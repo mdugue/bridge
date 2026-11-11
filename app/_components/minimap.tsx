@@ -1,144 +1,35 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { useEffect, useRef } from "react";
 import { LANDCOVER_CLASSES, landcoverSrgb } from "@/lib/city/landcover";
-import { decodeGreyPng } from "@/lib/city/png-raster";
-import type { GreyRaster } from "@/lib/city/png-raster";
-import {
-  epsgToMapPx,
-  mapBridges,
-  mapHeightPx,
-  mapPxToEpsg,
-} from "@/lib/city/minimap";
-import type { MapBridge, MapFootprints, MapTile } from "@/lib/city/minimap";
+import { epsgToMapPx, mapHeightPx, mapPxToEpsg } from "@/lib/city/minimap";
+import type { MapFootprints, MapPicture } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 
 /** Default CSS pixel width; canvases are scaled by devicePixelRatio. */
 const DEFAULT_SIZE = 192;
 
-// Canvas drawing colors — scene content like the 3D view, not themable chrome.
+// Drawing colors — scene content like the 3D view, not themable chrome.
 const PAPER = "#f7f5f0";
-const INK = "rgba(50, 53, 62, 0.85)";
-const INK_FILL = "rgba(50, 53, 62, 0.35)";
-const FRAME = "rgba(50, 53, 62, 0.25)";
+// a design's plan, in the picture's ink (scripts/bake-minimap.ts)
+const INK = "rgba(50, 53, 62, 0.9)";
 const PLAYER = "#2563eb";
 
-/**
- * Recolors the class-id raster into a small canvas in the viewer's palette
- * (lib/city/landcover.ts), sampling NEAREST so class boundaries stay crisp.
- * The raster comes from the PNG decoder (lib/city/png-raster.ts), not an
- * <img>: a browser colour-manages the grey bytes, which rewrote class ids.
- */
-function colorizeLandcover(
-  raster: GreyRaster,
-  size: number
-): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    return canvas;
-  }
-  const image = ctx.createImageData(size, size);
-  const { data } = image;
-  for (let y = 0; y < size; y += 1) {
-    const row = Math.floor(((y + 0.5) * raster.height) / size) * raster.width;
-    for (let x = 0; x < size; x += 1) {
-      const col = Math.floor(((x + 0.5) * raster.width) / size);
-      const tint = landcoverSrgb(raster.data[row + col]);
-      const i = (y * size + x) * 4;
-      data[i] = tint[0];
-      data[i + 1] = tint[1];
-      data[i + 2] = tint[2];
-      data[i + 3] = 255;
-    }
-  }
-  ctx.putImageData(image, 0, 0);
-  return canvas;
-}
+/** The ground a building leaves: the built-up class's colour, which the
+ *  picture has around most buildings. */
+const [GR, GG, GB] = landcoverSrgb(
+  LANDCOVER_CLASSES.find((c) => c.key === "builtup")?.id ?? 0
+);
+const GROUND = `rgb(${GR}, ${GG}, ${GB})`;
 
-/** A deck's fill: the colour of the class it carries (the class raster
- *  shows the river under a bridge). */
-const DECK_CLASS: Record<string, string> = {
-  rail: "railway",
-  road: "road",
-  path: "path",
-};
-
-function deckFill(kind: string): string {
-  const key = DECK_CLASS[kind] ?? "road";
-  const id = LANDCOVER_CLASSES.find((c) => c.key === key)?.id ?? 0;
-  const [r, g, b] = landcoverSrgb(id);
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
-/** The bridge decks over the land cover, each in its class colour with a
- *  hairline edge so it reads against the water. */
-function drawBridges(
-  ctx: CanvasRenderingContext2D,
-  bridges: MapBridge[],
-  bounds: TerrainBounds,
-  size: number
-): void {
-  ctx.strokeStyle = FRAME;
-  ctx.lineWidth = 0.5;
-  for (const deck of bridges) {
-    ctx.beginPath();
-    for (let i = 0; i < deck.pts.length; i += 1) {
-      const [x, y] = deck.pts[i];
-      const { px, py } = epsgToMapPx(x, y, bounds, size);
-      if (i === 0) {
-        ctx.moveTo(px, py);
-      } else {
-        ctx.lineTo(px, py);
-      }
-    }
-    ctx.closePath();
-    ctx.fillStyle = deckFill(deck.kind);
-    ctx.fill();
-    ctx.stroke();
-  }
-}
-
-/** The buildings' ink: INK_FILL's colour at this opacity where a pixel is
- *  wholly covered (the old outlines' 0.85 stroke over a 0.35 fill read as
- *  about this at the map's scale). */
-const FIGURE_INK = [50, 53, 62] as const;
-const FIGURE_OPACITY = 0.62;
-
-/**
- * A tile's picture of its buildings (lib/city/footprint-figure.ts) as ink:
- * the cover raster as the alpha of one colour. Through the PNG decoder, not
- * an <img>, like the class raster (its grey bytes are data).
- */
-function figureInk(raster: GreyRaster): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = raster.width;
-  canvas.height = raster.height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    return canvas;
-  }
-  const image = ctx.createImageData(raster.width, raster.height);
-  const { data } = image;
-  for (let i = 0; i < raster.data.length; i += 1) {
-    data[4 * i] = FIGURE_INK[0];
-    data[4 * i + 1] = FIGURE_INK[1];
-    data[4 * i + 2] = FIGURE_INK[2];
-    data[4 * i + 3] = Math.round(raster.data[i] * FIGURE_OPACITY);
-  }
-  ctx.putImageData(image, 0, 0);
-  return canvas;
-}
-
-/** Traces `pack`'s rings of the objects `gone` says are gone, in the
- *  frame `at` maps EPSG metres into. */
+/** Traces `pack`'s rings of the objects `gone` says are gone. */
 function traceGone(
   ctx: CanvasRenderingContext2D,
   { gone, pack }: MapFootprints["tiles"][number],
-  at: (x: number, y: number) => readonly [number, number]
+  bounds: TerrainBounds,
+  size: number
 ): void {
   const { objectEnd, ringEnd, xy } = pack;
   ctx.beginPath();
@@ -154,11 +45,16 @@ function traceGone(
       const first = r === 0 ? 0 : ringEnd[r - 1];
       for (let p = first; p < ringEnd[r]; p += 1) {
         // (the pack holds centimetres)
-        const [x, y] = at(xy[2 * p] / 100, xy[2 * p + 1] / 100);
+        const { px, py } = epsgToMapPx(
+          xy[2 * p] / 100,
+          xy[2 * p + 1] / 100,
+          bounds,
+          size
+        );
         if (p === first) {
-          ctx.moveTo(x, y);
+          ctx.moveTo(px, py);
         } else {
-          ctx.lineTo(x, y);
+          ctx.lineTo(px, py);
         }
       }
       ctx.closePath();
@@ -167,52 +63,25 @@ function traceGone(
 }
 
 /**
- * The tiles' pictures of their buildings, each without what is gone from
- * it (cut out along those buildings' outlines, a little grown so no rim
- * of ink stays), then a design's plan drawn as a building.
+ * What changed since the build drew the picture: the buildings that are
+ * gone painted over in the ground's colour (their outlines a little grown,
+ * so no rim of ink stays), then a design's plan drawn as a building.
  */
-function drawFigures(
+function drawChanges(
   ctx: CanvasRenderingContext2D,
-  figures: ReadonlyMap<string, HTMLCanvasElement>,
-  tiles: readonly MapTile[],
   footprints: MapFootprints,
   bounds: TerrainBounds,
   size: number
 ): void {
-  const gaps = new Map(footprints.tiles.map((t) => [t.tile, t]));
-  for (const tile of tiles) {
-    const ink = tile.figure ? figures.get(tile.figure) : undefined;
-    if (!ink) {
-      continue;
-    }
-    const a = epsgToMapPx(tile.bounds[0], tile.bounds[3], bounds, size);
-    const b = epsgToMapPx(tile.bounds[2], tile.bounds[1], bounds, size);
-    const gap = gaps.get(tile.id);
-    if (!gap) {
-      ctx.drawImage(ink, a.px, a.py, b.px - a.px, b.py - a.py);
-      continue;
-    }
-    const cut = document.createElement("canvas");
-    cut.width = ink.width;
-    cut.height = ink.height;
-    const c = cut.getContext("2d");
-    if (!c) {
-      continue;
-    }
-    c.drawImage(ink, 0, 0);
-    const [x0, y0, x1, y1] = tile.bounds;
-    const kx = ink.width / (x1 - x0);
-    const ky = ink.height / (y1 - y0);
-    traceGone(c, gap, (x, y) => [(x - x0) * kx, (y1 - y) * ky]);
-    c.globalCompositeOperation = "destination-out";
-    c.fill();
-    c.lineWidth = 1;
-    c.stroke();
-    ctx.drawImage(cut, a.px, a.py, b.px - a.px, b.py - a.py);
+  ctx.fillStyle = GROUND;
+  ctx.strokeStyle = GROUND;
+  ctx.lineWidth = 1;
+  for (const tile of footprints.tiles) {
+    traceGone(ctx, tile, bounds, size);
+    ctx.fill();
+    ctx.stroke();
   }
-  ctx.fillStyle = INK_FILL;
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 0.5;
+  ctx.fillStyle = INK;
   for (const { pts } of footprints.outlines) {
     if (pts.length < 3) {
       continue;
@@ -228,7 +97,6 @@ function drawFigures(
     }
     ctx.closePath();
     ctx.fill();
-    ctx.stroke();
   }
 }
 
@@ -263,57 +131,31 @@ function drawPictureFrame(
   ctx.stroke();
 }
 
+/** Where `picture` lies on a map of `bounds`, `size` px wide (CSS px). */
+function placed(picture: MapPicture, bounds: TerrainBounds, size: number) {
+  const [x0, y0, x1, y1] = picture.bounds;
+  const a = epsgToMapPx(x0, y1, bounds, size);
+  const b = epsgToMapPx(x1, y0, bounds, size);
+  return {
+    height: b.py - a.py,
+    left: a.px,
+    top: a.py,
+    url: picture.url,
+    width: b.px - a.px,
+  };
+}
+
 interface MinimapProps {
   bounds: TerrainBounds;
+  /** the buildings gone since the picture was drawn, and a design's plan */
   footprints: MapFootprints;
-  /** per-tile land-cover class PNGs + their EPSG bounds, drawn as
-   *  background, and each tile's bridge decks over them */
-  landcoverTiles?: MapTile[];
+  /** the build's picture of the site (scripts/bake-minimap.ts), or none */
+  mapPicture: MapPicture | null;
   onTeleport: (epsgX: number, epsgY: number) => void;
   /** CSS pixel width; the height follows the site's aspect ratio */
   size?: number;
   /** subscribe to throttled pose updates; returns an unsubscribe fn */
   subscribePose: (cb: (pose: PlayerPose) => void) => () => void;
-}
-
-/**
- * Every tile's bridge decks, loaded once (a few kB a tile; the same files
- * the dressing reads, so a later load hits the cache). A tile whose file
- * fails just shows no bridges. A deck across a seam comes in both tiles'
- * files and is drawn twice, in the same place.
- */
-function useBridges(tiles: MapTile[] | undefined): MapBridge[] {
-  const [bridges, setBridges] = useState<MapBridge[]>([]);
-  useEffect(() => {
-    const urls = (tiles ?? []).flatMap((t) => (t.bridges ? [t.bridges] : []));
-    const load = () => {
-      const controller = new AbortController();
-      Promise.all(
-        urls.map(
-          async (url) =>
-            await fetch(url, { signal: controller.signal })
-              .then(async (res): Promise<unknown> =>
-                res.ok ? ((await res.json()) as unknown) : null
-              )
-              .then(mapBridges)
-              .catch((): MapBridge[] => [])
-        )
-      )
-        .then((perTile) => {
-          if (!controller.signal.aborted) {
-            setBridges(perTile.flat());
-          }
-          return null;
-        })
-        .catch(() => {
-          // Each load already falls back to no bridges; nothing else can
-          // fail, and the map is fine without them.
-        });
-      return () => controller.abort();
-    };
-    return urls.length === 0 ? undefined : load();
-  }, [tiles]);
-  return bridges;
 }
 
 function setupCanvas(
@@ -333,105 +175,38 @@ function setupCanvas(
 }
 
 /**
- * Schematic figure-ground minimap: each tile's land cover and the picture of
- * its buildings (without those taken down) on a static canvas, the player dot + heading wedge on a dynamic
- * overlay canvas (redrawn at pose rate, ~10 Hz). Clicking teleports.
+ * Schematic figure-ground minimap: the build's picture of the site (land
+ * cover, bridge decks, buildings) as an image, a canvas over it for what
+ * changed since (a building taken down, a design), and the player dot +
+ * heading wedge on a second one (redrawn at pose rate, ~10 Hz). Clicking
+ * teleports.
  */
 export const Minimap = ({
   bounds,
   footprints,
-  landcoverTiles,
+  mapPicture,
   onTeleport,
   size = DEFAULT_SIZE,
   subscribePose,
 }: MinimapProps) => {
   // The map has the site's shape (a landscape for Dresden), edge to edge.
   const height = mapHeightPx(bounds, size);
-  const staticRef = useRef<HTMLCanvasElement>(null);
+  // The picture where its extent lies on the map: edge to edge for the
+  // site, cropped by the frame where the map shows one tile of it.
+  const picture = mapPicture && placed(mapPicture, bounds, size);
+  const changesRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
 
-  // Decoded + recoloured tiles, kept for the life of the component: per site
-  // tile a 512² class PNG (the tileset's `minimap` raster) and the picture
-  // of its buildings (`figure`), cheap once
-  // but not worth repeating on every demolish or sidebar resize. `requested`
-  // remembers which sources are already loading.
-  // (Assumes `landcoverTiles` is stable for a session — a future tile switcher
-  // must clear both when the block changes.)
-  const requestedRef = useRef(new Set<string>());
-  const [decoded, setDecoded] = useState(
-    () => new Map<string, HTMLCanvasElement>()
-  );
-  const bridges = useBridges(landcoverTiles);
+  // What changed since the picture: redrawn when a building goes or comes
+  // back and when a design loads, empty otherwise.
   useEffect(() => {
-    const loads = new AbortController();
-    const requested = requestedRef.current;
-    // Loads this run started and has not finished: the cleanup un-requests
-    // them so a re-run (StrictMode's mount → cleanup → mount in dev) requests
-    // them again instead of skipping a load whose result was discarded.
-    const pending = new Set<string>();
-    // each tile's land cover and the picture of its buildings
-    const rasters = (landcoverTiles ?? []).flatMap((tile) => [
-      {
-        src: tile.src,
-        paint: (r: GreyRaster) => colorizeLandcover(r, 256),
-      },
-      ...(tile.figure ? [{ src: tile.figure, paint: figureInk }] : []),
-    ]);
-    for (const { src, paint } of rasters) {
-      if (requested.has(src)) {
-        continue;
-      }
-      requested.add(src);
-      pending.add(src);
-      fetch(src, { signal: loads.signal })
-        .then(async (res) => await res.arrayBuffer())
-        .then(async (buf) => await decodeGreyPng(new Uint8Array(buf)))
-        .then((raster) => {
-          pending.delete(src);
-          if (!loads.signal.aborted) {
-            const cv = paint(raster);
-            setDecoded((prev) => new Map(prev).set(src, cv));
-          }
-          return null;
-        })
-        .catch(() => {
-          // The minimap just stays without this tile's layer.
-          pending.delete(src);
-        });
+    const canvas = changesRef.current;
+    if (canvas) {
+      const ctx = setupCanvas(canvas, size, height);
+      ctx.clearRect(0, 0, size, height);
+      drawChanges(ctx, footprints, bounds, size);
     }
-    return () => {
-      for (const src of pending) {
-        requested.delete(src);
-      }
-      loads.abort();
-    };
-  }, [landcoverTiles]);
-
-  // Static layer: per-tile land-cover background + frame + footprints. Redrawn
-  // after demolish and again as each tile's image decodes.
-  useEffect(() => {
-    const canvas = staticRef.current;
-    if (!canvas) {
-      return;
-    }
-    const ctx = setupCanvas(canvas, size, height);
-    ctx.fillStyle = PAPER;
-    ctx.fillRect(0, 0, size, height);
-    // Each tile drawn into its own sub-rect of the (union) bounds.
-    for (const tile of landcoverTiles ?? []) {
-      const cv = decoded.get(tile.src);
-      if (!cv) {
-        continue;
-      }
-      const a = epsgToMapPx(tile.bounds[0], tile.bounds[3], bounds, size);
-      const b = epsgToMapPx(tile.bounds[2], tile.bounds[1], bounds, size);
-      ctx.drawImage(cv, a.px, a.py, b.px - a.px, b.py - a.py);
-    }
-    drawBridges(ctx, bridges, bounds, size);
-    ctx.strokeStyle = FRAME;
-    ctx.strokeRect(0.5, 0.5, size - 1, height - 1);
-    drawFigures(ctx, decoded, landcoverTiles ?? [], footprints, bounds, size);
-  }, [footprints, bounds, size, height, landcoverTiles, decoded, bridges]);
+  }, [footprints, bounds, size, height]);
 
   // Dynamic layer: player dot + heading wedge.
   useEffect(() => {
@@ -483,12 +258,31 @@ export const Minimap = ({
         );
         onTeleport(x, y);
       }}
-      style={{ width: size, height }}
+      style={{ backgroundColor: PAPER, width: size, height }}
       type="button"
     >
+      {picture && (
+        // a plain img: the build's own picture, content-hashed and at its
+        // own size, is nothing for the image optimiser to do
+        <Image
+          alt=""
+          className="absolute max-w-none"
+          draggable={false}
+          height={Math.round(picture.height)}
+          src={picture.url}
+          style={{
+            height: picture.height,
+            left: picture.left,
+            top: picture.top,
+            width: picture.width,
+          }}
+          unoptimized
+          width={Math.round(picture.width)}
+        />
+      )}
       <canvas
         className="absolute inset-0"
-        ref={staticRef}
+        ref={changesRef}
         style={{ width: size, height }}
       />
       <canvas

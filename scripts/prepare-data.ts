@@ -50,6 +50,7 @@ import {
   muralsSource,
   parseMurals,
 } from "../lib/city/murals";
+import type { MinimapExtras } from "../lib/city/minimap";
 import type { MuralExtras } from "../lib/city/murals";
 import { PROVENANCE_FILE, siteProvenance } from "../lib/city/provenance";
 import type { ProvenanceRecord } from "../lib/city/provenance";
@@ -115,6 +116,7 @@ import { bakeCity } from "./prepare/city";
 import { bakeTerrain, dropTerrain } from "./prepare/terrain";
 import { bakePlate } from "./prepare/plate";
 import { publishHero } from "./prepare/hero";
+import { publishMinimap } from "./prepare/minimap";
 import { publishStats } from "./prepare/stats";
 import { publishStadtwissen } from "./prepare/stadtwissen";
 
@@ -157,7 +159,6 @@ if (MODE.kind === "ground") {
 
 const baked: BakedTile[] = [];
 const footprintFiles = new Map<string, string>();
-const figureFiles = new Map<string, string>();
 const groundHeights: number[] = [];
 for (let i = 0; i < TILES.length; i += 1) {
   const tile = TILES[i];
@@ -168,7 +169,6 @@ for (let i = 0; i < TILES.length; i += 1) {
   const city = await bakeCity(tile);
   const cityMs = since(t0);
   footprintFiles.set(tile, city.footprints);
-  figureFiles.set(tile, city.figure);
   t0 = performance.now();
   const fine = await bakeTerrain(tile, 0);
   const fineMs = since(t0);
@@ -346,11 +346,16 @@ await publishStadtwissen(
 type SiteExtras = TilesetExtras &
   PlateExtras &
   LandmarkFactsExtras &
+  MinimapExtras &
   MuralExtras &
   WalksExtras;
 
+// the minimap's picture of the site (scripts/prepare/minimap.ts)
+const map = await publishMinimap(footprintFiles);
+
 const extras: SiteExtras = {
   site: SITE.id,
+  ...(map ? { map } : {}),
   landmarks: siteLandmarks(
     TILES.map(landmarkFile).filter((f): f is LandmarkFile => f !== undefined)
   ),
@@ -368,7 +373,6 @@ const extras: SiteExtras = {
   tiles: baked.map((t) => ({
     id: t.id,
     bounds: t.bounds,
-    figure: figureFiles.get(t.id) ?? "",
     footprints: footprintFiles.get(t.id) ?? "",
     minimap: sideFiles.get(t.id)?.landcoverSmall ?? "",
     bridges: sideFiles.get(t.id)?.bridge,

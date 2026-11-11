@@ -67,7 +67,6 @@ import { siteDataLayers } from "@/lib/city/data-layers";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import { STUDY_DATES, STUDY_HOURS } from "@/lib/city/image-export";
 import { sitePlaces } from "@/lib/city/places";
-import type { MapTile } from "@/lib/city/minimap";
 import { RENDER_STYLE_BY_ID, RENDER_STYLES } from "@/lib/city/render-style";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { PlayerPose } from "@/lib/city/pose";
@@ -76,6 +75,7 @@ import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { cn } from "cn";
 import type { CityWalkHandle } from "./create-app";
 import { DataLayersPanel } from "./data-layers-panel";
+import type { MapPicture } from "@/lib/city/minimap";
 import { Minimap } from "./minimap";
 import { PlacesList } from "./places-list";
 import { AskEntry, WalksList } from "./walk-player";
@@ -300,11 +300,11 @@ const observeWidth = (
  */
 const MinimapCard = ({
   bounds,
-  landcoverTiles,
+  mapPicture,
   onTeleport,
 }: {
   bounds: TerrainBounds;
-  landcoverTiles: MapTile[];
+  mapPicture: MapPicture | null;
   onTeleport: (epsgX: number, epsgY: number) => void;
 }) => {
   const footprints = useSceneStatus("footprints");
@@ -318,7 +318,7 @@ const MinimapCard = ({
       }),
     [status]
   );
-  // The minimap paints into a fixed-size canvas, so it needs a pixel count
+  // The minimap's overlays are fixed-size canvases, so it needs a pixel count
   // rather than a CSS width: measure the card and hand it the result.
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState(0);
@@ -336,7 +336,7 @@ const MinimapCard = ({
           <Minimap
             bounds={bounds}
             footprints={footprints}
-            landcoverTiles={landcoverTiles}
+            mapPicture={mapPicture}
             onTeleport={onTeleport}
             size={size}
             subscribePose={subscribePose}
@@ -934,7 +934,7 @@ export const SceneSidebar = (props: SceneSidebarProps) => {
             {info?.terrainBounds && (
               <MinimapCard
                 bounds={info.terrainBounds}
-                landcoverTiles={info.landcoverTiles}
+                mapPicture={info.mapPicture}
                 onTeleport={props.onTeleport}
               />
             )}

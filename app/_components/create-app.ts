@@ -58,7 +58,8 @@ import {
   styleInstant,
 } from "@/lib/city/render-style";
 import type { RenderStyle } from "@/lib/city/render-style";
-import type { MapFootprints, MapTile } from "@/lib/city/minimap";
+import { minimapOf } from "@/lib/city/minimap";
+import type { MapFootprints, MapPicture } from "@/lib/city/minimap";
 import {
   footprintCircle,
   MODEL_PRESET_BY_ID,
@@ -398,12 +399,20 @@ function besideTileset(
   return file ? new URL(file, tilesetUrl).href : null;
 }
 
+/** The minimap's picture as the tileset names it, by its URL. */
+function sitePicture(extras: unknown, tilesetUrl: string): MapPicture | null {
+  const map = minimapOf(extras);
+  return map
+    ? { bounds: map.bounds, url: new URL(map.file, tilesetUrl).href }
+    : null;
+}
+
 /** What the HUD knows of the site from the tileset alone (`onSiteInfo`). */
 export type SiteInfo = Pick<
   CityWalkHandle,
-  | "landcoverTiles"
   | "landmarks"
   | "latLng"
+  | "mapPicture"
   | "provenanceUrl"
   | "terrainBounds"
   | "walksUrl"
@@ -716,10 +725,11 @@ export interface CityWalkHandle {
   };
   /** the site's most notable landmarks (Wikidata), for the HUD's list */
   landmarks: Landmark[];
-  /** per-tile land-cover class PNGs + their EPSG bounds, for the minimap */
-  landcoverTiles: MapTile[];
   /** the scene's geographic position — the HUD's sunrise/sunset times */
   latLng: { lat: number; lng: number };
+  /** the minimap's picture of the site and the extent it shows
+   *  (lib/city/minimap.ts), or none */
+  mapPicture: MapPicture | null;
   /** recenter offset, lets callers map EPSG coords -> world coords */
   offset: { cx: number; cy: number };
   /** analog altitude-stick input (fly mode): +1 climbs, −1 sinks */
@@ -1560,14 +1570,8 @@ async function bootApp(
   const murals = siteMurals(extras, tilesetUrl);
   const siteInfo: SiteInfo = {
     landmarks: extras.landmarks ?? [],
-    landcoverTiles: extras.tiles.map((t) => ({
-      id: t.id,
-      figure: t.figure ? new URL(t.figure, tilesetUrl).href : undefined,
-      src: new URL(t.minimap, tilesetUrl).href,
-      bounds: t.bounds,
-      bridges: t.bridges ? new URL(t.bridges, tilesetUrl).href : undefined,
-    })),
     latLng,
+    mapPicture: sitePicture(extras, tilesetUrl),
     photoCredits: murals.credits,
     provenanceUrl: besideTileset(extras.provenance, tilesetUrl),
     terrainBounds: siteBounds,
@@ -2762,9 +2766,9 @@ async function bootApp(
   });
   // The buildings' footprints, packed (lib/city/footprint-pack.ts), per
   // tile and only where a building's outline is asked for: a demolished
-  // one cut out of the minimap's picture, a design's cover. The minimap
-  // draws the tiles' pictures of them (`figure`, footprint-figure.ts):
-  // Dresden's every footprint was ≈ 2 MB gzipped and 4 MB held.
+  // one painted over on the minimap, a design's cover. The minimap shows
+  // the build's picture of them (scripts/bake-minimap.ts): Dresden's every
+  // footprint was ≈ 2 MB gzipped and 4 MB held.
   const demolitions = createDemolitions(stream);
   const footprints = new Map<string, FootprintPack>();
   /** the tiles whose footprints were asked for (here or on their way) */
@@ -2815,11 +2819,10 @@ async function bootApp(
         if (!(gone?.size || replaced?.size)) {
           continue;
         }
-        // a tile with gaps: its outlines cut them out of its picture
+        // a tile with gaps: its outlines paint them over on the picture
         const pack = footprints.get(tile.id);
         if (pack) {
           tiles.push({
-            tile: tile.id,
             gone: (i: number) =>
               gone?.has(i) === true || replaced?.has(i) === true,
             pack,
