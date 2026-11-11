@@ -146,6 +146,14 @@ def test_a_bridge_track_is_marked_on_its_pattern():
     assert at[0] == 0
 
 
+def test_the_days_count_from_the_feeds_date_or_its_first_service_day(tmp_path):
+    feed = T.site_trams(_feed_zip(tmp_path / "f.zip"), _site(), EPSG)
+    assert feed["published"] == "2026-10-01"
+    assert T.feed_date({**feed, "published": "2026-10-05"}) == datetime.date(2026, 10, 5)
+    # a zip without dates: the calendar's first day
+    assert T.feed_date({**feed, "published": "1980-01-01"}) == datetime.date(2026, 10, 1)
+
+
 class _NoClock(datetime.date):
     @classmethod
     def today(cls):

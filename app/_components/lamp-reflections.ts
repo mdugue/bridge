@@ -16,9 +16,9 @@ import {
   atan,
   attribute,
   cameraPosition,
-  distance,
   clamp,
   color,
+  distance,
   dot,
   exp,
   float,
@@ -107,6 +107,11 @@ export const LAMP_TRACK_REACH_M = 15;
  *  lamp still shows (fading from the first), and the shared array. */
 interface MirrorSet {
   count: UniformNode<"int", number>;
+  /** the eye the lamps were chosen for (world) and how far from it, on
+   *  the ground plan, the farthest of them stands (m): beyond that and a
+   *  lamp's range no pixel takes light from the set (`streetLight`) */
+  eye: UniformNode<"vec3", Vector3>;
+  far: UniformNode<"float", number>;
   heads: UniformArrayNode<"vec4">;
   reach: readonly [number, number];
   slots: Readonly<Record<DeviceTier, number>>;
@@ -120,6 +125,8 @@ function mirrorSet(
     slots,
     reach,
     count: uniform(0, "int"),
+    eye: uniform(new Vector3()),
+    far: uniform(0),
     // the heads (world, Y-up; w: their fade 0…1)
     heads: uniformArray(
       Array.from(
@@ -299,12 +306,13 @@ export function streetLight(n: V3): V3 {
     const at = positionWorld.toVar();
     const normal = n.toVar();
     const total = float(0).toVar();
-    // No lamp of the set (within its reach of the eye, on the ground
-    // plan) lights a surface a lamp's range beyond that: the far city,
-    // most of a view's pixels, runs the loop not at all.
+    // No lamp of the set lights a surface a lamp's range beyond the
+    // farthest of them: the far city, most of a view's pixels, runs the
+    // loop not at all. (Measured from the eye the lamps were chosen for,
+    // not the camera: Modell's stands elsewhere.)
     const near = step(
-      distance(at.xz, cameraPosition.xz),
-      STREET.reach[1] + LAMP_RANGE_M
+      distance(at.xz, STREET.eye.xz),
+      STREET.far.add(LAMP_RANGE_M)
     );
     Loop(
       {
@@ -793,14 +801,25 @@ function chooser(set: MirrorSet, tier: DeviceTier) {
     // The choice is made anew RANK_HZ times a second, and at once when the
     // lamps change (a tile lands or leaves, night falls); the glints ease
     // toward it every frame.
-    const fresh = heads !== ranked || now - rankedAt >= 1 / RANK_HZ;
+    // (a clock set back ranks at once)
+    const fresh =
+      heads !== ranked || now < rankedAt || now - rankedAt >= 1 / RANK_HZ;
     if (fresh) {
       ranked = heads;
       rankedAt = now;
       n =
         heads.length > 0 ? rankReflected(heads, eye, pick, wanted, scratch) : 0;
     }
-    set.count.value = ease(wanted, n, now, out, fresh);
+    const count = ease(wanted, n, now, out, fresh);
+    set.count.value = count;
+    // (the lamps shown, not the choice: one fading out after the eye has
+    // gone elsewhere still lights its street)
+    let far = 0;
+    for (let i = 0; i < count; i += 1) {
+      far = Math.max(far, Math.hypot(out[i].x - eye.x, out[i].z - eye.z));
+    }
+    set.eye.value.copy(eye);
+    set.far.value = far;
   };
 }
 

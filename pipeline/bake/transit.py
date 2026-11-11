@@ -260,6 +260,18 @@ def kind_of(day: datetime.date) -> str | None:
     return {5: "saturday", 6: "sunday"}.get(wd)
 
 
+def feed_date(feed: dict) -> datetime.date:
+    """The day the days are counted from: the feed's own date, not the
+    clock — the same feed bakes the same file whenever it is baked. A
+    feed zipped without dates (1980) counts from its first service day."""
+    published = datetime.date.fromisoformat(feed["published"])
+    starts = [c["start_date"] for c in feed["calendar"].values()]
+    if not starts:
+        return published
+    first = datetime.datetime.strptime(min(starts), "%Y%m%d").date()
+    return max(published, first)
+
+
 def pick_days(feed: dict, start: datetime.date) -> dict[str, datetime.date]:
     """Per kind of day, the date with the most tram trips in the next
     LOOKAHEAD_DAYS (the earliest of equals)."""
@@ -541,9 +553,7 @@ def run_site(raw: Path, data: Path, bounds, epsg: int) -> None:
         print(f"no GTFS feed at {folder / 'nv_free.zip'} — skipping the timetable trams")
         return
     tracks = read_tracks(data)
-    # The days are counted from the feed's own date, not the clock: the same
-    # feed bakes the same file whenever it is baked.
-    days = pick_days(feed, datetime.date.fromisoformat(feed["published"]))
+    days = pick_days(feed, feed_date(feed))
     doc = {
         "attribution": ATTRIBUTION,
         "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{epsg}"}},
