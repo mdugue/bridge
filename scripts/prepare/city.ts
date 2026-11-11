@@ -7,7 +7,11 @@ import { existsSync } from "node:fs";
 import type { z } from "zod";
 import { parseBakeFile } from "../../lib/city/bake-file";
 import type { BakeFile } from "../../lib/city/bake-file";
-import { withoutTrafficStructures } from "../../lib/city/city-mesh";
+import {
+  OBJECT_SOURCE_DOOR,
+  OBJECT_SOURCE_PLINTH,
+  withoutTrafficStructures,
+} from "../../lib/city/city-mesh";
 import { DOORS_FILE } from "../../lib/city/doors-file";
 import { DORMERS_FILE } from "../../lib/city/dormers-file";
 import { packFootprints } from "../../lib/city/footprint-pack";
@@ -126,6 +130,15 @@ function parseCity(
 }
 
 /** A tile's buildings: packed footprints + glTF, both from one parse. */
+/** The objects the far buildings leave out (column `source`): the doors,
+ *  and the plinths with their cornices and eave bands — a few centimetres
+ *  proud of their wall, nothing at the far level's distance (≥ 260 m), yet
+ *  a third of the near level's triangles. Their rows stay in the table. */
+const FAR_CITY_DROPPED: ReadonlySet<number> = new Set([
+  OBJECT_SOURCE_DOOR,
+  OBJECT_SOURCE_PLINTH,
+]);
+
 export async function bakeCity(tile: string): Promise<{
   far: string;
   file: string;
@@ -222,17 +235,19 @@ export async function bakeCity(tile: string): Promise<{
   }
   const parsed = table !== undefined;
   // the same buildings for far off: every vertex the shape does not need
-  // dropped (lib/city/tileset.ts `FAR_CITY_SIMPLIFY`)
+  // dropped (lib/city/tileset.ts `FAR_CITY_SIMPLIFY`), and what stands a
+  // few centimetres off a wall with them (`FAR_CITY_DROPPED`)
   const farName = `city_${tile}_far.glb.gz`;
   const farGlb = await cached(
     farName,
-    cacheKey(inputs, bake, glbKey, FAR_CITY_SIMPLIFY),
+    cacheKey(inputs, bake, glbKey, FAR_CITY_SIMPLIFY, [...FAR_CITY_DROPPED]),
     async () =>
       gz(
         await simplifyGlb(
           Bun.gunzipSync(glb as Uint8Array<ArrayBuffer>),
           FAR_CITY_SIMPLIFY,
-          table ?? built().input.table
+          table ?? built().input.table,
+          FAR_CITY_DROPPED
         )
       )
   );
