@@ -126,6 +126,17 @@ class Tile:
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
+    def raw_absent(self, out: Path, what: str) -> bool:
+        """A raw input its provider publishes is not on this machine, and the
+        step's file is committed: the file stays, as with a missing Basis-DLM
+        (`has_dlm`) — a bake on a partial `data/_raw` empties nothing. False
+        where the tile has no file yet: the step then writes its empty one,
+        for every tile carries the same files."""
+        if not out.exists():
+            return False
+        print(f"{self.id}: {what} — leaving {out.name} as it is")
+        return True
+
     def has_dlm(self, what: str) -> bool:
         """Whether the Basis-DLM is there; if not, say what is skipped. A step
         without it leaves its committed files alone rather than emptying them."""
@@ -157,9 +168,14 @@ class Tile:
         found = []
         for tif in sorted((self.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif")):
             tid = tif.stem.removeprefix("dgm1_")
-            with rasterio.open(tif) as ds:
-                b = ds.bounds
-            found.append((tid, (b.left, b.bottom, b.right, b.top)))
+            # the extent its name gives (a 2 km tile's raster is exactly
+            # that); only a file of another scheme is opened to ask
+            bounds = named_extent(tid)
+            if bounds is None:
+                with rasterio.open(tif) as ds:
+                    b = ds.bounds
+                bounds = (b.left, b.bottom, b.right, b.top)
+            found.append((tid, bounds))
         return found
 
     def osm_extract(self) -> Path | None:
@@ -328,6 +344,17 @@ def dgm_paths(tile: Tile, bounds: tuple[float, float, float, float]) -> list[Pat
         for path in sorted((tile.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif"))
         if (named := named_extent(path.stem.removeprefix("dgm1_"))) is None
         or overlaps(named, bounds)
+    ]
+
+
+def dom_paths(tile: Tile, bounds: tuple[float, float, float, float]) -> list[Path]:
+    """The DOM1 files on this machine that may cover `bounds`, by their
+    names as `dgm_paths`: a deck's ground opens its tile's neighbours, not
+    every surface model of the site."""
+    return [
+        path
+        for path in sorted((tile.raw / "dom1").glob("*.tif"))
+        if (named := named_extent(path.stem)) is None or overlaps(named, bounds)
     ]
 
 

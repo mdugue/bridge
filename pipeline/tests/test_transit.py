@@ -57,7 +57,8 @@ def _feed_zip(path: Path) -> Path:
     }
     with zipfile.ZipFile(path, "w") as z:
         for name, text in rows.items():
-            z.writestr(name, text)
+            # dated, as a feed's tables are: the days are counted from it
+            z.writestr(zipfile.ZipInfo(name, (2026, 10, 1, 4, 0, 0)), text)
     return path
 
 
@@ -145,7 +146,13 @@ def test_a_bridge_track_is_marked_on_its_pattern():
     assert at[0] == 0
 
 
-def test_the_file_is_written(tmp_path):
+class _NoClock(datetime.date):
+    @classmethod
+    def today(cls):
+        raise AssertionError("the timetable bake read the clock")
+
+
+def test_the_file_is_written(tmp_path, monkeypatch):
     raw = tmp_path / "raw" / "sn"
     data = tmp_path / "data"
     # the feed is shared by every provider: beside their raw folders
@@ -168,8 +175,12 @@ def test_the_file_is_written(tmp_path):
         ],
     }
     (data / "dlm" / "tram_t.geojson").write_text(json.dumps(tracks))
-    T.run_site(raw, data, _site(), EPSG, datetime.date(2026, 10, 1))
-    doc = json.loads((data / "transit" / "trams.json").read_text())
+    # the days are counted from the feed's date: the same feed bakes the
+    # same file on any day
+    monkeypatch.setattr(datetime, "date", _NoClock)
+    T.run_site(raw, data, _site(), EPSG)
+    out = data / "transit" / "trams.json"
+    doc = json.loads(out.read_text())
     assert "DELFI" in doc["attribution"] and "OpenStreetMap" in doc["attribution"]
     assert doc["days"]["weekday"]["date"] == "2026-10-01"
     # the filtered feed is cached beside the raw one
