@@ -47,7 +47,7 @@ function whenAborted(
  *
  * What the boot asked for ahead (boot-ahead.ts: the tileset, the boot
  * tile's first contents) is taken from there, once each, instead of asked
- * again; one that failed there is asked here, with its retries.
+ * again; one the network failed there is asked here, with its retries.
  */
 export class ContentFetchPlugin {
   name = "BRIDGE_CONTENT_FETCH";
@@ -61,7 +61,7 @@ export class ContentFetchPlugin {
   }
 
   /**
-   * What the boot already asked for, when it came whole. A request the
+   * What the boot already asked for, when it was answered. A request the
    * tile no longer wants (`signal`: the renderer dropped it) is stopped
    * and rejects with the abort, as its own fetch would — not waited out,
    * nor asked a second time.
@@ -86,7 +86,8 @@ export class ContentFetchPlugin {
     } finally {
       watch.stop();
     }
-    return got?.ok ? got : null;
+    // (a status came through the same fetch and its retries: none fixes it)
+    return got;
   }
 
   async fetchData(

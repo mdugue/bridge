@@ -77,7 +77,7 @@ export const NO_FOOTPRINTS: MapFootprints = { outlines: [], tiles: [] };
  * aspect ratio (Dresden: 10 × 6 km, a landscape map), so one scale serves
  * both axes: no padding around the site, no squashing.
  */
-function pxPerMetre(bounds: TerrainBounds, widthPx: number): number {
+export function pxPerMetre(bounds: TerrainBounds, widthPx: number): number {
   return widthPx / Math.max(bounds[2] - bounds[0], 1);
 }
 
