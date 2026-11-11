@@ -6,6 +6,7 @@ import { decodeGreyPng } from "@/lib/city/png-raster";
 import type { GreyRaster } from "@/lib/city/png-raster";
 import {
   epsgToMapPx,
+  pxPerMetre,
   mapBridges,
   mapHeightPx,
   mapPxToEpsg,
@@ -115,25 +116,10 @@ function drawFootprints(
   ctx.fillStyle = INK_FILL;
   ctx.strokeStyle = INK;
   ctx.lineWidth = 0.5;
-  /** One ring: `count` points, the `i`th at `at(i)` (EPSG metres). */
-  const ring = (count: number, at: (i: number) => [number, number]) => {
-    if (count < 3) {
-      return;
-    }
-    ctx.beginPath();
-    for (let i = 0; i < count; i += 1) {
-      const [x, y] = at(i);
-      const { px, py } = epsgToMapPx(x, y, bounds, size);
-      if (i === 0) {
-        ctx.moveTo(px, py);
-      } else {
-        ctx.lineTo(px, py);
-      }
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-  };
+  // (no array a point: a city's footprints are a million of them, at
+  // every repaint of the layer)
+  const { 0: minX, 3: maxY } = bounds;
+  const k = pxPerMetre(bounds, size);
   for (const { gone, pack } of footprints.tiles) {
     const { objectEnd, ringEnd, xy } = pack;
     let r = 0;
@@ -143,16 +129,43 @@ function drawFootprints(
       }
       for (; r < objectEnd[object]; r += 1) {
         const first = r === 0 ? 0 : ringEnd[r - 1];
-        // (the pack holds centimetres)
-        ring(ringEnd[r] - first, (i) => [
-          xy[2 * (first + i)] / 100,
-          xy[2 * (first + i) + 1] / 100,
-        ]);
+        const end = ringEnd[r];
+        if (end - first < 3) {
+          continue;
+        }
+        ctx.beginPath();
+        for (let p = first; p < end; p += 1) {
+          // (the pack holds centimetres)
+          const x = (xy[2 * p] / 100 - minX) * k;
+          const y = (maxY - xy[2 * p + 1] / 100) * k;
+          if (p === first) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
       }
     }
   }
   for (const { pts } of footprints.outlines) {
-    ring(pts.length, (i) => pts[i]);
+    if (pts.length < 3) {
+      continue;
+    }
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i += 1) {
+      const { px, py } = epsgToMapPx(pts[i][0], pts[i][1], bounds, size);
+      if (i === 0) {
+        ctx.moveTo(px, py);
+      } else {
+        ctx.lineTo(px, py);
+      }
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
   }
 }
 

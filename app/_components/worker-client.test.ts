@@ -143,14 +143,32 @@ test("a worker that dies before its handshake is given up: every job runs here, 
   expect(client.up()).toBe(false);
 });
 
-test("a worker that never says it runs is given up after the handshake's time", async () => {
+test("a worker late with its handshake is ended and started once more, then given up", async () => {
   const { workers, here, spec } = rig();
   const client = createWorkerClient({ ...spec, handshakeMs: 20 });
   expect(await client.run(1)).toBe(-1);
   expect(workers[0].ended).toBe(true);
   expect(workers[0].sent).toEqual([]);
-  expect(here).toEqual([1]);
   expect(client.up()).toBe(false);
+  // the next job starts one more, which runs
+  const next = client.run(2);
+  await settle();
+  expect(workers.length).toBe(2);
+  workers[1].say({ ready: true });
+  await settle();
+  workers[1].say({ out: 20 });
+  expect(await next).toBe(20);
+  expect(here).toEqual([1]);
+});
+
+test("a second worker late with its handshake is the last", async () => {
+  const { workers, here, spec } = rig();
+  const client = createWorkerClient({ ...spec, handshakeMs: 20 });
+  expect(await client.run(1)).toBe(-1);
+  expect(await client.run(2)).toBe(-2);
+  expect(await client.run(3)).toBe(-3);
+  expect(workers.length).toBe(2);
+  expect(here).toEqual([1, 2, 3]);
 });
 
 test("a worker that dies at work is started again once; the job it held runs here when its input was kept", async () => {

@@ -11,8 +11,9 @@ import { abortError, createTaskGate } from "@/lib/city/task-gate";
  *   signal aborts while it waits leaves the line and is never run.
  * - **A handshake first.** Nothing goes over before the worker's script
  *   said `{ ready: true }`: one that fails to load would keep what it was
- *   handed. A worker that says nothing for `HANDSHAKE_MS` counts as one
- *   that failed to load.
+ *   handed. A worker that says nothing for `HANDSHAKE_MS` is ended, its
+ *   jobs run here, and the next job starts one more (a slow first load is
+ *   not a session without workers); a second silence is the last.
  * - **Here where there is no worker** (a test, a browser that refuses it,
  *   a script that fails to load, a message that cannot be sent, a job
  *   `pack` keeps back): the work runs on the main thread, each job in a
@@ -106,9 +107,14 @@ export function createWorkerClient<In, Reply extends object, Out>(
     settle?.(why);
   };
 
-  /** The worker died: before its handshake, or a second time, for good. */
-  const die = (said: boolean): void => {
-    if (!said || restarted) {
+  /**
+   * The worker died: before its handshake (`failed`: its script does not
+   * load), or a second time, for good. One that only was `late` with its
+   * handshake counts as a death at work: the next job starts it once more
+   * (a slow first load has the script by then).
+   */
+  const die = (how: "failed" | "late" | "working"): void => {
+    if (how === "failed" || restarted) {
       broken = true;
     }
     restarted = true;
@@ -155,21 +161,21 @@ export function createWorkerClient<In, Reply extends object, Out>(
     ready = handshake;
     const overdue = setTimeout(() => {
       if (worker === w && !said) {
-        die(false);
+        die("late");
       }
     }, spec.handshakeMs ?? HANDSHAKE_MS);
     void handshake.then(() => clearTimeout(overdue));
     w.addEventListener("error", (event) => {
       event.preventDefault();
       if (worker === w) {
-        die(said);
+        die(said ? "working" : "failed");
       }
     });
     // a reply that cannot be read: its job would wait for ever, and what
     // it handed over is lost — as good as a dead worker
     w.addEventListener("messageerror", () => {
       if (worker === w) {
-        die(said);
+        die(said ? "working" : "failed");
       }
     });
     return await handshake;
