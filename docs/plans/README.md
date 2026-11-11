@@ -397,10 +397,9 @@ S/M/L.
     no importer and are still here: shadcn 4.23 has no `remove` command, and
     `components/ui/` is not edited by hand — the maintainer's call.
     `SUPPORTED_EPSG_CODES` (`crs.ts`, used nowhere) and the comment in
-    `lib/city/decks.ts` that still names `rail-layer.ts` wait for the next
-    real change to those files: both are in bake keys (`crs.ts`: frame,
-    city; `decks.ts`: most of them), so an edit re-bakes every site for no
-    byte of difference.
+    `lib/city/decks.ts` that still named `rail-layer.ts` went with the
+    2026-11-11 audit's first PR, whose platform cache re-keyed every
+    site's bakes anyway.
 28. ~~**The monuments' linked Wikidata items the fetch misses (S).**~~
     Closed 2026-11-05 by a measurement, nothing built: of the 156 items
     OSM's monuments link to and that still have no material (every
@@ -409,6 +408,77 @@ S/M/L.
     question answers. A `VALUES ?i` query and a re-fetch and re-bake of
     all seven sites would add no material. Ask again if Wikidata's
     coverage grows.
+
+### 2026-11-11 audit (the whole code, against `f762ce78`)
+
+Asked by the maintainer: *a comprehensive review — correctness, what can
+be simpler, how the app, the bakes and the start get faster, what makes
+the footprint smaller; effort is no criterion.* Eight parallel read-only
+auditors (spine, frame, memory, layers, the TypeScript build, the Python
+pipeline, the web shell, the repository), every finding re-read or
+re-measured by the lead. The report with its evidence (German):
+<https://claude.ai/artifact/SdfpkgbXtF1L6MBBVJQchV>. Baseline (four
+cores): `prepare-sites` cold 360 s, warm 10 s; `next build` 49 s; the
+units 42 s (4 522 tests); `/dresden`'s first load 1.0 MB gz of JS;
+`public/data` 561 MB, `data/` 936 MB, the git pack 1.10 GiB after 16
+days.
+
+The maintainer chose all of it, as eight stacked PRs in this order. The
+ids are the report's.
+
+1. **Bugs and small wins — built (2026-11-11).** K1 a `.shp` record
+   length that does not advance looped for ever, and a `.dbf` header
+   could count more records than the file holds (`shapefile.ts`; a
+   design's every picked file is weighed, not the first). K2 the
+   teardown is total (`cleanups.ts`: every cleanup runs, the renderer is
+   released whatever threw; a boot that failed is `disposed`; queued
+   captures reject). K3 a step whose raw input is merely not on the
+   machine leaves its committed file (`Tile.raw_absent`: dormers,
+   structures, the Mapillary lamps). K4 the timetable's days count from
+   the feed's own date, not the clock. K6 a tile whose dressing threw is
+   freed; the facade readings stop with the stream; `withinWait` clears
+   its timer. L5 the street lamps' loop does not run on pixels no lamp
+   of the set can reach. L7 the lamps are ranked ten times a second, not
+   every frame. L8 the painted ground is read once a pixel, not three
+   times. B3 the platforms' cut is cached (`BAKE_ENTRIES.platforms`): a
+   warm `prepare-sites` 6.7 s → 2.3 s. B8 a site's tiles are placed by
+   their names, a deck's surface model opens its neighbours only. T1
+   `verify` runs the reference `tsc`. T2 the boot's marks before the
+   first frame (`boot:page-to-viewer`, `boot:renderer-init`,
+   `boot:tileset`, `boot:setup`, `boot:spawn-wait`). T3 the bake says
+   each tile's and each step's seconds. T4 a docs-only PR runs one e2e
+   shard; the unit and pipeline jobs have ten minutes. V9 three dead
+   exports gone (`KNOWLEDGE_TOOLS`, `bedAt`, `SUPPORTED_EPSG_CODES`).
+   **Left for their PRs:** `SKY_REFLECTION_BYTES` (dead; PR #286 edits
+   the file), V8 (the lazy seam's importer, with the spine in 7),
+   `networkx` as a named dependency (with 5: today a changed `uv.lock`
+   re-keys every Python step).
+2. **The buildings' vertex stream, byte-identical (V2, B6)** — TODO.
+3. **Bands, kerbs and the vertex format (F1, F3, F4, F9, F10, T8)** —
+   TODO; re-bakes every site. F1: plinth, cornice and eave bands are
+   88.7 % of a dense tile's triangles (Dresden 33412_5656: 1.63 M of
+   1.84 M) because `KNOT_M = 1` cuts every band each metre. The
+   maintainer decides how much of the band's profile may go.
+4. **Rails (F2)** — TODO: non-indexed float geometry, 31.9 MB a rail
+   tile; the maintainer decides between a leaner layer and the spike of
+   baking them into the fine ground (PR #156, plan 074 A).
+5. **Cache keys (B1, B2, B5, B7, V5)** — TODO: both pipelines key wider
+   than what an artifact reads.
+6. **The start (L1, L2, B4, F6, F12)** — TODO: the boot is serial where
+   it need not be.
+7. **`create-app.ts` in owners, one worker client (V1, V3, V8)** — TODO.
+8. **The desktop's post (F8, K5, F11, L6)** — TODO.
+
+Not planned, for the maintainer: F14 (the re-baked rasters of 16 days
+are 633 MB of superseded blobs: squash-merge data PRs, or rewrite the
+history once), F15 (Dresden's DGMs are still LZW: 204 MB against about
+85), L3, L4, V4, V6, V7, V10, B9–B11, T5–T10 (in the report).
+
+**Checked and sound (not to be audited again):** the object flag bits
+and the window style word (below 2^24, two bits free); the half-open
+tile ownership; `disposeTile`; the view lens and the reversed depth; no
+network in a bake (ADR 0012); the ask token's HMAC; the lazy chunks of
+the chat, IFC, Rhino and sql.js.
 
 ### 2026-10-10 audit (performance and stability, against `85a41b7`)
 
@@ -1316,3 +1386,9 @@ prompt-injection content only (none found).
   the HUD's settings. Plans 068–074 written; 068, most of 070 and parts of
   069, 071 and 073 built on the same PR; see the "2026-10-10 audit"
   section.
+- **2026-11-11 run** (against `f762ce78`): the whole code, on the
+  maintainer's ask for correctness, simplicity, speed (app, bake, start)
+  and footprint with effort no criterion: eight parallel read-only
+  auditors, every finding re-read or re-measured, a measured baseline,
+  the report as a document. The maintainer chose all of it as eight
+  stacked PRs; see the "2026-11-11 audit" section for each one's state.
