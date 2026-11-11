@@ -1,5 +1,6 @@
 /** The renderer's requests through the viewer's one fetch. */
 import { TILE_FETCH_BUDGET_MS } from "@/lib/city/fetch-retry";
+import { abortError } from "@/lib/city/task-gate";
 import type { AheadRequest } from "./boot-ahead";
 import { eitherSignal, fetchBytes } from "./fetch-optional";
 import type { FetchedBytes } from "./fetch-optional";
@@ -14,11 +15,7 @@ function whenAborted(
   const gone = new Promise<never>((_resolve, reject) => {
     const leave = () => {
       then();
-      reject(
-        signal.reason instanceof Error
-          ? signal.reason
-          : new DOMException("The operation was aborted.", "AbortError")
-      );
+      reject(abortError(signal));
     };
     if (signal.aborted) {
       leave();
