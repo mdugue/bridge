@@ -1700,8 +1700,9 @@ the window niches' and the BVH's clients are each a few lines on it).
 One worker a kind, one job at a time, the jobs in a line a lower rank
 goes first in (a coarse ground level before the fine ones) and an aborted
 job leaves at once. Nothing is handed over before the worker's script
-said it runs: one that fails to load would keep what it got (15 s
-without a word counts as that). Where there
+said it runs: one that fails to load would keep what it got (one silent
+for 15 s is ended and started once more at the next job; a second
+silence is the last). Where there
 is no worker — a browser that refuses it, a script that did not load, a
 message that cannot be sent — the work runs on the main thread, each job
 in a later task of its own. A worker that dies at work is started again

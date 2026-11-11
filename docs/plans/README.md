@@ -604,7 +604,7 @@ ids are the report's.
    (none had one: a dead worker moved its work onto the page for good),
    an aborted job leaving the line at once. The three clients 811 → 501
    lines, the rule 247, eight tests of it on a fake worker; a worker
-   that says nothing for 15 s counts as one that failed to load (a job
+   that says nothing for 15 s is ended and started once more (a job
    waited on it for ever). **V8:**
    `lazyFeature` is `startOnce`; the `import()` measured again: 1 096.5 kB
    of viewer JS against 1 096.0 static, and the chunk fetched during the
