@@ -1541,7 +1541,7 @@ sequenceDiagram
 
 **Nothing waits that need not** (`boot-ahead.ts`): the route's HTML
 preloads the manifest and the tileset it names (`app/[site]/page.tsx`,
-read from the build's own manifest), and as soon as the HUD knows the
+named by the build's site index, `sites.json`), and as soon as the HUD knows the
 tileset's name it asks for the tileset and for the start tile's first
 two contents — beside the scene's chunk, the renderer's start and the
 scene's setup. The stream takes each from there once

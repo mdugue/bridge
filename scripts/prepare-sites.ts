@@ -39,6 +39,7 @@ import { SERVER_WISSEN_DIR, STADTWISSEN_FILE } from "../lib/city/stadtwissen";
 import type { StadtwissenIndex } from "../lib/city/stadtwissen";
 import { MANIFEST_FILE, tileIds } from "../lib/city/tile";
 import type { DataManifest } from "../lib/city/tile";
+import { TILESET_FILE } from "../lib/city/tileset";
 import { SITES } from "../sites";
 import type { SiteId } from "../sites";
 import { chosenSites } from "./site-choice";
@@ -240,6 +241,7 @@ for (const id of served) {
     readFileSync(path.join(OUT_DIR, id, MANIFEST_FILE), "utf-8")
   ) as DataManifest;
   const map = manifest.files[SITE_MAP_FILE];
+  const tileset = manifest.files[TILESET_FILE];
   const statsPath = path.join(OUT_DIR, id, SITE_STATS_FILE);
   const stats = existsSync(statsPath)
     ? parseSiteStats(JSON.parse(readFileSync(statsPath, "utf-8")))
@@ -247,6 +249,7 @@ for (const id of served) {
   index.sites.push({
     id,
     ...(map ? { map: `${siteDataBase(id)}/${map}` } : {}),
+    ...(tileset ? { tileset: `${siteDataBase(id)}/${tileset}` } : {}),
     ...(stats ? { stats } : {}),
   });
 }

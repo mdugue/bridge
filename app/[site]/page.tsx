@@ -64,7 +64,7 @@ const Viewer = async ({ params }: Props) => {
   // The manifest and the tileset it names, on their way with the HTML:
   // the viewer's own fetches then find them (as its fetch asks: CORS mode,
   // same-origin credentials).
-  for (const href of firstFetches(built.site.id)) {
+  for (const href of firstFetches(built)) {
     preload(href, { as: "fetch", crossOrigin: "anonymous" });
   }
   return (
