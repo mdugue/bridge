@@ -77,6 +77,12 @@ export const BAKE_ENTRIES = {
   ],
   /** the site's line levels (ADR 0041) */
   lineLevels: ["scripts/prepare/lines.ts", "scripts/line-levels.ts"],
+  /** a tile's platforms, cut back from the site's drawn tracks */
+  platforms: [
+    "scripts/prepare/lines.ts",
+    "scripts/line-levels.ts",
+    "lib/city/platform-clearance.ts",
+  ],
   /** a class raster downsampled; the artifact table names its size */
   classRaster: [
     "scripts/prepare/side-bakes.ts",

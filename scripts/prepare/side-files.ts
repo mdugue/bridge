@@ -104,7 +104,7 @@ export async function publishSideFiles(): Promise<void> {
         kind === "platform" &&
         existsSync(at(sideFileSource(SITE, artifact.file)))
       ) {
-        names[kind] = publishPlatforms(artifact.file);
+        names[kind] = await publishPlatforms(artifact.file);
         continue;
       }
       if (artifact.bakedFrom) {
