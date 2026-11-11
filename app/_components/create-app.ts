@@ -1293,8 +1293,12 @@ async function teardown(
   renderer: WebGPURenderer
 ): Promise<void> {
   try {
-    runCleanups(cleanups);
-    disposeObject3D(scene);
+    try {
+      runCleanups(cleanups);
+    } finally {
+      // (`runCleanups` throws what a cleanup threw, after the last one)
+      disposeObject3D(scene);
+    }
   } finally {
     // whatever a cleanup threw, the renderer and its device go
     await releaseRenderer(renderer);
@@ -1322,8 +1326,11 @@ async function teardownWhole(
   }) => void
 ): Promise<void> {
   try {
-    runCleanups(cleanups);
-    disposeObject3D(scene);
+    try {
+      runCleanups(cleanups);
+    } finally {
+      disposeObject3D(scene);
+    }
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
     });
