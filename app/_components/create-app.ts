@@ -165,6 +165,7 @@ import type { DesignLayer, DesignStatus } from "./design-layer";
 import { cutsGround, foldedThing, groundKeptUnderDesign } from "./design-site";
 import { graphOf, setGraph } from "./material-slots";
 import type { CrashTrail } from "./crash-trail";
+import { routeThreeErrors } from "./three-console";
 import { leafLitterAt, seasonAt, seasonShiftFor } from "@/lib/city/tree-season";
 import { crownLeaf, footLitter } from "./tree-foot";
 import {
@@ -1221,6 +1222,13 @@ export async function createCityWalkApp(
     opts.budget,
     opts.trail !== undefined
   );
+  // three's own errors (a pipeline that failed to build, and why): into
+  // the trail, which saw only what came after them (three-console.ts)
+  const trailThree = opts.trail
+    ? routeThreeErrors(opts.trail.error)
+    : () => {
+        // no trail: three prints as it does
+      };
   if (opts.trail) {
     traceRenderer(renderer, opts.trail, opts.budget.safety);
   }
@@ -1235,6 +1243,7 @@ export async function createCityWalkApp(
   // The scene-wide shared resources (three-utils.ts `sceneShared`) go with
   // the last app that holds them: first in, so they unwind last.
   const cleanups: (() => void)[] = [
+    trailThree,
     retainSceneMaterials(),
     retainOpenSkyTexture(),
   ];
