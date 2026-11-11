@@ -8,6 +8,7 @@ import rasterio
 import shapely
 from rasterio import features as rfeatures
 from rasterio.transform import from_origin
+from scipy import ndimage as ndi
 from shapely import affinity
 
 from bake.common import Tile
@@ -391,6 +392,21 @@ def test_a_wing_beside_a_low_roof_ends_along_its_eave_not_the_scans_blur(phase):
     # where the wing ends along each row: one straight line
     ends = [int(np.argmax(z[r] < 15.0)) for r in range(5, rows - 5)]
     assert np.ptp(ends) <= 1
+
+
+def test_a_stage_houses_wall_blur_is_split_at_half_height_not_a_collar():
+    # a stage house 20 × 24 m, its hipped roof from 18 m at the eave to
+    # 24 m, over a flat roof at 10 m; the scan grades its 8 m wall over a
+    # few cells, which the bands once drew as a collar round its roof
+    r, c = np.indices((60, 60)) + 0.5
+    inside = (np.abs(r - 30) < 12) & (np.abs(c - 30) < 10)
+    hip = 18 + np.minimum(np.minimum(12 - np.abs(r - 30), 10 - np.abs(c - 30)) * 0.8, 6.0)
+    dom = ndi.gaussian_filter(np.where(inside, hip, 10.0), 1.0)
+    own = np.ones(dom.shape, bool)
+    m = measured_model(dom, own, own, np.zeros_like(own), 20)
+    assert not [z for z in m.level if 11.5 < z < 16.5]
+    tower = m.lab == m.lab[30, 30]
+    assert abs(int(tower.sum()) - int(inside.sum())) <= 0.05 * inside.sum()
 
 
 def test_a_courtyard_drawn_from_the_scan_has_the_walls_straight_corners_of_the_building():

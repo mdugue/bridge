@@ -171,6 +171,7 @@ EXTEND_CELLS = 4  # how far past its cells a face's surface runs on its plane
 EAVE_WALL_M = 1.0  # a level this far under a flank's eave meets it at a wall along the eave
 EAVE_REACH = 3  # ... the cells either side within this of the face (the scan's blur) moved
 EAVE_DOWNHILL_COS = 0.5  # ... only where the plane falls toward them (60°): not a gable's end
+COLLAR_FLAT_SHARE = 0.5  # a narrow level under a flank the scan lies flat on less: a wall's blur
 FORM_SPAN_M = 3.0  # a LoD2 roof rising less than this has no form to keep
 FORM_R = 0.85  # the scan follows a LoD2 roof's form this closely (Pearson r)
 FORM_MISS_SHARE = 0.2  # ... and misses it on at most this share, once level
@@ -536,6 +537,13 @@ class Model:
     level: np.ndarray  # per region (index = label - 1), its median height
     faces: np.ndarray  # per label, whether the region is drawn as its surface
     surface: np.ndarray  # per cell, the measured surface the faces show
+    blur: np.ndarray | None = None  # per cell, a wall's blur the model splits at half height
+
+    def judged(self, cells: np.ndarray) -> np.ndarray:
+        """`cells` the model is judged on: its own, less a wall's blur it
+        draws as a sharp wall (no sharp roof lies on that blur)."""
+        out = cells & (self.lab > 0)
+        return out if self.blur is None else out & ~self.blur
 
     def heights(self) -> np.ndarray:
         """The model's roof per cell (NaN outside)."""
@@ -598,7 +606,7 @@ def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None):
     return surface, implausible, gables
 
 
-def _straight_eaves(h, lab, faces, surface, gables, small_cells: int) -> None:
+def _straight_eaves(h, lab, faces, surface, gables, small_cells: int) -> np.ndarray:
     """A face drawn as flanks ends where its flanks reach their eaves: the
     cells of a level well below an eave (EAVE_WALL_M, a courtyard's roof)
     that the flank's plane still stands over join the face, within
@@ -655,6 +663,70 @@ def _straight_eaves(h, lab, faces, surface, gables, small_cells: int) -> None:
         for t in np.unique(to[give]):
             mine = give & (to == t)
             sub[ndi.binary_propagation(sub == t, mask=mine | (sub == t)) & mine] = t
+    return _split_collars(h, lab, faces, surface, gables)
+
+
+def _split_collars(h, lab, faces, surface, gables) -> np.ndarray:
+    """A narrow level under a face drawn as flanks the scan does not lie
+    flat on (COLLAR_FLAT_SHARE) is the blur of the wall below the face's
+    eave — a 1 m scan grades a stage house's 8 m wall over three cells,
+    banded into a collar round its roof: split at half height, each cell
+    going to the face's plane or to the part beyond, whichever its scan
+    lies nearer, so the wall stands where the scan crosses its middle. In
+    place; returns the cells split."""
+    blur = np.zeros(lab.shape, bool)
+    n = int(lab.max())
+    narrow = np.concatenate([[False], _narrow(lab, n)])
+    med = np.concatenate([[np.nan], _region_medians(lab, h, n)])
+
+    def height(r: int, cells: np.ndarray) -> np.ndarray:
+        # a face drawn as flanks: its plane, else the part's median
+        z = np.full(int(cells.sum()), med[r])
+        if r in gables:
+            win, fit, _ = gables[r]
+            inside = np.zeros(lab.shape, bool)
+            inside[win] = True
+            full = np.full(lab.shape, np.nan)
+            full[win] = fit
+            z = np.where(inside[cells], full[cells], z)
+        return z
+
+    for rid, (win, fit, _) in gables.items():
+        sub = lab[win]
+        mine = sub == rid
+        near = ndi.binary_dilation(mine, iterations=1) & ~mine & (sub > 0)
+        collar = np.zeros(sub.shape, bool)
+        for r in np.unique(sub[near]):
+            cells = sub == r
+            flat = float((np.abs(h[win][cells] - med[r]) <= roof_planes.FLANK_TOL_M).mean())
+            under = float(np.median(fit[cells])) - med[r] > EAVE_WALL_M
+            if narrow[r] and not faces[r] and flat < COLLAR_FLAT_SHARE and under:
+                collar |= cells
+        other = (sub > 0) & ~mine & ~collar
+        if not collar.any() or not other.any():
+            continue
+        blur[win] |= collar
+        beyond = fill_nearest(np.where(other, sub, 0), other)
+        hh, top = h[win], surface[win]
+        for t in np.unique(beyond[collar]):
+            cells = collar & (beyond == t)
+            up = np.zeros(sub.shape, bool)
+            spread = np.zeros(lab.shape, bool)
+            spread[win] = cells
+            low = height(int(t), spread)
+            # nearer the face's plane, or off a lower face's plane (whose
+            # plane, carried this far past its edge, may stand anywhere)
+            off = np.abs(hh[cells] - low)
+            up[cells] = (np.abs(hh[cells] - fit[cells]) <= off) | (
+                bool(faces[t]) & (off > EAVE_WALL_M)
+            )
+            sub[up] = rid
+            top[up] = fit[up]
+            down = cells & ~up
+            sub[down] = t
+            if faces[t]:
+                top[down] = low[~up[cells]]
+    return blur
 
 
 def _pockets(rest: np.ndarray, closed: np.ndarray, small_cells: int) -> np.ndarray:
@@ -746,9 +818,9 @@ def measured_model(
         face &= ~(dropped & ~alone) & ~(alone & flank_only)
         flank_only &= face
     # `gables` holds only faces drawn as flanks (an implausible one is none)
-    _straight_eaves(h, lab, faces, surface, gables, small_cells)
+    blur = _straight_eaves(h, lab, faces, surface, gables, small_cells)
     level = _region_medians(lab, h, int(lab.max()))
-    return Model(lab, level, faces, surface)
+    return Model(lab, level, faces, surface, blur)
 
 
 @dataclass
@@ -1308,7 +1380,8 @@ def drawn_miss(
     model: Model, grid: Grid, dom: np.ndarray, judged: np.ndarray
 ) -> Callable[[list], float]:
     """The share of the `judged` cells under parts drawn of `model`
-    (`region_polygons`) where they miss DOM1 by more than MISS_M: each
+    (`region_polygons`), a wall's blur aside (`Model.judged`), where they
+    miss DOM1 by more than MISS_M: each
     part at its level, a face on its surface carried past its cells
     (`extend_face`, as `surface_grid` writes it)."""
 
@@ -1329,7 +1402,8 @@ def drawn_miss(
             box = roof_planes.grown_box(at | mine, EXTEND_CELLS + 2)
             sub = extend_face(model.surface[box], mine[box])
             h[box][at[box]] = sub[at[box]]
-        return miss_share(h, dom, judged & (lab > 0))
+        sharp = judged if model.blur is None else judged & ~model.blur
+        return miss_share(h, dom, sharp & (lab > 0))
 
     return share
 
@@ -1456,7 +1530,7 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     # hall's monitor roofs, 5 m strips 3 m over the rest, merged into blocks
     # that miss as much as the LoD2 did), they stay
     def misses(m: Model) -> bool:
-        return miss_share(m.heights(), dom, judged & (m.lab > 0)) > bar
+        return miss_share(m.heights(), dom, m.judged(judged)) > bar
 
     if misses(model):
         model = measured_model(

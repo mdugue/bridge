@@ -1145,8 +1145,21 @@ visual-variable codebook is in
   together, their takes before their gives, a cell two take going to
   the higher plane (as a valley is drawn): a level they would leave
   smaller than a part or narrower than 7 m (`NARROW_M`, a strip between
-  two wings standing as a box) keeps its cells. An der
-  Frauenkirche 5's ring is now 16 flanks meeting at hips; the block at
+  two wings standing as a box) keeps its cells. **A wall's blur under a
+  flank** (`_split_collars`, since 2026-11-11): a level narrower than
+  7 m below a face drawn as flanks (its median over 1 m under the planes
+  there) that the scan lies flat on (within 0.5 m) over less than half
+  its cells is no roof but the scan grading a wall over a few cells — a
+  stage house's 8 m wall banded into a collar round its hipped roof, the
+  Schauspielhaus's at 145 m: it is split at half height, each cell to the
+  face's plane or to the part beyond (a lower face's plane only within
+  1 m of the scan) whichever its scan lies nearer, so the wall stands
+  where the scan crosses its middle; those cells are not judged when the
+  model's miss is measured (`Model.judged`: no sharp roof lies on a
+  blur, and the split had sent a small gable at 2 % over its bar back to
+  the flat model). 31 buildings on Dresden's, Leipzig's, Hamburg's and
+  Grimma's tiles lost such a collar or ledge, 0.4 % fewer outline points.
+  An der Frauenkirche 5's ring is now 16 flanks meeting at hips; the block at
   Schloßstraße and Sporergasse 23 flanks, the scan within 0.5 m of the
   drawn roof on 70 % of its cells (35 % with the planes first). A face most of whose cells only the
   flank rule found is drawn as flanks or not at all: the planes or a
@@ -1207,9 +1220,10 @@ visual-variable codebook is in
   under 4 m² in plan, dropped →
   `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
-  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 741
-  parts, 334 of them faces** (2026-11-11; 2 738 and 335 before a
-  landmark's flanks took every building's bar; 2 814 and 367 before the flanks;
+  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 731
+  parts, 335 of them faces** (2026-11-11; 2 741 and 334 before a wall's
+  blur was split, 2 738 and 335 before a landmark's flanks took every
+  building's bar; 2 814 and 367 before the flanks;
   1 081, 2 755 and 222 before the plausibility rule; 886 objects, 2 227 parts before
   the band below 40 %; 2 956 parts before the strips merged; the
   Altstadt most); the step runs on every site — Hamburg 587 objects (365
