@@ -52,7 +52,7 @@ import {
 } from "@/lib/city/stream-order";
 import type { OrderedTile } from "@/lib/city/stream-order";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import { ownsPoint } from "@/lib/city/tileset";
+import { contentExtras, ownsPoint } from "@/lib/city/tileset";
 import type {
   CityExtras,
   ContentExtras,
@@ -1963,7 +1963,8 @@ export class DressingPlugin {
   }
 
   private async dressContent(scene: Object3D, tile: object): Promise<void> {
-    const extras = scene.userData as ContentExtras;
+    // the glTF's own extras with the side files its tile names
+    const extras = contentExtras(scene.userData, tile);
     // The content's own mesh by its node name ("terrain", "city"); the fine
     // terrain also carries a "stairs" node.
     const mesh = meshNamed(scene, extras.kind) ?? firstMesh(scene);

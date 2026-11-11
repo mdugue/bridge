@@ -11,7 +11,7 @@ import { tileIds } from "../../lib/city/tile";
 import { siteFromArgs } from "../../sites";
 import { bakeMode, NOT_CACHED } from "../warmers";
 import { readLockfile } from "../bake-sources";
-import { cachedEntry, writeEntry } from "../bake-cache";
+import { cachedEntry, generations, writeEntry } from "../bake-cache";
 import { KEY_PLUMBING, KEY_STOPS } from "../bake-entries";
 import { createKeyMaker } from "../cache-keys";
 import { sharedCache } from "../shared-cache";
@@ -117,6 +117,9 @@ export const cacheKey = keys.key;
  */
 export const siteWide = (name: string) => `${SITE.id}.${name}`;
 
+/** How many entries a name keeps in the local cache (bake-cache.ts). */
+const KEPT = generations();
+
 /** Every branch's bake cache, behind the local one (shared-cache.ts). */
 const SHARED = sharedCache(
   process.env,
@@ -132,14 +135,14 @@ async function fromShared(
 ): Promise<{ bytes: Uint8Array; path: string } | null> {
   const bytes = await SHARED.cache?.get(name, key);
   return bytes
-    ? { bytes, path: writeEntry(CACHE_DIR, name, key, bytes) }
+    ? { bytes, path: writeEntry(CACHE_DIR, name, key, bytes, KEPT) }
     : null;
 }
 
 /** A baked entry, written to the local cache and noted for the shared one
  *  (`settleShared` uploads it, read back from the local cache). */
 function store(name: string, key: string, bytes: Uint8Array): string {
-  const path = writeEntry(CACHE_DIR, name, key, bytes);
+  const path = writeEntry(CACHE_DIR, name, key, bytes, KEPT);
   SHARED.cache?.put(name, key, () =>
     existsSync(path) ? readFileSync(path) : null
   );

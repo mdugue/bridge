@@ -1,8 +1,11 @@
 /**
  * The OGC 3D Tiles tileset the viewer streams (3DTilesRendererJS), and the
- * `extras` the bake writes next to each glTF so the runtime can dress it.
- * scripts/prepare-data.ts writes it; app/_components/tile-stream.ts reads
- * it. No THREE, no DOM.
+ * `extras` the runtime dresses each glTF by: what the content is (in the
+ * glTF's own extras: its kind, tile, level and extent) and the side files
+ * it is dressed with (on its tile in the tileset: `TerrainFiles`,
+ * `CityFiles` — a glTF's bytes do not change when a side file's name
+ * does). scripts/prepare-data.ts writes both; app/_components/
+ * tile-stream.ts reads them as one. No THREE, no DOM.
  *
  * Tree, per site tile:
  *
@@ -105,10 +108,9 @@ export const FAR_CITY_ERROR = 4;
 export type DressingFiles = Partial<Record<DressingKind, string>>;
 
 /**
- * The terrain extras' raster keys in the order they are written — part of
- * every terrain glb's bytes and its cache key, so a new key goes at the
- * end. Which file each names, on which level and beside what, is the
- * artifact table's `terrain` column (lib/city/tile.ts).
+ * The terrain extras' raster keys in the order they are written (on the
+ * level's tile in the tileset). Which file each names, on which level and
+ * beside what, is the artifact table's `terrain` column (lib/city/tile.ts).
  */
 export const TERRAIN_RASTER_KEYS = [
   "landcover",
@@ -151,8 +153,8 @@ export function terrainRasterExtras(
   names: Partial<Record<TileArtifactKind, string>>,
   level: 0 | 1,
   crop: TerrainExtras["cultivatedCrop"] | undefined
-): Pick<TerrainExtras, "landcover" | "landcoverLow"> &
-  Partial<Pick<TerrainExtras, (typeof TERRAIN_RASTER_KEYS)[number]>> {
+): Pick<TerrainFiles, "landcover" | "landcoverLow"> &
+  Partial<Pick<TerrainFiles, (typeof TERRAIN_RASTER_KEYS)[number]>> {
   const has = (kind: TileArtifactKind) =>
     Boolean(names[kind]) && (kind !== "cultivatedRaster" || crop !== undefined);
   const out: Record<string, unknown> = {};
@@ -179,18 +181,10 @@ export function terrainRasterExtras(
   return out as Pick<TerrainExtras, "landcover" | "landcoverLow">;
 }
 
-export interface TerrainExtras {
+/** What a terrain level's glTF says of itself (its own `extras`). */
+export interface TerrainContent {
   bounds: TerrainBounds;
-  /** fine level only */
-  dressing?: DressingFiles;
-  /** coarse level only: the few side files it is dressed with
-   *  (lib/city/tile.ts `COARSE_DRESSING_KINDS`) */
-  coarse?: Partial<Record<CoarseDressingKind, string>>;
   kind: "terrain";
-  /** class raster at the level's edge */
-  landcover: string;
-  /** class raster at ≤ 2048² (phones) */
-  landcoverLow: string;
   level: 0 | 1;
   /** lowest valid elevation (m) — the valley floor */
   minElevation: number;
@@ -205,6 +199,26 @@ export interface TerrainExtras {
    * (lib/city/terrain-tin.ts TinIndex) instead of reading a grid.
    */
   tin?: { maxError: number; triangles: number };
+  /** the site tile (not `tile`: the renderer writes its own `userData.tile`) */
+  tileId: string;
+  /** the water sheet's tint grid and foam lines (lib/city/water-bodies.ts;
+   *  foam on the fine level only) — absent where the tile's water keeps the
+   *  sheet's own colour and nothing falls */
+  water?: WaterLook;
+}
+
+/** The side files a terrain level is dressed with, by their published
+ *  names (on the level's tile in the tileset, `tileNode`). */
+export interface TerrainFiles {
+  /** fine level only */
+  dressing?: DressingFiles;
+  /** coarse level only: the few side files it is dressed with
+   *  (lib/city/tile.ts `COARSE_DRESSING_KINDS`) */
+  coarse?: Partial<Record<CoarseDressingKind, string>>;
+  /** class raster at the level's edge */
+  landcover: string;
+  /** class raster at ≤ 2048² (phones) */
+  landcoverLow: string;
   ndvi?: string;
   /** OSM paving raster (fine level only: its patterns are close-range) */
   surface?: string;
@@ -230,24 +244,30 @@ export interface TerrainExtras {
   /** horizon raster, eight RGBA layers stacked: the far band, then the
    *  near band (both levels) */
   horizon?: string;
-  /** the site tile (not `tile`: the renderer writes its own `userData.tile`) */
-  tileId: string;
-  /** the water sheet's tint grid and foam lines (lib/city/water-bodies.ts;
-   *  foam on the fine level only) — absent where the tile's water keeps the
-   *  sheet's own colour and nothing falls */
-  water?: WaterLook;
 }
 
-export interface CityExtras {
+/** A terrain level as the viewer dresses it: its glTF's extras with its
+ *  tile's (`contentExtras`). */
+export type TerrainExtras = TerrainContent & TerrainFiles;
+
+/** What the buildings' glTF says of itself (its own `extras`). */
+export interface CityContent {
+  kind: "city";
+  tileId: string;
+}
+
+/** The side files the buildings are dressed with, by their published
+ *  names (on both of their tiles in the tileset). */
+export interface CityFiles {
   /** what street photos say about the tile's facades
    *  (lib/city/facade-reading.ts) */
   facades?: string;
-  kind: "city";
   /** the tile's sky-view raster, shared with its terrain (the facades'
    *  ambient light) */
   svf?: string;
-  tileId: string;
 }
+
+export type CityExtras = CityContent & CityFiles;
 
 export type ContentExtras = CityExtras | TerrainExtras;
 
@@ -302,6 +322,8 @@ export interface BakedTile {
   city: string;
   /** the same buildings simplified (`FAR_CITY_SIMPLIFY`) */
   cityFar: string;
+  /** the side files each content is dressed with */
+  files: { city: CityFiles; terrain: Record<0 | 1, TerrainFiles> };
   id: string;
   /** terrain glb per level */
   terrain: Record<0 | 1, string>;
@@ -362,8 +384,14 @@ function tileNode(tile: BakedTile, offset: { cx: number; cy: number }) {
         geometricError: FAR_CITY_ERROR,
         refine: "REPLACE",
         content: { uri: tile.cityFar },
+        extras: tile.files.city,
         children: [
-          { boundingVolume, geometricError: 0, content: { uri: tile.city } },
+          {
+            boundingVolume,
+            geometricError: 0,
+            content: { uri: tile.city },
+            extras: tile.files.city,
+          },
         ],
       },
       {
@@ -371,16 +399,33 @@ function tileNode(tile: BakedTile, offset: { cx: number; cy: number }) {
         geometricError: COARSE_TERRAIN_ERROR,
         refine: "REPLACE",
         content: { uri: tile.terrain[1] },
+        extras: tile.files.terrain[1],
         children: [
           {
             boundingVolume,
             geometricError: 0,
             content: { uri: tile.terrain[0] },
+            extras: tile.files.terrain[0],
           },
         ],
       },
     ],
   };
+}
+
+/**
+ * A content's extras as the viewer reads them: what its glTF says of
+ * itself (`own`: the scene's `userData`) with the side files its tile in
+ * the tileset names (`tile.extras`, written by `tileNode`). Written into
+ * `own`, which every later reader of the scene's `userData` then finds
+ * whole.
+ */
+export function contentExtras(own: object, tile: unknown): ContentExtras {
+  const files = (tile as { extras?: unknown } | null)?.extras;
+  return Object.assign(
+    own,
+    typeof files === "object" && files !== null ? files : {}
+  ) as ContentExtras;
 }
 
 /** The tileset JSON over `tiles` (the spawn tile first). */

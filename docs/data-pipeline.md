@@ -447,7 +447,10 @@ shapefile with its sidecars), what it looked for (`os.stat`,
 `os.path.exists`), which folders it listed and what it wrote, with content
 hashes, in `data/_raw/<provider>/.bake-cache/<site>/<step>/<tile>.json`.
 The next `bake` skips that step on that tile when the step's code (its
-module and every bake module it imports, and `uv.lock`), the spec, every
+module and every bake module it imports — not `step_cache.py` itself,
+which its `VERSION` stands for — and what `uv.lock` resolved for the
+packages a bake runs with, `locked_runtime`: a new ruff or pytest runs
+nothing again), the spec, every
 file it read or looked for and every file it wrote are as recorded. A
 change to one step's code, or to one input, re-runs that step and the steps
 that read what it wrote; everything else is a check of file sizes and
@@ -679,8 +682,12 @@ tileset under `public/data/<site>/`
    table, `tileArtifacts` in `lib/city/tile.ts`; the extras' types derive
    from it. Only class rasters are resized; no
    raster whose alpha carries data goes through an image tool any more.
-2. **Content.** Per tile, three glTF files (below), each naming its side
-   files in the glTF scene `extras`.
+2. **Content.** Per tile, four glTF files (below). A glTF's scene
+   `extras` say what it is (its kind, tile, level, extent); the side files
+   it is dressed with are named on its tile in the tileset (`TerrainFiles`,
+   `CityFiles`), so a side file that changes neither re-bakes nor renames
+   a glTF (2026-11-11; until then the names stood in the glTF and a new
+   sky-view raster re-baked the tile's buildings).
 3. **Tilesets.** `tileset.json` over every tile of the site and
    `tileset-spawn.json` over the spawn tile alone (`lib/city/tileset.ts`,
    `buildTileset`). The client picks the full one unless the scene budget
@@ -921,7 +928,7 @@ on Vercel in `.next/cache/prepare-data/`, since its build cache keeps only
 `node_modules` and `.next/cache` from one deployment to the next),
 one entry per output, under a key over the **contents** of its input
 files, the bake's own sources and the values it depends on (the recenter
-offset, the `extras` it names). The sources are found in two steps. The
+offset, what its `extras` say). The sources are found in two steps. The
 **entries** are one table, `scripts/bake-entries.ts`: each artifact names
 the bake modules that make it (`ground` for the shaped ground, one row per
 artifact kind). From those entries `scripts/bake-sources.ts` walks the
@@ -941,8 +948,8 @@ are its entry (`KEY_STOPS`), and neither is what only they import: the
 plumbing (`prepare/context.ts`: the site, the mode, the log, the cache,
 the gzip level), which every key carries whole instead and whose imports
 reach every site's config; the steps whose exports reach other bakes only
-as values the keys carry (`KEY_VALUES`: the frame's offset, the side
-files' published names in the `extras`; the test pins what each exports,
+as values the keys carry (`KEY_VALUES`: the frame's offset; the side
+files' published names reach no key at all, they go into the tileset; the test pins what each exports,
 the side files' step bakes nothing itself, and the buildings, which place
 every tile in the spawn tile's frame, list the frame among their entries), so the buildings' bake, which the frame reads,
 does not re-bake the grounds, nor the lines the side files publish the
@@ -972,9 +979,12 @@ module every ground walks (`lib/city/tileset.ts`, `lib/city/site.ts`,
 `lib/city/tile.ts`) re-bakes every site cold — on Vercel past its build
 time. Something only the viewer or another bake reads goes in its own
 module (the walks' `extras` field is `WalksExtras` in `lib/city/walks.ts`).
-A changed input, a changed bake or a renamed side file re-bakes; a checkout
-or a touch alone does not; anything else is a cache
-read. Every site shares the directory, and it keeps one entry per name: a
+A changed input or a changed bake re-bakes; a renamed side file, a
+checkout or a touch alone does not; anything else is a cache
+read. Every site shares the directory, and it keeps a name's newest
+entries (`generations()`: three at a desk, so a checkout of another branch
+and back across a bake module bakes neither way; one on Vercel and in CI,
+whose caches travel with every build; `BAKE_CACHE_GENERATIONS` overrides): a
 tile's names are unique across sites, the site-wide ones (the frame, the
 map picture, the stats) carry the site's id. An entry is written whole
 (`scripts/bake-cache.ts`): to a part file, renamed into place, the name's
@@ -1041,7 +1051,8 @@ killed run leaves a part file the next one prunes, never a truncated file
 under a name it trusts);
 `manifest.json` (`{ version: 1, files: {logical: hashed} }`) maps every
 name, but the viewer looks up only the tileset in it: the tileset names
-the hashed content, and the content's `extras` name the hashed side files
+the hashed content and, on each content's tile (`extras`), the hashed side
+files it is dressed with
 (the map picture is looked up the same way). The viewer fetches
 `/data/<site>/manifest.json`; every other URL resolves relative to the
 tileset's. Files the manifest no longer references are pruned, and no

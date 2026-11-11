@@ -5,6 +5,7 @@ description = "The offline geodata bakes: provider downloads -> the per-tile art
 requires-python = ">=3.12,<3.14"
 dependencies = [
   "laspy[lazrs]==2.7.0",
+  "networkx==3.7",
   "numpy==2.5.4",
   "onnxruntime==1.31.1",
   "pillow==13.0.0",

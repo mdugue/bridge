@@ -24,7 +24,7 @@ import { withPhotoGlass } from "../../lib/city/photo-glass";
 import { WINDOWS_FILE } from "../../lib/city/windows-file";
 import { cityMeshSourceFiles } from "../../lib/city/tile";
 import { FAR_CITY_SIMPLIFY } from "../../lib/city/tileset";
-import type { CityExtras } from "../../lib/city/tileset";
+import type { CityContent, CityFiles } from "../../lib/city/tileset";
 import type { CityJsonDocument } from "../../lib/city/types";
 import { bakeCityMesh, cityMesh } from "../bake-city-mesh";
 import type { BakedCityMesh } from "../city-bake";
@@ -124,9 +124,13 @@ function parseCity(
 }
 
 /** A tile's buildings: footprints JSON + glTF, both from one parse. */
-export async function bakeCity(
-  tile: string
-): Promise<{ far: string; file: string; footprints: string; maxZ: number }> {
+export async function bakeCity(tile: string): Promise<{
+  far: string;
+  file: string;
+  files: CityFiles;
+  footprints: string;
+  maxZ: number;
+}> {
   const src = cityMeshSourceFiles(SITE, tile);
   // the ground-floor windows clear the tile's fine ground
   const ground = await groundFile(tile);
@@ -170,16 +174,18 @@ export async function bakeCity(
       utf8({ maxZ: built().maxElevation })
     )
   ) as { maxZ: number };
+  // The side files the buildings are dressed with are named on their
+  // tiles in the tileset (lib/city/tileset.ts `CityFiles`), not in the
+  // glb: a sky-view raster or a facade reading that changes re-bakes no
+  // building. The facades' ambient light reads the terrain's sky-view
+  // raster, their relief and tone what street photos saw of them.
   const svf = sideFiles.get(tile)?.svf;
   const facades = sideFiles.get(tile)?.facades;
-  const extras: CityExtras = {
-    kind: "city",
-    tileId: tile,
-    // The facades' ambient light reads the terrain's sky-view raster.
+  const files: CityFiles = {
     ...(svf ? { svf } : {}),
-    // ...and their relief and tone what street photos saw of them.
     ...(facades ? { facades } : {}),
   };
+  const extras: CityContent = { kind: "city", tileId: tile };
   const name = `city_${tile}.glb.gz`;
   const glbKey = cacheKey(
     inputs,
@@ -230,6 +236,7 @@ export async function bakeCity(
   return {
     far: publish(farName, farGlb),
     file: publish(name, glb),
+    files,
     footprints,
     maxZ,
   };

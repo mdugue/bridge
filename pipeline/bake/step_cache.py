@@ -6,7 +6,7 @@ others. Each run of a step on a tile records what it read, what it looked
 for, which folders it listed and what it wrote, with every file's content
 hash, in a manifest beside the raw data; the next run of that step on that
 tile skips it when the step's code (its module and every bake module it
-imports, and the locked packages), the site spec, everything it read or
+imports, and the locked packages a bake runs with), the site spec, everything it read or
 looked for and everything it wrote are as they were. So after a change to
 one step's code, or to one input, only the steps that read what changed
 run again — the rest of a `bake all` is a check of file times.
@@ -28,6 +28,7 @@ import hashlib
 import json
 import os
 import sys
+import tomllib
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -35,8 +36,9 @@ import pyogrio
 import pyogrio.raw
 import rasterio
 
-# Bumped when the manifest's meaning changes.
-VERSION = 2
+# Bumped when the manifest's meaning changes, or this module in a way that
+# changes what a step writes (`code_hash` leaves this module out).
+VERSION = 3
 PACKAGE = Path(__file__).resolve().parent
 LOCK = PACKAGE.parent / "uv.lock"
 # A shapefile's other files, read by GDAL with it.
@@ -393,15 +395,50 @@ def _closure(module: str) -> set[str]:
     return seen
 
 
+def locked_runtime(text: str) -> str:
+    """What the lockfile resolved for the packages a bake runs with: the
+    project's dependencies and everything they depend on, one line each
+    (name, version, source), sorted. Not the dev group — a new ruff or
+    pytest bakes nothing differently — and not the wheels' lists, which
+    grow when a package publishes one for another platform. A lockfile
+    that does not read as one stands whole (never a stale skip)."""
+    try:
+        packages = tomllib.loads(text)["package"]
+        root = next(p for p in packages if "virtual" in p["source"] or "editable" in p["source"])
+    except (tomllib.TOMLDecodeError, KeyError, StopIteration, TypeError):
+        return text
+    by_name: dict[str, list[dict]] = {}
+    for p in packages:
+        by_name.setdefault(p["name"], []).append(p)
+    seen: set[tuple[str, str]] = set()
+    lines: set[str] = set()
+    todo = [(d["name"], e) for d in root.get("dependencies", ()) for e in ("", *d.get("extra", ()))]
+    while todo:
+        name, extra = todo.pop()
+        if (name, extra) in seen:
+            continue
+        seen.add((name, extra))
+        # (a name locked at two versions for two platforms: both)
+        for p in by_name.get(name, ()):
+            lines.add(f"{name} {p.get('version')} {json.dumps(p.get('source'), sort_keys=True)}")
+            needs = p.get("optional-dependencies", {}).get(extra, ()) if extra else ()
+            for d in (*p.get("dependencies", ()), *needs):
+                todo.extend((d["name"], e) for e in ("", *d.get("extra", ())))
+    return "\n".join(sorted(lines))
+
+
 def code_hash(module: str) -> str:
-    """The step's module, every bake module it reaches and the lockfile."""
+    """The step's module, every bake module it reaches and the locked
+    packages a bake runs with (`locked_runtime`). Not this module: it is
+    the cache, in every step's imports through the OSM index and the
+    memos, and `VERSION` says when its meaning changes."""
     if module not in _CODE:
         h = hashlib.sha256(f"{VERSION}:{sys.version_info[:2]}".encode())
-        for m in sorted(_closure(module)):
+        for m in sorted(_closure(module) - {__name__}):
             p = _module_path(m)
             if p is not None:
                 h.update(m.encode() + b"\0" + p.read_bytes() + b"\0")
-        h.update(LOCK.read_bytes() if LOCK.exists() else b"")
+        h.update(locked_runtime(LOCK.read_text()).encode() if LOCK.exists() else b"")
         _CODE[module] = h.hexdigest()
     return _CODE[module]
 

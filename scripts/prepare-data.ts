@@ -181,6 +181,7 @@ for (let i = 0; i < TILES.length; i += 1) {
     bounds: tileExtentOf(SITE.tiles[i]),
     city: city.file,
     cityFar: city.far,
+    files: { city: city.files, terrain: { 0: fine.files, 1: coarse.files } },
     terrain: { 0: fine.file, 1: coarse.file },
     zRange: [
       Number.isFinite(minZ) ? minZ : 0,
