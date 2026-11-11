@@ -136,11 +136,19 @@ test("a model's pieces are one set per cell, and far cells are hidden", () => {
   );
   expect(benches.length).toBe(2);
   group.updateMatrixWorld(true);
-  expect(showFurnitureNear(group, new Vector3(10, 101, 0))).toBe(true);
+  // how many cells flipped (each asks its shadow rings for a redraw)
+  const flips = (eye: Vector3) => {
+    let n = 0;
+    showFurnitureNear(group, eye, () => {
+      n += 1;
+    });
+    return n;
+  };
+  expect(flips(new Vector3(10, 101, 0))).toBe(1);
   expect(benches.map((b) => b.visible)).toEqual([true, false]);
   // nothing changed: no shadow redraw
-  expect(showFurnitureNear(group, new Vector3(10, 101, 0))).toBe(false);
-  expect(showFurnitureNear(group, new Vector3(1210, 101, 0))).toBe(true);
+  expect(flips(new Vector3(10, 101, 0))).toBe(0);
+  expect(flips(new Vector3(1210, 101, 0))).toBe(2);
   expect(benches.map((b) => b.visible)).toEqual([false, true]);
   // Modell: every cell
   showFurnitureNear(group, null);

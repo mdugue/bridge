@@ -536,19 +536,16 @@ const CLOTH_PICK_M = 0.5;
  *  at EPSG (x, y). A box, not its shape (`toleranceBox`). */
 function clothSolid(
   [ex, ey]: readonly [number, number],
-  mast: AskSolid
-): AskSolid | null {
-  if (!("cylinder" in mast)) {
-    return null; // a mast is always a cylinder (`standing`)
-  }
+  mast: Cylinder
+): AskSolid {
   const yaw = flagYaw(ex, ey);
   // local +X turned by yaw: (cos, −sin) in the scene's x–z; across it
   // (sin, cos)
   const [ax, az] = [Math.cos(yaw), -Math.sin(yaw)];
   const [bx, bz] = [-az * (CLOTH_PICK_M / 2), ax * (CLOTH_PICK_M / 2)];
-  const { x, z } = mast.cylinder;
+  const { x, z } = mast;
   const [fx, fz] = [x + ax * FLAG_CLOTH_L, z + az * FLAG_CLOTH_L];
-  const top = mast.cylinder.y1 - FLAG_BALL;
+  const top = mast.y1 - FLAG_BALL;
   return {
     prism: {
       ring: [
@@ -610,7 +607,7 @@ function standing(
   h: number,
   ctx: OwnGroundContext,
   deck?: number
-): AskSolid | null {
+): { cylinder: Cylinder } | null {
   // on a bridge, its deck's top (pipeline/bake/furniture.py `Decks`)
   const y = deck ?? ctx.treeHeightAt(ex, ey);
   if (y === null) {
@@ -976,13 +973,13 @@ function furnitureItem(
     };
     // a flag's cloth its own item, asked as the mast: its box a tolerance,
     // the mast still a thing the lens may focus on
-    const cloth = p.k === "flag" ? clothSolid(at, solid) : null;
-    return cloth
-      ? [
-          { solids: [solid], target },
-          { solids: [cloth], target },
-        ]
-      : [{ solids: [solid], target }];
+    if (p.k !== "flag") {
+      return [{ solids: [solid], target }];
+    }
+    return [
+      { solids: [solid], target },
+      { solids: [clothSolid(at, solid.cylinder)], target },
+    ];
   }
   const ring = f.geometry.coordinates[0];
   const centre = ringCentre(ring);
