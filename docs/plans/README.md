@@ -640,6 +640,17 @@ ids are the report's.
    AO's 5 × 5 smoothing made separable) changes the picture and its gain
    is GPU time no container measures.
 
+9. **Follow-ups the maintainer asked for (2026-11-11 evening)**, each a
+   draft stacked on the last: **(a) the minimap's picture** — each tile's
+   buildings baked into a 192² grey PNG (`figure_<t>.png`, 10.4 m a
+   pixel): Dresden's minimap fetches 139 kB where it fetched 2.0 MB of
+   footprints and holds fifteen 192² canvases (2.2 MB) instead of
+   ≈ 4.5 MB of packs; a tile's footprints come only for a demolish or a design's
+   cover (`footprintsIn`, `footprintsSettled`). (b) the eave and cornice
+   bands as one face with bent normals; (c) a lighter far level; (d) the
+   weld for trees and furniture; (e) the dressing in a worker; (f) the
+   rails baked into the ground.
+
 Not planned, for the maintainer: F14 (the re-baked rasters of 16 days
 are 633 MB of superseded blobs: squash-merge data PRs, or rewrite the
 history once), F15 (Dresden's DGMs are still LZW: 204 MB against about

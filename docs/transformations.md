@@ -751,7 +751,8 @@ visual-variable codebook is in
   `textureLoad`
   (`lib/city/city-mesh.ts` `packObjectTexels`), so the style lives once per
   building, not once per vertex. Footprints go, packed, to `footprints_<tile>.fpr.gz`
-  (`lib/city/footprint-pack.ts`) for the minimap (which draws the bridge decks from each tile's `bridge`
+  (`lib/city/footprint-pack.ts`), and as a 192² grey picture of their cover to `figure_<tile>.png`
+  (`lib/city/footprint-figure.ts`) for the minimap (which draws the bridge decks from each tile's `bridge`
   file too, in the colour of the class they carry — the class raster
   shows the river under them). Demolish = filter the building tree out of the index
   buffer + rebuild the BVH; BVH picking/collision, each tile's BVH built

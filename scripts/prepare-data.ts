@@ -157,6 +157,7 @@ if (MODE.kind === "ground") {
 
 const baked: BakedTile[] = [];
 const footprintFiles = new Map<string, string>();
+const figureFiles = new Map<string, string>();
 const groundHeights: number[] = [];
 for (let i = 0; i < TILES.length; i += 1) {
   const tile = TILES[i];
@@ -167,6 +168,7 @@ for (let i = 0; i < TILES.length; i += 1) {
   const city = await bakeCity(tile);
   const cityMs = since(t0);
   footprintFiles.set(tile, city.footprints);
+  figureFiles.set(tile, city.figure);
   t0 = performance.now();
   const fine = await bakeTerrain(tile, 0);
   const fineMs = since(t0);
@@ -366,6 +368,7 @@ const extras: SiteExtras = {
   tiles: baked.map((t) => ({
     id: t.id,
     bounds: t.bounds,
+    figure: figureFiles.get(t.id) ?? "",
     footprints: footprintFiles.get(t.id) ?? "",
     minimap: sideFiles.get(t.id)?.landcoverSmall ?? "",
     bridges: sideFiles.get(t.id)?.bridge,

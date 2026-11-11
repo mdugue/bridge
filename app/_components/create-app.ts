@@ -1561,6 +1561,8 @@ async function bootApp(
   const siteInfo: SiteInfo = {
     landmarks: extras.landmarks ?? [],
     landcoverTiles: extras.tiles.map((t) => ({
+      id: t.id,
+      figure: t.figure ? new URL(t.figure, tilesetUrl).href : undefined,
       src: new URL(t.minimap, tilesetUrl).href,
       bounds: t.bounds,
       bridges: t.bridges ? new URL(t.bridges, tilesetUrl).href : undefined,
@@ -2758,36 +2760,21 @@ async function bootApp(
       clearTimeout(statsTimer);
     }
   });
-  // Every tile's building footprints for the minimap, independent of what
-  // has streamed in, packed (lib/city/footprint-pack.ts: ≈ 2 MB gzipped
-  // and 4 MB held for Dresden): the map shows the whole city once the
-  // player has it (they load after the handover, not against the spawn
-  // tile's glTF), and demolished buildings via `demolitions`.
+  // The buildings' footprints, packed (lib/city/footprint-pack.ts), per
+  // tile and only where a building's outline is asked for: a demolished
+  // one cut out of the minimap's picture, a design's cover. The minimap
+  // draws the tiles' pictures of them (`figure`, footprint-figure.ts):
+  // Dresden's every footprint was ≈ 2 MB gzipped and 4 MB held.
   const demolitions = createDemolitions(stream);
   const footprints = new Map<string, FootprintPack>();
+  /** the tiles whose footprints were asked for (here or on their way) */
+  const footprintsAsked = new Set<string>();
+  /** the footprint files on their way */
+  const footprintLoads = new Set<Promise<void>>();
   // What the minimap draws, rebuilt only when a file lands or a building
   // goes (either drops it): the same object otherwise, so React bails out
   // and the minimap does not repaint its static layer on every tile event.
   let mapped: MapFootprints | null = null;
-  const currentFootprints = (): MapFootprints => {
-    if (!mapped) {
-      // the design's plan, drawn as a building
-      const planOutline = design?.outline();
-      mapped = {
-        outlines: planOutline ? [{ pts: planOutline }] : [],
-        tiles: [...footprints].map(([tile, pack]) => {
-          const gone = demolitions.goneOn(tile);
-          const replaced = design?.hiddenFor(tile);
-          return {
-            gone: (i: number) =>
-              gone?.has(i) === true || replaced?.has(i) === true,
-            pack,
-          };
-        }),
-      };
-    }
-    return mapped;
-  };
   const loadTileFootprints = async (tile: (typeof extras.tiles)[number]) => {
     try {
       const bytes = await fetchOptionalBinary(
@@ -2798,19 +2785,74 @@ async function bootApp(
       if (pack && !disposed) {
         footprints.set(tile.id, pack);
         mapped = null;
-        // a design loaded before the tile's footprints came
+        // a design that asked for them
         design?.refresh();
         scheduleStats();
       }
     } catch {
-      // a footprint file that fails leaves the minimap without that tile
+      // a footprint file that fails leaves its gaps out of the map
     }
   };
-  function loadFootprints(): void {
-    for (const tile of extras.tiles) {
-      void loadTileFootprints(tile);
+  /** Asks for a tile's footprints, once. */
+  const askFootprints = (tile: (typeof extras.tiles)[number]): void => {
+    if (!footprintsAsked.has(tile.id)) {
+      footprintsAsked.add(tile.id);
+      const loading = loadTileFootprints(tile);
+      footprintLoads.add(loading);
+      void loading.finally(() => {
+        footprintLoads.delete(loading);
+      });
     }
-  }
+  };
+  const currentFootprints = (): MapFootprints => {
+    if (!mapped) {
+      // the design's plan, drawn as a building
+      const planOutline = design?.outline();
+      const tiles: MapFootprints["tiles"][number][] = [];
+      for (const tile of extras.tiles) {
+        const gone = demolitions.goneOn(tile.id);
+        const replaced = design?.hiddenFor(tile.id);
+        if (!(gone?.size || replaced?.size)) {
+          continue;
+        }
+        // a tile with gaps: its outlines cut them out of its picture
+        const pack = footprints.get(tile.id);
+        if (pack) {
+          tiles.push({
+            tile: tile.id,
+            gone: (i: number) =>
+              gone?.has(i) === true || replaced?.has(i) === true,
+            pack,
+          });
+        } else {
+          askFootprints(tile);
+        }
+      }
+      mapped = {
+        outlines: planOutline ? [{ pts: planOutline }] : [],
+        tiles,
+      };
+    }
+    return mapped;
+  };
+  const footprintsIn = (
+    box: readonly [number, number, number, number]
+  ): ReadonlyMap<string, FootprintPack> => {
+    const out = new Map<string, FootprintPack>();
+    for (const tile of extras.tiles) {
+      const [x0, y0, x1, y1] = tile.bounds;
+      if (x1 < box[0] || x0 > box[2] || y1 < box[1] || y0 > box[3]) {
+        continue;
+      }
+      const pack = footprints.get(tile.id);
+      if (pack) {
+        out.set(tile.id, pack);
+      } else {
+        askFootprints(tile);
+      }
+    }
+    return out;
+  };
 
   // A planner's design (design-layer.ts, ADR 0054): nothing is built until
   // a file is loaded. The buildings it stands in for leave every loaded
@@ -2900,7 +2942,10 @@ async function bootApp(
     },
     pose: () => pose.getPose(),
     compile: async (object) => await postStack.compile(object),
-    footprints: () => footprints,
+    footprintsIn,
+    footprintsSettled: async () => {
+      await Promise.all(footprintLoads);
+    },
     changed: () => {
       if (disposed) {
         return;
@@ -4182,7 +4227,6 @@ async function bootApp(
     // dressing, not in the frames before it.
     opts.trail?.note("dressing gate");
     openGate?.();
-    loadFootprints();
     checkLoaded();
   };
 

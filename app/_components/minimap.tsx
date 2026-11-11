@@ -6,7 +6,6 @@ import { decodeGreyPng } from "@/lib/city/png-raster";
 import type { GreyRaster } from "@/lib/city/png-raster";
 import {
   epsgToMapPx,
-  pxPerMetre,
   mapBridges,
   mapHeightPx,
   mapPxToEpsg,
@@ -103,53 +102,117 @@ function drawBridges(
   }
 }
 
+/** The buildings' ink: INK_FILL's colour at this opacity where a pixel is
+ *  wholly covered (the old outlines' 0.85 stroke over a 0.35 fill read as
+ *  about this at the map's scale). */
+const FIGURE_INK = [50, 53, 62] as const;
+const FIGURE_OPACITY = 0.62;
+
 /**
- * Draws true building footprints as soft-filled, thin-outlined polygons so the
- * map reads as a figure-ground plan instead of a few oversized solid blocks.
+ * A tile's picture of its buildings (lib/city/footprint-figure.ts) as ink:
+ * the cover raster as the alpha of one colour. Through the PNG decoder, not
+ * an <img>, like the class raster (its grey bytes are data).
  */
-function drawFootprints(
+function figureInk(raster: GreyRaster): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = raster.width;
+  canvas.height = raster.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return canvas;
+  }
+  const image = ctx.createImageData(raster.width, raster.height);
+  const { data } = image;
+  for (let i = 0; i < raster.data.length; i += 1) {
+    data[4 * i] = FIGURE_INK[0];
+    data[4 * i + 1] = FIGURE_INK[1];
+    data[4 * i + 2] = FIGURE_INK[2];
+    data[4 * i + 3] = Math.round(raster.data[i] * FIGURE_OPACITY);
+  }
+  ctx.putImageData(image, 0, 0);
+  return canvas;
+}
+
+/** Traces `pack`'s rings of the objects `gone` says are gone, in the
+ *  frame `at` maps EPSG metres into. */
+function traceGone(
   ctx: CanvasRenderingContext2D,
+  { gone, pack }: MapFootprints["tiles"][number],
+  at: (x: number, y: number) => readonly [number, number]
+): void {
+  const { objectEnd, ringEnd, xy } = pack;
+  ctx.beginPath();
+  for (let object = 0; object < objectEnd.length; object += 1) {
+    if (!gone(object)) {
+      continue;
+    }
+    for (
+      let r = object === 0 ? 0 : objectEnd[object - 1];
+      r < objectEnd[object];
+      r += 1
+    ) {
+      const first = r === 0 ? 0 : ringEnd[r - 1];
+      for (let p = first; p < ringEnd[r]; p += 1) {
+        // (the pack holds centimetres)
+        const [x, y] = at(xy[2 * p] / 100, xy[2 * p + 1] / 100);
+        if (p === first) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.closePath();
+    }
+  }
+}
+
+/**
+ * The tiles' pictures of their buildings, each without what is gone from
+ * it (cut out along those buildings' outlines, a little grown so no rim
+ * of ink stays), then a design's plan drawn as a building.
+ */
+function drawFigures(
+  ctx: CanvasRenderingContext2D,
+  figures: ReadonlyMap<string, HTMLCanvasElement>,
+  tiles: readonly MapTile[],
   footprints: MapFootprints,
   bounds: TerrainBounds,
   size: number
 ): void {
+  const gaps = new Map(footprints.tiles.map((t) => [t.tile, t]));
+  for (const tile of tiles) {
+    const ink = tile.figure ? figures.get(tile.figure) : undefined;
+    if (!ink) {
+      continue;
+    }
+    const a = epsgToMapPx(tile.bounds[0], tile.bounds[3], bounds, size);
+    const b = epsgToMapPx(tile.bounds[2], tile.bounds[1], bounds, size);
+    const gap = gaps.get(tile.id);
+    if (!gap) {
+      ctx.drawImage(ink, a.px, a.py, b.px - a.px, b.py - a.py);
+      continue;
+    }
+    const cut = document.createElement("canvas");
+    cut.width = ink.width;
+    cut.height = ink.height;
+    const c = cut.getContext("2d");
+    if (!c) {
+      continue;
+    }
+    c.drawImage(ink, 0, 0);
+    const [x0, y0, x1, y1] = tile.bounds;
+    const kx = ink.width / (x1 - x0);
+    const ky = ink.height / (y1 - y0);
+    traceGone(c, gap, (x, y) => [(x - x0) * kx, (y1 - y) * ky]);
+    c.globalCompositeOperation = "destination-out";
+    c.fill();
+    c.lineWidth = 1;
+    c.stroke();
+    ctx.drawImage(cut, a.px, a.py, b.px - a.px, b.py - a.py);
+  }
   ctx.fillStyle = INK_FILL;
   ctx.strokeStyle = INK;
   ctx.lineWidth = 0.5;
-  // (no array a point: a city's footprints are a million of them, at
-  // every repaint of the layer)
-  const { 0: minX, 3: maxY } = bounds;
-  const k = pxPerMetre(bounds, size);
-  for (const { gone, pack } of footprints.tiles) {
-    const { objectEnd, ringEnd, xy } = pack;
-    let r = 0;
-    for (let object = 0; object < objectEnd.length; object += 1) {
-      if (gone(object)) {
-        r = objectEnd[object];
-      }
-      for (; r < objectEnd[object]; r += 1) {
-        const first = r === 0 ? 0 : ringEnd[r - 1];
-        const end = ringEnd[r];
-        if (end - first < 3) {
-          continue;
-        }
-        ctx.beginPath();
-        for (let p = first; p < end; p += 1) {
-          // (the pack holds centimetres)
-          const x = (xy[2 * p] / 100 - minX) * k;
-          const y = (maxY - xy[2 * p + 1] / 100) * k;
-          if (p === first) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-      }
-    }
-  }
   for (const { pts } of footprints.outlines) {
     if (pts.length < 3) {
       continue;
@@ -270,8 +333,8 @@ function setupCanvas(
 }
 
 /**
- * Schematic figure-ground minimap: building footprints from the in-memory
- * CityJSON on a static canvas, the player dot + heading wedge on a dynamic
+ * Schematic figure-ground minimap: each tile's land cover and the picture of
+ * its buildings (without those taken down) on a static canvas, the player dot + heading wedge on a dynamic
  * overlay canvas (redrawn at pose rate, ~10 Hz). Clicking teleports.
  */
 export const Minimap = ({
@@ -287,8 +350,9 @@ export const Minimap = ({
   const staticRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
 
-  // Decoded + recoloured land-cover tiles, kept for the life of the component:
-  // one 512² PNG per site tile (the tileset's `minimap` raster) is cheap once
+  // Decoded + recoloured tiles, kept for the life of the component: per site
+  // tile a 512² class PNG (the tileset's `minimap` raster) and the picture
+  // of its buildings (`figure`), cheap once
   // but not worth repeating on every demolish or sidebar resize. `requested`
   // remembers which sources are already loading.
   // (Assumes `landcoverTiles` is stable for a session — a future tile switcher
@@ -305,26 +369,34 @@ export const Minimap = ({
     // them so a re-run (StrictMode's mount → cleanup → mount in dev) requests
     // them again instead of skipping a load whose result was discarded.
     const pending = new Set<string>();
-    for (const tile of landcoverTiles ?? []) {
-      if (requested.has(tile.src)) {
+    // each tile's land cover and the picture of its buildings
+    const rasters = (landcoverTiles ?? []).flatMap((tile) => [
+      {
+        src: tile.src,
+        paint: (r: GreyRaster) => colorizeLandcover(r, 256),
+      },
+      ...(tile.figure ? [{ src: tile.figure, paint: figureInk }] : []),
+    ]);
+    for (const { src, paint } of rasters) {
+      if (requested.has(src)) {
         continue;
       }
-      requested.add(tile.src);
-      pending.add(tile.src);
-      fetch(tile.src, { signal: loads.signal })
+      requested.add(src);
+      pending.add(src);
+      fetch(src, { signal: loads.signal })
         .then(async (res) => await res.arrayBuffer())
         .then(async (buf) => await decodeGreyPng(new Uint8Array(buf)))
         .then((raster) => {
-          pending.delete(tile.src);
+          pending.delete(src);
           if (!loads.signal.aborted) {
-            const cv = colorizeLandcover(raster, 256);
-            setDecoded((prev) => new Map(prev).set(tile.src, cv));
+            const cv = paint(raster);
+            setDecoded((prev) => new Map(prev).set(src, cv));
           }
           return null;
         })
         .catch(() => {
-          // The minimap just stays without this tile's land cover.
-          pending.delete(tile.src);
+          // The minimap just stays without this tile's layer.
+          pending.delete(src);
         });
     }
     return () => {
@@ -358,7 +430,7 @@ export const Minimap = ({
     drawBridges(ctx, bridges, bounds, size);
     ctx.strokeStyle = FRAME;
     ctx.strokeRect(0.5, 0.5, size - 1, height - 1);
-    drawFootprints(ctx, footprints, bounds, size);
+    drawFigures(ctx, decoded, landcoverTiles ?? [], footprints, bounds, size);
   }, [footprints, bounds, size, height, landcoverTiles, decoded, bridges]);
 
   // Dynamic layer: player dot + heading wedge.

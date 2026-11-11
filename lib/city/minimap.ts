@@ -8,11 +8,14 @@ import type { FootprintPack } from "./footprint-pack";
 import type { TerrainBounds } from "./terrain-geometry";
 import type { CityJsonDocument } from "./types";
 
-/** One site tile's layers on the minimap: the 512² class raster and the
- *  bridge decks drawn over it (published URLs). */
+/** One site tile's layers on the minimap: the 512² class raster, the
+ *  bridge decks and the buildings' picture drawn over it (published URLs). */
 export interface MapTile {
   bounds: TerrainBounds;
   bridges?: string;
+  /** the picture of its buildings' cover (lib/city/footprint-figure.ts) */
+  figure?: string;
+  id: string;
   src: string;
 }
 
@@ -56,16 +59,18 @@ export interface FootprintPoly {
 }
 
 /**
- * The buildings the minimap draws: each loaded tile's packed footprints
- * (lib/city/footprint-pack.ts) without the objects that are `gone` (taken
- * down, or replaced by a design), and loose outlines (a design's plan).
- * A new object whenever any of it changes, the same one otherwise.
+ * What the minimap takes out of its tiles' pictures of the buildings: per
+ * tile with a gap, its packed footprints (lib/city/footprint-pack.ts) and
+ * which objects are `gone` (taken down, or replaced by a design); and
+ * loose outlines drawn as buildings (a design's plan). A new object
+ * whenever any of it changes, the same one otherwise.
  */
 export interface MapFootprints {
   outlines: readonly FootprintPoly[];
   tiles: readonly {
     gone: (object: number) => boolean;
     pack: FootprintPack;
+    tile: string;
   }[];
 }
 
@@ -77,7 +82,7 @@ export const NO_FOOTPRINTS: MapFootprints = { outlines: [], tiles: [] };
  * aspect ratio (Dresden: 10 × 6 km, a landscape map), so one scale serves
  * both axes: no padding around the site, no squashing.
  */
-export function pxPerMetre(bounds: TerrainBounds, widthPx: number): number {
+function pxPerMetre(bounds: TerrainBounds, widthPx: number): number {
   return widthPx / Math.max(bounds[2] - bounds[0], 1);
 }
 
