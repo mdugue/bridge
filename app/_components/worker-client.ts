@@ -1,5 +1,5 @@
 /** One page's worker for one kind of job, with one rule for its failures. */
-import { createTaskGate } from "@/lib/city/task-gate";
+import { abortError, createTaskGate } from "@/lib/city/task-gate";
 
 /**
  * The client of a worker that does one kind of job for the page (the
@@ -209,9 +209,7 @@ export function createWorkerClient<In, Reply extends object, Out>(
     }
     // nobody waits for it any more: the page does not work it out
     if (signal?.aborted) {
-      throw signal.reason instanceof Error
-        ? signal.reason
-        : new DOMException("The operation was aborted.", "AbortError");
+      throw abortError(signal);
     }
     return await spec.here(input);
   };
