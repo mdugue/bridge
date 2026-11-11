@@ -118,23 +118,26 @@ jobs:
 
   # Build and e2e share a job: its build step is the build check, and the
   # Playwright step serves the artifact it just produced instead of
-  # rebuilding inside `webServer`. The suite is split over three runners that
+  # rebuilding inside `webServer`. The suite is split over four runners that
   # run side by side, by the tags in e2e/city-walk.spec.ts: SwiftShader is
   # CPU-bound, so a second Playwright worker on the same runner only halves
   # both pages' frame rates, while another runner takes its share off the
-  # wall clock. The shards are cut by tag; the Playwright step (server start
-  # included) of the last three runs on main took, whole site with the shell
-  # and /wissen / desktop HUD with the phone / desktop rendering: 457 / 321 /
-  # 246 s (run 40131826252, 2026-10-24), 485 / 260 / 184 s (39971509670) and
-  # 426 / 338 / 255 s (39937443926, both 2026-10-23). The whole-site spec
-  # alone takes 169–415 s since it streams five dressed tiles (#142, #147),
-  # so its shard sets the floor; the rest of that shard takes seconds, and
-  # moving it by tag would barely help — a cheaper whole-site boot would.
-  # The rendering group cannot be cut finer by tag without a second boot of
-  # its shared page. Each shard builds for itself: 21–24 s with the bake
-  # cache warm (run 37496735478, 2026-10-06), 2m23s–3m24s cold (run
-  # 37476256017 on main, 2026-10-06). The checkout varies more than any of
-  # it (26 s to 12 min in that run), which is why it clones one commit.
+  # wall clock. Where the time goes (60 runs, 2026-11-10/11): checkout
+  # ~25 s, the build 16–40 s with the bake cache warm and 3.5–7 min when a
+  # PR changes a bake, the Playwright step 110–240 s (whole site), 200–480 s
+  # (desktop HUD with the phone) and 350–740 s (desktop rendering, before it
+  # was cut in two). Runners are a lottery: the same tests on the same
+  # branch took 6 or 12 min, and in run 42918082579 one shard baked a
+  # Dresden tile in 165 s where its two siblings, from the same cache, took
+  # 24–31 s — the shard ran out of its budget in the build. The browser's
+  # share of a test is negligible next to SwiftShader's frames, so a lighter
+  # driver (Lightpanda has no WebGL at all) gains nothing; what helps is
+  # fewer frames per runner. Building once and handing the result to the
+  # shards was measured and left: the build output is ~550 MB compressed
+  # (.next and public/data, 2026-11-11), whose upload and four downloads
+  # cost more on every warm run than the rare cold bake on a slow runner.
+  # The checkout varies more than any of it (26 s to 12 min in run
+  # 37476256017), which is why it clones one commit.
   e2e:
     name: E2E (${{ matrix.shard.name }})
     runs-on: ubuntu-latest
@@ -144,10 +147,12 @@ jobs:
     # budget cancels the job mid-run and reports nothing at all, which is
     # worse than a slow job. So the job outlasts the whole-site spec's own
     # budget (13.5 min on CI, so that even its timeout reports) after a cold
-    # build (5m45s in run 37947097945, 2026-10-09) and the setup around it.
-    timeout-minutes: 25
+    # bake on a slow runner (still baking at 23 min in run 42918082579,
+    # 2026-11-10, where its sibling shards built in 4) and the setup around
+    # it.
+    timeout-minutes: 35
     strategy:
-      # One shard failing must not cancel the other's report.
+      # One shard failing must not cancel the others' report.
       fail-fast: false
       matrix:
         shard:
@@ -161,8 +166,15 @@ jobs:
           - name: desktop rendering
             args: --grep @desktop-render
             buildCheck: false
+          - name: desktop look
+            args: --grep @desktop-look
+            buildCheck: false
     steps:
       - uses: actions/checkout@v7
+      # Which CPU this runner drew: the same shard runs twice as long on some
+      # (see the timings above), and this is what tells them apart.
+      - name: Runner CPU
+        run: lscpu | grep -E '^(Model name|CPU\(s\)):'
       # One extra commit, not the whole history: the repo carries ~810 MB of
       # committed geodata (2026-10-06; seven sites), so a deep clone is not
       # free.
