@@ -1,5 +1,6 @@
 import { SHADOW_RINGS } from "../lib/city/shadow-rings";
 import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import path from "node:path";
 import { Document, WebIO } from "@gltf-transform/core";
 import { expect, test } from "@playwright/test";
@@ -8,6 +9,7 @@ import { fromArrayBuffer } from "geotiff";
 import proj4 from "proj4";
 import type { LookValues } from "../lib/city/look-controls";
 import { utmToLatLng } from "../lib/city/crs";
+import { readFootprints, unpackedFootprints } from "../lib/city/footprint-pack";
 import { EYE_HEIGHT } from "../lib/city/pose";
 import {
   parseSnapshot,
@@ -524,9 +526,11 @@ async function aimAtBuilding(page: Page): Promise<void> {
   // building whose bounding-box centre lies inside it — a perimeter block's
   // centre is its courtyard, and the ray would hit the ground.
   const footprintsRes = await page.request.get(
-    await dataUrl(page, "footprints_33412_5656_2_sn.json")
+    await dataUrl(page, "footprints_33412_5656_2_sn.fpr.gz")
   );
-  const footprints = (await footprintsRes.json()) as [number, number][][][];
+  const pack = readFootprints(gunzipSync(await footprintsRes.body()));
+  expect(pack).not.toBeNull();
+  const footprints = pack ? unpackedFootprints(pack) : [];
   const target = footprints
     .filter((polys) => polys.length === 1)
     .map(([ring]) => {
@@ -2207,11 +2211,12 @@ test.describe("whole site streamed", () => {
       // The minimap names every site tile's footprints up front, streamed
       // or not: some lie west of the spawn tile (412 000 E).
       const westmost = await tilesPage.evaluate(() => {
-        const polys = window.__poc?.handle?.getFootprints() ?? [];
+        const tiles = window.__poc?.handle?.getFootprints().tiles ?? [];
         let minX = Number.POSITIVE_INFINITY;
-        for (const poly of polys) {
-          for (const [x] of poly.pts) {
-            minX = Math.min(minX, x);
+        for (const { pack } of tiles) {
+          // x, y pairs in centimetres (lib/city/footprint-pack.ts)
+          for (let i = 0; i < pack.xy.length; i += 2) {
+            minX = Math.min(minX, pack.xy[i] / 100);
           }
         }
         return minX;

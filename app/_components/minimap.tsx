@@ -10,7 +10,7 @@ import {
   mapHeightPx,
   mapPxToEpsg,
 } from "@/lib/city/minimap";
-import type { FootprintPoly, MapBridge, MapTile } from "@/lib/city/minimap";
+import type { MapBridge, MapFootprints, MapTile } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 
@@ -108,20 +108,21 @@ function drawBridges(
  */
 function drawFootprints(
   ctx: CanvasRenderingContext2D,
-  footprints: FootprintPoly[],
+  footprints: MapFootprints,
   bounds: TerrainBounds,
   size: number
 ): void {
   ctx.fillStyle = INK_FILL;
   ctx.strokeStyle = INK;
   ctx.lineWidth = 0.5;
-  for (const poly of footprints) {
-    if (poly.pts.length < 3) {
-      continue;
+  /** One ring: `count` points, the `i`th at `at(i)` (EPSG metres). */
+  const ring = (count: number, at: (i: number) => [number, number]) => {
+    if (count < 3) {
+      return;
     }
     ctx.beginPath();
-    for (let i = 0; i < poly.pts.length; i += 1) {
-      const [x, y] = poly.pts[i];
+    for (let i = 0; i < count; i += 1) {
+      const [x, y] = at(i);
       const { px, py } = epsgToMapPx(x, y, bounds, size);
       if (i === 0) {
         ctx.moveTo(px, py);
@@ -132,6 +133,26 @@ function drawFootprints(
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
+  };
+  for (const { gone, pack } of footprints.tiles) {
+    const { objectEnd, ringEnd, xy } = pack;
+    let r = 0;
+    for (let object = 0; object < objectEnd.length; object += 1) {
+      if (gone(object)) {
+        r = objectEnd[object];
+      }
+      for (; r < objectEnd[object]; r += 1) {
+        const first = r === 0 ? 0 : ringEnd[r - 1];
+        // (the pack holds centimetres)
+        ring(ringEnd[r] - first, (i) => [
+          xy[2 * (first + i)] / 100,
+          xy[2 * (first + i) + 1] / 100,
+        ]);
+      }
+    }
+  }
+  for (const { pts } of footprints.outlines) {
+    ring(pts.length, (i) => pts[i]);
   }
 }
 
@@ -168,7 +189,7 @@ function drawPictureFrame(
 
 interface MinimapProps {
   bounds: TerrainBounds;
-  footprints: FootprintPoly[];
+  footprints: MapFootprints;
   /** per-tile land-cover class PNGs + their EPSG bounds, drawn as
    *  background, and each tile's bridge decks over them */
   landcoverTiles?: MapTile[];

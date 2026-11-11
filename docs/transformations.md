@@ -750,8 +750,8 @@ visual-variable codebook is in
   client packs it into an RGBA32F texture the clay node reads with
   `textureLoad`
   (`lib/city/city-mesh.ts` `packObjectTexels`), so the style lives once per
-  building, not once per vertex. Footprints go to `footprints_<tile>.json`
-  for the minimap (which draws the bridge decks from each tile's `bridge`
+  building, not once per vertex. Footprints go, packed, to `footprints_<tile>.fpr.gz`
+  (`lib/city/footprint-pack.ts`) for the minimap (which draws the bridge decks from each tile's `bridge`
   file too, in the colour of the class they carry — the class raster
   shows the river under them). Demolish = filter the building tree out of the index
   buffer + rebuild the BVH; BVH picking/collision, each tile's BVH built

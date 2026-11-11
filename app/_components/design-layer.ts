@@ -16,6 +16,8 @@ import {
   siteFloor,
 } from "@/lib/city/design-cover";
 import type { PlanMask } from "@/lib/city/design-cover";
+import { ringsOf } from "@/lib/city/footprint-pack";
+import type { FootprintPack } from "@/lib/city/footprint-pack";
 import {
   designSize,
   elsewhereNote,
@@ -113,8 +115,8 @@ export interface DesignLayerDeps {
   pose: () => PlayerPose;
   /** builds an object's programs before it shows (PostStack.compile) */
   compile: (object: Object3D) => Promise<void>;
-  /** every tile's building footprints by object (EPSG rings) */
-  footprints: () => ReadonlyMap<string, [number, number][][][]>;
+  /** every tile's building footprints by object, packed */
+  footprints: () => ReadonlyMap<string, FootprintPack>;
   /** the design came, moved or went: hidden sets, shadows, the map */
   changed: () => void;
   /** the bytes the tile cache leaves to the design (0: none) */
@@ -452,8 +454,10 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     loaded.hidden = new Map();
     const { mask } = loaded;
     if (mask && replaceExisting) {
-      for (const [tile, polys] of deps.footprints()) {
-        const covered = coveredObjects(mask, polys);
+      for (const [tile, pack] of deps.footprints()) {
+        const covered = coveredObjects(mask, pack.objectEnd.length, (i) =>
+          ringsOf(pack, i)
+        );
         if (covered.size > 0) {
           loaded.hidden.set(tile, covered);
         }

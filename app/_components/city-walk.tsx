@@ -23,6 +23,7 @@ import type { CSSProperties, RefObject } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useCoarsePointer } from "./use-coarse-pointer";
 import { loadPercent, loadStageStates } from "@/lib/city/load-stages";
 import { dataLayersOf } from "@/lib/city/data-layers";
@@ -44,6 +45,7 @@ import type { Snapshot } from "@/lib/city/snapshot";
 import { arrivalOf as recoveryArrival } from "@/lib/city/gpu-recovery";
 import { restoresLook } from "@/lib/city/gpu-safety";
 import { AltitudeStick } from "./altitude-stick";
+import { bootAhead } from "./boot-ahead";
 import { BootError } from "./boot-error";
 import { ControlHintBar } from "./control-hints";
 import { CrashReport } from "./crash-report";
@@ -913,6 +915,14 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
     lastBoot.current = new Promise((resolve) => {
       settled = resolve;
     });
+    // The tileset and the first tile's contents, asked for now: beside the
+    // scene's chunk and the last boot's teardown (boot-ahead.ts).
+    const initialCamera = start ? start.camera : arrival.snapshot?.camera;
+    const ahead = bootAhead(
+      new URL(tilesetUrl, window.location.href).href,
+      { initialCamera, initialView: start?.view },
+      aborter.signal
+    );
     void previous
       .then(loadScene)
       .then(async ({ createCityWalkApp }) => {
@@ -925,7 +935,8 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
           look,
           site,
           tilesetUrl,
-          initialCamera: start ? start.camera : arrival.snapshot?.camera,
+          ahead,
+          initialCamera,
           initialView: start?.view,
           initialDate: timeNow(),
           signal: aborter.signal,
@@ -1390,7 +1401,18 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   );
 };
 
-export default CityWalk;
+/**
+ * The viewer under the tooltips' provider (the panel's open at once: its
+ * delay). Here, not in the root layout: no other page shows a tooltip,
+ * and each would load the tooltips' code for it.
+ */
+const CityWalkWithTooltips = (props: Props) => (
+  <TooltipProvider>
+    <CityWalk {...props} />
+  </TooltipProvider>
+);
+
+export default CityWalkWithTooltips;
 
 /**
  * The asked thing's card and what else the ray met: on a desktop one

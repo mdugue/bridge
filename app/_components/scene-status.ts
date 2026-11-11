@@ -25,7 +25,8 @@ import type {
   SkippedStages,
   StageFractions,
 } from "@/lib/city/load-stages";
-import type { FootprintPoly } from "@/lib/city/minimap";
+import { NO_FOOTPRINTS } from "@/lib/city/minimap";
+import type { MapFootprints } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
 import { createSliceStore, dataEqual } from "@/lib/city/slice-store";
 import type { SliceStore } from "@/lib/city/slice-store";
@@ -67,7 +68,7 @@ export interface SceneStatusSlices {
   gpuFailure: string | null;
   stats: HudStats | null;
   /** every loaded tile's building footprints, for the minimap */
-  footprints: FootprintPoly[];
+  footprints: MapFootprints;
   /** smoothed, whole frames per second */
   fps: number | null;
   /** the site as the tileset describes it (`onSiteInfo`) */
@@ -98,7 +99,7 @@ const INITIAL: SceneStatusSlices = {
   streamError: null,
   gpuFailure: null,
   stats: null,
-  footprints: [],
+  footprints: NO_FOOTPRINTS,
   fps: null,
   site: null,
   mode: "walk",
@@ -202,7 +203,7 @@ export function sceneReports(
   {
     footprints,
     live,
-  }: { footprints: () => FootprintPoly[] | undefined; live: () => boolean }
+  }: { footprints: () => MapFootprints | undefined; live: () => boolean }
 ): SceneReports {
   // The render stopped for good (onFatal): its message stays, and a tile
   // still in flight failing must not add a layer's hole under its card.

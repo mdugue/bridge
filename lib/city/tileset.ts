@@ -280,7 +280,7 @@ export interface TilesetTileInfo {
   ask?: TileAskFiles;
   bounds: TerrainBounds;
   /**
-   * minimap footprints per object: `[object][polygon][vertex] = [x, y]`.
+   * minimap footprints per object, packed (lib/city/footprint-pack.ts).
    * Here rather than in the city content, so the minimap shows every
    * building from the start, whatever has streamed in.
    */

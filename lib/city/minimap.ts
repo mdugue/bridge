@@ -4,6 +4,7 @@
  * northward.
  */
 
+import type { FootprintPack } from "./footprint-pack";
 import type { TerrainBounds } from "./terrain-geometry";
 import type { CityJsonDocument } from "./types";
 
@@ -53,6 +54,23 @@ export interface FootprintPoly {
   /** its inner rings (courtyards), where the GroundSurface has any */
   holes?: [number, number][][];
 }
+
+/**
+ * The buildings the minimap draws: each loaded tile's packed footprints
+ * (lib/city/footprint-pack.ts) without the objects that are `gone` (taken
+ * down, or replaced by a design), and loose outlines (a design's plan).
+ * A new object whenever any of it changes, the same one otherwise.
+ */
+export interface MapFootprints {
+  outlines: readonly FootprintPoly[];
+  tiles: readonly {
+    gone: (object: number) => boolean;
+    pack: FootprintPack;
+  }[];
+}
+
+/** No buildings yet. */
+export const NO_FOOTPRINTS: MapFootprints = { outlines: [], tiles: [] };
 
 /**
  * Canvas pixels per metre for a map `widthPx` wide. The map keeps the site's

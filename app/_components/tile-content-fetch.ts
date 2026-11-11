@@ -1,6 +1,8 @@
 /** The renderer's requests through the viewer's one fetch. */
 import { TILE_FETCH_BUDGET_MS } from "@/lib/city/fetch-retry";
+import type { AheadRequest } from "./boot-ahead";
 import { eitherSignal, fetchBytes } from "./fetch-optional";
+import type { FetchedBytes } from "./fetch-optional";
 
 /**
  * Every request the renderer makes — the tileset and each tile's content —
@@ -14,11 +16,41 @@ import { eitherSignal, fetchBytes } from "./fetch-optional";
  * parses as they are (no Response to copy them through again); JSON as a
  * Response, which the renderer reads itself; a status no retry fixes as an
  * empty Response with that status, which the renderer reports.
+ *
+ * What the boot asked for ahead (boot-ahead.ts: the tileset, the boot
+ * tile's first contents) is taken from there, once each, instead of asked
+ * again; one that failed there is asked here, with its retries.
  */
 export class ContentFetchPlugin {
   name = "BRIDGE_CONTENT_FETCH";
   /** aborts every request in flight when the stream goes (dispose) */
   private readonly aborter = new AbortController();
+  /** a request the boot already made for a URL, handed over once */
+  private readonly ahead?: (url: string) => AheadRequest | undefined;
+
+  constructor(ahead?: (url: string) => AheadRequest | undefined) {
+    this.ahead = ahead;
+  }
+
+  /** What the boot already asked for, when it came whole. */
+  private async early(url: string): Promise<FetchedBytes | null> {
+    const request = this.ahead?.(url);
+    if (!request) {
+      return null;
+    }
+    this.aborter.signal.addEventListener("abort", request.abort, {
+      once: true,
+    });
+    try {
+      const got = await request.got;
+      return got.ok ? got : null;
+    } catch {
+      return null;
+    } finally {
+      this.aborter.signal.removeEventListener("abort", request.abort);
+    }
+  }
+
   async fetchData(
     url: string,
     options: RequestInit
@@ -26,12 +58,14 @@ export class ContentFetchPlugin {
     const { signal, ...init } = options;
     const either = eitherSignal(signal, this.aborter.signal);
     try {
-      const got = await fetchBytes(url, {
-        signal: either.signal,
-        budgetMs: TILE_FETCH_BUDGET_MS,
-        gunzip: url.endsWith(".gz"),
-        init,
-      });
+      const got =
+        (await this.early(url)) ??
+        (await fetchBytes(url, {
+          signal: either.signal,
+          budgetMs: TILE_FETCH_BUDGET_MS,
+          gunzip: url.endsWith(".gz"),
+          init,
+        }));
       if (!got.ok) {
         return new Response(null, { status: got.status });
       }

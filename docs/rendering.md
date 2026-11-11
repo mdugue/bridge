@@ -1521,13 +1521,14 @@ too.
 sequenceDiagram
   participant B as Browser
   participant S as static host
-  B->>S: /<site> (the prerendered route: which site)
+  B->>S: /<site> (the prerendered route: which site · it preloads the next two)
   B->>S: /data/<site>/manifest.json (no-cache, retried · else the cached copy)
   B->>S: tileset.json (hashed, extras: CRS, offset, tile list)
+  B->>S: the HUD's and the scene's chunks (after hydration)
+  B->>S: the start tile's far buildings + coarse terrain (boot-ahead.ts)
   Note over B,S: every fetch retried for a budget of the page's visible time
   Note over B: renderer, sun rig, lamp light pool, post stack, tile stream
-  B->>S: every tile's footprints (minimap)
-  B->>S: spawn tile: buildings glb, a terrain level + class raster, NDVI
+  B->>S: spawn tile: the fine levels, class raster, NDVI
   Note over B: dress: clay + object texture · splat painted + water · compileAsync
   Note over B: placed on the spawn ground (its buildings' BVH) · a frame draws the shadow map → light stage, 52 %
   Note over B: first frame → overlay drops (HUD phase "running", streaming pill)
@@ -1537,6 +1538,16 @@ sequenceDiagram
   Note over B: each task's changes, once: shadows invalidated · lamp heads · stats
   Note over B: spawn dressed, renderer idle, no dressing pending → onLoaded (__poc.ready)
 ```
+
+**Nothing waits that need not** (`boot-ahead.ts`): the route's HTML
+preloads the manifest and the tileset it names (`app/[site]/page.tsx`,
+read from the build's own manifest), and as soon as the HUD knows the
+tileset's name it asks for the tileset and for the start tile's first
+two contents — beside the scene's chunk, the renderer's start and the
+scene's setup. The stream takes each from there once
+(`tile-content-fetch.ts`), the tileset too, which it used to fetch a
+second time. Before, the first tile was asked for in the first frame.
+Every tile's footprints (the minimap) follow the handover.
 
 The **first frame** waits on the spawn tile's buildings and *any* of its
 terrain levels (`bootApp` in `create-app.ts`); the player is then placed

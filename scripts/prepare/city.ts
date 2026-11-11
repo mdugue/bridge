@@ -10,6 +10,7 @@ import type { BakeFile } from "../../lib/city/bake-file";
 import { withoutTrafficStructures } from "../../lib/city/city-mesh";
 import { DOORS_FILE } from "../../lib/city/doors-file";
 import { DORMERS_FILE } from "../../lib/city/dormers-file";
+import { packFootprints } from "../../lib/city/footprint-pack";
 import { withLandmarks } from "../../lib/city/landmark-lut";
 import { MEASURED_ROOFS_FILE } from "../../lib/city/measured-roofs-file";
 import { OSM_BUILDINGS_FILE } from "../../lib/city/osm-buildings-file";
@@ -123,7 +124,7 @@ function parseCity(
   );
 }
 
-/** A tile's buildings: footprints JSON + glTF, both from one parse. */
+/** A tile's buildings: packed footprints + glTF, both from one parse. */
 export async function bakeCity(tile: string): Promise<{
   far: string;
   file: string;
@@ -164,10 +165,15 @@ export async function bakeCity(tile: string): Promise<{
     }
     return mesh;
   };
-  const footprintsFile = `footprints_${tile}.json`;
+  // Packed, not JSON (lib/city/footprint-pack.ts): the minimap read 11 MB
+  // of it at every start. Pre-gzipped like the glTF (static hosts do not
+  // compress binary types).
+  const footprintsFile = `footprints_${tile}.fpr.gz`;
   const footprints = publish(
     footprintsFile,
-    await cached(footprintsFile, key, () => utf8(built().footprints))
+    await cached(footprintsFile, key, () =>
+      gz(packFootprints(built().footprints))
+    )
   );
   const { maxZ } = parse(
     await cached(`city_${tile}.json`, key, () =>

@@ -50,7 +50,7 @@ import {
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import { shadowTilesStream } from "@/lib/city/gpu-safety";
 import type { GpuLoss, SafetyLevel } from "@/lib/city/gpu-safety";
-import { bootingPose, startOf } from "@/lib/city/boot-start";
+import { bootingPose } from "@/lib/city/boot-start";
 import { createGround } from "@/lib/city/ground";
 import { createPageLifecycle } from "@/lib/city/page-lifecycle";
 import type {
@@ -77,8 +77,7 @@ import {
   styleInstant,
 } from "@/lib/city/render-style";
 import type { RenderStyle } from "@/lib/city/render-style";
-import { footprintPolys } from "@/lib/city/city-mesh";
-import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
+import type { MapFootprints, MapTile } from "@/lib/city/minimap";
 import {
   footprintCircle,
   MODEL_PRESET_BY_ID,
@@ -111,7 +110,7 @@ import { spawnViewpoint, tileExtentOf } from "@/lib/city/site";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
 import { beyondExtents } from "@/lib/city/design-placement";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import { parseTilesetExtras, tileTopsOf } from "@/lib/city/tileset";
+import { tileTopsOf } from "@/lib/city/tileset";
 import type { TilesetExtras } from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import type { WalksExtras } from "@/lib/city/walks";
@@ -167,11 +166,11 @@ import { graphOf, setGraph } from "./material-slots";
 import type { CrashTrail } from "./crash-trail";
 import { leafLitterAt, seasonAt, seasonShiftFor } from "@/lib/city/tree-season";
 import { crownLeaf, footLitter } from "./tree-foot";
-import {
-  fetchOptionalJson,
-  fetchRequiredJson,
-  isAbortError,
-} from "./fetch-optional";
+import { bootAhead } from "./boot-ahead";
+import type { BootAhead } from "./boot-ahead";
+import { fetchOptionalBinary, isAbortError } from "./fetch-optional";
+import { readFootprints } from "@/lib/city/footprint-pack";
+import type { FootprintPack } from "@/lib/city/footprint-pack";
 import type { MovementMode } from "./fps-movement";
 import { NO_GPU_MESSAGE } from "./gpu-support";
 import { raiseSafety } from "./gpu-safety";
@@ -587,6 +586,9 @@ export interface CityWalkOptions {
   site: Site;
   /** the 3D Tiles tileset to stream (lib/city/tileset.ts), a served URL */
   tilesetUrl: string;
+  /** the head start the page made for that tileset and this start
+   *  (boot-ahead.ts); without one the boot makes its own */
+  ahead?: BootAhead;
 }
 
 /** The BVH worker's holds on these tiles' indexes. */
@@ -724,7 +726,7 @@ export interface CityWalkHandle {
     hitName: string | null;
   };
   /** current Building footprint polygons (EPSG) — shrinks when demolishing */
-  getFootprints: () => FootprintPoly[];
+  getFootprints: () => MapFootprints;
   getPose: () => PlayerPose;
   /**
    * GPU counters for perf work: the draw calls and triangles of the last
@@ -1227,11 +1229,22 @@ export async function createCityWalkApp(
     streamTimings.since("boot:page-to-viewer", 0);
     streamTimings.markOnce("boot:viewer-start");
   }
+  // The tileset and the boot tile's first contents, under way while the
+  // renderer starts and the scene is set up (boot-ahead.ts): the page's
+  // own head start when it made one for this tileset, or one from here.
+  const tilesetHref = new URL(opts.tilesetUrl, window.location.href).href;
+  const ahead =
+    opts.ahead?.url === tilesetHref
+      ? opts.ahead
+      : bootAhead(tilesetHref, opts, opts.signal);
   const renderer = await createRenderer(
     opts.container,
     opts.budget,
     opts.trail !== undefined
-  );
+  ).catch((error: unknown) => {
+    ahead.release();
+    throw error;
+  });
   if (opts.trail) {
     traceRenderer(renderer, opts.trail, opts.budget.safety);
   }
@@ -1248,6 +1261,7 @@ export async function createCityWalkApp(
   const cleanups: (() => void)[] = [
     retainSceneMaterials(),
     retainOpenSkyTexture(),
+    ahead.release,
   ];
   // `?trace=1`: the stream's timings on the browser's timeline, the long
   // tasks counted, the summary printed once loaded (stream-timing.ts).
@@ -1265,7 +1279,7 @@ export async function createCityWalkApp(
     );
   }
   try {
-    return await bootApp(opts, renderer, scene, cleanups);
+    return await bootApp(opts, renderer, scene, cleanups, ahead);
   } catch (error) {
     // Centralized teardown: covers both abort (StrictMode remount) and real
     // load failures — otherwise the dead canvas would linger in the DOM.
@@ -1403,7 +1417,8 @@ async function bootApp(
   opts: CityWalkOptions,
   renderer: WebGPURenderer,
   scene: Scene,
-  cleanups: (() => void)[]
+  cleanups: (() => void)[],
+  ahead: BootAhead
 ): Promise<CityWalkHandle> {
   const { container, budget } = opts;
   let disposed = false;
@@ -1489,14 +1504,18 @@ async function bootApp(
 
   stage("buildings", 0);
   // What the viewer needs before any content: the frame and the tile list.
-  const tilesetUrl = new URL(opts.tilesetUrl, window.location.href).href;
-  const tileset = await streamTimings.timed(
+  // (asked for before the renderer started: what is left of its wait)
+  const tilesetUrl = ahead.url;
+  const {
+    extras,
+    json: tileset,
+    start: bootStart,
+  } = await streamTimings.timed(
     "boot:tileset",
-    async () => await fetchRequiredJson<unknown>(tilesetUrl, opts.signal)
+    async () => await ahead.tileset
   );
   // everything from here to the wait for the first tiles (`boot:setup`)
   const setupStarted = streamTimings.now();
-  const extras = parseTilesetExtras(tileset);
   // the walks name their file beside the tileset's own extras (WalksExtras)
   const walksFile = (extras as WalksExtras).walks;
   ensureAlive();
@@ -1504,7 +1523,7 @@ async function bootApp(
   // The tile the boot starts on and waits for: the spawn tile, or the one
   // a recovered page's camera, or a place picked in the HUD while the page
   // was loading, stands on (lib/city/boot-start.ts).
-  const { picked, restored, spawn } = startOf(opts, extras.tiles);
+  const { picked, restored, spawn } = bootStart;
   // Streamed before anything else until the first frame is up
   // (lib/city/stream-order.ts).
   let bootTile: string | null = spawn.id;
@@ -1807,6 +1826,7 @@ async function bootApp(
       tier: budget.tier,
       tileBounds: (id) => siteTileBounds.get(id),
       tilesetUrl,
+      ahead: ahead.take,
       // the data layers' traffic builder (they are set up with the post
       // stack below; a slot asks only once the look has a layer on and
       // its tile has landed)
@@ -2767,43 +2787,45 @@ async function bootApp(
     }
   });
   // Every tile's building footprints for the minimap, independent of what
-  // has streamed in (a few hundred KB for the site): the map shows the whole
-  // city once the player has it (they load after the handover, not against
-  // the spawn tile's glTF), and demolished buildings via `demolitions`.
+  // has streamed in, packed (lib/city/footprint-pack.ts: ≈ 2 MB gzipped
+  // and 4 MB held for Dresden): the map shows the whole city once the
+  // player has it (they load after the handover, not against the spawn
+  // tile's glTF), and demolished buildings via `demolitions`.
   const demolitions = createDemolitions(stream);
-  const footprints = new Map<string, [number, number][][][]>();
-  // The flattened list the minimap draws, rebuilt only when a file lands or
-  // a building goes (either drops it): the same array otherwise, so React
-  // bails out and the minimap does not repaint its static layer on every
-  // tile event.
-  let flattened: FootprintPoly[] | null = null;
-  const currentFootprints = (): FootprintPoly[] => {
-    if (!flattened) {
-      flattened = [...footprints].flatMap(([tile, polys]) => {
-        const gone = demolitions.goneOn(tile);
-        const replaced = design?.hiddenFor(tile);
-        return footprintPolys(
-          polys,
-          (i) => gone?.has(i) !== true && replaced?.has(i) !== true
-        );
-      });
+  const footprints = new Map<string, FootprintPack>();
+  // What the minimap draws, rebuilt only when a file lands or a building
+  // goes (either drops it): the same object otherwise, so React bails out
+  // and the minimap does not repaint its static layer on every tile event.
+  let mapped: MapFootprints | null = null;
+  const currentFootprints = (): MapFootprints => {
+    if (!mapped) {
       // the design's plan, drawn as a building
       const planOutline = design?.outline();
-      if (planOutline) {
-        flattened.push({ pts: planOutline });
-      }
+      mapped = {
+        outlines: planOutline ? [{ pts: planOutline }] : [],
+        tiles: [...footprints].map(([tile, pack]) => {
+          const gone = demolitions.goneOn(tile);
+          const replaced = design?.hiddenFor(tile);
+          return {
+            gone: (i: number) =>
+              gone?.has(i) === true || replaced?.has(i) === true,
+            pack,
+          };
+        }),
+      };
     }
-    return flattened;
+    return mapped;
   };
   const loadTileFootprints = async (tile: (typeof extras.tiles)[number]) => {
     try {
-      const polys = await fetchOptionalJson<[number, number][][][]>(
+      const bytes = await fetchOptionalBinary(
         new URL(tile.footprints, tilesetUrl).href,
         opts.signal
       );
-      if (polys && !disposed) {
-        footprints.set(tile.id, polys);
-        flattened = null;
+      const pack = bytes ? readFootprints(bytes) : null;
+      if (pack && !disposed) {
+        footprints.set(tile.id, pack);
+        mapped = null;
         // a design loaded before the tile's footprints came
         design?.refresh();
         scheduleStats();
@@ -2912,7 +2934,7 @@ async function bootApp(
         return;
       }
       hideReplaced();
-      flattened = null;
+      mapped = null;
       probe.refresh();
       postStack.sceneChanged();
       invalidateShadows();
@@ -2978,7 +3000,7 @@ async function bootApp(
     siteGround.setSources(terrains);
     // a building level that landed under the design steps aside too
     if (hideReplaced()) {
-      flattened = null;
+      mapped = null;
     }
     groundPlate?.showUnder(new Set(terrains.map((t) => t.tile)));
     // a tile whose other building level landed or took over keeps the mark
@@ -3022,7 +3044,7 @@ async function bootApp(
     }
     // the demolished house's niches go with it
     niches?.invalidate();
-    flattened = null;
+    mapped = null;
     invalidateShadows();
     scheduleStats();
     // a tile whose index the BVH worker had takes the demolish once it is
@@ -3031,7 +3053,7 @@ async function bootApp(
     if (held.length > 0) {
       void Promise.all(held).then(() => {
         if (!disposed) {
-          flattened = null;
+          mapped = null;
           invalidateShadows();
         }
         return null;
@@ -4359,6 +4381,8 @@ async function bootApp(
   streamTimings.since("boot:spawn-wait", waitStarted);
   firstFrameShown = true;
   bootTile = null;
+  // what the stream did not take, it will not: the boot is over
+  ahead.release();
   lifecycle.dispatch({ kind: "firstFrame" });
   onChange();
   flushStats();
