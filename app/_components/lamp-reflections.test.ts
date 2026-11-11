@@ -121,6 +121,18 @@ describe("glintEaser", () => {
     expect(out[0].w).toBeGreaterThan(0.95);
   });
 
+  test("between two choices the glints ease on toward the last one", () => {
+    const ease = glintEaser(4);
+    const out = slots(4);
+    ease([lamp(0)], 1, 0, out);
+    ease([lamp(10)], 1, 1 / 60, out);
+    // no new choice (whatever the scratch holds meanwhile): lamp 10 keeps
+    // coming, lamp 0 keeps going
+    expect(ease([], 0, 6 * GLINT_EASE_S, out, false)).toBe(1);
+    expect(out[0].x).toBe(10);
+    expect(out[0].w).toBeGreaterThan(0.95);
+  });
+
   test("never more than its slots, the brightest first", () => {
     const ease = glintEaser(2);
     const out = slots(2);
