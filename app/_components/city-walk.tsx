@@ -915,15 +915,21 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
     lastBoot.current = new Promise((resolve) => {
       settled = resolve;
     });
-    // The tileset and the first tile's contents, asked for now: beside the
-    // scene's chunk and the last boot's teardown (boot-ahead.ts).
+    // The tileset and the first tile's contents, asked for beside the
+    // scene's chunk (boot-ahead.ts) — once the last boot's teardown is
+    // through: what they bring is not held beside the scene that goes (a
+    // phone's peak at a change of place). The first boot waits on nothing.
     const initialCamera = start ? start.camera : arrival.snapshot?.camera;
-    const ahead = bootAhead(
-      new URL(tilesetUrl, window.location.href).href,
-      { initialCamera, initialView: start?.view },
-      aborter.signal
+    const ahead = previous.then(() =>
+      aborter.signal.aborted
+        ? undefined
+        : bootAhead(
+            new URL(tilesetUrl, window.location.href).href,
+            { initialCamera, initialView: start?.view },
+            aborter.signal
+          )
     );
-    void previous
+    void ahead
       .then(loadScene)
       .then(async ({ createCityWalkApp }) => {
         if (aborter.signal.aborted) {
@@ -935,7 +941,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
           look,
           site,
           tilesetUrl,
-          ahead,
+          ahead: await ahead,
           initialCamera,
           initialView: start?.view,
           initialDate: timeNow(),

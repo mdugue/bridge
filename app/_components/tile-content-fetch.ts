@@ -4,6 +4,37 @@ import type { AheadRequest } from "./boot-ahead";
 import { eitherSignal, fetchBytes } from "./fetch-optional";
 import type { FetchedBytes } from "./fetch-optional";
 
+/** Rejects with the abort once `signal` fires, after `then`; `stop` ends
+ *  the watch. */
+function whenAborted(
+  signal: AbortSignal,
+  then: () => void
+): { gone: Promise<never>; stop: () => void } {
+  const watching = new AbortController();
+  const gone = new Promise<never>((_resolve, reject) => {
+    const leave = () => {
+      then();
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new DOMException("The operation was aborted.", "AbortError")
+      );
+    };
+    if (signal.aborted) {
+      leave();
+    } else {
+      signal.addEventListener("abort", leave, {
+        once: true,
+        signal: watching.signal,
+      });
+    }
+  });
+  gone.catch(() => {
+    // (read by its race, or not at all)
+  });
+  return { gone, stop: () => watching.abort() };
+}
+
 /**
  * Every request the renderer makes — the tileset and each tile's content —
  * through the viewer's one fetch (fetch-optional.ts `fetchBytes`): a
@@ -32,23 +63,33 @@ export class ContentFetchPlugin {
     this.ahead = ahead;
   }
 
-  /** What the boot already asked for, when it came whole. */
-  private async early(url: string): Promise<FetchedBytes | null> {
+  /**
+   * What the boot already asked for, when it came whole. A request the
+   * tile no longer wants (`signal`: the renderer dropped it) is stopped
+   * and rejects with the abort, as its own fetch would — not waited out,
+   * nor asked a second time.
+   */
+  private async early(
+    url: string,
+    signal: AbortSignal
+  ): Promise<FetchedBytes | null> {
     const request = this.ahead?.(url);
     if (!request) {
       return null;
     }
-    this.aborter.signal.addEventListener("abort", request.abort, {
-      once: true,
-    });
+    const watch = whenAborted(signal, request.abort);
+    let got: FetchedBytes | null = null;
     try {
-      const got = await request.got;
-      return got.ok ? got : null;
-    } catch {
-      return null;
+      got = await Promise.race([request.got, watch.gone]);
+    } catch (error) {
+      if (signal.aborted) {
+        throw error;
+      }
+      // failed there (or the boot let it go): asked here, with its retries
     } finally {
-      this.aborter.signal.removeEventListener("abort", request.abort);
+      watch.stop();
     }
+    return got?.ok ? got : null;
   }
 
   async fetchData(
@@ -59,7 +100,7 @@ export class ContentFetchPlugin {
     const either = eitherSignal(signal, this.aborter.signal);
     try {
       const got =
-        (await this.early(url)) ??
+        (await this.early(url, either.signal)) ??
         (await fetchBytes(url, {
           signal: either.signal,
           budgetMs: TILE_FETCH_BUDGET_MS,

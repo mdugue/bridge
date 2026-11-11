@@ -232,3 +232,17 @@ def test_a_cached_cut_without_agencies_is_derived_again(tmp_path):
     feed = T.cached_site_trams(tmp_path, _site(), EPSG)
     assert feed is not None and feed["agencies"] == {"r11": "Verkehrsverbund Oberelbe"}
     assert "agencies" in json.loads(stale.read_text())
+
+
+def test_a_zip_whose_entries_carry_no_date_counts_as_1980(tmp_path):
+    path = tmp_path / "undated.zip"
+    with zipfile.ZipFile(path, "w") as z:
+        info = zipfile.ZipInfo("stops.txt")
+        info.date_time = (1980, 0, 0, 0, 0, 0)
+        z.writestr(info, "stop_id\n")
+    with zipfile.ZipFile(path) as z:
+        assert T._zip_date(z) == datetime.date(1980, 1, 1)
+    empty = tmp_path / "empty.zip"
+    zipfile.ZipFile(empty, "w").close()
+    with zipfile.ZipFile(empty) as z:
+        assert T._zip_date(z) == datetime.date(1980, 1, 1)
