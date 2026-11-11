@@ -646,8 +646,12 @@ ids are the report's.
    pixel): Dresden's minimap fetches 139 kB where it fetched 2.0 MB of
    footprints and holds fifteen 192² canvases (2.2 MB) instead of
    ≈ 4.5 MB of packs; a tile's footprints come only for a demolish or a design's
-   cover (`footprintsIn`, `footprintsSettled`). (b) the eave and cornice
-   bands as one face with bent normals; (c) a lighter far level; (d) the
+   cover (`footprintsIn`, `footprintsSettled`). **(b) the bands' rounds
+   one facet each** — the plinth's shoulder and the Traufgesims's round
+   one face, the Gurtgesims's half-round nose two, their normals bending
+   from face to face (`plinths.ts` `bend`): a band 10–12 → 6–8 triangles
+   a piece, caps 5 → 3. Dresden 7.05 M → 5.30 M triangles, 41.3 → 37.2 MB;
+   the far level 3.68 M → 3.46 M, 35.0 → 33.4 MB; (c) a lighter far level; (d) the
    weld for trees and furniture; (e) the dressing in a worker; (f) the
    rails baked into the ground.
 
