@@ -369,7 +369,7 @@ FLANK_TOL_M = 0.5  # a cell this close to its flank's plane is explained by it
 ROOFTOP_M = 3.0  # ... and one up to this above it carries a dormer, a chimney, a skylight
 ROOFTOP_M2 = 30.0  # ... as long as what stands there is no larger
 GABLE_SHARE = 0.85  # flanks are the face when they explain this much of it, rooftop cells included
-LANDMARK_GABLE_SHARE = 0.95  # ... of a landmark's, whose own surface is the alternative
+EAVE_BLUR = 2  # cells in from a face's edge the scan's eave blur is not judged
 GABLE_ON_SHARE = 0.6  # ... and this much within FLANK_TOL_M of their planes
 # a flank sagging this far off a plane across its fall line is a vault's half
 FLANK_SAG_M = 0.5
@@ -963,12 +963,12 @@ def flank_facets(h: np.ndarray, mine: np.ndarray, slope_min: float, res: float =
 
 
 def gable_fit(
-    h: np.ndarray, mine: np.ndarray, slope: float, res: float = 1.0, share: float = GABLE_SHARE
+    h: np.ndarray, mine: np.ndarray, slope: float, res: float = 1.0
 ) -> tuple[np.ndarray, np.ndarray] | None:
     """The face as its flanks (`flank_facets`) over the whole grid, each
     cell on the plane of the flank nearest it; or None where they do not
-    explain the face: less than `share` of its cells (a cell in from its
-    edge, where the scan blurs the eave) within FLANK_TOL_M of their plane
+    explain the face: less than GABLE_SHARE of its cells (EAVE_BLUR cells in
+    from its edge, where the scan blurs the eave) within FLANK_TOL_M of their plane
     or up to ROOFTOP_M over it (a dormer), less than GABLE_ON_SHARE on it,
     a flank sagging like a vault's half, flanks holding less than
     FLANK_SHARE of it, flanks turned every way (not `orderly`), or flanks
@@ -988,16 +988,20 @@ def gable_fit(
     for k, p in planes.items():
         coef[k] = p
     out = coef[near, 0] + coef[near, 1] * cols + coef[near, 2] * rows
-    # judged a cell in from its edge: the scan blurs an eave into the wall
-    judged = ndi.binary_erosion(mine, iterations=1)
-    if judged.sum() < 0.5 * mine.sum():
-        judged = mine
+    # judged EAVE_BLUR cells in from its edge: the scan blurs an eave into
+    # the wall, a steep flank's over two cells
+    judged = mine
+    for n in range(EAVE_BLUR, 0, -1):
+        inner = ndi.binary_erosion(mine, iterations=n)
+        if inner.sum() >= 0.5 * mine.sum():  # a narrow face: less blur left out
+            judged = inner
+            break
     off = np.where(judged, h - out, 0.0)
     on = judged & (np.abs(off) <= FLANK_TOL_M)
     # over the planes, a dormer, a chimney, a skylight: small and not too high
     explained = _explained(off, judged, res)
     cells = judged.sum()
-    if explained.sum() < share * cells or on.sum() < GABLE_ON_SHARE * cells:
+    if explained.sum() < GABLE_SHARE * cells or on.sum() < GABLE_ON_SHARE * cells:
         return None
     # each flank's eave: the lowest of its plane where the scan lies on it,
     # a level line a lower roof beside it is cut along (NaN off the flanks)
@@ -1024,11 +1028,11 @@ def plausible_fit(
     module's head). With `flanks_only` (a face only the flank rule found),
     as flanks or None. With the surface, drawn as flanks, each cell's eave
     (`gable_fit`), else None."""
-    # a landmark's flanks explain nearly all of it: else its scan is drawn;
-    # a face only the flank rule found has no other form, and every
-    # building's bar
-    strict = landmark and not flanks_only
-    gable = gable_fit(h, mine, slope, res, LANDMARK_GABLE_SHARE if strict else GABLE_SHARE)
+    # flanks are judged alike on every building: a landmark's own surface
+    # is the alternative only where they fail (the Schauspielhaus's 23°
+    # roof over the auditorium was drawn as its blurred scan at a 95 % bar);
+    # a face only the flank rule found has no other form
+    gable = gable_fit(h, mine, slope, res)
     if gable is not None or flanks_only:
         return gable
     lab, planes = plane_facets(h, mine, res)

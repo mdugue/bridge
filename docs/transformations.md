@@ -1109,9 +1109,13 @@ visual-variable codebook is in
   der Frauenkirche 5's east wing) — within 6 cells of it, so where the
   planes cross further off (a flank joined over a bend) no island of the
   other plane stands far from the border; other borders, a row of houses
-  stepping, stay where the scan put them. The flanks are the face when, judged a cell in from its edge
-  (the eave's blur), 85 % of its cells (a landmark's 95 %, unless only
-  the flank rule found the face: it has no other form) lie within
+  stepping, stay where the scan put them. The flanks are the face when, judged two cells in from its edge
+  (the eave's blur: a 1 m scan rounds a steep flank's eave into the
+  wall over two cells; one where two would leave less than half the
+  face), 85 % of its cells — a landmark's too: its blurred scan is the
+  alternative only where flanks fail (since 2026-11-11; at a 95 % bar the
+  Schauspielhaus's 23° roof over the auditorium, 84 % on its flanks,
+  was drawn as its scan) — lie within
   0.5 m of their plane or under a blob of ≤ 30 m² up to 3 m over it, 60 %
   on it; no flank sags (a parabola through its metre strips' lower
   quartiles — a row of dormers lifts a strip's median, not its lower
@@ -1203,8 +1207,9 @@ visual-variable codebook is in
   under 4 m² in plan, dropped →
   `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
-  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 738
-  parts, 335 of them faces** (2026-11-10; 2 814 and 367 before the flanks;
+  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 741
+  parts, 334 of them faces** (2026-11-11; 2 738 and 335 before a
+  landmark's flanks took every building's bar; 2 814 and 367 before the flanks;
   1 081, 2 755 and 222 before the plausibility rule; 886 objects, 2 227 parts before
   the band below 40 %; 2 956 parts before the strips merged; the
   Altstadt most); the step runs on every site — Hamburg 587 objects (365
@@ -1780,7 +1785,8 @@ visual-variable codebook is in
   its cells and its outline, so a strip narrower than a cell has one); until then such a roof's dormers and chimneys stood
   at the LoD2 faces it replaces, metres off the drawn roof — some
   chimneys' measured tops under their own feet (Dresden's rebuilt roofs
-  hold 359 dormers now, 50 before; the block at Schloßstraße and
+  hold 371 dormers now, 50 before (359 before a landmark's flanks took
+  every building's bar: the Kreuzschule's 12, 2 before); the block at Schloßstraße and
   Sporergasse 26, 4 before). The burned 1 m roof
   reads a cell's height, up to half a metre off a 45° face under a
   centre: over all seven cities 7 % of the dormers stood more than 0.3 m

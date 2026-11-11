@@ -235,13 +235,27 @@ def test_a_vaults_half_sags_a_flank_does_not():
     assert not bool(_flank_plane(dense, every, np.pi)[1])
 
 
-def test_a_landmarks_face_only_flanks_found_takes_every_buildings_bar():
+def test_a_landmarks_flanks_take_every_buildings_bar():
     # a gable with a tenth of its cells 1.2 m under its planes (a cluttered
-    # roof): flanks for any building; a landmark's face the flank rule
-    # alone found has no other form, so the same holds for it
+    # roof): flanks for any building, a landmark too, whose blurred scan is
+    # the alternative only where flanks fail (the Schauspielhaus's 23° roof)
     clean = _gable(rows=60, cols=24, ridge=12.0, pitch=0.8)
     off = np.random.default_rng(4).random(clean.shape) < 0.1
     h = clean - np.where(off, 1.2, 0.0)
     every = np.ones(h.shape, bool)
     assert plausible_fit(h, every, SLOPE, flanks_only=True) is not None
     assert plausible_fit(h, every, SLOPE, landmark=True, flanks_only=True) is not None
+    fit = plausible_fit(h, every, SLOPE, landmark=True)
+    assert fit is not None and fit[1] is not None  # drawn as flanks, with eaves
+
+
+def test_a_steep_flanks_eave_blurred_over_two_cells_is_still_a_gable():
+    # a steep gable whose scan sinks 1.5 m into the wall over its outer two
+    # cells all round, as a 1 m scan blurs a steep eave: the blur is not
+    # judged, so the flanks still explain the face (judged from the second
+    # cell in, the blur's inner ring alone failed them)
+    h = _gable(rows=30, cols=20, ridge=10.0, pitch=0.8)
+    every = np.ones(h.shape, bool)
+    edge = ndi.distance_transform_cdt(np.pad(every, 1), metric="chessboard")[1:-1, 1:-1]
+    blurred = h - np.where(edge <= 2, 1.5, 0.0)
+    assert gable_surface(blurred, every, SLOPE) is not None
