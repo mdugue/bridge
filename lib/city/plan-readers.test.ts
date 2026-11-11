@@ -159,6 +159,16 @@ describe("shapefile", () => {
     );
   });
 
+  test("padding behind the last record of a .shp is no record", () => {
+    const whole = new Uint8Array(shp(5, [[square(0, 0, 10)]]));
+    const padded = new Uint8Array(whole.length + 16);
+    padded.set(whole);
+    // the header's file length (16-bit words) ends before the padding
+    new DataView(padded.buffer).setInt32(24, whole.length / 2, false);
+    const read = readShapefile(padded.buffer, null, null);
+    expect(read.length).toBe(1);
+  });
+
   test("a .dbf reads the records it holds, whatever its header counts", () => {
     const claims = new DataView(dbf(["ART"], [["Wiese"], ["Rasen"]]).slice(0));
     claims.setUint32(4, 4_000_000_000, true);
