@@ -171,8 +171,10 @@ function* floats(src: readonly number[]): Steps<Float32Array> {
  */
 function* snorm8(src: readonly number[]): Steps<Int8Array<ArrayBuffer>> {
   const out = new Int8Array(src.length);
-  for (let i = 0; i < src.length; i += FLOAT_RUN) {
-    const end = Math.min(src.length, i + FLOAT_RUN);
+  // (whole normals a run: one cut in two would be scaled by its halves)
+  const run = FLOAT_RUN - (FLOAT_RUN % 3);
+  for (let i = 0; i < src.length; i += run) {
+    const end = Math.min(src.length, i + run);
     for (let k = i; k < end; k += 3) {
       const x = src[k];
       const y = src[k + 1];
@@ -225,7 +227,8 @@ export function* geometrySteps(
   }
   g.setIndex(
     new BufferAttribute(
-      w.unique <= 0x1_00_00 ? Uint16Array.from(w.indices) : w.indices,
+      // (65 535 is WebGL2's restart index: never a vertex of 16 bits)
+      w.unique < 0x1_00_00 ? Uint16Array.from(w.indices) : w.indices,
       1
     )
   );
