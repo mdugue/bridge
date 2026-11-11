@@ -1,5 +1,5 @@
 /**
- * The triangle-soup kit the runtime's line and bridge layers build their
+ * The triangle kit the runtime's line and bridge layers build their
  * meshes with (rail-layer.ts, bridge-layer.ts, tram-layer.ts,
  * riverside-layer.ts, catenary-layer.ts), and their palette (`COLORS`): an
  * accumulator of positions and per-vertex normals in the Y-up scene frame, the primitives that push into it — a triangle
@@ -23,6 +23,8 @@ import type { Material } from "three/webgpu";
 import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
 import type { Ring2 } from "@/lib/city/decks";
+import { packed, weldSteps } from "@/lib/city/weld";
+import type { WeldColumn } from "@/lib/city/weld";
 import { normalWorld } from "three/tsl";
 import { lineUnderDesign } from "./design-site";
 import { railGlints } from "./lamp-reflections";
@@ -163,18 +165,81 @@ function* floats(src: readonly number[]): Steps<Float32Array> {
   return out;
 }
 
-function* finishGeo(acc: Mesh3): Steps<BufferGeometry | null> {
-  if (acc.pos.length === 0) {
+/** Normals as signed bytes (a unit axis is exact, any other within half a
+ *  degree): four bytes a vertex on the GPU where three floats were twelve.
+ * @yields {void} after each run of numbers, to hand the thread back
+ */
+function* snorm8(src: readonly number[]): Steps<Int8Array<ArrayBuffer>> {
+  const out = new Int8Array(src.length);
+  for (let i = 0; i < src.length; i += FLOAT_RUN) {
+    const end = Math.min(src.length, i + FLOAT_RUN);
+    for (let k = i; k < end; k += 3) {
+      const x = src[k];
+      const y = src[k + 1];
+      const z = src[k + 2];
+      const scale = 127 / (Math.hypot(x, y, z) || 1);
+      out[k] = Math.round(x * scale);
+      out[k + 1] = Math.round(y * scale);
+      out[k + 2] = Math.round(z * scale);
+    }
+    yield;
+  }
+  return out;
+}
+
+/**
+ * Triangles given corner by corner as a geometry: welded (lib/city/weld.ts:
+ * a soup's corners that agree in everything are one vertex) and indexed,
+ * with 16-bit indices where they reach. A yard's ballast keeps a sixth of
+ * its vertices, a rail's ribbon under half. `more`: further attributes, by
+ * name, with how many values a vertex has.
+ * @yields {void} after each run of numbers, to hand the thread back
+ */
+export function* geometrySteps(
+  positions: readonly number[],
+  normals: readonly number[],
+  more: readonly (readonly [string, readonly number[], number])[] = []
+): Steps<BufferGeometry | null> {
+  if (positions.length === 0) {
     return null;
   }
-  const g = new BufferGeometry();
-  g.setAttribute("position", new BufferAttribute(yield* floats(acc.pos), 3));
-  g.setAttribute("normal", new BufferAttribute(yield* floats(acc.nrm), 3));
-  if (acc.deck?.length === (acc.pos.length / 3) * 4) {
-    g.setAttribute("aDeck", new BufferAttribute(yield* floats(acc.deck), 4));
+  const count = positions.length / 3;
+  const pos = yield* floats(positions);
+  const nrm = yield* snorm8(normals);
+  const columns: WeldColumn[] = [
+    [pos, 3],
+    [nrm, 3],
+  ];
+  const others: [string, Float32Array, number][] = [];
+  for (const [name, values, n] of more) {
+    const column = yield* floats(values);
+    columns.push([column, n]);
+    others.push([name, column, n]);
   }
+  const w = yield* weldSteps(columns, count);
+  const g = new BufferGeometry();
+  g.setAttribute("position", new BufferAttribute(packed(pos, 3, w), 3));
+  g.setAttribute("normal", new BufferAttribute(packed(nrm, 3, w), 3, true));
+  for (const [name, column, n] of others) {
+    g.setAttribute(name, new BufferAttribute(packed(column, n, w), n));
+  }
+  g.setIndex(
+    new BufferAttribute(
+      w.unique <= 0x1_00_00 ? Uint16Array.from(w.indices) : w.indices,
+      1
+    )
+  );
   g.computeBoundingSphere();
   return g;
+}
+
+function finishGeo(acc: Mesh3): Steps<BufferGeometry | null> {
+  const framed = acc.deck?.length === (acc.pos.length / 3) * 4;
+  return geometrySteps(
+    acc.pos,
+    acc.nrm,
+    framed && acc.deck ? [["aDeck", acc.deck, 4]] : []
+  );
 }
 
 export interface MatOpts {

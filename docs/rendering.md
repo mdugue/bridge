@@ -993,6 +993,7 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 | paving raster (fine level) | 0.6–0.86 MB | — |
 | edge raster (fine level) | 0.34–0.46 MB | — |
 | kerb stones (in the fine terrain) | ≈ 0.2–0.4 MB | up to 319 k, indexed (up to 468 k vertices; 956 k as a triangle soup until 2026-11-11), as the stairs and walls are |
+| rails, ballast, sleepers, tram tracks and bridges (built at runtime from the line files, `mesh-kit.ts`) | — | welded and indexed, normals as signed bytes (`lib/city/weld.ts`): the yard tile 33408_5656 0.75 M triangles on 0.74 M vertices, 21 MB on the GPU (2.24 M vertices and 56 MB as a triangle soup until 2026-11-11); the tram tile 33410_5656 7 MB of tracks (14) |
 | canopy points (fine level) | 0.6–9.5 MB raw (forest tiles top) | up to 81 k trees: ≈ 9 MB of instance data once built (trunks, mid and rich crowns share one matrix buffer) |
 | cadastre trees, scan trees, hedges (fine level) | 0.4–0.8 / 0.65 (spawn only) / ≤ 0.03 MB raw | — |
 | coarse crowns (coarse level) | 0.04–0.29 MB (0.07–0.56 MB raw) | 3 700–27 900 crowns, 20 tris each: ≈ 90 B of instance data a crown once built (matrix, tint, season) |

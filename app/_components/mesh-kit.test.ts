@@ -100,5 +100,25 @@ test("an empty soup makes no mesh, a deck frame of the wrong length is left off"
   expect(mesh?.geometry.getAttribute("aDeck")).toBeUndefined();
   acc.deck = Array.from({ length: 6 * 4 }, () => 1);
   const framed = meshFrom(acc, 0xff_ff_ff, { cast: false });
-  expect(framed?.geometry.getAttribute("aDeck")?.count).toBe(6);
+  // the quad's two triangles share two corners
+  expect(framed?.geometry.getAttribute("aDeck")?.count).toBe(4);
+  expect(framed?.geometry.getAttribute("position").count).toBe(4);
+  expect(framed?.geometry.getIndex()?.count).toBe(6);
+});
+
+test("a mesh reads through its index as the soup it was pushed as", () => {
+  const acc = mesh3();
+  quad(acc, [0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1], [0, 1, 0]);
+  quad(acc, [1, 0, 0], [2, 0, 0], [2, 0, 1], [1, 0, 1], [0, 1, 0]);
+  quad(acc, [0, 0, 0], [1, 0, 0], [1, -1, 0], [0, -1, 0], [0, 0, -1]);
+  const geometry = meshFrom(acc, 0xff_ff_ff, { cast: false })?.geometry;
+  // two quads in a row share an edge; the third shares positions with the
+  // first but faces another way
+  expect(geometry?.getAttribute("position").count).toBe(10);
+  expect(geometry?.getIndex()?.array).toBeInstanceOf(Uint16Array);
+  const soup = geometry?.toNonIndexed();
+  expect([...(soup?.getAttribute("position").array ?? [])]).toEqual(acc.pos);
+  const normal = soup?.getAttribute("normal");
+  expect(normal?.normalized).toBe(true);
+  expect([...(normal?.array ?? [])].map((v) => v / 127)).toEqual(acc.nrm);
 });

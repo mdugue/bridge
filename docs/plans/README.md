@@ -501,9 +501,36 @@ ids are the report's.
    counted), F10 (one table file for both levels: a second request a
    tile before it can be dressed, for 0.4 MB a tile both levels of which
    load).
-4. **Rails (F2)** — TODO: non-indexed float geometry, 31.9 MB a rail
-   tile; the maintainer decides between a leaner layer and the spike of
-   baking them into the fine ground (PR #156, plan 074 A).
+4. **Rails (F2) — the viewer's part built (2026-11-11); no picture
+   change, no baked byte changes.** The line and bridge meshes were a
+   triangle soup of floats. `mesh-kit.ts` now finishes every mesh welded
+   and indexed (`lib/city/weld.ts`, exact: corners that agree in every
+   attribute bit for bit are one vertex; 16-bit indices where they
+   reach), with normals as signed bytes (a unit axis exact, any other
+   within half a degree; the tiles' own normals are bytes too). The
+   sleepers' ribbons take the same finish (`geometrySteps`), and the fine
+   terrain's `indexed` (PR 3) is the same weld. Measured on the DGM, built
+   as the viewer builds them: the yard tile 33408_5656 2.24 M → 0.74 M
+   vertices, 56.4 → 20.4 MB (its ballast 1.22 M → 0.28 M vertices, its
+   rails 714 k → 323 k, its sleepers 117 k → 39 k); 33410_5656 rails 23.5
+   → 8.1 MB, tram 13.7 → 7.0 MB; 33412_5656 tram 7.1 → 3.5 MB. The
+   report's 31.9 MB for the yard tile was low: the ballast alone was
+   29 MB. A cold bake of all seven sites publishes 0 new files.
+   **Left:** (a) the index is now a third of a rail's bytes (32-bit: a
+   yard's steel is one mesh of 323 k vertices); (b) thinning straight
+   runs (a rail is sampled every 4 m, a tram every 2 m) would take most
+   of what is left, but a line is pressed under a planner's design per
+   vertex (`lineUnderDesign`), so longer pieces would rise through a
+   design's plate at its edge — it needs a per-fragment cut for lines
+   first; (c) the meshes keep their CPU copy (as much again on the page's
+   process: only the bridges are asked by ray) — `dropCpuCopies` covers
+   the tile's content, not its dressing; (d) the builders still collect
+   into plain arrays (some 34 MB of transient heap for the yard) and run
+   on the main thread, 3 s for the yard tile on a desktop core, most of
+   it the ballast's drape. Baking the lines into the fine ground (PR
+   #156, plan 074 A) ends (c) and (d); the maintainer decides whether to
+   take that spike up again (asked 2026-11-11): it lies a month behind
+   main and across PR #187.
 5. **Cache keys (B1, B2, B5, B7, V5)** — TODO: both pipelines key wider
    than what an artifact reads.
 6. **The start (L1, L2, B4, F6, F12)** — TODO: the boot is serial where

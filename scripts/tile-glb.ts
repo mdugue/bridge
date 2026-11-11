@@ -32,6 +32,7 @@ import {
   MeshoptEncoder,
   MeshoptSimplifier,
 } from "meshoptimizer";
+import { packed, welded } from "../lib/city/weld";
 import { ownBuffer, pad, readGlb, writeGlb } from "./glb-container";
 import { weldExact } from "./glb-weld";
 import { toExtMeshopt, toKhrMeshopt } from "./khr-meshopt";
@@ -222,63 +223,14 @@ export function indexed(child: ChildInput): ChildInput {
   if (child.uvs) {
     columns.push([child.uvs, 2]);
   }
-  const bits = columns.map(([a, n]): [Uint32Array, number] => [
-    new Uint32Array(a.buffer, a.byteOffset, a.length),
-    n,
-  ]);
-  const count = child.positions.length / 3;
-  let size = 4;
-  while (size < 2 * count) {
-    size *= 2;
-  }
-  // open addressing: a slot holds a kept vertex's place among the kept + 1
-  const slots = new Uint32Array(size);
-  const kept = new Uint32Array(count);
-  const indices = new Uint32Array(count);
-  const same = (v: number, w: number) =>
-    bits.every(([a, n]) => {
-      for (let c = 0; c < n; c += 1) {
-        if (a[n * v + c] !== a[n * w + c]) {
-          return false;
-        }
-      }
-      return true;
-    });
-  let unique = 0;
-  for (let v = 0; v < count; v += 1) {
-    let h = 0x9e_37_79_b9;
-    for (const [a, n] of bits) {
-      for (let c = 0; c < n; c += 1) {
-        h = Math.imul(h ^ a[n * v + c] ^ (h >>> 15), 0x85_eb_ca_6b);
-      }
-    }
-    let slot = (h ^ (h >>> 13)) & (size - 1);
-    while (slots[slot] !== 0 && !same(kept[slots[slot] - 1], v)) {
-      slot = (slot + 1) & (size - 1);
-    }
-    if (slots[slot] === 0) {
-      kept[unique] = v;
-      unique += 1;
-      slots[slot] = unique;
-    }
-    indices[v] = slots[slot] - 1;
-  }
-  const packed = (a: Float32Array, n: number): Float32Array<ArrayBuffer> => {
-    const out = new Float32Array(n * unique);
-    for (let u = 0; u < unique; u += 1) {
-      for (let c = 0; c < n; c += 1) {
-        out[n * u + c] = a[n * kept[u] + c];
-      }
-    }
-    return out;
-  };
+  const w = welded(columns, child.positions.length / 3);
   return {
     ...child,
-    positions: packed(child.positions, 3),
-    normals: packed(child.normals, 3),
-    ...(child.colors && { colors: packed(child.colors, 3) }),
-    ...(child.uvs && { uvs: packed(child.uvs, 2) }),
-    indices,
+    positions: packed(child.positions, 3, w),
+    normals: packed(child.normals, 3, w),
+    ...(child.colors && { colors: packed(child.colors, 3, w) }),
+    ...(child.uvs && { uvs: packed(child.uvs, 2, w) }),
+    indices: w.indices,
   };
 }
 
