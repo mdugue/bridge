@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
+import { finished } from "@/lib/city/build-steps";
 import type { Ring2 } from "@/lib/city/decks";
 import {
   addColumn,
   addFootprint,
   addRibbon,
   addStrut,
+  geometrySteps,
   mesh3,
   meshFrom,
   quad,
@@ -121,4 +123,23 @@ test("a mesh reads through its index as the soup it was pushed as", () => {
   const normal = soup?.getAttribute("normal");
   expect(normal?.normalized).toBe(true);
   expect([...(normal?.array ?? [])].map((v) => v / 127)).toEqual(acc.nrm);
+});
+
+test("a normal past the first run of numbers is scaled by its own length", () => {
+  // 22 000 corners: the normals' 66 000 numbers are more than one run
+  const positions: number[] = [];
+  const normals: number[] = [];
+  for (let i = 0; i < 22_000; i += 1) {
+    positions.push(i, 0, 0);
+    // every other corner a normal of another length beside it
+    normals.push(...(i % 2 === 0 ? [0.6, 0.8, 0] : [0, 2, 0]));
+  }
+  const geometry = finished(geometrySteps(positions, normals));
+  const normal = geometry?.getAttribute("normal");
+  expect(normal?.count).toBe(22_000);
+  for (const i of [0, 1, 21_844, 21_845, 21_846, 21_999]) {
+    expect([normal?.getX(i), normal?.getY(i), normal?.getZ(i)]).toEqual(
+      i % 2 === 0 ? [76 / 127, 102 / 127, 0] : [0, 1, 0]
+    );
+  }
 });
