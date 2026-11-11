@@ -17,7 +17,7 @@ import { createTaskGate } from "@/lib/city/task-gate";
  *   a script that fails to load, a message that cannot be sent, a job
  *   `pack` keeps back): the work runs on the main thread, each job in a
  *   later task of its own, so a line of them never freezes the page in
- *   one.
+ *   one. A job whose signal aborted by then is not worked on.
  * - **A worker that dies is started again once.** The job it held runs
  *   here when its input was `kept` (copied); one that was handed over is
  *   gone with it and rejects. A second death, or one before the handshake,
@@ -198,15 +198,29 @@ export function createWorkerClient<In, Reply extends object, Out>(
     return { reply, kept: packed.kept };
   };
 
-  const hereLater = async (input: In, mine: number): Promise<Out> => {
+  const hereLater = async (
+    input: In,
+    mine: number,
+    signal?: AbortSignal
+  ): Promise<Out> => {
     await laterTask();
     if (mine !== generation) {
       throw stoppedError();
     }
+    // nobody waits for it any more: the page does not work it out
+    if (signal?.aborted) {
+      throw signal.reason instanceof Error
+        ? signal.reason
+        : new DOMException("The operation was aborted.", "AbortError");
+    }
     return await spec.here(input);
   };
 
-  const inTurn = async (input: In, mine: number): Promise<Out> => {
+  const inTurn = async (
+    input: In,
+    mine: number,
+    signal?: AbortSignal
+  ): Promise<Out> => {
     // (a job from before a stop starts no worker of its own)
     const there = mine === generation && (await started());
     if (mine !== generation) {
@@ -214,7 +228,7 @@ export function createWorkerClient<In, Reply extends object, Out>(
     }
     const sent = there ? send(input) : null;
     if (!sent) {
-      return await hereLater(input, mine);
+      return await hereLater(input, mine, signal);
     }
     const reply = await sent.reply;
     if (reply === "stopped") {
@@ -224,7 +238,7 @@ export function createWorkerClient<In, Reply extends object, Out>(
       if (!sent.kept) {
         throw new Error(`the ${spec.name} worker died with a job`);
       }
-      return await hereLater(input, mine);
+      return await hereLater(input, mine, signal);
     }
     return spec.unpack(reply, input);
   };
@@ -233,7 +247,7 @@ export function createWorkerClient<In, Reply extends object, Out>(
     run: async (input, signal) => {
       const mine = generation;
       return await gate.run(
-        async () => await inTurn(input, mine),
+        async () => await inTurn(input, mine, signal),
         signal,
         spec.rank?.(input) ?? 0
       );
