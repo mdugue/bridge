@@ -88,6 +88,9 @@ export const BOLLARD_HEIGHT = 0.9;
 /** A flagpole's height (m) when the map says nothing — a forecourt's mast:
  *  the model is built at it. */
 export const FLAG_HEIGHT = 7;
+/** The shortest mast a tagged height may give (m; pipeline/bake/furniture.py
+ *  FLAG_H leaves out any shorter one). */
+export const FLAG_HEIGHT_MIN = 3;
 /** The tallest mast a tagged height may give (m; pipeline/bake/furniture.py
  *  FLAG_H leaves out any taller one). */
 export const FLAG_HEIGHT_MAX = 30;

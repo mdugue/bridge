@@ -58,6 +58,7 @@ import { subdividePolyline } from "@/lib/city/polyline";
 import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
 import { flagCloths, tileCloths } from "./flag-cloth";
+import { RING, SOFT_GREEN } from "./furniture-palette";
 import type { TileCloths } from "./flag-cloth";
 import { Instances, instancePosition } from "./instancing";
 import { clockMinutes, sceneNight } from "./scene-environment";
@@ -136,18 +137,17 @@ const BUTTER = 0xec_e1_c0;
 const LILAC = 0xd9_d2_df;
 /* The street's signs and fixtures (plan 030), in the same pastels. */
 const PAPER = 0xef_e9_dc; // the advertising column's drum, timetables
-const RING = 0xb3_b3_bf; // its cap ring and crown, a clock's rim
 const SIGNAL_HEAD = 0xa9_ab_b6; // the metal's lavender-grey, a shade deeper
 const GLASS = 0x93_96_a2; // unlit signal lamps, barely darker
 const OCHRE = 0xd2_9f_8c; // pillar hydrants: red ochre in the pastel range
 const SIGN_PLATE = 0xe9_c9_c1; // the hydrant sign: one soft rose field
 const CLOCK_FACE = 0xf3_ef_e6;
 const STOP_DISC = 0xea_dc_a8; // the stop sign's yellow, softened
-const STOP_RING = 0xb9_c9_a8; // its green, as a colour field (no letter)
+const STOP_RING = SOFT_GREEN; // its green, as a colour field (no letter)
 const INK = 0x86_8a_96; // clock hands: soft slate, not black
 /* The bins' colours (`c`: their own tag, else the city's), softened. */
 const BIN_RED = 0xd8_a4_98;
-const BIN_GREEN = 0xb9_c9_a8;
+const BIN_GREEN = SOFT_GREEN;
 const BIN_BLUE = 0xb7_c6_d6;
 const BIN_ORANGE = 0xe3_bc_9c;
 /** The underground hydrant's sign plate is drawn at this scale. */
@@ -1089,17 +1089,15 @@ const cellBox = new Box3();
  * Shows the furniture cells under `root` (a tile's furniture, its tram
  * stops' signs) whose pieces are near `eye` (the scene frame), hides the
  * far ones; none hidden without an eye (Modell: its views and exports
- * draw the whole picture at one scale). True when any changed (the shadow
- * map must then be redrawn); `changed`, when given, hears the world box of
- * every cell that did (borrowed: read it at once) — only the rings that
- * can hold it need a redraw, each cell's own.
+ * draw the whole picture at one scale). `changed` hears the world box of
+ * every cell that flipped (borrowed: read it at once): the shadow rings it
+ * can fall on need a redraw.
  */
 export function showFurnitureNear(
   root: Object3D,
   eye: Vector3 | null,
   changed?: (box: Readonly<Box3>) => void
-): boolean {
-  let any = false;
+): void {
   root.traverse((child) => {
     const box = child.userData.furnitureCell as Box3 | undefined;
     if (!box) {
@@ -1115,7 +1113,6 @@ export function showFurnitureNear(
     }
     if (near !== child.visible) {
       child.visible = near;
-      any = true;
       if (changed) {
         // without an eye the box was not placed yet
         changed(
@@ -1124,7 +1121,6 @@ export function showFurnitureNear(
       }
     }
   });
-  return any;
 }
 
 /** One tile's street furniture as instanced models on its ground. */
