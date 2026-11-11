@@ -1,10 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-  createWatch,
-  follow,
-  lazyFeature,
-  wantOnSwitchOn,
-} from "./feature-seam";
+import { createWatch, follow, startOnce, wantOnSwitchOn } from "./feature-seam";
 
 /** Every promise the calls before started has settled. */
 const settled = async () =>
@@ -30,56 +25,47 @@ function counted() {
   };
 }
 
-test("a feature wanted many times loads and starts once", async () => {
-  let imports = 0;
+test("a feature wanted many times starts once, after the call that wanted it", async () => {
   const feature = counted();
-  const lazy = lazyFeature(async () => {
-    imports += 1;
-    return {};
-  }, feature.start);
-  expect(lazy.current()).toBeNull();
-  const [a, b] = await Promise.all([lazy.want(), lazy.want()]);
-  await lazy.want();
-  expect(imports).toBe(1);
+  const once = startOnce(feature.start);
+  expect(once.current()).toBeNull();
+  const wants = [once.want(), once.want()];
+  expect(feature.starts()).toBe(0);
+  const [a, b] = await Promise.all(wants);
+  await once.want();
   expect(feature.starts()).toBe(1);
   expect(a).toBe(b);
-  expect(lazy.current()).toBe(a);
+  expect(once.current()).toBe(a);
 });
 
-test("a module that did not load is asked for again on the next want", async () => {
-  let imports = 0;
-  const feature = counted();
-  const lazy = lazyFeature(async () => {
-    imports += 1;
-    return imports === 1
-      ? await Promise.reject(new Error("load"))
-      : await Promise.resolve({});
-  }, feature.start);
-  const failed = await lazy.want().then(
-    () => null,
-    (error: unknown) => error
-  );
-  expect(failed).toBeInstanceOf(Error);
-  expect(lazy.current()).toBeNull();
-  expect(await lazy.want()).not.toBeNull();
-  expect(imports).toBe(2);
-  expect(feature.starts()).toBe(1);
+test("a start that throws fails every want, and is not tried again", async () => {
+  let starts = 0;
+  const once = startOnce((): { dispose: () => void } => {
+    starts += 1;
+    throw new Error("start");
+  });
+  const failed = async () =>
+    await once.want().then(
+      () => null,
+      (error: unknown) => error
+    );
+  expect(await failed()).toBeInstanceOf(Error);
+  expect(await failed()).toBeInstanceOf(Error);
+  expect(starts).toBe(1);
+  expect(once.current()).toBeNull();
 });
 
-test("a spine gone before the module came never starts the feature; one gone after stops it", async () => {
-  const { promise: coming, resolve } = Promise.withResolvers<object>();
-  const arrive = () => resolve({});
+test("a spine gone before the start never starts the feature; one gone after stops it", async () => {
   const early = counted();
-  const gone = lazyFeature(async () => await coming, early.start);
+  const gone = startOnce(early.start);
   const wanted = gone.want();
   gone.dispose();
-  arrive();
   expect(await wanted).toBeNull();
   expect(early.starts()).toBe(0);
   expect(gone.current()).toBeNull();
 
   const late = counted();
-  const started = lazyFeature(async () => ({}), late.start);
+  const started = startOnce(late.start);
   await started.want();
   started.dispose();
   expect(late.stops()).toBe(1);
@@ -89,19 +75,20 @@ test("a spine gone before the module came never starts the feature; one gone aft
   expect(late.starts()).toBe(1);
 });
 
-test("the spine asks again on the next switch-on after a load that failed, not on every change while on", async () => {
-  let imports = 0;
-  const feature = counted();
-  const lazy = lazyFeature(async () => {
-    imports += 1;
-    return imports === 1
-      ? await Promise.reject(new Error("load"))
-      : await Promise.resolve({});
-  }, feature.start);
+test("the spine wants the feature on each switch-on, not on every change while on", async () => {
+  let wants = 0;
   const failures: unknown[] = [];
-  const want = wantOnSwitchOn(lazy, (reason) => {
-    failures.push(reason);
-  });
+  const want = wantOnSwitchOn(
+    {
+      want: async () => {
+        wants += 1;
+        return await Promise.reject(new Error("start"));
+      },
+    },
+    (reason) => {
+      failures.push(reason);
+    }
+  );
   want(false);
   want(true);
   await settled();
@@ -109,14 +96,13 @@ test("the spine asks again on the next switch-on after a load that failed, not o
   // another change while a layer is on (a slider, a second layer)
   want(true);
   await settled();
-  expect(imports).toBe(1);
-  // off and on again: loaded, started
+  expect(wants).toBe(1);
+  // off and on again
   want(false);
   want(true);
   await settled();
-  expect(imports).toBe(2);
-  expect(feature.starts()).toBe(1);
-  expect(failures).toHaveLength(1);
+  expect(wants).toBe(2);
+  expect(failures).toHaveLength(2);
 });
 
 test("a follower hears the value of now first, then every change, until it lets go", () => {

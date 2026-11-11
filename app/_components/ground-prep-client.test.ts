@@ -54,15 +54,16 @@ test("a shared index goes once and serves every level that names it", async () =
 test("a job dropped before its turn is never run", async () => {
   const aborter = new AbortController();
   const busy = prepareGroundOffThread(grid());
-  const dropped = prepareGroundOffThread(grid(), { signal: aborter.signal });
+  // (it leaves the line at the abort, not at its turn)
+  const dropped = prepareGroundOffThread(grid(), {
+    signal: aborter.signal,
+  }).then(
+    () => false,
+    () => true
+  );
   aborter.abort();
   await busy;
-  let failed = false;
-  try {
-    await dropped;
-  } catch {
-    failed = true;
-  }
+  const failed = await dropped;
   expect(failed).toBe(true);
 });
 

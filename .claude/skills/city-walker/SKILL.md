@@ -21,6 +21,14 @@ were made — add an ADR when you change one.
 
 ## Scene architecture
 
+What has a life of its own leaves `bootApp` as an **owner** (a factory
+over a few objects and callbacks: `scene-capture.ts`, `frame-meter.ts`,
+`tile-memory.ts`, `crosshair-focus.ts`, `load-veil-follow.ts`), not as a
+new block of closure state. A frame's work goes into one of the named
+steps of `frame-steps.ts`, whose order is tested. A new worker is a
+`createWorkerClient` (`worker-client.ts`: the handshake, the line, the
+fallback, one restart), its script posting `{ ready: true }` last.
+
 `app/_components/create-app.ts` is the spine: it builds the renderer, scene, a
 `PerspectiveCamera`, a `world` group (Z-up data frame, rotated −90° about X to
 Y-up), reads the tileset's extras (CRS, recenter offset, tile bounds), starts
@@ -29,7 +37,7 @@ streaming the site and the animation loop, and returns a `CityWalkHandle`
 any of its terrain levels are on screen — the first frame. The fixed
 lamp-light pool and the fog floor are created before the first frame and
 retargeted/lowered as tiles land. The data layers are not wired into
-`bootApp` by hand: they start on their first switch-on (`lazyFeature`,
+`bootApp` by hand: they start on their first switch-on (`startOnce`,
 `data-layers-feature.ts`) and hear the spine through its hooks
 (`feature-seam.ts`: frame, stream change, the look store, the scene's
 clock — a watched value a late starter reads first); a tile's traffic
