@@ -209,6 +209,10 @@ export function streamWriter(v: CityVertices, has?: StreamAttributes) {
       if (count === 0) {
         return;
       }
+      // (a stray coordinate would shift every column of every later part)
+      if (!Number.isInteger(count)) {
+        throw new Error(`a part of ${xyz.length} coordinates is no triangles`);
+      }
       positions.push(xyz, 3 * count);
       objectIds.fill(o, count);
       if (typeof more.isRoof === "object") {
