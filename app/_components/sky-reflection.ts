@@ -27,8 +27,9 @@ import { viewDirection } from "./view-direction";
  * texels wide, which the box-filtered mips of a small cube match. This
  * one holds 6 × 64² half floats with mips and a depth buffer, ≈ 0.4 MB.
  *
- * It mirrors the sky only, never the city: what lies across the street
- * would take screen-space reflections or baked probes, both far dearer.
+ * It holds the sky only: what lies across the street a window or a glass
+ * wall mirrors from the baked horizon instead (city-mirror.ts), never from
+ * a second look at the scene.
  * The map is re-rendered when the sun or the palette moves (`refresh`,
  * throttled to a visible change), never per frame; a material reads it
  * through `skyReflection`, weighted by the `Spiegelung` row — at 0 every

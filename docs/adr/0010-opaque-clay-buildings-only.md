@@ -41,11 +41,12 @@ from data, read the same on every house, and stay calm.
    from OSM entrances, dormers, shop fascias — rounded profiles, never hard
    bevels, relief lit from above and never darker than the wall.
    Landmarks get none of the generic parts.
-6. **Glass where it helps the facade read**, calm and muted, never a
-   mirror of the scene: a shop window is an opening cut into its wall,
-   reveals in the wall's clay and glass at its back, as a window is a
-   recess (a real one at every distance, as wide as the measured bay); a
-   window's back mirrors a little sky as its pane would.
+6. **Glass where it helps the facade read**: a shop window is an opening
+   cut into its wall, reveals in the wall's clay and glass at its back, as
+   a window is a recess (a real one at every distance, as wide as the
+   measured bay). Panes and glass walls mirror the street's skyline and
+   the sky above it, read from the baked horizon — a stand-in house below
+   the skyline, never a second render of the scene.
 7. **Night:** walls do not glow; every unlit or additive layer is dimmed by
    the one night factor.
 8. **Water is matte** (a sun path, glints, gentle waves); fountains keep

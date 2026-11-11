@@ -77,7 +77,9 @@ import {
   openSkySlots,
   SKY_VIEW,
 } from "./sky-light";
-import { mirrorWeight, REFLECTIONS, skyReflection } from "./sky-reflection";
+import { mirrorWeight, REFLECTIONS } from "./sky-reflection";
+import { clayHorizonSlots, createCityMirror } from "./city-mirror";
+import type { MirrorSeen } from "./city-mirror";
 import { viewDirection } from "./view-direction";
 
 /** A building tile's object table (lib/city/city-mesh.ts). */
@@ -373,6 +375,9 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     wall,
     wn,
   });
+  // Der Skyline-Spiegel (city-mirror.ts): what a window's back and a glass
+  // wall mirror, read once on the facet
+  const mirror = createCityMirror(d.uSun).at(wn, h);
   // the wall's own looks (relief, tone, ledges) stay off the openings
   const plaster = wall.mul(float(1).sub(windows.opening));
   const colour = clayAlbedo(windows, {
@@ -419,15 +424,15 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     ao: createClaySky().ao(h, build.z, SKY_VIEW).mul(windows.ao),
     // after dark the street lamps light the walls that face them, each
     // as its colour takes their light (lamp-reflections.ts `streetLight`)
-    emissive: clayGlow(d, build, h, wall, flags, wn, sn)
+    emissive: clayGlow(d, { build, h, wall, flags, wn, sn, mirror })
       .add(windows.glow.mul(DUSK_GLOW).mul(d.uNight))
       .add(colour.mul(streetLight(wn)))
       // a window's back mirrors the sky as a shop window's pane does
       // (`paneSky`), dimmed after dark
       .add(
-        vec3(...PANE_SKY_RGB).mul(
-          windows.sky.mul(float(1).sub(d.uNight.mul(PANE_SKY_NIGHT_DIM)))
-        )
+        vec3(...PANE_SKY_RGB)
+          .mul(mirror.tone)
+          .mul(windows.sky.mul(float(1).sub(d.uNight.mul(PANE_SKY_NIGHT_DIM))))
       ),
   };
 }
@@ -488,7 +493,7 @@ function clayAlbedo(
             wn
           )
         )
-        .mul(float(1).sub(facadeMirror(flags, wall, sn).mul(0.6))),
+        .mul(facadeBody(flags, wall, sn)),
       h,
       wall,
       flags,
@@ -816,11 +821,39 @@ function facadeMaterial(flags: F, wall: F): { glass: F; metal: F } {
  */
 function facadeMirror(flags: F, wall: F, normal: V3): F {
   const m = facadeMaterial(flags, wall);
-  // a shop window's pane keeps its own calm sky (paneSky), never a mirror
-  const glass = m.glass.mul(float(1).sub(shopPane(flags)));
-  return mirrorWeight(normal, 0.1)
-    .mul(glass.add(m.metal.mul(0.35)))
+  return mirrorWeight(normal, GLASS_MIRROR.base)
+    .mul(facadeGlass(flags, wall))
+    .add(mirrorWeight(normal, 0.1).mul(m.metal.mul(0.35)))
     .mul(REFLECTIONS);
+}
+
+/** A glass wall's mirror and body: a quarter of the scene face on (glass
+ *  seen against a dark inside shows its reflection, not its own colour),
+ *  all of it at a grazing view; its own colour, where the mirror does not
+ *  cover it, darkened to a tinted pane. */
+export const GLASS_MIRROR = {
+  base: 0.28,
+  body: 0.62,
+  roughness: 0.05,
+} as const;
+
+/** 1 on a glass wall (flag 4) but a shop window's pane, which keeps its
+ *  own calm sky (paneSky), never a mirror. */
+function facadeGlass(flags: F, wall: F): F {
+  return facadeMaterial(flags, wall).glass.mul(float(1).sub(shopPane(flags)));
+}
+
+/** What of the clay's own colour a glass or metal wall keeps: it gives way
+ *  to the mirror as a pane's would, and on glass to the dark behind it. */
+function facadeBody(flags: F, wall: F, normal: V3): F {
+  return float(1).sub(
+    min(
+      facadeMirror(flags, wall, normal)
+        .mul(0.6)
+        .add(facadeGlass(flags, wall).mul(GLASS_MIRROR.body)),
+      0.94
+    )
+  );
 }
 
 /** Glass and metal cladding read a little smoother than the clay; a shop
@@ -893,13 +926,17 @@ function osmColour(col: V3, build: V4, h: F, wall: F, flags: F): V3 {
  */
 function clayGlow(
   d: ClayDetailUniforms,
-  build: V4,
-  h: F,
-  wall: F,
-  flags: F,
-  wn: V3,
-  sn: V3
+  at: {
+    build: V4;
+    h: F;
+    wall: F;
+    flags: F;
+    wn: V3;
+    sn: V3;
+    mirror: MirrorSeen;
+  }
 ): V3 {
+  const { build, h, wall, flags, wn, sn, mirror } = at;
   const view = viewDirection().negate();
   const fres = float(1).sub(clamp(dot(view, sn), 0, 1));
   // a shop window has its own grazing light (paneSky), not the clay's rim
@@ -934,12 +971,20 @@ function clayGlow(
   const askedLight = ASKED_PALE.mul(
     askedFlag(flags).mul(d.uNight.mul(0.08).add(0.06))
   );
-  return rim
-    .add(nightLight(d, build, h, wall, flags, wn))
-    .add(vec3(0.55, 0.68, 0.85).mul(sheen.mul(0.5)))
-    .add(skyReflection(sn, 0.22).mul(facadeMirror(flags, wall, sn)))
-    .add(paneSky(d, h, fres).mul(paneShade(h, build.z)).mul(pane))
-    .add(askedLight);
+  return (
+    rim
+      .add(nightLight(d, build, h, wall, flags, wn))
+      .add(vec3(0.55, 0.68, 0.85).mul(sheen.mul(0.5)))
+      // a glass wall mirrors the street (city-mirror.ts), sharp; metal the
+      // same, blurred
+      .add(
+        mirror
+          .colour(mix(0.22, GLASS_MIRROR.roughness, facadeGlass(flags, wall)))
+          .mul(facadeMirror(flags, wall, sn))
+      )
+      .add(paneSky(d, h, fres).mul(paneShade(h, build.z)).mul(pane))
+      .add(askedLight)
+  );
 }
 
 /** A hash of a light's cell along the wall, 0…1 (`k` picks the stream). */
@@ -1199,6 +1244,23 @@ export function setClaySkyView(
   size: [number, number]
 ): void {
   setSlots(clay, { ...slotsOf(clay), ...claySkySlots(texture, origin, size) });
+}
+
+/**
+ * Hands a tile's clay its horizon (the skyline its windows and glass
+ * mirror, city-mirror.ts), loaded after the tile shows: a texture and
+ * uniform swap, no rebuild. `origin` and `size` as `setClaySkyView`'s.
+ */
+export function setClayHorizon(
+  clay: MeshStandardNodeMaterial,
+  texture: Texture,
+  origin: [number, number],
+  size: [number, number]
+): void {
+  setSlots(clay, {
+    ...slotsOf(clay),
+    ...clayHorizonSlots(texture, origin, size),
+  });
 }
 
 /**
