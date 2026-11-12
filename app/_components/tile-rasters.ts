@@ -108,7 +108,10 @@ export interface TileRasters {
   clear: () => void;
   /** `root`'s handle. `weighed: false` for a holder the tile cache does not
    *  weigh by its rasters (a building tile's sky view). */
-  holder: (root: object, opts?: { weighed?: boolean }) => RasterHold;
+  holder: (
+    root: object,
+    opts?: { rank?: number; weighed?: boolean }
+  ) => RasterHold;
 }
 
 export interface RasterHold {
@@ -302,6 +305,8 @@ export function rasterFiles(
 
 /** What a raster's load is handed. */
 interface LoadContext {
+  /** the asking tile's place in the downloads' line */
+  rank?: number;
   renderer: WebGPURenderer;
   signal: AbortSignal;
 }
@@ -315,8 +320,9 @@ interface KindHooks<T> {
 
 /** A row and nothing else: one raster, its own texture. */
 const plainHooks = <T extends Texture>(): KindHooks<T> => ({
-  load: async (url, kind, { renderer, signal }) => {
+  load: async (url, kind, { rank, renderer, signal }) => {
     const loaded = await loadDataRaster(url, RASTER_KINDS[kind].look, {
+      rank,
       renderer,
       signal,
     });
@@ -333,9 +339,10 @@ const plainHooks = <T extends Texture>(): KindHooks<T> => ({
  * 2048² on a phone. Its water mask is read before its bytes go.
  */
 const classHooks: KindHooks<SplatRasters> = {
-  load: async (url, kind, { renderer, signal }) => {
+  load: async (url, kind, { rank, renderer, signal }) => {
     let water: WaterMask | null | undefined;
     const raster = await loadDataRaster(url, RASTER_KINDS[kind].look, {
+      rank,
       renderer,
       signal,
       inspect: (data, width, height) => {
@@ -409,7 +416,7 @@ const PAIR_JOIN = "\n";
 const indexedHooks = (
   pack: (doc: object) => { data: Float32Array; width: number } | null
 ): KindHooks<IndexedRaster> => ({
-  load: async (key, kind, { renderer, signal }) => {
+  load: async (key, kind, { rank, renderer, signal }) => {
     const [rasterUrl = "", tableUrl = ""] = key.split(PAIR_JOIN);
     const doc = await fetchOptionalJson<object>(tableUrl, signal);
     let table: DataTexture;
@@ -423,6 +430,7 @@ const indexedHooks = (
       return null;
     }
     const loaded = await loadDataRaster(rasterUrl, RASTER_KINDS[kind].look, {
+      rank,
       renderer,
       signal,
     }).catch((error: unknown) => {
@@ -486,7 +494,8 @@ export function createTileRasters(opts: {
   ): SharedRasters<RasterOf[K]> => {
     const hooks: KindHooks<RasterOf[K]> = HOOKS[kind];
     return createSharedRasters<RasterOf[K]>(
-      async (key, signal) => await hooks.load(key, kind, { renderer, signal }),
+      async (key, signal, rank) =>
+        await hooks.load(key, kind, { rank, renderer, signal }),
       hooks.free
     );
   };
@@ -558,7 +567,7 @@ export function createTileRasters(opts: {
           // the reference is taken here, in the caller's task; an abort lets
           // go at once (`release`), not once the raster this waits for has
           // decoded and uploaded: the last holder gone, its load stops too
-          const loading = share.acquire(key);
+          const loading = share.acquire(key, holderOpts?.rank);
           const entry: (typeof taken)[number] = {
             letGo: () => share.release(key),
             textures: [],

@@ -105,6 +105,7 @@ import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures } from "./sport-fixtures";
 import type { SportFixtureLayer } from "./sport-fixtures";
 import { cpuDroppable, createGridShare, dressTerrain } from "./terrain-layer";
+import type { FetchBounds } from "@/lib/city/fetch-order";
 import type { ReachBox } from "@/lib/city/ground-reach";
 import type { GridShare, GroundUniforms, TerrainLayer } from "./terrain-layer";
 import { dressFences } from "./fence-layer";
@@ -306,6 +307,9 @@ export interface TileStreamContext {
   /** whether a ground level lying in `box` starts on its close-range
    *  rasters' twins (ground-reach-follow.ts); without it, the full ones */
   groundFar?: (box: ReachBox) => boolean;
+  /** a tile's place in the rasters' downloads, from its bounds: its
+   *  distance from the eye (lib/city/fetch-order.ts); unset, as asked */
+  rasterRank?: (bounds: FetchBounds) => number;
   /** the scene's season and look (scene-environment.ts): a dressing
    *  lands with them as they are now */
   environment: DressingEnvironment;
@@ -2195,7 +2199,10 @@ export class DressingPlugin {
   ): void {
     const bounds = this.ctx.tileBounds(extras.tileId);
     // not weighed: a building tile weighs no raster
-    entry.svf = this.rasters.holder(scene, { weighed: false });
+    entry.svf = this.rasters.holder(scene, {
+      rank: bounds && this.ctx.rasterRank?.(bounds),
+      weighed: false,
+    });
     void entry.svf.acquire("svf", extras).then((texture) => {
       const { city } = entry;
       if (texture && bounds && city && this.dressed.get(scene) === entry) {
@@ -2233,7 +2240,9 @@ export class DressingPlugin {
     this.loadAborts.set(scene, own);
     const either = eitherSignal(own.signal, this.lifetime.signal);
     let terrain: TerrainLayer;
-    const rasters = this.rasters.holder(scene);
+    const rasters = this.rasters.holder(scene, {
+      rank: this.ctx.rasterRank?.(extras.bounds),
+    });
     try {
       terrain = await dressTerrain(mesh, extras, toData, {
         fogColor: this.ctx.fogColor,
