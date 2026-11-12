@@ -650,8 +650,13 @@ ids are the report's.
    only for a demolish or a design's cover (`footprintsIn`,
    `footprintsSettled`). A first cut (a 192² grey figure per tile, drawn
    on a canvas) showed seams at the tile edges and pale buildings. Left:
-   the 512² class raster is still published and named on each tile. (b) the eave and cornice
-   bands as one face with bent normals; (c) a lighter far level; (d) the
+   the 512² class raster is still published and named on each tile.
+   **(b) the bands' rounds
+   one facet each** — the plinth's shoulder and the Traufgesims's round
+   one face, the Gurtgesims's half-round nose two, their normals bending
+   from face to face (`plinths.ts` `bend`): a band 10–12 → 6–8 triangles
+   a piece, caps 5 → 3. Dresden 7.05 M → 5.30 M triangles, 41.3 → 37.2 MB;
+   the far level 3.68 M → 3.46 M, 35.0 → 33.4 MB; (c) a lighter far level; (d) the
    weld for trees and furniture; (e) the dressing in a worker; (f) the
    rails baked into the ground.
 
