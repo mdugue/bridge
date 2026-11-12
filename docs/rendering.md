@@ -956,6 +956,7 @@ the safety levels 1, 2 and 3:
 | Pixel ratio | ≤ 1.5 (1.25, 1.0, 1.0; ≤ 2 until 2026-10-10: a retina laptop's 5.2 MP of post stack, 1.5 is 56 % of it), × 0.85 / 0.72 / 0.6 while the GPU misses 50 fps (`lib/city/resolution-scale.ts`) | ≤ 1.5 (1.25, 1.0, 0.85), × 0.85 / 0.72 while it misses 40 fps | 0.5, never scaled |
 | Post (`postProfileFor`) | DoF, SMAA, only the outline warmed | no DoF, FXAA, only the outline warmed | as the tier |
 | Land-cover rasters | L0 4096², its splat 2048² (85 → 21 MiB with mips, since 2026-10-10), L1 1024² | L0 2048², L1 1024²; no sports raster | as the tier |
+| Close-range rasters of a fine level (paving, edges, sports grounds, markings, colonies) | 2048² within 0.75 m a pixel of the view, their 1024² twins beyond 1.1 (`lib/city/ground-reach.ts`) | same | as the tier |
 | GTAO samples | 16 | 8 | 8 |
 | Frames behind the sidebar (`lib/city/frame-pace.ts`) | every frame (the panel floats beside the scene) | 12 fps while its sheet covers the scene, none while it scrolls and 250 ms after (the scene shared the GPU with the compositor drawing the scroll, and the scroll lagged the finger); the sheet's backdrop is not blurred | as the tier |
 | Frames while the scene stands still (`frame-pace.ts`, `createStillness`) | 30 fps once the camera has not moved for 1 s, everything is loaded and neither the traffic nor the trams run; any input on the page (a pointer moving over the canvas only), a look change, a new hour, a glide to a viewpoint, a resize or a stream wakes it for the next frame (a resize to a container without area is skipped: the canvas keeps its last size, `canvas-size.ts`, since WebGPU fails a 0 × 0 swap chain). The resolution scale steps up there by the GPU's time alone, and the HUD's fps readout keeps the last moving rate | same | as the tier (a SwiftShader frame takes longer than the pace's interval, so it holds none) |
@@ -1059,6 +1060,29 @@ stays their measure; the tile cache counts true bytes.
   kept only where a tile's numbers equal the site's: −6 MiB per coarse
   tile after the first, on the GPU and the CPU), and it carries only its
   coarse crowns, traffic and bridges.
+- **The close-range rasters follow the view** (`lib/city/ground-reach.ts`,
+  `ground-reach-follow.ts`, since 2026-11-12). The kerb lines, paving
+  patterns and lawn edges fade out by the metres a pixel spans (gone at
+  0.5 m, `ground-detail.ts`), yet a fine level held the rasters they are
+  drawn from at any distance: paving 16 MiB, edges 8, sports grounds 16,
+  markings 16 on a desktop. A fine level whose nearest point the view
+  draws at 0.75 m a pixel or coarser now starts on their 1024² twins
+  (4 + 2 + 4 + 4 MiB; the build's `surfaceFar`, `edgesFar`, `sportFar`,
+  and the phone twins of the markings and colonies), which still carry
+  what shows out there: the paving's kind, the urban green, a pitch's
+  lines, the lane lines until 1.5 m a pixel. Ten times a second the
+  frame measures every loaded fine level and has the nearest one on the
+  wrong set swap it, one at a time: the other set is loaded and put on
+  the GPU outside a frame (`RasterHold.acquire` with `now`), handed to
+  the material's slots — a variant's graph reads the same kinds, so no
+  shader is built — and the old one dropped (`GroundDetail.setFar`).
+  Back to the twins only above 1.1 m a pixel, so pacing a tile's edge
+  swaps nothing. The measure is taken at the size a picture is saved at
+  (the tier's pixel ratio whatever the frame rate took; Modell at its
+  export's scale): an export finds the rasters its pixels ask for.
+  While a swap loads, a level holds both sets: on a phone, whose
+  markings and colonies are their twins anyway, the paving's and edges'
+  6 MiB of twins beside their 24.
 - **The water sheets cover the water, not the tile**
   (`lib/city/water-mask.ts`, terrain-layer.ts `waterSheetsOf`). The water
   and mist sheets drape the terrain mesh and mask themselves to the water

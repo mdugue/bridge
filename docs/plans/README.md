@@ -660,9 +660,28 @@ ids are the report's.
    without doors and bands** (`FAR_CITY_DROPPED` in
    `scripts/prepare/city.ts`, `simplifyGlb`'s `drop`: their triangles go
    before the simplifier, their rows stay): 3.46 M → 2.17 M triangles,
-   33.4 → 25.3 MB, the densest tile 0.40 M → 0.23 M; (c) a lighter far level; (d) the
-   weld for trees and furniture; (e) the dressing in a worker; (f) the
-   rails baked into the ground.
+   33.4 → 25.3 MB, the densest tile 0.40 M → 0.23 M; **(d) the
+   close-range rasters near the camera only** (2026-11-12, after a CPU
+   profile of the boot: pipelines, texture uploads and GPU waits are 95 %
+   of the main thread, every dressing builder together 3 %, so (f) and
+   (g) below would move little) — a fine level beyond the ground
+   detail's reach reads the paving, edges, sports grounds and markings
+   from 1024² twins, 14 MiB instead of 56, and swaps to the full ones
+   through the material's slots as the view comes near
+   (`lib/city/ground-reach.ts`, `ground-reach-follow.ts`,
+   terrain-layer.ts `GroundDetail`). Dresden's start on foot (1280 × 800,
+   five fine levels, two of them near): the textures three holds
+   683 → 505 MB, the download 56.0 → 48.3 MB. The minimap's 512² class
+   raster went with it. Not built: (e) the weld for trees and furniture
+   (they are instanced on shared indexed geometries; only the playground
+   slabs are a soup); (f) the dressing in a worker (it needs every loaded
+   tile's heights in the worker: a copy grows a phone's memory, sharing
+   needs COOP/COEP); (g) the rails baked into the ground (spike #156 is
+   the template; the builders are 7 s of a 334 s boot under
+   SwiftShader). Open on the GPU side, waiting for a trace from a real
+   GPU: uploads spread over frames, the murals read back without
+   `getImageData`, the sports raster as a block atlas (its grounds cover
+   1 % of the texels, 3–9 % of 64 px blocks).
 
 Not planned, for the maintainer: F14 (the re-baked rasters of 16 days
 are 633 MB of superseded blobs: squash-merge data PRs, or rewrite the
