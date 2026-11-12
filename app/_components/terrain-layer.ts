@@ -55,6 +55,7 @@ import {
   ROAD_CLASS,
   srgbToLinear,
 } from "@/lib/city/landcover";
+import type { ReachBox } from "@/lib/city/ground-reach";
 import type { WaterMask } from "@/lib/city/water-mask";
 import type {
   GroundPositions,
@@ -93,8 +94,15 @@ import {
 } from "./shader-chunks";
 import { splatSize } from "./splat-uv";
 import type { F, Tex, V3 } from "./shader-chunks";
+import { RASTER_KINDS, REACH_KINDS } from "./tile-rasters";
 import type { IndexedRaster, RasterHold, SplatRasters } from "./tile-rasters";
-import { setGraph, setSlots, slotTexture, slotUniform } from "./material-slots";
+import {
+  setGraph,
+  setSlots,
+  slotsOf,
+  slotTexture,
+  slotUniform,
+} from "./material-slots";
 import type { Slots } from "./material-slots";
 import { applyGroundLight } from "./sky-light";
 import type { GroundLight } from "./sky-light";
@@ -155,6 +163,29 @@ export interface TerrainLayer {
   /** the tile's baked light for what stands on this level (kerbs, fences,
    *  stairs, walls; sky-light.ts `applyGroundLight`), when it has any */
   light?: GroundLight;
+  /** the level's close-range rasters and their twins, where the content
+   *  names twins (the fine level) */
+  detail?: GroundDetail;
+}
+
+/**
+ * Which set of its close-range rasters (tile-rasters.ts `REACH_KINDS`) a
+ * level reads: the full ones near the camera, their twins beyond the
+ * detail's reach (lib/city/ground-reach.ts). The frame asks
+ * (ground-reach-follow.ts); a swap is a slot write, no shader build.
+ */
+export interface GroundDetail {
+  /** the level's ground in the scene's frame (Y up, recentered) */
+  box: ReachBox;
+  /** whether it reads the twins now */
+  far: () => boolean;
+  /**
+   * Loads the other set, on the GPU before it is read, hands it to the
+   * material and lets the old one go. Resolves true when the ground now
+   * draws other rasters; false when nothing changed (a swap under way, a
+   * load that failed, the level gone, a twin missing beside its full file).
+   */
+  setFar: (far: boolean) => Promise<boolean>;
 }
 
 export interface TerrainOptions {
@@ -174,6 +205,9 @@ export interface TerrainOptions {
   signal?: AbortSignal;
   /** the grid level's index and water index, one copy for the site */
   grids?: GridShare;
+  /** whether the level starts on its close-range rasters' twins, given
+   *  where its ground lies (ground-reach.ts); without it, the full ones */
+  far?: (box: ReachBox) => boolean;
 }
 
 /**
@@ -1045,9 +1079,11 @@ async function settledAll<T extends readonly unknown[]>(promises: {
  */
 async function loadTerrainRasters(
   extras: TerrainExtras,
-  opts: TerrainOptions
+  opts: TerrainOptions,
+  far: boolean
 ): Promise<TerrainRasters> {
   const { rasters: hold, signal } = opts;
+  const how = { far };
   try {
     const [
       splats,
@@ -1062,11 +1098,11 @@ async function loadTerrainRasters(
     ] = await settledAll([
       hold.acquire("class", extras, signal),
       hold.acquire("ndvi", extras, signal),
-      hold.acquire("surface", extras, signal),
-      hold.acquire("edges", extras, signal),
-      hold.acquire("sport", extras, signal),
-      hold.acquire("markings", extras, signal),
-      hold.acquire("colonies", extras, signal),
+      hold.acquire("surface", extras, signal, how),
+      hold.acquire("edges", extras, signal, how),
+      hold.acquire("sport", extras, signal, how),
+      hold.acquire("markings", extras, signal, how),
+      hold.acquire("colonies", extras, signal, how),
       hold.acquire("horizon", extras, signal),
       hold.acquire("svf", extras, signal),
     ]);
@@ -1090,6 +1126,170 @@ async function loadTerrainRasters(
     hold.release();
     throw error;
   }
+}
+
+/** A level's ground in the scene's frame (Y up, recentered): its bounds,
+ *  and the heights its mesh spans. */
+function reachBoxOf(
+  mesh: Mesh,
+  extras: TerrainExtras,
+  toData: Matrix4,
+  offset: { cx: number; cy: number }
+): ReachBox {
+  const [minX, minY, maxX, maxY] = extras.bounds;
+  const { geometry } = mesh;
+  if (!geometry.boundingBox) {
+    geometry.computeBoundingBox();
+  }
+  // (the data frame is Z up: the mesh's box there has the heights)
+  const heights = geometry.boundingBox?.clone().applyMatrix4(toData);
+  const low = heights && Number.isFinite(heights.min.z) ? heights.min.z : 0;
+  const high = heights && Number.isFinite(heights.max.z) ? heights.max.z : low;
+  return {
+    min: [
+      minX - offset.cx,
+      Math.min(low, extras.minElevation),
+      -(maxY - offset.cy),
+    ],
+    max: [
+      maxX - offset.cx,
+      Math.max(high, extras.minElevation),
+      -(minY - offset.cy),
+    ],
+  };
+}
+
+/** Where a level's ground lies, and the set it starts on there. */
+function reachStart(
+  mesh: Mesh,
+  extras: TerrainExtras,
+  toData: Matrix4,
+  opts: TerrainOptions
+): { box: ReachBox; far: boolean } {
+  const box = reachBoxOf(mesh, extras, toData, opts.offset);
+  return { box, far: opts.far?.(box) ?? false };
+}
+
+/** Whether the content names a twin for any close-range raster. */
+function hasTwins(extras: TerrainExtras): boolean {
+  // reason: the extras name only some of the raster keys
+  const named = extras as unknown as Partial<Record<string, string>>;
+  return REACH_KINDS.some((kind) => {
+    const { far } = RASTER_KINDS[kind];
+    return far !== undefined && named[far] !== undefined;
+  });
+}
+
+/** The close-range rasters of a splat, by kind (as `acquire` gave them). */
+interface ReachSet {
+  colonies: Texture | undefined;
+  edges: Texture | undefined;
+  markings: SplatLayer["markings"];
+  sport: SplatLayer["sport"];
+  surface: Texture | undefined;
+}
+
+const reachSetOf = (splat: SplatLayer): ReachSet => ({
+  surface: splat.surfaceTexture,
+  edges: splat.edgesTexture,
+  sport: splat.sport,
+  markings: splat.markings,
+  colonies: splat.colonies?.texture,
+});
+
+/** The set a swap loaded, all of it or (one missing, the level gone)
+ *  nothing: a variant's graph reads the kinds it was built with. */
+async function loadReachSet(
+  d: GroundDetailInput,
+  far: boolean,
+  now: ReachSet
+): Promise<ReachSet | null> {
+  const how = { far, now: true };
+  const got = await settledAll([
+    d.hold.acquire("surface", d.extras, d.signal, how),
+    d.hold.acquire("edges", d.extras, d.signal, how),
+    d.hold.acquire("sport", d.extras, d.signal, how),
+    d.hold.acquire("markings", d.extras, d.signal, how),
+    d.hold.acquire("colonies", d.extras, d.signal, how),
+  ]);
+  const next: ReachSet = {
+    surface: got[0] ?? undefined,
+    edges: got[1] ?? undefined,
+    sport: got[2] ?? undefined,
+    markings: got[3] ?? undefined,
+    colonies: got[4] ?? undefined,
+  };
+  const whole = REACH_KINDS.every(
+    (kind) => (next[kind] === undefined) === (now[kind] === undefined)
+  );
+  if (whole && !d.signal.aborted) {
+    return next;
+  }
+  for (const kind of REACH_KINDS) {
+    d.hold.drop(next[kind]);
+  }
+  return null;
+}
+
+export interface GroundDetailInput {
+  box: ReachBox;
+  extras: TerrainExtras;
+  far: boolean;
+  hold: RasterHold;
+  mesh: Mesh;
+  signal: AbortSignal;
+  splat: SplatLayer | undefined;
+}
+
+/** A level's hold on its close-range rasters (`GroundDetail`). */
+export function groundDetailOf(d: GroundDetailInput): GroundDetail | undefined {
+  const { splat, mesh, hold } = d;
+  if (!(splat && hasTwins(d.extras))) {
+    return undefined;
+  }
+  let { far } = d;
+  let busy = false;
+  const swap = async (next: boolean): Promise<boolean> => {
+    const old = reachSetOf(splat);
+    const set = await loadReachSet(d, next, old);
+    if (!set) {
+      return false;
+    }
+    splat.surfaceTexture = set.surface;
+    splat.edgesTexture = set.edges;
+    splat.sport = set.sport;
+    splat.markings = set.markings;
+    if (splat.colonies && set.colonies) {
+      splat.colonies = { ...splat.colonies, texture: set.colonies };
+    }
+    // reason: the terrain's one material (createTerrainMaterial)
+    const material = mesh.material as MeshStandardNodeMaterial;
+    setSlots(material, { ...slotsOf(material), ...splatSlots(splat) });
+    for (const kind of REACH_KINDS) {
+      hold.drop(old[kind]);
+    }
+    far = next;
+    return true;
+  };
+  return {
+    box: d.box,
+    far: () => far,
+    setFar: async (next) => {
+      if (busy || next === far || d.signal.aborted) {
+        return false;
+      }
+      busy = true;
+      try {
+        return await swap(next);
+      } catch {
+        // (a raster that did not load: the level keeps what it reads, and
+        // the frame asks again)
+        return false;
+      } finally {
+        busy = false;
+      }
+    },
+  };
 }
 
 /** The terrain's draw order among the opaque (dressTerrain): after the
@@ -1238,7 +1438,8 @@ export async function dressTerrain(
   if (grids && index) {
     mesh.geometry.setIndex(grids.index(n, index));
   }
-  const loaded = await loadTerrainRasters(extras, opts);
+  const { box, far: startsFar } = reachStart(mesh, extras, toData, opts);
+  const loaded = await loadTerrainRasters(extras, opts, startsFar);
   const free = opts.rasters.release;
   const classes = loaded.class;
   // the class raster's water cells: none (null) where the tile has no
@@ -1328,10 +1529,20 @@ export async function dressTerrain(
     }
   }
 
+  const gone = new AbortController();
   return {
     mesh,
     rasters: water ? [water.tint] : [],
     light: splat ? groundLightOf(splat) : undefined,
+    detail: groundDetailOf({
+      box,
+      extras,
+      far: startsFar,
+      hold: opts.rasters,
+      mesh,
+      signal: gone.signal,
+      splat,
+    }),
     tile: extras.tileId,
     level: extras.level,
     tin: extras.tin !== undefined,
@@ -1342,6 +1553,7 @@ export async function dressTerrain(
     heightAt,
     heightBytes,
     dispose: () => {
+      gone.abort();
       try {
         // Shares the tile's positions; only its own index (and normals) go —
         // not the site's (GridShare), which other tiles draw with.

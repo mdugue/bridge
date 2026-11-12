@@ -374,7 +374,6 @@ const extras: SiteExtras = {
     id: t.id,
     bounds: t.bounds,
     footprints: footprintFiles.get(t.id) ?? "",
-    minimap: sideFiles.get(t.id)?.landcoverSmall ?? "",
     bridges: sideFiles.get(t.id)?.bridge,
     ask: pickFiles(sideFiles.get(t.id) ?? {}, ASK_KINDS),
   })),

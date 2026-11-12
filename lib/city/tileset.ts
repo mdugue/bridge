@@ -117,8 +117,11 @@ export const TERRAIN_RASTER_KEYS = [
   "landcoverLow",
   "ndvi",
   "surface",
+  "surfaceFar",
   "edges",
+  "edgesFar",
   "sport",
+  "sportFar",
   "sportTable",
   "cultivated",
   "cultivatedCrop",
@@ -222,11 +225,16 @@ export interface TerrainFiles {
   ndvi?: string;
   /** OSM paving raster (fine level only: its patterns are close-range) */
   surface?: string;
+  /** its 1024² twin, read while the level is far from the camera (as
+   *  `edgesFar`, `sportFar`; lib/city/ground-reach.ts) */
+  surfaceFar?: string;
   /** edge-distance raster (fine level only) */
   edges?: string;
+  edgesFar?: string;
   /** sports-ground index raster and its table of grounds (both levels;
    *  a phone's coarse level skips it, terrain-layer.ts readsSportGrounds) */
   sport?: string;
+  sportFar?: string;
   sportTable?: string;
   /** allotment-colony raster cropped to the colonies, its half-resolution
    *  twin for phones, and where the crop lies: `[x, y, width, height,
@@ -286,9 +294,6 @@ export interface TilesetTileInfo {
    */
   footprints: string;
   id: string;
-  /** the 512² class raster the minimap reads (`landcoverSmall`,
-   *  lib/city/tile.ts) */
-  minimap: string;
   /** the tile's bridge decks (the artifact `bridge`): the minimap draws
    *  them over the class raster, which shows the river under a bridge */
   bridges?: string;

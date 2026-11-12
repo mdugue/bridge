@@ -1391,6 +1391,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
         return null;
       });
       expect(off).not.toBeNull();
+      // (the search asked, so its card is up: only a mounted card hears
+      // the key)
+      await expect(card).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
       await page.mouse.move(

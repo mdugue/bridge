@@ -105,6 +105,7 @@ import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures } from "./sport-fixtures";
 import type { SportFixtureLayer } from "./sport-fixtures";
 import { cpuDroppable, createGridShare, dressTerrain } from "./terrain-layer";
+import type { ReachBox } from "@/lib/city/ground-reach";
 import type { GridShare, GroundUniforms, TerrainLayer } from "./terrain-layer";
 import { dressFences } from "./fence-layer";
 import { dressKerbs } from "./kerb-layer";
@@ -302,6 +303,9 @@ export interface TileStreamContext {
   pinnedGround?: () => (x: number, y: number) => number | null;
   /** the ground's look strengths (by reference) */
   ground: GroundUniforms;
+  /** whether a ground level lying in `box` starts on its close-range
+   *  rasters' twins (ground-reach-follow.ts); without it, the full ones */
+  groundFar?: (box: ReachBox) => boolean;
   /** the scene's season and look (scene-environment.ts): a dressing
    *  lands with them as they are now */
   environment: DressingEnvironment;
@@ -2237,6 +2241,7 @@ export class DressingPlugin {
         offset: this.ctx.offset,
         rasters,
         grids: this.grids,
+        far: this.ctx.groundFar,
         signal: either.signal,
       });
     } catch (error) {

@@ -245,6 +245,8 @@ import { createFrameMeter } from "./frame-meter";
 import { createLoadVeilFollow } from "./load-veil-follow";
 import { frameOf } from "./frame-steps";
 import { createSceneCapture } from "./scene-capture";
+import { createGroundReachFollow, reachViewOf } from "./ground-reach-follow";
+import type { GroundReachFollow } from "./ground-reach-follow";
 import { GOVERN_MS, bindTileMemory } from "./tile-memory";
 import type { CapturedImage } from "./scene-capture";
 import { createHook, follow, startOnce, wantOnSwitchOn } from "./feature-seam";
@@ -1751,6 +1753,7 @@ async function bootApp(
   };
   // each site tile's rectangle (the stream's and the loading veil's)
   const siteTileBounds = new Map(extras.tiles.map((t) => [t.id, t.bounds]));
+  let groundReach: GroundReachFollow | null = null;
   const stream = createTileStream(
     {
       // whether it compiled (a tile drops the CPU copies of what it
@@ -1780,6 +1783,9 @@ async function bootApp(
         missing.layerFailed(`${message} (Kachel ${tile})`);
       },
       onCopiesDropped: () => cpuCount.changed(),
+      // (the follow is made with the capture, further down; a level that
+      // lands before it starts on its full rasters)
+      groundFar: (box) => groundReach?.startsFar(box) ?? false,
       dressingGate,
       bootTile: () => bootTile,
       fogColor: sceneFog.color,
@@ -3652,6 +3658,21 @@ async function bootApp(
     resized: () => postStack.setSize(),
   });
   cleanups.push(capture.drop);
+  // Each fine ground level on the rasters its distance asks for: the full
+  // paving, edges, sports grounds and markings near the camera, their
+  // 1024² twins beyond the detail's reach (lib/city/ground-reach.ts).
+  groundReach = createGroundReachFollow({
+    details: () =>
+      [...stream.terrains].flatMap((t) => (t.detail ? [t.detail] : [])),
+    onSwap: () => postStack.sceneChanged(),
+    view: () =>
+      reachViewOf(
+        activeCamera(),
+        renderer,
+        capture.basePixelRatio,
+        budget.tier
+      ),
+  });
   /**
    * The boot's wait for the start pose's first shadow map (the light
    * stage, below): ended by the frame that draws it — three builds the
@@ -3869,6 +3890,7 @@ async function bootApp(
       if (poseTick) {
         tickDue = elapsed + 0.1;
         prepareBvhNear();
+        groundReach?.tick();
         if (modelRig.owns()) {
           tickModel();
         } else {
