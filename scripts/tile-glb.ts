@@ -84,6 +84,10 @@ export interface MeshInput {
   name: string;
   /** vertex normals; bake them, the runtime never recomputes */
   normals: Float32Array;
+  /** the writer may turn `positions` and `normals` to glTF's frame where
+   *  they lie: the caller reads neither again (a dense tile's buildings,
+   *  a quarter gigabyte the copies would hold beside them) */
+  owned?: boolean;
   positions: Float32Array;
   /** per-feature table; requires a `_FEATURE_ID_0` attribute */
   table?: PropertyTable;
@@ -137,12 +141,15 @@ async function io(): Promise<NodeIO> {
 }
 
 /** Data frame (Z-up) → glTF (Y-up): (x, y, z) → (x, z, −y). */
-function toYUp(xyz: Float32Array): Float32Array<ArrayBuffer> {
-  const out = new Float32Array(xyz.length);
+function toYUp(xyz: Float32Array, inPlace = false): Float32Array<ArrayBuffer> {
+  const out = inPlace
+    ? (xyz as Float32Array<ArrayBuffer>)
+    : new Float32Array(xyz.length);
   for (let i = 0; i < xyz.length; i += 3) {
+    const y = xyz[i + 1];
     out[i] = xyz[i];
     out[i + 1] = xyz[i + 2];
-    out[i + 2] = -xyz[i + 1];
+    out[i + 2] = -y;
   }
   return out;
 }
@@ -161,8 +168,14 @@ function addPrimitive(
     doc.createAccessor().setArray(array).setType(type).setBuffer(buffer);
   const prim = doc
     .createPrimitive()
-    .setAttribute("POSITION", accessor(toYUp(input.positions), "VEC3"))
-    .setAttribute("NORMAL", accessor(toYUp(input.normals), "VEC3"));
+    .setAttribute(
+      "POSITION",
+      accessor(toYUp(input.positions, input.owned), "VEC3")
+    )
+    .setAttribute(
+      "NORMAL",
+      accessor(toYUp(input.normals, input.owned), "VEC3")
+    );
   if (input.colors) {
     prim.setAttribute("COLOR_0", accessor(input.colors, "VEC3"));
   }

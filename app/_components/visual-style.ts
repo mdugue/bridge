@@ -131,7 +131,7 @@ export interface ClayDetailUniforms {
 /** Farbvariation: the clay colour each building takes from its use and
  *  height, mixed into the base — a middling mix breaks the uniform massing
  *  and stays painterly. The shopfronts' baked colours assume it
- *  (scripts/bake-city-mesh.ts `WALL_TINT_SHOWN`): tune both together; the
+ *  (scripts/city-shopfronts.ts `WALL_TINT_SHOWN`): tune both together; the
  *  niches read it as it is (window-niche-layer.ts `wallColour`). */
 export const TINT_SHARE = 0.6;
 const TINT = float(TINT_SHARE);

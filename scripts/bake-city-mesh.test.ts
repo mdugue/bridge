@@ -43,22 +43,20 @@ import { storeyHeight } from "../lib/city/building-tint";
 import type { RoofColours } from "../lib/city/building-tint";
 import {
   appendedRoofColour,
-  assignWindows,
+  shapedGap,
+  scanStructureId,
+} from "./city-structures";
+import { assignWindows, liftToStreet } from "./city-windows";
+import {
   bakeCityMesh,
-  carriesCornices,
-  cityFrame,
   cityMesh,
   onBuildings,
-  shapedGap,
   joinEnsembles,
-  liftToStreet,
-  scanStructureId,
   vertexNormals,
-  withMeasuredRoofs,
-  withOpenRoofs,
-  withRoofSteps,
-  appendPlinths,
 } from "./bake-city-mesh";
+import { carriesCornices, appendPlinths } from "./city-fittings";
+import { cityFrame, withRoofSteps } from "./city-lod2";
+import { withMeasuredRoofs, withOpenRoofs } from "./city-roofs";
 
 /** A box as a CityJSON LoD2 solid over the eight vertices from `first`. */
 function box(first: number) {

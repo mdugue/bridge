@@ -453,7 +453,26 @@ ids are the report's.
    the file), V8 (the lazy seam's importer, with the spine in 7),
    `networkx` as a named dependency (with 5: today a changed `uv.lock`
    re-keys every Python step).
-2. **The buildings' vertex stream, byte-identical (V2, B6)** — TODO.
+2. **The buildings' vertex stream, byte-identical (V2, B6) — built
+   (2026-11-11).** `bake-city-mesh.ts` (3 833 lines) is nine modules on
+   one typed stream (`scripts/vertex-stream.ts`: `appended`,
+   `streamWriter`; the attribute list stands in one place, no copy goes
+   through plain arrays). A cold bake of all seven sites publishes 0 new
+   files. The measurement corrected the report: the stream's copies were
+   not the peak. A tile's memory peaks in the walls' cut for the
+   passages, the rounded normals and the glb's writer, so those took the
+   work — the mesh is released once the glb is written (the far glb
+   needs its table alone), the writer turns positions and normals in
+   place, the normals keep one bucket table, the passages copy only
+   triangles in a passage's box, two more collections. München's
+   heaviest tile baked alone: 2.58 → 1.88 GiB; Dresden's (33414_5654):
+   1.64–1.88 → 1.33–1.49 GiB. Four tiles side by side still reach
+   1.9 GiB (garbage the collector has not yet taken when the cores are
+   busy), so `TILE_PEAK` stays; measure again after 3, which takes most
+   of the triangles away. **Not done:** each stage its own cache entry
+   (stream, glb, far glb) — the stream would have to be written to the
+   cache, 400 MB a dense tile; the table read back from the glb (it
+   saves a parse only when the far glb alone is stale).
 3. **Bands, kerbs and the vertex format (F1, F3, F4, F9, F10, T8)** —
    TODO; re-bakes every site. F1: plinth, cornice and eave bands are
    88.7 % of a dense tile's triangles (Dresden 33412_5656: 1.63 M of

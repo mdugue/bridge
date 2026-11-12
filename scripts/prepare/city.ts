@@ -27,9 +27,10 @@ import { FAR_CITY_SIMPLIFY } from "../../lib/city/tileset";
 import type { CityExtras } from "../../lib/city/tileset";
 import type { CityJsonDocument } from "../../lib/city/types";
 import { bakeCityMesh, cityMesh } from "../bake-city-mesh";
-import type { BakedCityMesh } from "../bake-city-mesh";
+import type { BakedCityMesh } from "../city-bake";
 import { BAKE_ENTRIES } from "../bake-entries";
 import { simplifyGlb, writeMeshGlb } from "../tile-glb";
+import type { PropertyTable } from "../tile-glb";
 import {
   HINT,
   SITE,
@@ -149,6 +150,8 @@ export async function bakeCity(
   // the beds reaching into the tile lower the tops the tracks run on
   const key = cacheKey(inputs, bake, offset, shapeDigest(bedsIn(tile)));
   let mesh: ReturnType<typeof cityMesh> | null = null;
+  // the mesh's table, kept for the far glb when the writer has the mesh
+  let table: PropertyTable | undefined;
   const built = () => {
     if (!mesh) {
       mesh = cityMesh(parseCity(tile, heightOver(tile, ground)));
@@ -191,13 +194,19 @@ export async function bakeCity(
         ...built().input,
         name: "city",
         extras: { ...extras },
+        // nothing reads the mesh after it: the far glb is made of the glb
+        owned: true,
       })
     )
   );
-  // the glb's writer's copies, gone before the far glb is simplified
+  // the mesh and its writer's copies, gone before the far glb is
+  // simplified: only its table goes back on that one
   if (mesh) {
+    ({ table } = (mesh as ReturnType<typeof cityMesh>).input);
+    mesh = null;
     Bun.gc(true);
   }
+  const parsed = table !== undefined;
   // the same buildings for far off: every vertex the shape does not need
   // dropped (lib/city/tileset.ts `FAR_CITY_SIMPLIFY`)
   const farName = `city_${tile}_far.glb.gz`;
@@ -209,12 +218,13 @@ export async function bakeCity(
         await simplifyGlb(
           Bun.gunzipSync(glb as Uint8Array<ArrayBuffer>),
           FAR_CITY_SIMPLIFY,
-          built().input.table
+          table ?? built().input.table
         )
       )
   );
   // the simplifier's copies, gone before the tile's terrain is written
-  if (mesh) {
+  if (mesh || parsed) {
+    mesh = null;
     Bun.gc(true);
   }
   return {
