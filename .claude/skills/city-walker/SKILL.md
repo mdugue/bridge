@@ -209,7 +209,11 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   far horizon → `receivedShadowNode`; `lib/city/skyview.ts`, the raster
   shared with the buildings through `tile-rasters.ts`, which hands every
   content root its rasters by kind: the kinds table holds a raster's look,
-  tier twin and gate).
+  tier twin, far twin and gate). A fine level reads the close-range
+  kinds' 1024² twins beyond the detail's reach and swaps sets through
+  the material's slots (`lib/city/ground-reach.ts`,
+  `ground-reach-follow.ts`, terrain-layer.ts `GroundDetail`): a new
+  close-range raster names its `far` twin or stays full at any distance.
 - Buildings: `lib/city/building-tint.ts` (tint, storey height, roofs, at
   bake time), `lib/city/small-buildings.ts` (the scan's sheds as boxes, and
   the canopy points they veto at build time), `scripts/measured-roofs.ts`
