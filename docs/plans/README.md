@@ -671,7 +671,7 @@ ids are the report's.
    (`lib/city/ground-reach.ts`, `ground-reach-follow.ts`,
    terrain-layer.ts `GroundDetail`). Dresden's start on foot (1280 × 800,
    five fine levels, two of them near): the textures three holds
-   683 → 505 MB, the download 56.0 → 48.3 MB. The minimap's 512² class
+   683 → 516 MB, the download 56.0 → 48.3 MB. The minimap's 512² class
    raster went with it. Not built: (e) the weld for trees and furniture
    (they are instanced on shared indexed geometries; only the playground
    slabs are a soup); (f) the dressing in a worker (it needs every loaded
