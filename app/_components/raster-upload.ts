@@ -18,6 +18,7 @@ import type { GreyRaster } from "@/lib/city/png-raster";
 import { createTaskGate } from "@/lib/city/task-gate";
 import { fetchBytes, isAbortError } from "./fetch-optional";
 import type { DeviceTier } from "./scene-profile";
+import { streamTimings } from "./stream-timing";
 import { textureBytes, trackTexture } from "./three-utils";
 
 /**
@@ -290,19 +291,32 @@ export async function loadDataRaster(
 ): Promise<LoadedRaster | null> {
   const { inspect, renderer, signal } = opts;
   try {
-    const bytes = await fetchRasterBytes(url, signal);
+    // (the three parts of a raster's wait, apart: the network, its turn at
+    // the gate, and the inflate with the upload — `?trace=1` tells which
+    // one a slow ground waits for)
+    const bytes = await streamTimings.timed(
+      "raster:fetch",
+      async () => await fetchRasterBytes(url, signal)
+    );
+    const queued = streamTimings.now();
     return await inRasterTurn(async () => {
-      const raster = await decodeRaster(bytes, look, signal);
-      if (!raster) {
-        return null;
+      streamTimings.since("raster:turn-wait", queued);
+      const started = streamTimings.now();
+      try {
+        const raster = await decodeRaster(bytes, look, signal);
+        if (!raster) {
+          return null;
+        }
+        if (inspect && raster.data) {
+          inspect(raster.data, raster.width, raster.height);
+        }
+        applyLook(raster, look);
+        uploadNow(raster.texture, renderer);
+        const { texture, width, height } = raster;
+        return { texture, width, height };
+      } finally {
+        streamTimings.since("raster:decode", started);
       }
-      if (inspect && raster.data) {
-        inspect(raster.data, raster.width, raster.height);
-      }
-      applyLook(raster, look);
-      uploadNow(raster.texture, renderer);
-      const { texture, width, height } = raster;
-      return { texture, width, height };
     }, signal);
   } catch (error) {
     if (isAbortError(error)) {
