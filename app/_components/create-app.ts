@@ -58,7 +58,8 @@ import {
   styleInstant,
 } from "@/lib/city/render-style";
 import type { RenderStyle } from "@/lib/city/render-style";
-import type { MapFootprints, MapTile } from "@/lib/city/minimap";
+import { minimapOf } from "@/lib/city/minimap";
+import type { MapFootprints, MapPicture } from "@/lib/city/minimap";
 import {
   footprintCircle,
   MODEL_PRESET_BY_ID,
@@ -398,12 +399,20 @@ function besideTileset(
   return file ? new URL(file, tilesetUrl).href : null;
 }
 
+/** The minimap's picture as the tileset names it, by its URL. */
+function sitePicture(extras: unknown, tilesetUrl: string): MapPicture | null {
+  const map = minimapOf(extras);
+  return map
+    ? { bounds: map.bounds, url: new URL(map.file, tilesetUrl).href }
+    : null;
+}
+
 /** What the HUD knows of the site from the tileset alone (`onSiteInfo`). */
 export type SiteInfo = Pick<
   CityWalkHandle,
-  | "landcoverTiles"
   | "landmarks"
   | "latLng"
+  | "mapPicture"
   | "provenanceUrl"
   | "terrainBounds"
   | "walksUrl"
@@ -716,10 +725,11 @@ export interface CityWalkHandle {
   };
   /** the site's most notable landmarks (Wikidata), for the HUD's list */
   landmarks: Landmark[];
-  /** per-tile land-cover class PNGs + their EPSG bounds, for the minimap */
-  landcoverTiles: MapTile[];
   /** the scene's geographic position — the HUD's sunrise/sunset times */
   latLng: { lat: number; lng: number };
+  /** the minimap's picture of the site and the extent it shows
+   *  (lib/city/minimap.ts), or none */
+  mapPicture: MapPicture | null;
   /** recenter offset, lets callers map EPSG coords -> world coords */
   offset: { cx: number; cy: number };
   /** analog altitude-stick input (fly mode): +1 climbs, −1 sinks */
@@ -1560,12 +1570,8 @@ async function bootApp(
   const murals = siteMurals(extras, tilesetUrl);
   const siteInfo: SiteInfo = {
     landmarks: extras.landmarks ?? [],
-    landcoverTiles: extras.tiles.map((t) => ({
-      src: new URL(t.minimap, tilesetUrl).href,
-      bounds: t.bounds,
-      bridges: t.bridges ? new URL(t.bridges, tilesetUrl).href : undefined,
-    })),
     latLng,
+    mapPicture: sitePicture(extras, tilesetUrl),
     photoCredits: murals.credits,
     provenanceUrl: besideTileset(extras.provenance, tilesetUrl),
     terrainBounds: siteBounds,
@@ -2758,36 +2764,21 @@ async function bootApp(
       clearTimeout(statsTimer);
     }
   });
-  // Every tile's building footprints for the minimap, independent of what
-  // has streamed in, packed (lib/city/footprint-pack.ts: ≈ 2 MB gzipped
-  // and 4 MB held for Dresden): the map shows the whole city once the
-  // player has it (they load after the handover, not against the spawn
-  // tile's glTF), and demolished buildings via `demolitions`.
+  // The buildings' footprints, packed (lib/city/footprint-pack.ts), per
+  // tile and only where a building's outline is asked for: a demolished
+  // one painted over on the minimap, a design's cover. The minimap shows
+  // the build's picture of them (scripts/bake-minimap.ts): Dresden's every
+  // footprint was ≈ 2 MB gzipped and 4 MB held.
   const demolitions = createDemolitions(stream);
   const footprints = new Map<string, FootprintPack>();
+  /** the tiles whose footprints were asked for (here or on their way) */
+  const footprintsAsked = new Set<string>();
+  /** the footprint files on their way */
+  const footprintLoads = new Set<Promise<void>>();
   // What the minimap draws, rebuilt only when a file lands or a building
   // goes (either drops it): the same object otherwise, so React bails out
   // and the minimap does not repaint its static layer on every tile event.
   let mapped: MapFootprints | null = null;
-  const currentFootprints = (): MapFootprints => {
-    if (!mapped) {
-      // the design's plan, drawn as a building
-      const planOutline = design?.outline();
-      mapped = {
-        outlines: planOutline ? [{ pts: planOutline }] : [],
-        tiles: [...footprints].map(([tile, pack]) => {
-          const gone = demolitions.goneOn(tile);
-          const replaced = design?.hiddenFor(tile);
-          return {
-            gone: (i: number) =>
-              gone?.has(i) === true || replaced?.has(i) === true,
-            pack,
-          };
-        }),
-      };
-    }
-    return mapped;
-  };
   const loadTileFootprints = async (tile: (typeof extras.tiles)[number]) => {
     try {
       const bytes = await fetchOptionalBinary(
@@ -2798,19 +2789,73 @@ async function bootApp(
       if (pack && !disposed) {
         footprints.set(tile.id, pack);
         mapped = null;
-        // a design loaded before the tile's footprints came
+        // a design that asked for them
         design?.refresh();
         scheduleStats();
       }
     } catch {
-      // a footprint file that fails leaves the minimap without that tile
+      // a footprint file that fails leaves its gaps out of the map
     }
   };
-  function loadFootprints(): void {
-    for (const tile of extras.tiles) {
-      void loadTileFootprints(tile);
+  /** Asks for a tile's footprints, once. */
+  const askFootprints = (tile: (typeof extras.tiles)[number]): void => {
+    if (!footprintsAsked.has(tile.id)) {
+      footprintsAsked.add(tile.id);
+      const loading = loadTileFootprints(tile);
+      footprintLoads.add(loading);
+      void loading.finally(() => {
+        footprintLoads.delete(loading);
+      });
     }
-  }
+  };
+  const currentFootprints = (): MapFootprints => {
+    if (!mapped) {
+      // the design's plan, drawn as a building
+      const planOutline = design?.outline();
+      const tiles: MapFootprints["tiles"][number][] = [];
+      for (const tile of extras.tiles) {
+        const gone = demolitions.goneOn(tile.id);
+        const replaced = design?.hiddenFor(tile.id);
+        if (!(gone?.size || replaced?.size)) {
+          continue;
+        }
+        // a tile with gaps: its outlines paint them over on the picture
+        const pack = footprints.get(tile.id);
+        if (pack) {
+          tiles.push({
+            gone: (i: number) =>
+              gone?.has(i) === true || replaced?.has(i) === true,
+            pack,
+          });
+        } else {
+          askFootprints(tile);
+        }
+      }
+      mapped = {
+        outlines: planOutline ? [{ pts: planOutline }] : [],
+        tiles,
+      };
+    }
+    return mapped;
+  };
+  const footprintsIn = (
+    box: readonly [number, number, number, number]
+  ): ReadonlyMap<string, FootprintPack> => {
+    const out = new Map<string, FootprintPack>();
+    for (const tile of extras.tiles) {
+      const [x0, y0, x1, y1] = tile.bounds;
+      if (x1 < box[0] || x0 > box[2] || y1 < box[1] || y0 > box[3]) {
+        continue;
+      }
+      const pack = footprints.get(tile.id);
+      if (pack) {
+        out.set(tile.id, pack);
+      } else {
+        askFootprints(tile);
+      }
+    }
+    return out;
+  };
 
   // A planner's design (design-layer.ts, ADR 0054): nothing is built until
   // a file is loaded. The buildings it stands in for leave every loaded
@@ -2900,7 +2945,10 @@ async function bootApp(
     },
     pose: () => pose.getPose(),
     compile: async (object) => await postStack.compile(object),
-    footprints: () => footprints,
+    footprintsIn,
+    footprintsSettled: async () => {
+      await Promise.all(footprintLoads);
+    },
     changed: () => {
       if (disposed) {
         return;
@@ -4182,7 +4230,6 @@ async function bootApp(
     // dressing, not in the frames before it.
     opts.trail?.note("dressing gate");
     openGate?.();
-    loadFootprints();
     checkLoaded();
   };
 

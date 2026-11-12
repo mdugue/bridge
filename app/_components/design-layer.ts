@@ -115,8 +115,16 @@ export interface DesignLayerDeps {
   pose: () => PlayerPose;
   /** builds an object's programs before it shows (PostStack.compile) */
   compile: (object: Object3D) => Promise<void>;
-  /** every tile's building footprints by object, packed */
-  footprints: () => ReadonlyMap<string, FootprintPack>;
+  /**
+   * the footprints by object, packed, of the tiles that reach into the box
+   * [minX, minY, maxX, maxY] (EPSG): those already here; the rest are
+   * fetched, and `refresh` is asked again as each comes
+   */
+  footprintsIn: (
+    box: readonly [number, number, number, number]
+  ) => ReadonlyMap<string, FootprintPack>;
+  /** resolves once the footprint files asked for so far have come */
+  footprintsSettled: () => Promise<void>;
   /** the design came, moved or went: hidden sets, shadows, the map */
   changed: () => void;
   /** the bytes the tile cache leaves to the design (0: none) */
@@ -454,7 +462,13 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
     loaded.hidden = new Map();
     const { mask } = loaded;
     if (mask && replaceExisting) {
-      for (const [tile, pack] of deps.footprints()) {
+      const box = [
+        mask.x0,
+        mask.y0,
+        mask.x0 + mask.cols * mask.cell,
+        mask.y0 + mask.rows * mask.cell,
+      ] as const;
+      for (const [tile, pack] of deps.footprintsIn(box)) {
         const covered = coveredObjects(mask, pack.objectEnd.length, (i) =>
           ringsOf(pack, i)
         );
@@ -679,6 +693,12 @@ export function createDesignLayer(deps: DesignLayerDeps): DesignLayer {
       deps.reserve(model.bytes + SITE_BYTES);
       deps.parent.add(mesh);
       moved(true);
+      // the tiles' footprints its plan asked for: planned again once they
+      // are here, so `load` resolves with the buildings it covers set aside
+      await deps.footprintsSettled();
+      if (current === loaded) {
+        moved(true);
+      }
       if (model.prefersColours) {
         await setFileColours(true);
       }

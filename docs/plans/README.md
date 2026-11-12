@@ -640,6 +640,21 @@ ids are the report's.
    AO's 5 × 5 smoothing made separable) changes the picture and its gain
    is GPU time no container measures.
 
+9. **Follow-ups the maintainer asked for (2026-11-11 evening)**, each a
+   draft stacked on the last: **(a) the minimap's picture** — the build
+   draws one picture of the site (`minimap.webp`, 640 px wide: land
+   cover, bridge decks, buildings as ink) and the minimap shows it as an
+   image: Dresden's minimap fetches 87 kB in one request where it
+   fetched 2.0 MB of footprints, fifteen class rasters and fifteen
+   bridge files, and holds no canvas of them; a tile's footprints come
+   only for a demolish or a design's cover (`footprintsIn`,
+   `footprintsSettled`). A first cut (a 192² grey figure per tile, drawn
+   on a canvas) showed seams at the tile edges and pale buildings. Left:
+   the 512² class raster is still published and named on each tile. (b) the eave and cornice
+   bands as one face with bent normals; (c) a lighter far level; (d) the
+   weld for trees and furniture; (e) the dressing in a worker; (f) the
+   rails baked into the ground.
+
 Not planned, for the maintainer: F14 (the re-baked rasters of 16 days
 are 633 MB of superseded blobs: squash-merge data PRs, or rewrite the
 history once), F15 (Dresden's DGMs are still LZW: 204 MB against about

@@ -2157,8 +2157,8 @@ test.describe("mobile", { tag: "@phone" }, () => {
  * every tile in the tileset (scene-profile.ts). The specs above stream the
  * spawn tile alone, so this is the one that walks the multi-tile path — tile
  * events arriving while the spawn tile boots, dressings queued for several
- * tiles, the site-wide minimap footprints. A load event that throws there
- * leaves `ready` false forever, which is exactly what this waits on.
+ * tiles. A load event that throws there leaves `ready` false forever,
+ * which is exactly what this waits on.
  */
 test.describe("whole site streamed", () => {
   // A retry would start the same long boot again and run the job past
@@ -2208,20 +2208,6 @@ test.describe("whole site streamed", () => {
       expect(stats?.city.meshes ?? 0).toBeGreaterThan(1);
       expect(stats?.vegetation.instances ?? 0).toBeGreaterThan(1000);
 
-      // The minimap names every site tile's footprints up front, streamed
-      // or not: some lie west of the spawn tile (412 000 E).
-      const westmost = await tilesPage.evaluate(() => {
-        const tiles = window.__poc?.handle?.getFootprints().tiles ?? [];
-        let minX = Number.POSITIVE_INFINITY;
-        for (const { pack } of tiles) {
-          // x, y pairs in centimetres (lib/city/footprint-pack.ts)
-          for (let i = 0; i < pack.xy.length; i += 2) {
-            minX = Math.min(minX, pack.xy[i] / 100);
-          }
-        }
-        return minX;
-      });
-      expect(westmost).toBeLessThan(412_000);
       expectNoErrors(tilesErrors);
     } finally {
       await context.close();
