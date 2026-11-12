@@ -1847,7 +1847,11 @@ after the frame. create-app.ts's callbacks are unchanged:
 
 **The boot and the stream time themselves** (`stream-timing.ts`, plan
 069). Every span is counted by its category — `tile:city`, `tile:bvh`,
-`tile:rasters`, `tile:compile`, `tile:handover-wait`,
+`tile:rasters` (a ground level's whole dressing; within it
+`terrain:rasters`, its wait for all its rasters, and `terrain:ground`,
+the ground worker; per raster `raster:fetch`, `raster:turn-wait` at the
+decode gate and `raster:decode`, the inflate with the upload),
+`tile:compile`, `tile:handover-wait`,
 `dressing:queue-wait`, `dressing:build`, `dressing:compile`,
 `dressing:asks`, the boot's way to the first frame (`boot:page-to-viewer`
 from the navigation to the viewer's code, `boot:renderer-init`,

@@ -93,6 +93,7 @@ import {
   texelSize,
 } from "./shader-chunks";
 import { splatSize } from "./splat-uv";
+import { streamTimings } from "./stream-timing";
 import type { F, Tex, V3 } from "./shader-chunks";
 import { RASTER_KINDS, REACH_KINDS } from "./tile-rasters";
 import type { IndexedRaster, RasterHold, SplatRasters } from "./tile-rasters";
@@ -1439,7 +1440,11 @@ export async function dressTerrain(
     mesh.geometry.setIndex(grids.index(n, index));
   }
   const { box, far: startsFar } = reachStart(mesh, extras, toData, opts);
-  const loaded = await loadTerrainRasters(extras, opts, startsFar);
+  const loaded = await streamTimings.timed(
+    "terrain:rasters",
+    async () => await loadTerrainRasters(extras, opts, startsFar),
+    extras.tileId
+  );
   const free = opts.rasters.release;
   const classes = loaded.class;
   // the class raster's water cells: none (null) where the tile has no
@@ -1447,7 +1452,11 @@ export async function dressTerrain(
   const mask = classes?.water;
   let ground: GroundPrep;
   try {
-    ground = await groundOf(mesh, extras, toData, opts, mask ?? null);
+    ground = await streamTimings.timed(
+      "terrain:ground",
+      async () => await groundOf(mesh, extras, toData, opts, mask ?? null),
+      extras.tileId
+    );
   } catch (error) {
     free();
     throw error;
