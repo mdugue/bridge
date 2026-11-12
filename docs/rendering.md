@@ -966,7 +966,7 @@ the safety levels 1, 2 and 3:
 | Real lamp lights (`LAMP_LIGHTS`, every lit fragment shades each, by day too) | 3 | 1 | as the tier |
 | Lamps lighting the walls and fountains (`STREET` in lamp-reflections.ts, a loop over each lit wall pixel at night only) | 48 | 12 | as the tier |
 | The walker's lantern (`lantern.ts`, one more light) | with a 512² cube shadow | no shadow | as the tier |
-| Tile contents at once | 5 parses, 25 downloads per origin | 2 parses, 4 downloads per origin | as the tier |
+| Tile contents at once | 5 parses, 6 downloads per origin (`STREAM_DOWNLOADS`; 3 until the boot's first frame, so the line is the spawn tile's) | 2 parses, 4 downloads per origin (3 until the first frame) | as the tier |
 | Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 150–285 MiB (118–249, 96–228, 64–196) | as the tier |
 | Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 420 / 460 MB (a last one 10 s past 460; 480 / 560 until two walk crashes); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
 
@@ -1257,7 +1257,7 @@ stays their measure; the tile cache counts true bytes.
   it — stops its raster loads where they are (`DressingPlugin`'s
   per-content abort): it decodes and uploads nothing more, and lets go
   of the shared rasters it waited for at once. And a phone parses two
-  tile contents and downloads four per origin at once (`PHONE_STREAM`,
+  tile contents and downloads four per origin at once (`PHONE_STREAM`, `STREAM_DOWNLOADS`,
   the renderer's own queues replaced before its first update), where the
   boot asked for eleven contents in one millisecond.
   Two rules follow: an attribute read on the CPU after the dressing (the

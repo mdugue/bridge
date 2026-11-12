@@ -213,6 +213,7 @@ import {
   createTileStream,
   DRESSING_PART_NAMES,
   DRESSING_PARTS,
+  setStreamDownloads,
 } from "./tile-stream";
 import { withinCompileWait } from "./late-parts";
 import type { CpuBytes, DressingPartName, TileDressing } from "./tile-stream";
@@ -4109,6 +4110,8 @@ async function bootApp(
   streamTimings.since("boot:spawn-wait", waitStarted);
   firstFrameShown = true;
   bootTile = null;
+  // (the line was the spawn tile's until here)
+  setStreamDownloads(stream.tiles, budget.tier, false);
   // what the stream did not take, it will not: the boot is over
   ahead.release();
   lifecycle.dispatch({ kind: "firstFrame" });
