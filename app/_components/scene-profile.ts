@@ -342,9 +342,9 @@ export interface PostProfile {
    */
   dof: boolean;
   /**
-   * SMAA (three full-resolution half-float targets and a copy of the frame
-   * before it, 24 MB on that iPhone) or FXAA, which needs no target: it
-   * runs inside the last pass, on the scene's own colour.
+   * SMAA (smaa.ts: two full-resolution byte targets, 6 bytes a pixel) or
+   * FXAA, which needs no target: it runs inside the last pass, on the
+   * scene's own colour.
    */
   antialias: "smaa" | "fxaa";
   /**

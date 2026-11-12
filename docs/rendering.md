@@ -440,7 +440,7 @@ depth texture (`post-stack.ts`), and three's node `RenderPipeline` reads
 colour and depth from it: `GTAO (half resolution, normals from depth) ^
 AO_EXPONENT → the lens blur (lens-blur.ts; desktop; skipped while
 moving; in motion the camera's motion blur instead, pastel only) → the
-picture style → SMAANode (FXAA on a phone) → depth grading + vignette +
+picture style → SMAA (`smaa.ts`; FXAA on a phone) → depth grading + vignette +
 the loading veil + paper grain + the outline → sRGB`. Rendering the
 scene outside the pipeline lets the styles swap and dress the scene for
 exactly its render,
@@ -512,6 +512,19 @@ plain buffer, to compare.
 screen-sized targets live in the GPU process for the whole session, and no
 step of the memory governor can shrink them.
 
+- **The desktop's SMAA is the project's own** (`smaa.ts`, 2026-11-11):
+  SMAA 1x as three's `SMAANode` ran it (colour edges, eight search
+  steps, no diagonals), in **two byte targets** — the edges RG8, the
+  weights RGBA8, 6 bytes a pixel — and the blend inside the pass that
+  finishes the frame, as the phone's FXAA runs. Three's node kept edges,
+  weights and the blended frame in half-float RGBA: 24 bytes a pixel,
+  107 MiB at 2880 × 1620 against 27 now, and one full-screen pass more.
+  The edges are found on **square-rooted** colours, as `fxaa.ts`'s luma
+  is: SMAA's threshold of 0.1 is tuned to a gamma frame, and on the
+  linear one it was most of the range in the shade and at night and
+  nothing in the sun. The area and search tables are worked out
+  (`lib/city/smaa-tables.ts`, a test holds them to three's two pictures
+  value for value) rather than decoded from PNGs in the scene's chunk.
 - **Desktop.** The pipelines before the antialiasing (with and without
   DoF, Modell's, the styles') are built once — swapping one pipeline's
   output node would re-translate the whole post graph every time a
@@ -544,8 +557,8 @@ step of the memory governor can shrink them.
   among them, would hold ≈ 15 MiB at an iPhone's 603×1311 drawing buffer
   from the first frame (three's `DepthOfFieldNode` held 23 MiB),
   standing still or not, for a lens hint a six-inch screen barely shows.
-  FXAA replaces SMAA's three half-float targets and the frame copy before
-  them (24 MiB): `fxaa.ts` is three's FXAANode ported with a **perceptual
+  FXAA replaces SMAA's targets and the frame copy before them (24 MiB
+  when they were three's three half-float ones): `fxaa.ts` is three's FXAANode ported with a **perceptual
   luma** — the square root of the linear luma, since three's expects sRGB
   and this frame is linear half-float, above 1 in the sun's glow — and
   explicit level-0 samples (no derivatives inside its branches). It runs

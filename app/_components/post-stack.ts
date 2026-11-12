@@ -23,7 +23,6 @@ import type {
   WebGPURenderer,
 } from "three/webgpu";
 import { ao } from "three/addons/tsl/display/GTAONode.js";
-import { smaa } from "three/addons/tsl/display/SMAANode.js";
 import {
   clamp,
   distance,
@@ -34,7 +33,6 @@ import {
   max,
   min,
   mix,
-  nodeObject,
   pow,
   renderOutput,
   rtt,
@@ -71,6 +69,7 @@ import { crownsPrinted } from "./crown-season";
 import { DATA_MARKS, dataMarks } from "./glass";
 import { crownSwayShare } from "./vegetation-layer";
 import { fxaa } from "./fxaa";
+import { createSmaa } from "./smaa";
 import { createLensBlur, LENS_TALLEST_PX } from "./lens-blur";
 import { createMotionBlur } from "./motion-blur";
 import type { SceneFog } from "./height-fog";
@@ -398,8 +397,8 @@ interface Antialiasing {
 }
 
 /**
- * SMAA reads a texture and renders three passes of its own into three
- * full-resolution half-float targets, so there is one SMAA for every frame
+ * SMAA (smaa.ts) reads a texture and renders two passes of its own into
+ * two full-resolution byte targets, so there is one SMAA for every frame
  * and its input is a texture binding the frame switches (`read`): the lens
  * blur's composite, a style's frame in `beforeAa`, or — nothing drawn
  * before it — the scene target, the contact shadows multiplied in after
@@ -419,11 +418,10 @@ function antialiasingOf(
 ): Antialiasing {
   if (kind === "smaa") {
     const input = texture(beforeAa.texture);
-    const node = smaa(input);
+    const own = createSmaa(input, new Vector2(scene.width, scene.height));
     // 1 while SMAA reads the scene target: its contact shadows come after
     const raw = uniform(0);
-    // reason: as above, SMAANode's vec4 output
-    const antialiased = nodeObject(node) as unknown as V4;
+    const antialiased = own.color;
     return {
       afterPre: vec4(
         antialiased.rgb.mul(mix(float(1), occlusion, raw)),
@@ -434,10 +432,8 @@ function antialiasingOf(
         input.value = from;
         raw.value = isRaw ? 1 : 0;
       },
-      setSize: () => {
-        // SMAA follows the renderer's size by itself
-      },
-      dispose: () => node.dispose(),
+      setSize: own.setSize,
+      dispose: own.dispose,
     };
   }
   const texel = uniform(new Vector2());
