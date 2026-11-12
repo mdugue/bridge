@@ -22,6 +22,7 @@ import {
   KHRMeshQuantization,
 } from "@gltf-transform/extensions";
 import {
+  compactPrimitive,
   dequantize,
   quantize,
   reorder,
@@ -298,12 +299,15 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
  * surface more than `error` (m, of a mesh `extent` m across at most); the
  * vertices left keep their attributes as they were, and `table` goes back
  * on as it was (gltf-transform reads no EXT_structural_metadata). It reads
- * the written glb, so the result is that file simplified and nothing else.
+ * the written glb, so the result is that file simplified and nothing else
+ * — but for the objects whose `source` column `drop` names: their
+ * triangles go first (their rows stay, the ids are the near level's).
  */
 export async function simplifyGlb(
   glb: Uint8Array,
   error: number,
-  table?: PropertyTable
+  table?: PropertyTable,
+  drop?: ReadonlySet<number>
 ): Promise<Uint8Array> {
   const nodeIO = await io();
   await MeshoptSimplifier.ready;
@@ -316,6 +320,14 @@ export async function simplifyGlb(
       method: EXTMeshoptCompression.EncoderMethod.QUANTIZE,
     });
   await doc.transform(dequantize({ pattern: QUANTIZE.pattern }), weldExact());
+  const source = table?.properties.source;
+  if (drop?.size && source?.type === "SCALAR") {
+    for (const mesh of doc.getRoot().listMeshes()) {
+      for (const prim of mesh.listPrimitives()) {
+        dropObjects(prim, (id) => drop.has(source.values[id]));
+      }
+    }
+  }
   // meshopt's error is a share of the mesh's own extent: the scene's
   // bounds in metres, the node's scale included
   const { min, max } = getBounds(doc.getRoot().listScenes()[0]);
@@ -331,6 +343,28 @@ export async function simplifyGlb(
   );
   const out = await nodeIO.writeBinary(doc);
   return toKhrMeshopt(table ? addPropertyTable(out, table) : out);
+}
+
+/** `prim` without the triangles of the objects `gone` names (by their
+ *  `_FEATURE_ID_0`), its vertices compacted to those left. */
+function dropObjects(prim: Primitive, gone: (id: number) => boolean): void {
+  const ids = prim.getAttribute("_FEATURE_ID_0");
+  const index = prim.getIndices();
+  const order = index?.getArray();
+  if (!(ids && index && order)) {
+    return;
+  }
+  const kept: number[] = [];
+  for (let t = 0; t + 2 < order.length; t += 3) {
+    if (!gone(ids.getScalar(order[t]))) {
+      kept.push(order[t], order[t + 1], order[t + 2]);
+    }
+  }
+  if (kept.length === order.length) {
+    return;
+  }
+  index.setArray(Uint32Array.from(kept));
+  compactPrimitive(prim);
 }
 
 // --- EXT_structural_metadata (gltf-transform has no writer for it) ----------

@@ -997,7 +997,7 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 
 | Content | Wire size per tile | Triangles |
 |---|---|---|
-| buildings `city_<tile>.glb.gz` | up to 4.3 MB, Dresden's fifteen 37 MB (2026-11-11, the bands' rounds one facet each; 41 MB with three to four, 59 MB while the bands were cut every metre); the far level up to 3.8 MB, 33 MB | up to 0.63 M a tile, 5.3 M over Dresden (7.1 M with the rounds faceted, 22.4 M before that); the far level 3.5 M |
+| buildings `city_<tile>.glb.gz` | up to 4.3 MB, Dresden's fifteen 37 MB (2026-11-11, the bands' rounds one facet each; 41 MB with three to four, 59 MB while the bands were cut every metre); the far level, without doors and bands, up to 2.8 MB, 25 MB (33 MB with them) | up to 0.63 M a tile, 5.3 M over Dresden (7.1 M with the rounds faceted, 22.4 M before that); the far level up to 0.23 M, 2.2 M (3.5 M with doors and bands) |
 | fine terrain `terrain_<tile>_l0.glb.gz` (TIN, ADR 0030) | 1.3–3.6 MB | 0.30–0.49 M (TIN + skirt; the 1024² grid it replaced: ≈2.1 M, 2.15–2.45 MB) |
 | coarse terrain `terrain_<tile>_l1.glb.gz` | 0.4–0.55 MB | ≈0.53 M (512² grid + skirt) |
 | footprints (minimap) | only on demand, 0.23–0.33 MB (the minimap's picture is one image of the site, 87 kB, not a tile's) | — |
