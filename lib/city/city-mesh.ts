@@ -1,5 +1,4 @@
 import type { DrawnFacts } from "./drawn-facts";
-import type { FootprintPoly } from "./minimap";
 import type { ObjectFacts } from "./object-facts";
 import type { OsmBuildingRow } from "./osm-buildings-file";
 import type { CityJsonDocument } from "./types";
@@ -541,23 +540,6 @@ export function countBuildings(
     }
   }
   return count;
-}
-
-/** Footprint polygons of the live objects. */
-export function footprintPolys(
-  footprints: readonly [number, number][][][],
-  alive: (objectIndex: number) => boolean
-): FootprintPoly[] {
-  const out: FootprintPoly[] = [];
-  for (let i = 0; i < footprints.length; i += 1) {
-    const polys = footprints[i];
-    if (alive(i)) {
-      for (const pts of polys) {
-        out.push({ pts });
-      }
-    }
-  }
-  return out;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { bootingPose, startOf } from "./boot-start";
+import { bootingPose, firstContents, startOf } from "./boot-start";
 import type { CameraState } from "./pose";
 import type { ViewpointGeometry } from "./site";
 
@@ -130,4 +130,35 @@ test("a camera higher than half the boot's reach above its tile boots lower", ()
   expect(
     bootingPose({ restored: high }, view(3000), undefined, offset, reach)
   ).toEqual({ camera: { ...high, pitchDeg: -90 } });
+});
+
+const node = (uri: string, fine: string) => ({
+  content: { uri },
+  children: [{ content: { uri: fine } }],
+});
+
+test("a tile's first contents are its children's, not their children's", () => {
+  const json = {
+    root: {
+      children: [
+        {
+          children: [
+            node("far0.glb.gz", "city0.glb.gz"),
+            node("l1_0.glb", "l0_0.glb"),
+          ],
+        },
+        {
+          children: [
+            node("far1.glb.gz", "city1.glb.gz"),
+            node("l1_1.glb", "l0_1.glb"),
+          ],
+        },
+      ],
+    },
+  };
+  expect(firstContents(json, 1)).toEqual(["far1.glb.gz", "l1_1.glb"]);
+  expect(firstContents(json, 2)).toEqual([]);
+  expect(firstContents(json, -1)).toEqual([]);
+  expect(firstContents({ root: {} }, 0)).toEqual([]);
+  expect(firstContents(null, 0)).toEqual([]);
 });

@@ -6,11 +6,12 @@ import { decodeGreyPng } from "@/lib/city/png-raster";
 import type { GreyRaster } from "@/lib/city/png-raster";
 import {
   epsgToMapPx,
+  pxPerMetre,
   mapBridges,
   mapHeightPx,
   mapPxToEpsg,
 } from "@/lib/city/minimap";
-import type { FootprintPoly, MapBridge, MapTile } from "@/lib/city/minimap";
+import type { MapBridge, MapFootprints, MapTile } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 
@@ -108,21 +109,54 @@ function drawBridges(
  */
 function drawFootprints(
   ctx: CanvasRenderingContext2D,
-  footprints: FootprintPoly[],
+  footprints: MapFootprints,
   bounds: TerrainBounds,
   size: number
 ): void {
   ctx.fillStyle = INK_FILL;
   ctx.strokeStyle = INK;
   ctx.lineWidth = 0.5;
-  for (const poly of footprints) {
-    if (poly.pts.length < 3) {
+  // (no array a point: a city's footprints are a million of them, at
+  // every repaint of the layer)
+  const { 0: minX, 3: maxY } = bounds;
+  const k = pxPerMetre(bounds, size);
+  for (const { gone, pack } of footprints.tiles) {
+    const { objectEnd, ringEnd, xy } = pack;
+    let r = 0;
+    for (let object = 0; object < objectEnd.length; object += 1) {
+      if (gone(object)) {
+        r = objectEnd[object];
+      }
+      for (; r < objectEnd[object]; r += 1) {
+        const first = r === 0 ? 0 : ringEnd[r - 1];
+        const end = ringEnd[r];
+        if (end - first < 3) {
+          continue;
+        }
+        ctx.beginPath();
+        for (let p = first; p < end; p += 1) {
+          // (the pack holds centimetres)
+          const x = (xy[2 * p] / 100 - minX) * k;
+          const y = (maxY - xy[2 * p + 1] / 100) * k;
+          if (p === first) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+  }
+  for (const { pts } of footprints.outlines) {
+    if (pts.length < 3) {
       continue;
     }
     ctx.beginPath();
-    for (let i = 0; i < poly.pts.length; i += 1) {
-      const [x, y] = poly.pts[i];
-      const { px, py } = epsgToMapPx(x, y, bounds, size);
+    for (let i = 0; i < pts.length; i += 1) {
+      const { px, py } = epsgToMapPx(pts[i][0], pts[i][1], bounds, size);
       if (i === 0) {
         ctx.moveTo(px, py);
       } else {
@@ -168,7 +202,7 @@ function drawPictureFrame(
 
 interface MinimapProps {
   bounds: TerrainBounds;
-  footprints: FootprintPoly[];
+  footprints: MapFootprints;
   /** per-tile land-cover class PNGs + their EPSG bounds, drawn as
    *  background, and each tile's bridge decks over them */
   landcoverTiles?: MapTile[];

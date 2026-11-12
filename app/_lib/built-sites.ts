@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { parseSiteIndex, SITE_INDEX_FILE } from "@/lib/city/site-index";
+import {
+  parseSiteIndex,
+  SITE_INDEX_FILE,
+  siteDataBase,
+} from "@/lib/city/site-index";
+import { MANIFEST_FILE } from "@/lib/city/tile";
 import type { SiteIndexEntry } from "@/lib/city/site-index";
 import type { Site } from "@/lib/city/site";
 import type { SiteStats } from "@/lib/city/site-stats";
@@ -12,6 +17,8 @@ export interface BuiltSite {
   site: Site;
   /** the city in numbers, when the build measured it */
   stats?: SiteStats;
+  /** the whole site's tileset as served, when the index names it */
+  tileset?: string;
 }
 
 /**
@@ -38,13 +45,26 @@ export function builtSites(): BuiltSite[] {
   } catch {
     // no index yet: the reference site alone
   }
-  return entries.flatMap(({ id, map, stats }) => {
+  return entries.flatMap(({ id, map, stats, tileset }) => {
     const site = siteById(id);
-    return site ? [{ site, map, stats }] : [];
+    return site ? [{ site, map, stats, tileset }] : [];
   });
 }
 
 /** The built site with this id, or undefined (unknown, or not built here). */
 export function builtSite(id: string): BuiltSite | undefined {
   return builtSites().find((b) => b.site.id === id);
+}
+
+/**
+ * What a site's viewer fetches first, as served paths: its manifest, and
+ * the tileset the build's index names for it. The page preloads them, so
+ * they are on their way before its scripts run; the viewer still reads
+ * the manifest itself (city-walk-client.tsx).
+ */
+export function firstFetches({ site, tileset }: BuiltSite): string[] {
+  return [
+    `${siteDataBase(site.id)}/${MANIFEST_FILE}`,
+    ...(tileset ? [tileset] : []),
+  ];
 }

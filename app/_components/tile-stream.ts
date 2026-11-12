@@ -53,6 +53,7 @@ import {
 import type { OrderedTile } from "@/lib/city/stream-order";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { contentExtras, ownsPoint } from "@/lib/city/tileset";
+import type { AheadRequest } from "./boot-ahead";
 import type {
   CityExtras,
   ContentExtras,
@@ -334,6 +335,9 @@ export interface TileStreamContext {
   /** a site tile's exact extent (the tileset's root extras) */
   tileBounds: (tileId: string) => TerrainBounds | undefined;
   tilesetUrl: string;
+  /** a request the boot already made for this URL, handed over once
+   *  (boot-ahead.ts) */
+  ahead?: (url: string) => AheadRequest | undefined;
   /**
    * The traffic bodies' builder, from the data layers' feature
    * (data-layers-feature.ts), which starts on the first switch-on: the
@@ -2803,7 +2807,7 @@ export function createTileStream(
   const tiles = new TilesRenderer(ctx.tilesetUrl);
   orderStreaming(tiles, ctx.tier, ctx.bootTile);
   setRasterTier(ctx.tier);
-  tiles.registerPlugin(new ContentFetchPlugin());
+  tiles.registerPlugin(new ContentFetchPlugin(ctx.ahead));
   // The decoder's own workers: without them a tile's meshopt buffers (75 MB
   // decoded for a dense building tile) decode on the main thread, inside
   // the parse that lands it. Idempotent: a remount keeps the same workers.

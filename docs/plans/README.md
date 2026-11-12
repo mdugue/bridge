@@ -566,8 +566,34 @@ ids are the report's.
    rewriting an earlier step's file can only be taken apart with the raw
    data at hand (every site's Python bake runs again), which a cloud
    session does not hold.
-6. **The start (L1, L2, B4, F6, F12)** — TODO: the boot is serial where
-   it need not be.
+6. **The start (L1, L2, B4, F6, F12) — built (2026-11-11).** **L1, L2:**
+   the route preloads the manifest and the tileset
+   (`app/[site]/page.tsx`), and the boot asks for the tileset and the
+   start tile's far buildings and coarse terrain as soon as the tileset's
+   name is known (`boot-ahead.ts`), beside the scene's chunk and the
+   renderer's start; the stream takes them from there and no longer
+   fetches the tileset twice. Headless (SwiftShader, CPU ×4, 9 Mbit/s,
+   150 ms; three runs each): manifest asked at 0.2 s (was 1.2), tileset
+   at 0.2 s (2.9–3.1), first tile content at 2.0–2.2 s (9.3–10.2), the
+   far buildings landed at 7.3–7.7 s (24.2–25.0), the boot's wait for
+   its tile over at 59–61 s (69–74; that machine parses and compiles for
+   most of it). Not built: the viewer's chunks still start after
+   hydration (≈ 1.1 s here; starting them when the module first runs
+   moved nothing, and preloading them from the HTML needs chunk names
+   only Next's private build manifest has), and the timings on an iPhone
+   (`?trace=1`) are the maintainer's to read. **F6:** the minimap's
+   footprints are a packed file (`lib/city/footprint-pack.ts`,
+   `footprints_<tile>.fpr.gz`): Dresden 11.0 MB of JSON (3.0 MB gzipped)
+   → 1.9 MB gzipped, no parse, and 460 000 points held as 3.7 MB of
+   integers where they were two-element arrays (≈ 50 MB of heap); the
+   minimap draws from the pack, a design's cover reads one object at a
+   time. **F12:** the tooltips' provider is the viewer's
+   (`city-walk.tsx`), not the root layout's: `/impressum` loads 190 kB
+   of scripts where it loaded 220 kB. **B4:** `PREPARE_SITES=meissen bun
+   dev` prepares that site alone and leaves the others served as built
+   last (`scripts/site-choice.ts`): 0.5 s where every site took 10 s
+   warm. Not built: a stat fingerprint per site, and starting `next dev`
+   before the bakes end.
 7. **`create-app.ts` in owners, one worker client (V1, V3, V8)** — TODO.
 8. **The desktop's post (F8, K5, F11, L6)** — TODO.
 
