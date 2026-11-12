@@ -235,6 +235,9 @@ test("the stream's dispose releases every dressed tile, quietly", async () => {
       settle: () => {
         // an unweighed hold settles nothing
       },
+      drop: () => {
+        // (nothing held)
+      },
       release: () => {
         freed.push("sky view");
       },

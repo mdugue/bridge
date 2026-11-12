@@ -818,8 +818,8 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
   19.8 m and 110 m), the walker as far from every edge as before (91 m,
   was 90.2), 17 redraws over a straight 500 m instead of 26, texels 10 %
   coarser; the air and Modell unchanged.
-- **The minimap's 512² class raster** has one reader left that paints
-  256² a tile (a re-bake and a look).
+- ~~**The minimap's 512² class raster**~~ — gone (2026-11-12): the
+  minimap shows the build's picture of the site.
 - **A tile's fine level re-bakes when any tile's terrain inputs change**
   (plan 072's maintenance note, M): its key covers every tile's DGM,
   walls, stairs, terraces and kerbs (ADR 0030), though its walls, kerbs,

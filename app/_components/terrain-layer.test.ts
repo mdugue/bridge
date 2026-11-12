@@ -20,10 +20,12 @@ import {
   createGridShare,
   createTerrainMaterial,
   dressTerrain,
+  groundDetailOf,
 } from "./terrain-layer";
 import type { GroundUniforms, SplatLayer } from "./terrain-layer";
 import { isSceneShared } from "./three-utils";
 import { createTileRasters } from "./tile-rasters";
+import type { RasterHold } from "./tile-rasters";
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -197,4 +199,113 @@ test("a level whose tile leaves while it waits for its rasters lets go at once: 
   expect(await outcome).toBe("AbortError");
   // its hold is gone already: the last holder gone, the load stops
   expect(signals.map((signal) => signal.aborted)).toEqual([true]);
+});
+
+/** A hold that hands out one raster per kind and set, and notes the drops. */
+function reachHold(kinds: string[], missingFar: string[] = []) {
+  const dropped: unknown[] = [];
+  const asked: { far: boolean; kind: string; now: boolean }[] = [];
+  const hold: RasterHold = {
+    acquire: (async (
+      kind: string,
+      _extras: unknown,
+      _signal?: AbortSignal,
+      how?: { far?: boolean; now?: boolean }
+    ) => {
+      asked.push({ kind, far: how?.far === true, now: how?.now === true });
+      if (!kinds.includes(kind) || (how?.far && missingFar.includes(kind))) {
+        return await Promise.resolve(null);
+      }
+      return kind === "sport" || kind === "markings"
+        ? { raster: raster(RGBAFormat), table: raster(RGBAFormat) }
+        : raster(RGBAFormat);
+    }) as RasterHold["acquire"],
+    drop: (value) => {
+      dropped.push(value);
+    },
+    release: () => {},
+    settle: () => {},
+  };
+  return { asked, dropped, hold };
+}
+
+const twinExtras = {
+  kind: "terrain",
+  level: 0,
+  surface: "p.png",
+  surfaceFar: "p-far.png",
+} as unknown as TerrainExtras;
+
+const detailBox = { min: [0, 0, 0], max: [1, 1, 1] } as const;
+
+test("a level's detail swaps its close-range rasters through the slots and drops the old set", async () => {
+  const layer = splat({
+    surfaceTexture: raster(RGBAFormat),
+    markings: { raster: raster(RGBAFormat), table: raster(RGBAFormat) },
+  });
+  const near = { surface: layer.surfaceTexture, markings: layer.markings };
+  const mesh = new Mesh(new BoxGeometry(), createTerrainMaterial(layer));
+  const lightSlots = Object.keys(mesh.material.userData.slots as object);
+  const { asked, dropped, hold } = reachHold(["surface", "markings"]);
+  const detail = groundDetailOf({
+    box: detailBox,
+    extras: twinExtras,
+    far: false,
+    hold,
+    mesh,
+    signal: new AbortController().signal,
+    splat: layer,
+  });
+  if (!detail) {
+    throw new Error("the level has twins");
+  }
+  expect(detail.far()).toBe(false);
+  // asked for what it reads already: nothing to do
+  expect(await detail.setFar(false)).toBe(false);
+  expect(await detail.setFar(true)).toBe(true);
+  expect(detail.far()).toBe(true);
+  expect(asked.every((a) => a.far && a.now)).toBe(true);
+  const slots = mesh.material.userData.slots as Record<string, unknown>;
+  expect(slots.surface).toBe(layer.surfaceTexture);
+  expect(slots.surface).not.toBe(near.surface);
+  expect(slots.markingsRaster).toBe(layer.markings?.raster);
+  // the kinds the variant was built without stay out of it
+  expect(slots.edges).toBeUndefined();
+  expect(layer.edgesTexture).toBeUndefined();
+  // every other slot (the baked light's among them) is still there
+  expect(Object.keys(slots).sort()).toEqual(lightSlots.sort());
+  expect(dropped).toContain(near.surface);
+  expect(dropped).toContain(near.markings);
+});
+
+test("a twin missing beside a raster the level reads: no swap, what was loaded is let go", async () => {
+  const layer = splat({ surfaceTexture: raster(RGBAFormat) });
+  const before = layer.surfaceTexture;
+  const mesh = new Mesh(new BoxGeometry(), createTerrainMaterial(layer));
+  const { dropped, hold } = reachHold(["surface"], ["surface"]);
+  const detail = groundDetailOf({
+    box: detailBox,
+    extras: twinExtras,
+    far: false,
+    hold,
+    mesh,
+    signal: new AbortController().signal,
+    splat: layer,
+  });
+  expect(await detail?.setFar(true)).toBe(false);
+  expect(detail?.far()).toBe(false);
+  expect(layer.surfaceTexture).toBe(before);
+  expect(dropped).not.toContain(before);
+  // a level without twins, or without a splat, has no detail to swap
+  expect(
+    groundDetailOf({
+      box: detailBox,
+      extras: { kind: "terrain", level: 1 } as unknown as TerrainExtras,
+      far: false,
+      hold,
+      mesh,
+      signal: new AbortController().signal,
+      splat: layer,
+    })
+  ).toBeUndefined();
 });

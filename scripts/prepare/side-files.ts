@@ -54,6 +54,29 @@ function checkedBytes(
   return bytes;
 }
 
+/** A raster baked from another side file (`bakedFrom`), published; none
+ *  where an optional one's source is absent (its twin goes without it). */
+async function bakedTwin(artifact: TileArtifact): Promise<string | undefined> {
+  const from = artifact.bakedFrom;
+  if (!from) {
+    return undefined;
+  }
+  const source = sideFileSource(SITE, from.file);
+  const src = at(source);
+  if (existsSync(src)) {
+    return await publishClassRaster(
+      artifact.file,
+      src,
+      from.raster,
+      from.channels
+    );
+  }
+  if (artifact.required) {
+    fail(`missing source file ${source}${HINT}`);
+  }
+  return undefined;
+}
+
 /** Publishes every side file of the tiles this run bakes, into `sideFiles`.
  *  A ground warmer needs none; a tile warmer its own tiles'. */
 export async function publishSideFiles(): Promise<void> {
@@ -108,16 +131,7 @@ export async function publishSideFiles(): Promise<void> {
         continue;
       }
       if (artifact.bakedFrom) {
-        const source = sideFileSource(SITE, artifact.bakedFrom.file);
-        const src = at(source);
-        if (!existsSync(src)) {
-          fail(`missing source file ${source}${HINT}`);
-        }
-        names[kind] = await publishClassRaster(
-          artifact.file,
-          src,
-          artifact.bakedFrom.raster
-        );
+        names[kind] = await bakedTwin(artifact);
         continue;
       }
       const source = sideFileSource(SITE, artifact.file);
