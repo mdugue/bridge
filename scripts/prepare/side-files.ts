@@ -2,8 +2,8 @@
  * Step 1 of scripts/prepare-data.ts: each tile's side files, published as
  * they are, with the lines' levels (lines.ts), or baked (side-bakes.ts).
  * A value module (bake-entries.ts `KEY_VALUES`): the buildings and the
- * terrain read its published names, values their keys carry, and no key
- * walks it.
+ * terrain hand its published names on to the tileset (lib/city/tileset.ts
+ * `CityFiles`, `TerrainFiles`); no key carries them and none walks it.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { parseBakeFile } from "../../lib/city/bake-file";

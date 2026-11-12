@@ -531,8 +531,41 @@ ids are the report's.
    #156, plan 074 A) ends (c) and (d); the maintainer decides whether to
    take that spike up again (asked 2026-11-11): it lies a month behind
    main and across PR #187.
-5. **Cache keys (B1, B2, B5, B7, V5)** — TODO: both pipelines key wider
-   than what an artifact reads.
+5. **Cache keys (B1, B2, B5, B7, V5) — built in part (2026-11-11);
+   renames every site's glbs once.** **B2 built:** the side files a
+   content is dressed with are named on its tile in the tileset
+   (`lib/city/tileset.ts` `TerrainFiles`, `CityFiles`, `contentExtras`),
+   not in the glTF's extras, and in no key: a new sky-view raster no
+   longer re-bakes the tile's buildings (20–45 s a tile), a new lamp or
+   tree file no longer renames the fine terrain (which visitors then
+   loaded again unchanged). Dresden's tileset grows from 21.9 to 57.6 kB
+   (3.3 → 9.0 kB gz at the start). **B5 built in part:** the local cache
+   keeps a name's three newest entries (`bake-cache.ts` `generations`; one
+   on Vercel and in CI), so a checkout across a bake module and back bakes
+   neither way. Not built: read access to Vercel's shared cache from CI
+   and a desk (a token for the store outside Vercel is the maintainer's
+   to give). **B7 built in part:** a Python step's key carries what
+   `uv.lock` resolved for the packages a bake runs with
+   (`step_cache.locked_runtime`: 40 of 46, not ruff or pytest and what
+   only they need) and leaves `step_cache.py` itself out (`VERSION`
+   stands for it); `networkx`, which `transit.py` imports, is a named
+   dependency. This re-keys every step once, where a cache exists (the
+   ruff bump in PR #278 would have under the old key; under this one it
+   no longer does). Not built: the spec's part of the key (the tile list
+   stays: steps reach their neighbours through it, and a new neighbour
+   must run them again), the year in a dated step's key. **B1 not built,
+   by measurement:** the key as the hash of each entry's tree-shaken
+   bundle (`Bun.build`, 47 ms for all 36 entries) was replayed over the
+   last 200 commits on main: the buildings' key changed in 29 of them as
+   text and in 26 as bundle, the terrain's in 7 and 2, the ground's in 1
+   and 1; over the 55 merges, 18 and 15, 12 and 9, 6 and 5. Nearly every
+   commit that touches the buildings' graph changes code they run; three
+   bakes in two hundred commits do not pay for a key that every Bun
+   release would change. Narrowing the table to the step modules alone
+   changes nothing more. **V5 not built:** `islands` and `lamp-heights`
+   rewriting an earlier step's file can only be taken apart with the raw
+   data at hand (every site's Python bake runs again), which a cloud
+   session does not hold.
 6. **The start (L1, L2, B4, F6, F12)** — TODO: the boot is serial where
    it need not be.
 7. **`create-app.ts` in owners, one worker client (V1, V3, V8)** — TODO.

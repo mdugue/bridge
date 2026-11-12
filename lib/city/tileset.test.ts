@@ -7,6 +7,7 @@ import {
   parseTilesetExtras,
   terrainRasterExtras,
   tileBox,
+  contentExtras,
   tileTopsOf,
 } from "./tileset";
 import type { BakedTile, TilesetExtras } from "./tileset";
@@ -17,6 +18,17 @@ const tile = (id: string, e: number): BakedTile => ({
   bounds: [e, 5_656_000, e + 2000, 5_658_000],
   city: `city_${id}.glb.gz`,
   cityFar: `city_${id}_far.glb.gz`,
+  files: {
+    city: { svf: `svf_${id}.png` },
+    terrain: {
+      0: {
+        landcover: `lc_${id}.png`,
+        landcoverLow: "",
+        dressing: { lamps: `lamps_${id}.geojson` },
+      },
+      1: { landcover: `lc_${id}_1.png`, landcoverLow: "" },
+    },
+  },
   terrain: { 0: `terrain_${id}_l0.glb.gz`, 1: `terrain_${id}_l1.glb.gz` },
   zRange: [100, 200],
 });
@@ -189,4 +201,38 @@ test("a terrain level's raster extras are what prepare-data wrote by hand, key f
       written
     );
   }
+});
+
+test("each content's tile names the side files it is dressed with, and the viewer reads them with the glTF's own extras", () => {
+  const set = buildTileset([tile("a", 412_000)], extras) as {
+    root: {
+      children: {
+        children: { children: { extras: object }[]; extras: object }[];
+      }[];
+    };
+  };
+  const [city, terrain] = set.root.children[0].children;
+  expect(city.extras).toEqual({ svf: "svf_a.png" });
+  expect(city.children[0].extras).toEqual({ svf: "svf_a.png" });
+  expect(terrain.extras).toEqual({
+    landcover: "lc_a_1.png",
+    landcoverLow: "",
+  });
+  // what the glTF says of itself, then what its tile names
+  const own = { kind: "terrain", tileId: "a", level: 0 };
+  const read = contentExtras(own, terrain.children[0]);
+  expect(read).toBe(own as typeof read);
+  expect(read).toEqual({
+    kind: "terrain",
+    tileId: "a",
+    level: 0,
+    landcover: "lc_a.png",
+    landcoverLow: "",
+    dressing: { lamps: "lamps_a.geojson" },
+  } as unknown as typeof read);
+  // a tile without extras (a tileset baked before them) adds nothing
+  expect(contentExtras({ kind: "city", tileId: "a" }, {})).toEqual({
+    kind: "city",
+    tileId: "a",
+  });
 });
