@@ -5,6 +5,7 @@ import type {
 } from "three/webgpu";
 import { MeshBVH } from "three-mesh-bvh";
 import { whenIdle } from "./main-yield";
+import { createWorkerClient } from "./worker-client";
 
 /**
  * A building tile's BVH built in the BVH worker (bvh-worker.ts) instead of
@@ -23,10 +24,10 @@ import { whenIdle } from "./main-yield";
  * the main thread: the GPU keeps the order it was given, the same
  * triangles. A tile whose arrays share a buffer with anything else is
  * built here (handed over, the other would go with them; copied, the
- * page's memory would grow).
+ * page's memory would grow). The line, the handshake and what follows a
+ * dead worker are the one rule of the page's workers (worker-client.ts).
  */
 export interface BvhJob {
-  id: number;
   position: {
     array: PositionArray;
     itemSize: number;
@@ -40,10 +41,6 @@ export interface BvhJob {
 }
 
 export interface BvhReply {
-  /** the worker's first message: its script runs (nothing is handed over
-   *  before it — a worker that fails to load would keep what it got) */
-  ready?: true;
-  id: number;
   roots?: ArrayBuffer[];
   error?: string;
   index: IndexArray;
@@ -58,19 +55,10 @@ type PositionArray =
   | Uint16Array
   | Uint8Array;
 
-let worker: Worker | null = null;
-let broken = typeof Worker === "undefined";
-let nextId = 0;
 const building = new WeakSet<BufferGeometry>();
 /** geometries whose arrays a dying worker took with it: drawn, never
  *  raycast again (treated as still building) */
 const lost = new WeakSet<BufferGeometry>();
-const settles = new Map<number, (reply: BvhReply | null) => void>();
-/** one build at a time: the next waits for this one */
-let chain: Promise<unknown> = Promise.resolve();
-/** settles true once the worker said it runs, false if it died first */
-let started: Promise<boolean> | null = null;
-let markStarted: ((up: boolean) => void) | null = null;
 /** How long a build here, where the worker cannot, waits for an idle main
  *  thread at most (ms). */
 const IDLE_BUILD_MS = 1000;
@@ -89,71 +77,7 @@ export function bvhLost(geometry: BufferGeometry): boolean {
 
 /** Whether the BVH worker is up (a test asks: the fallback builds alike). */
 export function bvhWorkerUp(): boolean {
-  return worker !== null && !broken;
-}
-
-function startWorker(): Worker | null {
-  if (worker || broken) {
-    return worker;
-  }
-  started = new Promise<boolean>((resolve) => {
-    markStarted = resolve;
-  });
-  let w: Worker;
-  try {
-    w = new Worker(new URL("./bvh-worker.ts", import.meta.url), {
-      type: "module",
-      name: "bvh",
-    });
-  } catch {
-    broken = true;
-    markStarted?.(false);
-    return null;
-  }
-  worker = w;
-  // a stopped worker's last word is not about the one now running
-  w.addEventListener("message", ({ data }: MessageEvent<BvhReply>) => {
-    if (worker !== w) {
-      return;
-    }
-    if (data.ready) {
-      markStarted?.(true);
-      return;
-    }
-    const settle = settles.get(data.id);
-    settles.delete(data.id);
-    settle?.(data);
-  });
-  // the arrays of a reply that cannot be read are lost: so is the worker
-  w.addEventListener("messageerror", () => {
-    if (worker === w) {
-      dieOut();
-    }
-  });
-  w.addEventListener("error", (event) => {
-    event.preventDefault();
-    if (worker === w) {
-      dieOut();
-    }
-  });
-  return w;
-}
-
-/** Ends the worker; every build still away settles as lost. */
-function shutDown(): void {
-  markStarted?.(false);
-  worker?.terminate();
-  worker = null;
-  started = null;
-  for (const [id, settle] of settles) {
-    settles.delete(id);
-    settle(null);
-  }
-}
-
-function dieOut(): void {
-  broken = true;
-  shutDown();
+  return client.up();
 }
 
 /**
@@ -164,7 +88,7 @@ function dieOut(): void {
  * new worker.
  */
 export function stopBvhWorker(): void {
-  shutDown();
+  client.stop();
 }
 
 /** Whether a typed array is all of its buffer (can be handed over). */
@@ -172,7 +96,7 @@ const ownsBuffer = (a: ArrayBufferView): boolean =>
   a.byteOffset === 0 && a.byteLength === a.buffer.byteLength;
 
 interface Taken {
-  job: Omit<BvhJob, "id">;
+  job: BvhJob;
   /** puts the arrays that came back where they were */
   restore: (reply: Pick<BvhReply, "index" | "position">) => void;
   transfer: Transferable[];
@@ -243,59 +167,82 @@ function take(geometry: BufferGeometry): Taken | null {
   };
 }
 
-/** One build in the worker; resolves whether it built (false: the worker
- *  failed — the caller may build here). The arrays are back either way. */
-async function buildThere(
-  geometry: BufferGeometry,
-  wanted: () => boolean
-): Promise<boolean> {
-  const w = startWorker();
-  // nothing goes over before the worker runs: one whose script fails to
-  // load would take the tile's arrays with it
-  if (!(w && (await started) && worker === w)) {
-    return false;
-  }
-  const taken = take(geometry);
-  if (!taken) {
-    return false;
-  }
-  const id = nextId;
-  nextId += 1;
-  building.add(geometry);
-  const reply = await new Promise<BvhReply | null | "unsent">((resolve) => {
-    settles.set(id, resolve);
-    try {
-      w.postMessage({ ...taken.job, id }, taken.transfer);
-    } catch {
-      // not sent (a clone fails before the transfer): the arrays are here
-      settles.delete(id);
-      resolve("unsent");
-    }
-  });
-  building.delete(geometry);
-  if (reply === "unsent") {
-    return false;
-  }
-  if (!reply) {
-    // the worker died with the arrays: nothing to restore them from (the
-    // GPU still draws the tile; no ray will read it)
-    lost.add(geometry);
-    throw new Error("BVH worker lost a tile's buffers");
-  }
-  taken.restore(reply);
-  // a tile that left meanwhile gets no BVH: nothing would ray it
-  if (!reply.roots || geometry.boundsTree || !wanted()) {
-    return true;
-  }
-  const index = geometry.getIndex()?.array as IndexArray;
-  // (`version` is read, though the types leave it out: without it the
-  // nodes would be "fixed up" from the old format)
-  const data = { version: 1, roots: reply.roots, index, indirectBuffer: null };
-  geometry.boundsTree = MeshBVH.deserialize(data, geometry, {
-    setIndex: false,
-  });
-  return true;
+/** One tile's build: its geometry, and its arrays while they are away. */
+interface Build {
+  geometry: BufferGeometry;
+  wanted: () => boolean;
+  taken?: Taken;
 }
+
+/** Whether the build still has a point: no BVH yet, the tile still there. */
+const due = (build: Build): boolean =>
+  !build.geometry.boundsTree && build.wanted();
+
+/** (a build's result: whether the worker did it) */
+const client = createWorkerClient<Build, BvhReply, boolean>({
+  name: "BVH",
+  start: () =>
+    new Worker(new URL("./bvh-worker.ts", import.meta.url), {
+      type: "module",
+      name: "bvh",
+    }),
+  // a tile that left before its turn is not built; one whose arrays cannot
+  // be handed over is built here
+  pack: (build) => {
+    const taken = due(build) ? take(build.geometry) : null;
+    if (!taken) {
+      return null;
+    }
+    build.taken = taken;
+    building.add(build.geometry);
+    return { message: taken.job, transfer: taken.transfer, kept: false };
+  },
+  unsent: (build) => {
+    // (the arrays never left)
+    build.taken = undefined;
+    building.delete(build.geometry);
+  },
+  unpack: (reply, build) => {
+    const { geometry } = build;
+    build.taken?.restore(reply);
+    build.taken = undefined;
+    building.delete(geometry);
+    // a build that failed there leaves the tile without a BVH (a ray then
+    // builds it on the main thread); a tile that left meanwhile gets none:
+    // nothing would ray it
+    if (!(reply.roots && due(build))) {
+      return true;
+    }
+    const index = geometry.getIndex()?.array as IndexArray;
+    // (`version` is read, though the types leave it out: without it the
+    // nodes would be "fixed up" from the old format)
+    const data = {
+      version: 1,
+      roots: reply.roots,
+      index,
+      indirectBuffer: null,
+    };
+    geometry.boundsTree = MeshBVH.deserialize(data, geometry, {
+      setIndex: false,
+    });
+    return true;
+  },
+  // here after all, in idle time where the thread has some
+  here: async (build) => {
+    if (!due(build)) {
+      return false;
+    }
+    await new Promise<void>((resolve) => {
+      whenIdle(() => {
+        if (due(build)) {
+          build.geometry.computeBoundsTree();
+        }
+        resolve();
+      }, IDLE_BUILD_MS);
+    });
+    return false;
+  },
+});
 
 /**
  * Builds `geometry`'s BVH in the worker, after the builds before it;
@@ -303,36 +250,25 @@ async function buildThere(
  * geometry has its BVH back (or the build failed: a ray then builds it on
  * the main thread as before). `wanted` says whether the tile is still
  * there: one that left before its turn is not built, and one that left
- * during it gets its arrays back but no BVH.
+ * during it gets its arrays back but no BVH. Rejects when the worker ended
+ * with the tile's arrays (`bvhLost`).
  */
 export async function buildBvhOffThread(
   geometry: BufferGeometry,
   wanted: () => boolean = () => true
 ): Promise<void> {
-  const run = chain.then(async () => await buildInTurn(geometry, wanted));
-  chain = run.catch(() => {
-    // the caller sees a failed build through `run`; the chain only orders
-  });
-  await run;
-}
-
-/** One geometry's turn in the chain: there if it can, else here. */
-async function buildInTurn(
-  geometry: BufferGeometry,
-  wanted: () => boolean
-): Promise<void> {
-  if (geometry.boundsTree || !wanted()) {
-    return;
-  }
-  if (!(await buildThere(geometry, wanted))) {
-    // here after all, in idle time where the thread has some
-    await new Promise<void>((resolve) => {
-      whenIdle(() => {
-        if (!geometry.boundsTree && wanted()) {
-          geometry.computeBoundsTree();
-        }
-        resolve();
-      }, IDLE_BUILD_MS);
-    });
+  const build: Build = { geometry, wanted };
+  try {
+    await client.run(build);
+  } catch (error) {
+    if (build.taken) {
+      // the worker ended with the arrays: nothing to restore them from
+      // (the GPU still draws the tile; no ray will read it)
+      build.taken = undefined;
+      building.delete(geometry);
+      lost.add(geometry);
+      throw new Error("BVH worker lost a tile's buffers", { cause: error });
+    }
+    throw error;
   }
 }

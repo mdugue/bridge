@@ -1581,12 +1581,29 @@ from then on hear the spine through its hooks (`feature-seam.ts`: the
 frame, the stream's changes, the look store, the scene's clock — read
 first, since they may start long after it was set); a tile's traffic
 slot waits for the same start, outside the dressings' turn, before its
-bodies join the tile's late parts. Their code ships in the scene's chunk: loaded by
+bodies join the tile's late parts. Their code ships in the scene's chunk,
+so the seam only starts them, once (`startOnce`): loaded by
 `import()` as a chunk of its own, it made the first-load JS 22.7 KB gz
 larger while moving 10.1 KB out, three.js shared by both chunks losing
-its scope hoisting with the scene's code ([ADR 0040](./adr/0040-data-layers-and-live-city-data.md)) — and the
+its scope hoisting with the scene's code ([ADR 0040](./adr/0040-data-layers-and-live-city-data.md)).
+Measured again on 2026-11-11, with three in chunks of its own, the
+penalty is gone and so is the gain: the viewer's JS came out 0.5 kB
+larger (1 096.5 against 1 096.0 kB over the wire) and the chunk was
+fetched during the boot all the same. The
 picture styles and Modell, which import three as much, stay in the
-scene's chunk for the same reason.
+scene's chunk too.
+
+**The spine's owners.** `bootApp` is one long closure; what has a life of
+its own is taken out of it as an owner — a factory that takes a few
+objects and callbacks and returns what the spine calls: the picture
+export (`scene-capture.ts`), the frame's times and the resolution they
+allow (`frame-meter.ts`), the stream's detail and cache bound to the GPU
+memory held (`tile-memory.ts`), the crosshair's focus
+(`crosshair-focus.ts`), the loading ring (`load-veil-follow.ts`). **A
+frame is an ordered list of named steps** (`frame-steps.ts`: `clock`,
+`move`, `stream`, `follow`, `view`, `tick`, `overlay`, `render`,
+`after`): the list says why each stands where it does, its test holds
+the order, and `bootApp` binds each name to its work.
 Everything else is the tiles renderer's call: it loads and
 unloads by screen-space error from both cameras, and a `DressingPlugin`
 (`tile-stream.ts`) dresses each landing tile inside the renderer's own
@@ -1677,6 +1694,22 @@ over a floor that is not there. Before a reload to a heavier page
 worker are terminated, and their heaps go with them rather than with the
 old document (create-app.ts `stopWorkers`); the reloads after a lost GPU
 keep them, since their stream still sends jobs.
+
+**The page's workers follow one rule** (`worker-client.ts`; the ground's,
+the window niches' and the BVH's clients are each a few lines on it).
+One worker a kind, one job at a time, the jobs in a line a lower rank
+goes first in (a coarse ground level before the fine ones) and an aborted
+job leaves at once. Nothing is handed over before the worker's script
+said it runs: one that fails to load would keep what it got (one silent
+for 15 s is ended and started once more at the next job; a second
+silence is the last). Where there
+is no worker — a browser that refuses it, a script that did not load, a
+message that cannot be sent — the work runs on the main thread, each job
+in a later task of its own. A worker that dies at work is started again
+once; the job it held runs here when its input was copied (the ground)
+and is lost when it was handed over (a tile's niches are then missing,
+a building tile is `bvhLost`: drawn, never raycast). A second death, or
+one before the handshake, and every later job runs here.
 Whatever moves the camera — walking, flying, a glide on its way, a double
 tap, a snapshot, a GPS fix, a tile landing — it ends up neither below the
 ground nor inside a building: `camera-pose.ts` sets a walker out beside a
