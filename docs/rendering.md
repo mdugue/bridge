@@ -1853,7 +1853,9 @@ after the frame. create-app.ts's callbacks are unchanged:
 the ground worker; per raster `raster:fetch-wait` in the downloads'
 line, `raster:fetch`, `raster:turn-wait` at the decode gate and
 `raster:decode`, the inflate with the upload),
-`tile:compile`, `tile:handover-wait`,
+`tile:compile` (within it, per drawable, `compile:turn-wait` behind
+the compiles in flight and `compile:call`, its own `compileAsync`),
+`tile:handover-wait`,
 `dressing:queue-wait`, `dressing:build`, `dressing:compile`,
 `dressing:asks`, the boot's way to the first frame (`boot:page-to-viewer`
 from the navigation to the viewer's code, `boot:renderer-init`,

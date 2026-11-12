@@ -64,6 +64,7 @@ import { NAMEPLATE_TYPES } from "@/lib/city/nameplate-type";
 import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
 import type { PaperKind, RenderStyleDef } from "@/lib/city/render-style";
 import { compileInLanes, compileInTurn } from "./compile-lanes";
+import { streamTimings } from "./stream-timing";
 import type { Compiling } from "./compile-lanes";
 import { crownsPrinted } from "./crown-season";
 import { DATA_MARKS, dataMarks } from "./glass";
@@ -970,8 +971,19 @@ export function createPostStack(
   /** Queues a compile made by `now` behind the ones in flight. */
   const inTurn =
     (now: (object: Object3D) => Promise<void>) =>
-    async (object: Object3D): Promise<void> =>
-      await compileInTurn(renderer, async () => await now(object));
+    async (object: Object3D): Promise<void> => {
+      // (the two parts of a drawable's compile, apart: its wait behind the
+      // compiles in flight, and its own call — `?trace=1` tells whether a
+      // slow tile waits for the line or for its own builds)
+      const queued = streamTimings.now();
+      await compileInTurn(renderer, async () => {
+        streamTimings.since("compile:turn-wait", queued);
+        await streamTimings.timed(
+          "compile:call",
+          async () => await now(object)
+        );
+      });
+    };
   const compileOne = inTurn(async (object) => await compileNow(object));
   /**
    * The cameras the frames are drawn with, one of each kind: the walk/fly
