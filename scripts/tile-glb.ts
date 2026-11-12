@@ -202,6 +202,93 @@ function addPrimitive(
   return prim;
 }
 
+type ChildInput = NonNullable<MeshInput["children"]>[number];
+
+/**
+ * A child given as a triangle soup, indexed: vertices whose position,
+ * normal, colour and texture coordinate are bit for bit the same become
+ * one. A quad's two triangles share two corners and a ribbon's quads their
+ * ends, so a tile's kerbs, stairs and walls draw the same picture from
+ * about a third of the vertices. Not for a child with custom attributes.
+ */
+export function indexed(child: ChildInput): ChildInput {
+  // (a column this does not compare would merge vertices that differ in
+  // it and stay at the soup's length beside the welded ones)
+  if (child.attributes || child.vectors) {
+    throw new Error(
+      `indexed: the child "${child.name}" carries custom attributes; give it indices`
+    );
+  }
+  const columns: [Float32Array, number][] = [
+    [child.positions, 3],
+    [child.normals, 3],
+  ];
+  if (child.colors) {
+    columns.push([child.colors, 3]);
+  }
+  if (child.uvs) {
+    columns.push([child.uvs, 2]);
+  }
+  const bits = columns.map(([a, n]): [Uint32Array, number] => [
+    new Uint32Array(a.buffer, a.byteOffset, a.length),
+    n,
+  ]);
+  const count = child.positions.length / 3;
+  let size = 4;
+  while (size < 2 * count) {
+    size *= 2;
+  }
+  // open addressing: a slot holds a kept vertex's place among the kept + 1
+  const slots = new Uint32Array(size);
+  const kept = new Uint32Array(count);
+  const indices = new Uint32Array(count);
+  const same = (v: number, w: number) =>
+    bits.every(([a, n]) => {
+      for (let c = 0; c < n; c += 1) {
+        if (a[n * v + c] !== a[n * w + c]) {
+          return false;
+        }
+      }
+      return true;
+    });
+  let unique = 0;
+  for (let v = 0; v < count; v += 1) {
+    let h = 0x9e_37_79_b9;
+    for (const [a, n] of bits) {
+      for (let c = 0; c < n; c += 1) {
+        h = Math.imul(h ^ a[n * v + c] ^ (h >>> 15), 0x85_eb_ca_6b);
+      }
+    }
+    let slot = (h ^ (h >>> 13)) & (size - 1);
+    while (slots[slot] !== 0 && !same(kept[slots[slot] - 1], v)) {
+      slot = (slot + 1) & (size - 1);
+    }
+    if (slots[slot] === 0) {
+      kept[unique] = v;
+      unique += 1;
+      slots[slot] = unique;
+    }
+    indices[v] = slots[slot] - 1;
+  }
+  const packed = (a: Float32Array, n: number): Float32Array<ArrayBuffer> => {
+    const out = new Float32Array(n * unique);
+    for (let u = 0; u < unique; u += 1) {
+      for (let c = 0; c < n; c += 1) {
+        out[n * u + c] = a[n * kept[u] + c];
+      }
+    }
+    return out;
+  };
+  return {
+    ...child,
+    positions: packed(child.positions, 3),
+    normals: packed(child.normals, 3),
+    ...(child.colors && { colors: packed(child.colors, 3) }),
+    ...(child.uvs && { uvs: packed(child.uvs, 2) }),
+    indices,
+  };
+}
+
 /** Only positions, normals, colours and texture coordinates are quantised:
  *  the custom attributes are ids and flags that must stay exact (quantize
  *  would squeeze them to 12 bits), the vectors are quantised already. */
@@ -232,7 +319,7 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
   for (const child of input.children ?? []) {
     const childMesh = doc
       .createMesh(child.name)
-      .addPrimitive(addPrimitive(doc, child));
+      .addPrimitive(addPrimitive(doc, child.indices ? child : indexed(child)));
     scene.addChild(doc.createNode(child.name).setMesh(childMesh));
   }
   scene.setExtras(input.extras);

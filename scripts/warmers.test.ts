@@ -70,13 +70,13 @@ describe("bakeLimits", () => {
     expect(Math.floor(memory / PROCESS_PEAK)).toBeGreaterThanOrEqual(4);
   });
 
-  test("on Vercel's 4-core, 8.6 GB builder two tile warmers bake at once", () => {
+  test("on Vercel's 4-core, 8.6 GB builder three tile warmers bake at once", () => {
     const { memory } = bakeLimits({ cores: 4, memory: 8.6e9 });
-    expect(Math.floor(memory / TILE_PEAK)).toBe(2);
-    // the heaviest tile's cold peak (München 32690_5334, 2.40 GiB on
-    // 2026-10-31) fits its count with Vercel's Bun's 15 % more, and 5 %
-    // to spare
-    expect(1.05 * 1.15 * 2.4 * 2 ** 30).toBeLessThanOrEqual(TILE_PEAK);
+    expect(Math.floor(memory / TILE_PEAK)).toBe(3);
+    // the heaviest tile's cold peak (München 32690_5334, 1.26 GiB on
+    // 2026-11-11, three others beside it) fits its count with Vercel's
+    // Bun's 15 % more, and a quarter to spare
+    expect(1.25 * 1.15 * 1.26 * 2 ** 30).toBeLessThanOrEqual(TILE_PEAK);
   });
 
   test("without the warmers, Vercel's builder bakes one cold site at a time, beside a cached site's run", () => {
@@ -88,8 +88,8 @@ describe("bakeLimits", () => {
   });
 
   test("on CI's 4-core, 16.8 GB runner four tile warmers bake at once, two cold sites without them", () => {
-    const { memory } = bakeLimits({ cores: 4, memory: 16.8e9 });
-    expect(Math.floor(memory / TILE_PEAK)).toBe(4);
+    const { jobs, memory } = bakeLimits({ cores: 4, memory: 16.8e9 });
+    expect(Math.min(jobs, Math.floor(memory / TILE_PEAK))).toBe(4);
     expect(Math.floor(memory / SITE_PEAK)).toBe(2);
   });
 

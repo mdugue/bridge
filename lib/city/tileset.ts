@@ -13,7 +13,7 @@
  *         └ terrain L0 content: TIN terrain + the tile's dressing
  *
  * The buildings of a tile load whenever the tile is in view, far off as the
- * same LoD2 simplified to half a metre (a sixth of the triangles; what goes
+ * same LoD2 simplified to half a metre (half of the triangles; what goes
  * is small roof detail and the per-vertex facade detail — windows along
  * the ground, doors — that nothing resolves at that distance), and near as
  * baked (`FAR_CITY_SIMPLIFY`, `FAR_CITY_ERROR`). The terrain

@@ -422,6 +422,26 @@ export function untrackTexture(texture: Texture): void {
   trackedTextures.delete(texture);
 }
 
+/**
+ * The bytes a geometry's positions take on the GPU beyond their array: a
+ * quantised position is three 16-bit numbers, and a vertex buffer has no
+ * three-component 16-bit format, so each is uploaded as four (two bytes a
+ * vertex the tile cache's estimate of the glTF does not see). 0 for
+ * float positions.
+ */
+export function paddedPositionBytes(geometry: BufferGeometry): number {
+  const position = geometry.getAttribute("position") as
+    | AnyAttribute
+    | undefined;
+  if (position?.itemSize !== 3) {
+    return 0;
+  }
+  const { array } = position;
+  return array instanceof Int16Array || array instanceof Uint16Array
+    ? 2 * position.count
+    : 0;
+}
+
 /** A tracked texture's GPU bytes (0 when it is not tracked). */
 export function trackedBytesOf(texture: Texture): number {
   return trackedTextures.get(texture) ?? 0;

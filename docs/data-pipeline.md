@@ -832,9 +832,11 @@ the bakes still keep to 80 % of it).
 **Warmers** (off with `PREPARE_WARMERS=0`). One tile per process:
 `prepare-data.ts <site>` runs as **warmers**, which only fill the cache,
 before one plain run finds everything cached and publishes. A tile warmer
-counts as 3.2 GB (its buildings are the peak: München's heaviest tile
-`32690_5334` 2.40 GiB on 2026-10-31, the others 0.4–2.2 GiB; Vercel's
-Bun 1.3.14 took about 15 % more for a whole site), every other bake as
+counts as 2.0 GB (its buildings are the peak: München's heaviest tile
+`32690_5334` 1.26 GiB with three others beside it on 2026-11-11, since
+the bands are cut where their wall bends and not every metre — 2.40 GiB
+and a count of 3.2 GB before; Vercel's Bun 1.3.14 took about 15 % more
+for a whole site), every other bake as
 1.6 GB (a ground warmer 0.6 GiB at most, a site's publishing run 1.12 GiB,
 Dresden's).
 
@@ -857,8 +859,8 @@ file under `public/data/`, no manifest, no prune — so it can never remove
 what another process wrote. One tile per warmer because a process's memory
 grows with every tile it bakes: a whole cold site in one process peaks
 near twice its heaviest tile (München 4.47 GiB), so Vercel's 4-core,
-8.6 GB builder holds one cold site at a time but two tiles, CI's 16.8 GB
-runner four. A slot that frees late still finds a tile to take. Anything
+8.6 GB builder holds one cold site at a time but three tiles, CI's
+16.8 GB runner four (its cores). A slot that frees late still finds a tile to take. Anything
 new that is computed from every tile must be cached by step 1, or every
 warmer computes it again.
 

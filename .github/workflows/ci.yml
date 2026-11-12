@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # This job never reads data/ (811 MB of geodata, 2026-10-06): a
+          # This job never reads data/ (936 MB of geodata, 2026-11-11): a
           # sparse checkout of everything else.
           sparse-checkout: |
             /*
@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # This job never reads data/ (811 MB of geodata, 2026-10-06): a
+          # This job never reads data/ (936 MB of geodata, 2026-11-11): a
           # sparse checkout of everything else.
           sparse-checkout: |
             /*
@@ -177,8 +177,8 @@ jobs:
       # (see the timings above), and this is what tells them apart.
       - name: Runner CPU
         run: lscpu | grep -E '^(Model name|CPU\(s\)):'
-      # One extra commit, not the whole history: the repo carries ~810 MB of
-      # committed geodata (2026-10-06; seven sites), so a deep clone is not
+      # One extra commit, not the whole history: the repo carries ~940 MB of
+      # committed geodata (2026-11-11; seven sites), so a deep clone is not
       # free.
       - name: Fetch the PR base commit
         if: github.event_name == 'pull_request'

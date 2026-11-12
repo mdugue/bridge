@@ -984,7 +984,7 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 
 | Content | Wire size per tile | Triangles |
 |---|---|---|
-| buildings `city_<tile>.glb.gz` | up to 2.0 MB (the laser scan's small structures add 1–12 %, +3.3 % over the site) | ≈143 k on the spawn tile (+2.4 k for its 204 scan structures, 12 each) |
+| buildings `city_<tile>.glb.gz` | up to 4.8 MB, Dresden's fifteen 41 MB (2026-11-11; 59 MB while the bands were cut every metre); the far level up to 4.1 MB, 35 MB | up to 0.87 M a tile, 7.1 M over Dresden (22.4 M before); the plinths, cornices and eave bands are still some 60 % of a dense tile's; the far level up to 0.43 M, 3.7 M |
 | fine terrain `terrain_<tile>_l0.glb.gz` (TIN, ADR 0030) | 1.3–3.6 MB | 0.30–0.49 M (TIN + skirt; the 1024² grid it replaced: ≈2.1 M, 2.15–2.45 MB) |
 | coarse terrain `terrain_<tile>_l1.glb.gz` | 0.4–0.55 MB | ≈0.53 M (512² grid + skirt) |
 | footprints (minimap) | 0.23–0.33 MB | — |
@@ -992,7 +992,7 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 | NDVI raster | 0.3–0.45 MB | — |
 | paving raster (fine level) | 0.6–0.86 MB | — |
 | edge raster (fine level) | 0.34–0.46 MB | — |
-| kerb stones (in the fine terrain) | ≈ 0.2–0.4 MB | ≈ 130–200 k |
+| kerb stones (in the fine terrain) | ≈ 0.2–0.4 MB | up to 319 k, indexed (up to 468 k vertices; 956 k as a triangle soup until 2026-11-11), as the stairs and walls are |
 | canopy points (fine level) | 0.6–9.5 MB raw (forest tiles top) | up to 81 k trees: ≈ 9 MB of instance data once built (trunks, mid and rich crowns share one matrix buffer) |
 | cadastre trees, scan trees, hedges (fine level) | 0.4–0.8 / 0.65 (spawn only) / ≤ 0.03 MB raw | — |
 | coarse crowns (coarse level) | 0.04–0.29 MB (0.07–0.56 MB raw) | 3 700–27 900 crowns, 20 tris each: ≈ 90 B of instance data a crown once built (matrix, tint, season) |
