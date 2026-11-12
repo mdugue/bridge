@@ -1,10 +1,4 @@
-import {
-  BufferGeometry,
-  Color,
-  Float32BufferAttribute,
-  Mesh,
-  MeshStandardNodeMaterial,
-} from "three/webgpu";
+import { Color, Mesh, MeshStandardNodeMaterial } from "three/webgpu";
 import {
   abs,
   attribute,
@@ -18,6 +12,8 @@ import {
 } from "three/tsl";
 import { footprint } from "./bridge-surface";
 import { gdNoise } from "./shader-chunks";
+import { finished } from "@/lib/city/build-steps";
+import { geometrySteps } from "./mesh-kit";
 import type { Pt } from "./mesh-kit";
 import type { F, V2, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
@@ -155,14 +151,12 @@ function sleeperColour(bed: V2): V3 {
 /** The ribbons as one mesh on the scene-wide sleeper material; null when
  *  empty. Never casts (it lies on the bed). */
 export function sleeperMesh(acc: SleeperRibbons): Mesh | null {
-  if (acc.pos.length === 0) {
+  const g = finished(
+    geometrySteps(acc.pos, acc.nrm, [["aSleeper", acc.bed, 2]])
+  );
+  if (!g) {
     return null;
   }
-  const g = new BufferGeometry();
-  g.setAttribute("position", new Float32BufferAttribute(acc.pos, 3));
-  g.setAttribute("normal", new Float32BufferAttribute(acc.nrm, 3));
-  g.setAttribute("aSleeper", new Float32BufferAttribute(acc.bed, 2));
-  g.computeBoundingSphere();
   const material = sceneMaterial("rail-sleepers", () => {
     const m = new MeshStandardNodeMaterial({ roughness: 0.95 });
     m.name = "rail-sleepers";

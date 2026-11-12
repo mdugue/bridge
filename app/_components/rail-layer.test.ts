@@ -77,7 +77,8 @@ test("a yard across an underpass follows the ground, not its corners", () => {
     properties: {},
   };
   const mesh = buildBallast([yard], underpass);
-  const pos = mesh?.geometry.getAttribute("position");
+  // (the mesh is indexed: read triangle by triangle)
+  const pos = mesh?.geometry.toNonIndexed().getAttribute("position");
   expect(pos?.count ?? 0).toBeGreaterThan(0);
   let overStreet = 0;
   if (pos) {

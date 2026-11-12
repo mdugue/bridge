@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
+import { finished } from "@/lib/city/build-steps";
 import type { Ring2 } from "@/lib/city/decks";
 import {
   addColumn,
   addFootprint,
   addRibbon,
   addStrut,
+  geometrySteps,
   mesh3,
   meshFrom,
   quad,
@@ -100,5 +102,44 @@ test("an empty soup makes no mesh, a deck frame of the wrong length is left off"
   expect(mesh?.geometry.getAttribute("aDeck")).toBeUndefined();
   acc.deck = Array.from({ length: 6 * 4 }, () => 1);
   const framed = meshFrom(acc, 0xff_ff_ff, { cast: false });
-  expect(framed?.geometry.getAttribute("aDeck")?.count).toBe(6);
+  // the quad's two triangles share two corners
+  expect(framed?.geometry.getAttribute("aDeck")?.count).toBe(4);
+  expect(framed?.geometry.getAttribute("position").count).toBe(4);
+  expect(framed?.geometry.getIndex()?.count).toBe(6);
+});
+
+test("a mesh reads through its index as the soup it was pushed as", () => {
+  const acc = mesh3();
+  quad(acc, [0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1], [0, 1, 0]);
+  quad(acc, [1, 0, 0], [2, 0, 0], [2, 0, 1], [1, 0, 1], [0, 1, 0]);
+  quad(acc, [0, 0, 0], [1, 0, 0], [1, -1, 0], [0, -1, 0], [0, 0, -1]);
+  const geometry = meshFrom(acc, 0xff_ff_ff, { cast: false })?.geometry;
+  // two quads in a row share an edge; the third shares positions with the
+  // first but faces another way
+  expect(geometry?.getAttribute("position").count).toBe(10);
+  expect(geometry?.getIndex()?.array).toBeInstanceOf(Uint16Array);
+  const soup = geometry?.toNonIndexed();
+  expect([...(soup?.getAttribute("position").array ?? [])]).toEqual(acc.pos);
+  const normal = soup?.getAttribute("normal");
+  expect(normal?.normalized).toBe(true);
+  expect([...(normal?.array ?? [])].map((v) => v / 127)).toEqual(acc.nrm);
+});
+
+test("a normal past the first run of numbers is scaled by its own length", () => {
+  // 22 000 corners: the normals' 66 000 numbers are more than one run
+  const positions: number[] = [];
+  const normals: number[] = [];
+  for (let i = 0; i < 22_000; i += 1) {
+    positions.push(i, 0, 0);
+    // every other corner a normal of another length beside it
+    normals.push(...(i % 2 === 0 ? [0.6, 0.8, 0] : [0, 2, 0]));
+  }
+  const geometry = finished(geometrySteps(positions, normals));
+  const normal = geometry?.getAttribute("normal");
+  expect(normal?.count).toBe(22_000);
+  for (const i of [0, 1, 21_844, 21_845, 21_846, 21_999]) {
+    expect([normal?.getX(i), normal?.getY(i), normal?.getZ(i)]).toEqual(
+      i % 2 === 0 ? [76 / 127, 102 / 127, 0] : [0, 1, 0]
+    );
+  }
 });
