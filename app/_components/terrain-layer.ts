@@ -340,7 +340,7 @@ const groundTilt = property("vec3", "terrainGroundTilt", vec3(0));
  * aliases/shimmers in the far field (the failure mode that got plain
  * foliage translucency rejected as "noise").
  */
-function grassMottle(inp: GroundInputs, colorTexture: Tex): GroundColour {
+function grassMottle(inp: GroundInputs, painted: V3): GroundColour {
   const { xy, cls, fw } = inp;
   const meadow = float(1)
     .sub(step(0.5, abs(cls.sub(MEADOW_CLASS))))
@@ -352,7 +352,7 @@ function grassMottle(inp: GroundInputs, colorTexture: Tex): GroundColour {
     .mul(1.4)
     .add(gdNoise(xy.mul(0.4).add(17.3)).sub(0.5).mul(0.6))
     .toVar();
-  const paths = smoothPaths(inp, texture(colorTexture, inp.uv).rgb);
+  const paths = smoothPaths(inp, painted);
   const col: GroundColour = {
     baseCol: paths.col,
     path: paths.path,
@@ -499,10 +499,9 @@ function contourInk(elevation: F): F {
  * footprint. Under water the ink is gone too (the sheet is translucent, it
  * showed).
  */
-function contourGate(inp: GroundInputs, elevation: F, colorTexture: Tex): F {
+function contourGate(inp: GroundInputs, elevation: F, water: F): F {
   const run = max(length(fwidth(inp.xy)), 1e-4);
   const slope = fwidth(elevation).div(run);
-  const water = texture(colorTexture, inp.uv).a;
   return smoothstep(0.025, 0.09, slope).mul(
     float(1).sub(smoothstep(0.05, 0.4, water))
   );
@@ -535,7 +534,9 @@ function splatColour(splat: SplatNodes): V3 {
       meadowColor: vec3(MEADOW_LINEAR[0], MEADOW_LINEAR[1], MEADOW_LINEAR[2]),
       roadColor: vec3(ROAD_LINEAR[0], ROAD_LINEAR[1], ROAD_LINEAR[2]),
     };
-    const col = grassMottle(inp, splat.colorTexture);
+    // the painted ground, read once: its colour, and in alpha the water
+    const painted = texture(splat.colorTexture, uv).toVar();
+    const col = grassMottle(inp, painted.rgb);
     const g = groundFields(
       inp,
       splat.surface,
@@ -580,12 +581,12 @@ function splatColour(splat: SplatNodes): V3 {
       meadowNdvi(col, coarseNdvi, MEADOW_NDVI);
     }
     arableGround(inp, col, g, coarseNdvi);
-    const baseCol = paperGround(col, texture(splat.colorTexture, uv).a);
+    const baseCol = paperGround(col, painted.a);
     grassDetail.assign(col.detail);
     groundTilt.assign(g.tilt);
     const elevation = positionWorld.y;
     const ink = contourInk(elevation)
-      .mul(contourGate(inp, elevation, splat.colorTexture))
+      .mul(contourGate(inp, elevation, painted.a))
       .mul(contourKept);
     return mix(baseCol, INK, ink);
   })();

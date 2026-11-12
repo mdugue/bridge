@@ -84,6 +84,7 @@ import {
   fetchFeatures,
   fetchOptionalBinary,
   fetchOptionalJson,
+  isAbortError,
 } from "./fetch-optional";
 import { furnitureSteps } from "./furniture-layer";
 import { buildLamps } from "./lamp-layer";
@@ -1941,6 +1942,16 @@ export class DressingPlugin {
     this.settles.set(scene, settle);
     try {
       await this.dressContent(scene, tile);
+    } catch (error) {
+      // A dressing that threw fails the load, and the renderer never
+      // records a failed load's scene: what was dressed so far (the
+      // buildings among `cities`, their late parts) is freed here.
+      if (this.sceneOf.get(tile) === scene) {
+        this.sceneOf.delete(tile);
+      }
+      this.leave(scene);
+      this.release(scene);
+      throw error;
     } finally {
       // The renderer records the content in the continuation of this call
       // and then says so (`landed`); a load it drops says nothing, and by
@@ -2058,14 +2069,30 @@ export class DressingPlugin {
     // What street photos say about the facades lands after the buildings
     // show; until then (and without it) they are drawn as before.
     if (extras.facades) {
-      void fetchOptionalJson<FacadeReadings>(this.url(extras.facades)).then(
-        (readings) => {
-          if (readings && this.dressed.get(scene) === entry) {
-            city.facadeReadings(readings);
-          }
-          return null;
-        }
+      void this.readFacades(scene, entry, city, extras.facades);
+    }
+  }
+
+  /** The facade readings of a city tile, fetched until the stream goes
+   *  (an abort then is no error to report). */
+  private async readFacades(
+    scene: Object3D,
+    entry: Dressed,
+    city: CityLayer,
+    file: string
+  ): Promise<void> {
+    try {
+      const readings = await fetchOptionalJson<FacadeReadings>(
+        this.url(file),
+        this.lifetime.signal
       );
+      if (readings && this.dressed.get(scene) === entry) {
+        city.facadeReadings(readings);
+      }
+    } catch (error) {
+      if (!isAbortError(error)) {
+        throw error;
+      }
     }
   }
 

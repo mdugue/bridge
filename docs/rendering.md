@@ -1766,7 +1766,10 @@ after the frame. create-app.ts's callbacks are unchanged:
 069). Every span is counted by its category — `tile:city`, `tile:bvh`,
 `tile:rasters`, `tile:compile`, `tile:handover-wait`,
 `dressing:queue-wait`, `dressing:build`, `dressing:compile`,
-`dressing:asks`, the boot's last steps before the light stage
+`dressing:asks`, the boot's way to the first frame (`boot:page-to-viewer`
+from the navigation to the viewer's code, `boot:renderer-init`,
+`boot:tileset`, `boot:setup` from the tileset to the wait for the first
+tiles, `boot:spawn-wait`), its last steps before the light stage
 (`boot:scene-compile`, `boot:place` — the spawn tile's BVH among it —
 and `boot:light-wait`), `boot:frame` (the first 60 frames at the start
 pose), `boot:first-shadow-frame`, `boot:light-to-veil`,

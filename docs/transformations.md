@@ -5408,8 +5408,9 @@ GPU**.
   committed) → `pipeline/bake/transit.py`, **site-wide** →
   `data/dresden/transit/trams.json` (≈ 680 KB): 12 lines, 127 stop patterns, 264
   running-time profiles, 2 598 / 2 002 / 1 629 trips on a working day /
-  Saturday / Sunday (the busiest day of each kind in the next three weeks:
-  3 October 2026, a holiday, lost to the 10th). The feed has no shapes:
+  Saturday / Sunday (the busiest day of each kind in the three weeks from
+  the feed's date: 3 October 2026, a holiday, lost to the 10th). The feed
+  has no shapes:
   each leg is laid on the OSM tram tracks (`tram_<tile>.geojson`) as the
   shortest way between the tracks near its two platforms, a metre from
   platform to track weighing three of way, so a car keeps to the track

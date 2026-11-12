@@ -263,6 +263,7 @@ import {
 } from "./visual-style";
 import { setWaterTime } from "./water-layer";
 import { createModelCuts } from "./model-cuts";
+import { runCleanups } from "./cleanups";
 import * as dataLayersModule from "./data-layers-feature";
 import {
   createHook,
@@ -860,7 +861,10 @@ async function createRenderer(
     reversedDepthBuffer: reversedDepthFromSearch(window.location.search),
   });
   try {
-    await renderer.init();
+    await streamTimings.timed(
+      "boot:renderer-init",
+      async () => await renderer.init()
+    );
   } catch (error) {
     // No adapter and no WebGL2 either (the preflight only sees that
     // `navigator.gpu` exists): free what init made, and say why in the
@@ -1216,6 +1220,13 @@ export async function createCityWalkApp(
   // before the first build: WebKit's slices otherwise wait for a clamped
   // timer (main-yield.ts)
   installMainYield();
+  // What the page spent before the viewer's code ran: its HTML, the
+  // hydration, this chunk (on a page opened at the city's route; one come
+  // to from another page counts from that page's load).
+  if (streamTimings.markedAt("boot:viewer-start") === undefined) {
+    streamTimings.since("boot:page-to-viewer", 0);
+    streamTimings.markOnce("boot:viewer-start");
+  }
   const renderer = await createRenderer(
     opts.container,
     opts.budget,
@@ -1258,9 +1269,15 @@ export async function createCityWalkApp(
   } catch (error) {
     // Centralized teardown: covers both abort (StrictMode remount) and real
     // load failures — otherwise the dead canvas would linger in the DOM.
-    void teardown(cleanups, scene, renderer);
+    void teardown(cleanups, scene, renderer).catch(reportTeardown);
     throw error;
   }
+}
+
+/** A teardown that threw has still released the renderer: the error goes
+ *  to the page's handler (and so to the reports), never unhandled. */
+function reportTeardown(error: unknown): void {
+  globalThis.reportError?.(error);
 }
 
 /**
@@ -1275,9 +1292,17 @@ async function teardown(
   scene: Scene,
   renderer: WebGPURenderer
 ): Promise<void> {
-  runCleanups(cleanups);
-  disposeObject3D(scene);
-  await releaseRenderer(renderer);
+  try {
+    try {
+      runCleanups(cleanups);
+    } finally {
+      // (`runCleanups` throws what a cleanup threw, after the last one)
+      disposeObject3D(scene);
+    }
+  } finally {
+    // whatever a cleanup threw, the renderer and its device go
+    await releaseRenderer(renderer);
+  }
 }
 
 /**
@@ -1301,8 +1326,11 @@ async function teardownWhole(
   }) => void
 ): Promise<void> {
   try {
-    runCleanups(cleanups);
-    disposeObject3D(scene);
+    try {
+      runCleanups(cleanups);
+    } finally {
+      disposeObject3D(scene);
+    }
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
     });
@@ -1335,13 +1363,6 @@ async function releaseRenderer(renderer: WebGPURenderer): Promise<void> {
   });
   renderer.domElement.remove();
   await released;
-}
-
-/** Unwinds registered teardowns in reverse creation order. */
-function runCleanups(cleanups: (() => void)[]): void {
-  for (const cleanup of [...cleanups].reverse()) {
-    cleanup();
-  }
 }
 
 /** The whole site's extent in EPSG coordinates (the minimap frame). */
@@ -1393,6 +1414,12 @@ async function bootApp(
 ): Promise<CityWalkHandle> {
   const { container, budget } = opts;
   let disposed = false;
+  // A boot that fails or is aborted is torn down without `leave()`: what
+  // still resolves afterwards (a plate, a stats timer, a cut-out) must
+  // find the app gone. First in, so it holds once every cleanup has run.
+  cleanups.push(() => {
+    disposed = true;
+  });
   const framedBuilds = framedBuildCounter(renderer);
 
   const camera = new PerspectiveCamera(
@@ -1470,7 +1497,12 @@ async function bootApp(
   stage("buildings", 0);
   // What the viewer needs before any content: the frame and the tile list.
   const tilesetUrl = new URL(opts.tilesetUrl, window.location.href).href;
-  const tileset = await fetchRequiredJson<unknown>(tilesetUrl, opts.signal);
+  const tileset = await streamTimings.timed(
+    "boot:tileset",
+    async () => await fetchRequiredJson<unknown>(tilesetUrl, opts.signal)
+  );
+  // everything from here to the wait for the first tiles (`boot:setup`)
+  const setupStarted = streamTimings.now();
   const extras = parseTilesetExtras(tileset);
   // the walks name their file beside the tileset's own extras (WalksExtras)
   const walksFile = (extras as WalksExtras).walks;
@@ -3620,6 +3652,7 @@ async function bootApp(
     note: (e) => opts.trail?.note(e.event, e.detail),
     stopRender: () => {
       void renderer.setAnimationLoop(null);
+      dropCaptures();
     },
     reload: () => {
       const reload = reloadNow;
@@ -3730,6 +3763,18 @@ async function bootApp(
     ctx: CanvasRenderingContext2D;
     imagePxPerCssPx: number;
   } | null = null;
+  /** No frame will draw them: the pictures asked for and the one in the
+   *  making settle, so an export's veil comes down (city-walk.tsx). */
+  const dropCaptures = () => {
+    const gone = new Error("Die Ansicht wurde beendet.");
+    for (const request of captureQueue.splice(0)) {
+      request.reject(gone);
+    }
+    const c = capture;
+    capture = null;
+    c?.request.reject(gone);
+  };
+  cleanups.push(dropCaptures);
   // The picture is saved at the tier's resolution, not at the one the
   // frame rate took (rescale, below, takes it back after the export).
   const basePixelRatio = renderer.getPixelRatio();
@@ -4295,6 +4340,8 @@ async function bootApp(
     city: stream.visibleCities().some((c) => startsOn(c.tile)),
     terrain: stream.visibleTerrains().some((t) => startsOn(t.tile)),
   });
+  streamTimings.since("boot:setup", setupStarted);
+  const waitStarted = streamTimings.now();
   await new Promise<void>((resolve, reject) => {
     const poll = () => {
       if (disposed || opts.signal?.aborted) {
@@ -4316,6 +4363,7 @@ async function bootApp(
     };
     poll();
   });
+  streamTimings.since("boot:spawn-wait", waitStarted);
   firstFrameShown = true;
   bootTile = null;
   lifecycle.dispatch({ kind: "firstFrame" });
@@ -4340,6 +4388,7 @@ async function bootApp(
   // over the fallback floor). Its buildings' BVH is built here, as the
   // placing's rays reach them (ADR 0032: never inside a building) — after
   // the tile's ground has landed, not inside the parse that landed them.
+  ensureAlive();
   bvhOnDemand = true;
   streamTimings.timedSync("boot:place", () => placeStart());
   streamTimings.markOnce("boot:placed");
@@ -4353,6 +4402,7 @@ async function bootApp(
     "boot:light-wait",
     async () => await withinCompileWait(firstShadowFrame())
   );
+  ensureAlive();
   // The sun rig, the shadow map and the clay materials are up: this is the
   // first renderable frame, and the point the HUD hands over to the pill.
   stage("light", 1);
@@ -4695,7 +4745,7 @@ async function bootApp(
         // Same list, same order as a failed boot unwinds: animation loop ->
         // resize observer -> listeners -> touch -> post stack -> stream ->
         // lights -> sun rig.
-        void teardown(cleanups, scene, renderer);
+        void teardown(cleanups, scene, renderer).catch(reportTeardown);
       }
     },
     disposeForReload: async () => {
