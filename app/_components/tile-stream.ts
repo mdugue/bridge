@@ -105,6 +105,7 @@ import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures } from "./sport-fixtures";
 import type { SportFixtureLayer } from "./sport-fixtures";
 import { cpuDroppable, createGridShare, dressTerrain } from "./terrain-layer";
+import type { FetchBounds } from "@/lib/city/fetch-order";
 import type { ReachBox } from "@/lib/city/ground-reach";
 import type { GridShare, GroundUniforms, TerrainLayer } from "./terrain-layer";
 import { dressFences } from "./fence-layer";
@@ -306,6 +307,9 @@ export interface TileStreamContext {
   /** whether a ground level lying in `box` starts on its close-range
    *  rasters' twins (ground-reach-follow.ts); without it, the full ones */
   groundFar?: (box: ReachBox) => boolean;
+  /** a tile's place in the rasters' downloads, from its bounds: its
+   *  distance from the eye (lib/city/fetch-order.ts); unset, as asked */
+  rasterRank?: (bounds: FetchBounds) => number;
   /** the scene's season and look (scene-environment.ts): a dressing
    *  lands with them as they are now */
   environment: DressingEnvironment;
@@ -2195,7 +2199,10 @@ export class DressingPlugin {
   ): void {
     const bounds = this.ctx.tileBounds(extras.tileId);
     // not weighed: a building tile weighs no raster
-    entry.svf = this.rasters.holder(scene, { weighed: false });
+    entry.svf = this.rasters.holder(scene, {
+      rank: bounds && this.ctx.rasterRank?.(bounds),
+      weighed: false,
+    });
     void entry.svf.acquire("svf", extras).then((texture) => {
       const { city } = entry;
       if (texture && bounds && city && this.dressed.get(scene) === entry) {
@@ -2233,7 +2240,9 @@ export class DressingPlugin {
     this.loadAborts.set(scene, own);
     const either = eitherSignal(own.signal, this.lifetime.signal);
     let terrain: TerrainLayer;
-    const rasters = this.rasters.holder(scene);
+    const rasters = this.rasters.holder(scene, {
+      rank: this.ctx.rasterRank?.(extras.bounds),
+    });
     try {
       terrain = await dressTerrain(mesh, extras, toData, {
         fogColor: this.ctx.fogColor,
@@ -2741,15 +2750,42 @@ export function dropLoaderResult(tile: unknown): void {
 }
 
 /**
- * How many tile contents a phone downloads (per origin) and parses at once.
- * The tile renderer's own queues (25 downloads, 5 parses) asked for the
+ * How many tile contents a phone parses at once (its downloads:
+ * `STREAM_DOWNLOADS`). The tile renderer's own queues (25 downloads, 5
+ * parses) asked for the
  * boot's eleven contents in one millisecond, and a parse holds its decoded
  * glTF, its rasters and its compile until it is through: several hundred
  * MB on the page's process before anything reached the GPU, and Safari
  * ended the page at the first frame. Two parses keep a neighbour coming
  * while the spawn tile compiles.
  */
-export const PHONE_STREAM = { parses: 2, downloadsPerOrigin: 4 } as const;
+export const PHONE_STREAM = { parses: 2 } as const;
+
+/**
+ * How many tile contents download at once (per origin): a desktop's
+ * six, a phone's four — and three on every tier until the boot's first
+ * frame. The renderer's own 25 asked for every content in view in one go
+ * (fifteen files, 24 MB at Dresden's start), and over one connection they
+ * share the line evenly with the rasters: on a 10 Mbit line the spawn
+ * tile's coarse ground, 2 MB of rasters asked for at second 8, had them at
+ * second 29. A few at a time, in our order (the boot's tile first, the
+ * coarse ground before the buildings, nearer before farther), the line
+ * goes to what the first frame waits for; a fast line is kept busy by six.
+ */
+export const STREAM_DOWNLOADS = { boot: 3, desktop: 6, mobile: 4 } as const;
+
+/** Sets how many contents `tiles` downloads at once: the boot's few, or
+ *  the tier's from its first frame on (create-app.ts). */
+export function setStreamDownloads(
+  tiles: TilesRenderer,
+  tier: DeviceTier,
+  booting: boolean
+): void {
+  // reason: the queue is ours (`orderStreaming`), a DownloadPriorityQueue
+  tiles.downloadQueue.maxJobsPerOrigin = booting
+    ? STREAM_DOWNLOADS.boot
+    : STREAM_DOWNLOADS[tier];
+}
 
 /**
  * Gives the renderer queues of its own, in our order (lib/city/stream-order.ts:
@@ -2773,12 +2809,9 @@ export function orderStreaming(
   parse.priorityCallback = order;
   tiles.parseQueue = parse;
   const download = new DownloadPriorityQueue();
-  download.maxJobsPerOrigin =
-    tier === "mobile"
-      ? PHONE_STREAM.downloadsPerOrigin
-      : tiles.downloadQueue.maxJobsPerOrigin;
   download.priorityCallback = order;
   tiles.downloadQueue = download;
+  setStreamDownloads(tiles, tier, bootTile() !== null);
   // a full cache admits loads in the order it keeps tiles: ground first
   // there too (the cache is the renderer's module-wide one, used by no
   // other renderer here; wrapped once)

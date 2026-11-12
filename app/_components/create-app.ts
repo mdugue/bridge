@@ -21,6 +21,7 @@ import type {
 } from "three/webgpu";
 import { uniform } from "three/tsl";
 import { fogRangeFor, streamFarFor } from "@/lib/city/atmosphere";
+import { fetchRank } from "@/lib/city/fetch-order";
 import { FLAG_HEIGHT_MAX } from "@/lib/city/furniture";
 import { plateOf } from "@/lib/city/ground-plate";
 import { utmToLatLng } from "@/lib/city/crs";
@@ -212,6 +213,7 @@ import {
   createTileStream,
   DRESSING_PART_NAMES,
   DRESSING_PARTS,
+  setStreamDownloads,
 } from "./tile-stream";
 import { withinCompileWait } from "./late-parts";
 import type { CpuBytes, DressingPartName, TileDressing } from "./tile-stream";
@@ -1786,6 +1788,12 @@ async function bootApp(
       // (the follow is made with the capture, further down; a level that
       // lands before it starts on its full rasters)
       groundFar: (box) => groundReach?.startsFar(box) ?? false,
+      // (the stream's twin camera: where the tiles are asked from)
+      rasterRank: (bounds) =>
+        fetchRank(bounds, {
+          e: offset.cx + streamCamera.position.x,
+          n: offset.cy - streamCamera.position.z,
+        }),
       dressingGate,
       bootTile: () => bootTile,
       fogColor: sceneFog.color,
@@ -4102,6 +4110,8 @@ async function bootApp(
   streamTimings.since("boot:spawn-wait", waitStarted);
   firstFrameShown = true;
   bootTile = null;
+  // (the line was the spawn tile's until here)
+  setStreamDownloads(stream.tiles, budget.tier, false);
   // what the stream did not take, it will not: the boot is over
   ahead.release();
   lifecycle.dispatch({ kind: "firstFrame" });

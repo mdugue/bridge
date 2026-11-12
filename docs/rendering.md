@@ -953,6 +953,7 @@ the safety levels 1, 2 and 3:
 | Shadow rings, four of | 2048² (1024², 1024², 512²) | 900² (900², 360², 360²) | 256² |
 | Shadow camera streams at | 128 px, by day; from level 2 never | never | as the tier |
 | Rasters decoding at once (`RASTER_TURNS`) | 5 | 1 | as the tier |
+| Rasters downloading at once (`RASTER_FETCHES`), the nearest tile's first | 6 | 6 | as the tier |
 | Pixel ratio | ≤ 1.5 (1.25, 1.0, 1.0; ≤ 2 until 2026-10-10: a retina laptop's 5.2 MP of post stack, 1.5 is 56 % of it), × 0.85 / 0.72 / 0.6 while the GPU misses 50 fps (`lib/city/resolution-scale.ts`) | ≤ 1.5 (1.25, 1.0, 0.85), × 0.85 / 0.72 while it misses 40 fps | 0.5, never scaled |
 | Post (`postProfileFor`) | DoF, SMAA, only the outline warmed | no DoF, FXAA, only the outline warmed | as the tier |
 | Land-cover rasters | L0 4096², its splat 2048² (85 → 21 MiB with mips, since 2026-10-10), L1 1024² | L0 2048², L1 1024²; no sports raster | as the tier |
@@ -965,7 +966,7 @@ the safety levels 1, 2 and 3:
 | Real lamp lights (`LAMP_LIGHTS`, every lit fragment shades each, by day too) | 3 | 1 | as the tier |
 | Lamps lighting the walls and fountains (`STREET` in lamp-reflections.ts, a loop over each lit wall pixel at night only) | 48 | 12 | as the tier |
 | The walker's lantern (`lantern.ts`, one more light) | with a 512² cube shadow | no shadow | as the tier |
-| Tile contents at once | 5 parses, 25 downloads per origin | 2 parses, 4 downloads per origin | as the tier |
+| Tile contents at once | 5 parses, 6 downloads per origin (`STREAM_DOWNLOADS`; 3 until the boot's first frame, so the line is the spawn tile's) | 2 parses, 4 downloads per origin (3 until the first frame) | as the tier |
 | Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 150–285 MiB (118–249, 96–228, 64–196) | as the tier |
 | Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 420 / 460 MB (a last one 10 s past 460; 480 / 560 until two walk crashes); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
 
@@ -1256,7 +1257,7 @@ stays their measure; the tile cache counts true bytes.
   it — stops its raster loads where they are (`DressingPlugin`'s
   per-content abort): it decodes and uploads nothing more, and lets go
   of the shared rasters it waited for at once. And a phone parses two
-  tile contents and downloads four per origin at once (`PHONE_STREAM`,
+  tile contents and downloads four per origin at once (`PHONE_STREAM`, `STREAM_DOWNLOADS`,
   the renderer's own queues replaced before its first update), where the
   boot asked for eleven contents in one millisecond.
   Two rules follow: an attribute read on the CPU after the dressing (the
@@ -1849,9 +1850,12 @@ after the frame. create-app.ts's callbacks are unchanged:
 069). Every span is counted by its category — `tile:city`, `tile:bvh`,
 `tile:rasters` (a ground level's whole dressing; within it
 `terrain:rasters`, its wait for all its rasters, and `terrain:ground`,
-the ground worker; per raster `raster:fetch`, `raster:turn-wait` at the
-decode gate and `raster:decode`, the inflate with the upload),
-`tile:compile`, `tile:handover-wait`,
+the ground worker; per raster `raster:fetch-wait` in the downloads'
+line, `raster:fetch`, `raster:turn-wait` at the decode gate and
+`raster:decode`, the inflate with the upload),
+`tile:compile` (within it, per drawable, `compile:turn-wait` behind
+the compiles in flight and `compile:call`, its own `compileAsync`),
+`tile:handover-wait`,
 `dressing:queue-wait`, `dressing:build`, `dressing:compile`,
 `dressing:asks`, the boot's way to the first frame (`boot:page-to-viewer`
 from the navigation to the viewer's code, `boot:renderer-init`,
