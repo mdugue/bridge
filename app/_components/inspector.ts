@@ -12,11 +12,6 @@ import type { WebGPURenderer } from "three/webgpu";
  * the privacy page) and turns the backend's timestamps on.
  */
 
-/** Whether the page was opened with `?inspect=1`. */
-export function inspectRequested(search: string): boolean {
-  return new URLSearchParams(search).get("inspect") === "1";
-}
-
 /**
  * Puts three's Inspector on the renderer; the returned teardown gives the
  * renderer back a bare inspector (which takes the panel off the page and

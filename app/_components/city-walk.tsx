@@ -54,7 +54,6 @@ import { GpuFailureCard } from "./gpu-failure-card";
 import { pageRecovery } from "./gpu-recovery";
 import { raiseSafety, resetSafety } from "./gpu-safety";
 import { VEIL_HOLD_MS } from "./handover";
-import { streamTimings } from "./stream-timing";
 import { createScenePace, settle, startScene } from "./scene-client";
 import type { CityWalkHandle } from "./scene-client";
 import { LoadScreen } from "./load-screen";
@@ -419,6 +418,21 @@ const nothingToClean = (): void => {
   // the boot has not begun: no scene, no listeners, no timers
 };
 
+/** How long a reload waits at most for the scene to let its GPU go (ms). */
+const RELOAD_WAIT_MS = 1000;
+
+/** Reloads the page once the scene let its GPU go (`letGo`), failed to,
+ *  or kept silent for `RELOAD_WAIT_MS`: the reload comes either way. */
+async function reloadWithin(letGo: Promise<void> | undefined): Promise<void> {
+  await Promise.race([
+    letGo?.catch(() => null),
+    new Promise((resolve) => {
+      setTimeout(resolve, RELOAD_WAIT_MS);
+    }),
+  ]);
+  location.reload();
+}
+
 /** (image-export.ts is the scene's: loaded with it, not with the HUD) */
 const saveImageLazily = async (
   h: CityWalkHandle,
@@ -699,8 +713,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
         recovery.current?.capture() ?? null
       );
     }
-    const released = handleRef.current?.releaseGpu() ?? Promise.resolve();
-    void released.then(() => location.reload());
+    void reloadWithin(handleRef.current?.releaseGpu());
   };
   /**
    * *Qualität*'s way back to full detail: level 0 from the next page on,
@@ -720,8 +733,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
         { kind: "reset" },
         recovery.current?.capture() ?? null
       );
-      const gone = handleRef.current?.disposeForReload() ?? Promise.resolve();
-      void gone.then(() => location.reload());
+      void reloadWithin(handleRef.current?.disposeForReload());
     }
     return true;
   };
@@ -975,10 +987,10 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
           },
         });
       })
-      .then((h) => {
+      .then((h): Promise<void> | null => {
         if (aborter.signal.aborted) {
-          h.dispose();
-          return null;
+          // the next boot waits for this one's teardown (lastBoot)
+          return h.dispose();
         }
         handle = h;
         handleRef.current = h;
@@ -1020,13 +1032,9 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
         // Then the glass is removed, in one frame, with nothing in between.
         veilTimer = setTimeout(() => {
           setVeilUp(false);
-          // how late the veil's timer fired after the light stage: what a
-          // busy page shows as a load frozen at 52 % (stream-timing.ts)
-          streamTimings.markOnce("boot:veil-drop");
-          const light = streamTimings.markedAt("boot:light-done");
-          if (light !== undefined) {
-            streamTimings.since("boot:light-to-veil", light);
-          }
+          // the trace's veil marks are the scene's: its thread times the
+          // light stage and the load (stream-timing.ts)
+          h.veilDropped();
         }, VEIL_HOLD_MS);
         // The dressing (vegetation, lamps, rails, walls) and the terrain BVHs wait until
         // then: each is a long synchronous task, and the frames while the city
@@ -1069,7 +1077,16 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
       clearTimeout(veilTimer);
       clearTimeout(streamFallback);
       handleRef.current = null;
-      handle?.dispose();
+      if (handle) {
+        // the next boot waits for this teardown too: a worker ends up to
+        // seconds later, and two devices are not held at once
+        const gone = handle.dispose();
+        const booted = lastBoot.current;
+        lastBoot.current = (async () => {
+          await booted;
+          await gone;
+        })();
+      }
       // The hook must not keep a disposed scene callable (or alive): the
       // next boot republishes.
       updatePocDebug({

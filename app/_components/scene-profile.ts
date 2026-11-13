@@ -67,6 +67,12 @@ export function reversedDepthFromSearch(search: string): boolean {
   return new URLSearchParams(search).get("depth") !== "standard";
 }
 
+/** Whether the page was opened with `?inspect=1`: three's Inspector
+ *  (inspector.ts), which also keeps the scene on the page. Pure. */
+export function inspectRequested(search: string): boolean {
+  return new URLSearchParams(search).get("inspect") === "1";
+}
+
 /**
  * `?scene=lite&block=1` streams the whole site in the lite profile — a QA
  * knob for exercising the tile streaming (tile-stream.ts) headless,

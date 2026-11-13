@@ -42,6 +42,8 @@ export interface SceneInit {
   /** the stops the page recovers from by a reload (gpu-recovery.ts) */
   reloadable: GpuLoss[];
   page: PageState;
+  /** the page's `performance.timeOrigin` (`boot:page-to-viewer`) */
+  pageOrigin: number;
   /** the page keeps a crash trail: the scene notes into it */
   trail: boolean;
   /** the specs' probes set before the boot (poc-debug.ts) */

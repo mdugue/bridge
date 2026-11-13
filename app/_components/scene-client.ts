@@ -25,7 +25,6 @@ import type {
   SceneKeys,
 } from "./create-app";
 import { NO_GPU_MESSAGE } from "./gpu-support";
-import { inspectRequested } from "./inspector";
 import type { ModelHud, ViewMode } from "./model-rig";
 import { plateLetters } from "./nameplate-glyphs";
 import { pageState } from "./page-view";
@@ -43,6 +42,7 @@ import type {
   ToScene,
   WorkerHello,
 } from "./scene-protocol";
+import { inspectRequested } from "./scene-profile";
 import type { SceneBudget } from "./scene-profile";
 import {
   attachSceneInput,
@@ -96,6 +96,7 @@ const TOLD = [
   "toggleModel",
   "turnModel",
   "turnModelTo",
+  "veilDropped",
 ] as const satisfies readonly (keyof SceneApp)[];
 type Told = (typeof TOLD)[number];
 
@@ -159,7 +160,9 @@ export type CityWalkHandle = SceneStatic & {
   /** Settles once the scene has taken every call made before it and
    *  sent its mirror after them: a read after a write. */
   sync: () => Promise<void>;
-  dispose: () => void;
+  /** Ends the scene; settles once its teardown is through (a worker's
+   *  device gone with it, `WORKER_TEARDOWN_MS` at most). Never rejects. */
+  dispose: () => Promise<void>;
 };
 
 /**
@@ -500,8 +503,13 @@ function inputSink(client: Client): {
   };
 }
 
-/** How often the HUD's panels are measured while a nameplate shows (ms). */
+/** How often the HUD's panels are measured (ms). */
 const COVERS_MS = 250;
+
+/** How long the page waits at most for a disposed worker's answer, or an
+ *  aborted boot's end, before it ends the worker (ms): its GPU device goes
+ *  with it either way. */
+const WORKER_TEARDOWN_MS = 3000;
 
 /**
  * Starts the scene and settles with its handle once its first frame drew;
@@ -528,6 +536,7 @@ export async function startScene(
     look: opts.look.get(),
     reloadable: opts.reloadable(),
     page: pageState(),
+    pageOrigin: performance.timeOrigin,
     trail: opts.trail !== undefined,
     probe: pocProbeNow(),
     covered: opts.pace.covered,
@@ -595,12 +604,25 @@ async function bootOver(
     stops.push(
       watchPage((state, event) => client.post({ t: "page", state, event }))
     );
+    // and the page as it stands now: the init's was read before the
+    // worker said hello, and a change since reached no one
+    client.post({ t: "page", state: pageState() });
   }
   let info: SceneStatic;
   try {
-    // an abort: the boot aborts itself, and its "failed" follows
-    const onAbort = () => client.tell("dispose", []);
     info = await new Promise<SceneStatic>((resolve, reject) => {
+      // an abort: the boot aborts itself, and its "failed" follows; a
+      // worker that does not end it in time is ended all the same
+      let grace: ReturnType<typeof setTimeout> | undefined;
+      const onAbort = () => {
+        client.tell("dispose", []);
+        if (channel.thread === "worker") {
+          grace = setTimeout(() => {
+            done();
+            reject(new DOMException("CityWalk startup aborted", "AbortError"));
+          }, WORKER_TEARDOWN_MS);
+        }
+      };
       if (opts.signal.aborted) {
         onAbort();
       } else {
@@ -620,6 +642,7 @@ async function bootOver(
       // (an uncaught error in the worker is reported, not fatal: the boot
       // fails by its own "failed")
       const done = () => {
+        clearTimeout(grace);
         opts.signal.removeEventListener("abort", onAbort);
         channel.port.removeEventListener("message", onMessage);
       };
@@ -646,19 +669,19 @@ async function bootOver(
   scenePace.setCovered(opts.pace.covered);
   scenePace.setListening(opts.pace.listening);
   stops.push(opts.pace.follow(scenePace));
-  // the HUD's panels, while a nameplate shows (it keeps clear of them)
+  // the HUD's panels (a nameplate keeps clear of them): measured from the
+  // start, so a plate's first placement knows them; sent when they moved
   let lastCovers = "";
-  const covers = setInterval(() => {
-    if (!client.mirror()?.nameplate) {
-      return;
-    }
+  const measureCovers = () => {
     const boxes = coverBoxes(canvas);
     const said = JSON.stringify(boxes);
     if (said !== lastCovers) {
       lastCovers = said;
       client.tell("setCovers", [boxes]);
     }
-  }, COVERS_MS);
+  };
+  measureCovers();
+  const covers = setInterval(measureCovers, COVERS_MS);
   stops.push(() => clearInterval(covers));
   // the stops recoverable now: the records age, and the scene decides at
   // the stop, where it cannot ask (a message, not a call: it wakes nothing)
@@ -688,10 +711,6 @@ async function bootOver(
 
 /** How often the page asks again which stops it recovers from (ms). */
 const RELOADABLE_MS = 30_000;
-
-/** How long the page waits at most for a disposed worker's answer before
- *  it ends it (ms): its GPU device goes with it either way. */
-const WORKER_TEARDOWN_MS = 3000;
 
 function handleOf(
   client: Client,
@@ -783,7 +802,7 @@ function handleOf(
     disposeForReload: async () => {
       await finish(client.ask("disposeForReload", []));
     },
-    dispose: () => {
+    dispose: async () => {
       // the scene tears itself down and answers; a worker that does not
       // answer in time is ended all the same (its device goes with it)
       const answered = client.ask("dispose", []);
@@ -796,7 +815,7 @@ function handleOf(
               }),
             ])
           : answered;
-      void finish(gone);
+      await finish(gone);
     },
   };
 }

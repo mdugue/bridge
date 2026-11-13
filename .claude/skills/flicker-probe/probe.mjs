@@ -7,17 +7,18 @@
 // after one more step to the camera's right).
 import { chromium } from "playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
-const [outDir, stylesArg, query = "gpu=webgl2", W = "960", H = "600", date = "2026-10-30T12:00:00.000Z", extra = "{}"] = process.argv.slice(2);
+const [outDir, stylesArg, query = "", W = "960", H = "600", date = "2026-10-30T12:00:00.000Z", extra = "{}"] = process.argv.slice(2);
 const styles = stylesArg.split(",");
 mkdirSync(outDir, { recursive: true });
 const t0 = Date.now();
 const log = (...a) => console.log(((Date.now() - t0) / 1000).toFixed(0) + "s", ...a);
-const browser = await chromium.launch({ executablePath: process.env.CHROME, args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
+// the e2e's WebGPU on SwiftShader's Vulkan (e2e/city-walk.spec.ts)
+const browser = await chromium.launch({ executablePath: process.env.CHROME, args: ["--enable-unsafe-webgpu", "--use-webgpu-adapter=swiftshader", "--enable-features=Vulkan", "--use-vulkan=swiftshader", "--use-angle=swiftshader"] });
 const page = await browser.newPage({ viewport: { width: +W, height: +H } });
 page.on("pageerror", (e) => log("pageerror", e.message));
 page.on("console", (m) => { if (m.type() === "error") log("console", m.text().slice(0, 300)); });
 if (process.env.POSE) await page.addInitScript((pose) => { window.__probePose = JSON.parse(pose); }, process.env.POSE);
-await page.goto(`${process.env.BASE_URL ?? "http://localhost:3000"}/dresden?${query}`);
+await page.goto(`${process.env.BASE_URL ?? "http://localhost:3000"}/dresden${query ? `?${query}` : ""}`);
 await page.waitForFunction(() => window.__poc?.firstFrame === true, undefined, { timeout: 1_500_000, polling: 2000 });
 log("first frame");
 const pose = await page.evaluate(([d, ex]) => {

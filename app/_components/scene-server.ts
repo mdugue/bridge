@@ -260,14 +260,28 @@ export function serveScene(
       }
       case "call": {
         if (message.m === "dispose" && !app) {
-          // a boot not up yet is aborted, and tears itself down
+          // a boot not up yet is aborted, and tears itself down; the head
+          // start goes too (the worker's has no signal of its own)
           aborter.abort();
+          ahead?.release();
           break;
         }
         if (!app) {
           // a call before the first frame (a resize, the sheet): made
           // once the scene is up
           beforeBoot.push(event);
+          break;
+        }
+        if (disposed) {
+          // a disposed scene takes no call; one that waits is answered
+          if (message.id !== undefined) {
+            send({
+              t: "reply",
+              id: message.id,
+              ok: false,
+              error: errorMessage(new Error("Die Ansicht wurde beendet.")),
+            });
+          }
           break;
         }
         void reply(message.id, () => {
@@ -315,6 +329,7 @@ export function serveScene(
         letters,
         signal: aborter.signal,
         ahead,
+        pageOrigin: init.pageOrigin,
       });
     } catch (error) {
       clearInterval(idleMirror);
@@ -331,7 +346,8 @@ export function serveScene(
     }
     const { landmarks, latLng, mapPicture, offset, provenanceUrl } = booted;
     const { terrainBounds, walksUrl } = booted;
-    lastMirror = JSON.stringify(mirrorOf(booted));
+    const mirror = mirrorOf(booted);
+    lastMirror = JSON.stringify(mirror);
     send({
       t: "ready",
       info: {
@@ -343,7 +359,7 @@ export function serveScene(
         terrainBounds,
         walksUrl,
       },
-      mirror: mirrorOf(booted),
+      mirror,
     });
     for (const event of beforeBoot.splice(0)) {
       onMessage(event);

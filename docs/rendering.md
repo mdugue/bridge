@@ -1596,7 +1596,11 @@ worker gets the no-GPU message (`?thread=main` runs the same server on
 the page, for debugging). Everything the HUD reads every frame — the camera,
 the pose, Modell's state, what streams — comes back in the mirror the
 scene sends when it changed; `__poc.handle` is that client, so its value
-calls are promises.
+calls are promises. A scene ends when it answers `dispose` or, a worker,
+3 s on (`WORKER_TEARDOWN_MS`; its device goes with it): `dispose()`
+settles then, and the next boot waits for it. A boot aborted on the way
+releases the worker's head start, and the page ends a worker that has
+not ended it 3 s later.
 
 The **first frame** waits on the spawn tile's buildings and *any* of its
 terrain levels (`bootApp` in `create-app.ts`); the player is then placed
@@ -1875,11 +1879,15 @@ tiles, `boot:spawn-wait`), its last steps before the light stage
 (`boot:scene-compile`, `boot:place` — the spawn tile's BVH among it —
 and `boot:light-wait`), `boot:frame` (the first 60 frames at the start
 pose), `boot:first-shadow-frame`, `boot:light-to-veil`,
-`boot:veil-to-loaded`. With `?trace=1` each span also lands on the
-browser's own timeline (DevTools' and Web Inspector's *Timings* track)
-with its tile id, the long tasks are counted where the browser reports
-them (Chromium; Safari has none), and the page prints the table once
-loaded and 20 s later (`console.table`). The names are a contract for
+`boot:veil-to-loaded`. The timings are the scene's thread's: the page
+tells it when the veil dropped (`veilDropped`) and when it navigated (the
+init's `pageOrigin`), so every boot span is measured there. With
+`?trace=1` each span also lands on that thread's timeline (DevTools' and
+Web Inspector's *Timings* track) with its tile id, and the scene prints
+the table once loaded and 20 s later (`console.table`). The long tasks
+(`longtask`) and the crash trail's `heapMB` are the page's alone: a
+worker reports neither, so they are counted only with `?thread=main`
+(Chromium; Safari reports no long tasks). The names are a contract for
 later perf work: add one rather than rename one. None of it reaches the
 crash trail or the reports — a tile's id names where the player was.
 

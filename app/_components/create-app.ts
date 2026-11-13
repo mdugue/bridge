@@ -181,6 +181,7 @@ import type { SceneCensus } from "./scene-census";
 import { retainOpenSkyTexture } from "./sky-light";
 import {
   aoSamplesFor,
+  inspectRequested,
   postProfileFor,
   pixelRatioFor,
   shadowMapSizeFor,
@@ -223,7 +224,7 @@ import {
   streamTimings,
   traceRequested,
 } from "./stream-timing";
-import { attachInspector, inspectRequested } from "./inspector";
+import { attachInspector } from "./inspector";
 import type { TouchControlsCallbacks } from "./touch-controls";
 import { pageView } from "./page-view";
 import { setFlagTime } from "./flag-cloth";
@@ -586,6 +587,9 @@ export interface CityWalkOptions {
   /** the head start the page made for that tileset and this start
    *  (boot-ahead.ts); without one the boot makes its own */
   ahead?: BootAhead;
+  /** the page's `performance.timeOrigin`: a worker's clock starts later,
+   *  and `boot:page-to-viewer` counts from the page's navigation */
+  pageOrigin?: number;
 }
 
 /** The BVH worker's holds on these tiles' indexes. */
@@ -684,6 +688,9 @@ export interface SceneApp {
   resize: (size: CanvasSize) => void;
   /** The HUD's panels over the canvas: the nameplate keeps clear of them. */
   setCovers: (boxes: readonly CoverBox[]) => void;
+  /** The page's loading veil is gone: `boot:veil-drop` on the trace,
+   *  and the spans it ends and starts (stream-timing.ts). */
+  veilDropped: () => void;
   /** A still or covered scene draws its next frames: what the page asks
    *  of it shows (scene-server.ts wakes it for every call). */
   wake: () => void;
@@ -1220,7 +1227,11 @@ export async function createCityWalkApp(
   // hydration, this chunk (on a page opened at the city's route; one come
   // to from another page counts from that page's load).
   if (streamTimings.markedAt("boot:viewer-start") === undefined) {
-    streamTimings.since("boot:page-to-viewer", 0);
+    const navigation =
+      opts.pageOrigin === undefined
+        ? 0
+        : opts.pageOrigin - performance.timeOrigin;
+    streamTimings.since("boot:page-to-viewer", navigation);
     streamTimings.markOnce("boot:viewer-start");
   }
   // The tileset and the boot tile's first contents, under way while the
@@ -2567,9 +2578,10 @@ async function bootApp(
       ...(dataLayers.current()?.asks() ?? []),
       ...(design?.asks() ?? []),
     ],
+    // the page's CSS size: an OffscreenCanvas has no layout of its own
     viewport: () => ({
-      width: renderer.domElement.clientWidth || 1,
-      height: renderer.domElement.clientHeight || 1,
+      width: Math.max(viewSize.width, 1),
+      height: Math.max(viewSize.height, 1),
     }),
     toSite: (p) => [p.x + offset.cx, offset.cy - p.z],
     // an instance a design's site folded away is not there to be asked
@@ -4279,6 +4291,15 @@ async function bootApp(
     resize,
     setCovers: (boxes) => {
       covers = boxes;
+    },
+    veilDropped: () => {
+      // how late the veil's timer fired after the light stage: what a
+      // busy page shows as a load frozen at 52 % (stream-timing.ts)
+      streamTimings.markOnce("boot:veil-drop");
+      const light = streamTimings.markedAt("boot:light-done");
+      if (light !== undefined) {
+        streamTimings.since("boot:light-to-veil", light);
+      }
     },
     wake: wakeStill,
     setCovered: (covered) => {

@@ -401,8 +401,7 @@ and therefore what keeps builds out of frames:
   `castShadowPositionNode ?? positionNode` and discards by `maskNode`: a
   swaying crown casts rigidly through `castShadowPositionNode =
   instancePosition()`; the bare crown thins its shadow through its mask.
-- **Vertex formats.** WebGPU has no 1-component 8/16-bit vertex formats
-  (and the WebGL2 backend rejects them against TSL's float attribute): the
+- **Vertex formats.** WebGPU has no 1-component 8/16-bit vertex formats: the
   feature id is baked as FLOAT (`scripts/tile-glb.ts`); the roof flag
   rides in the windows' snorm16 `_FACADE` (−1 in its third,
   `lib/city/windows.ts` `FACADE_ROOF`).
@@ -411,9 +410,9 @@ and therefore what keeps builds out of frames:
   three requests no more). Each non-interleaved attribute is one buffer,
   `position` and `normal` included (an interleaved instance matrix is
   one). A ninth invalidates the pipeline and the mesh silently draws
-  nothing on a real GPU, while the WebGL2 backend (sixteen) — the
-  headless e2e's — draws it fine: the traffic flows vanished that way
-  with ten single-float attributes. Pack scalars into vec4s and test the
+  nothing, on a real GPU and in the headless e2e alike (WebGPU on
+  SwiftShader's Vulkan): the traffic flows vanished that way with ten
+  single-float attributes. Pack scalars into vec4s and test the
   count.
 - **Points are 1 px on WebGPU**, whatever their size. The lamp halos are
   billboard quads: an `Instances` set under a `PointsNodeMaterial`.
@@ -443,8 +442,8 @@ More traps, each found the hard way:
   inter-stage variables, `front_facing` takes one (and the Ausschnitt's
   clip distances one on the vertex side), and the clay passes thirteen
   of the other fifteen. A new value per building or per vertex rides in
-  a varying it already passes; past fifteen the buildings vanish on
-  WebGPU while WebGL2 still draws them (ADR 0010).
+  a varying it already passes; past fifteen the buildings vanish, in the
+  headless e2e too (ADR 0010).
 - **A TSL `select` is an if/else in the shader.** three builds each arm in
   its own scope: what an arm builds first is built again where it is used
   outside, and a derivative or texture read first built in an arm runs in
