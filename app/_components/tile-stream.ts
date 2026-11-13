@@ -2843,7 +2843,10 @@ export function createTileStream(
   world: Group,
   cameras: { camera: Camera; height: number; width: number }[]
 ): TileStream {
-  const tiles = new TilesRenderer(ctx.tilesetUrl);
+  // the page's address, not a worker's script's: the renderer resolves the
+  // tileset's own paths against the URL it is given (and, for a relative
+  // one, against `location`, patches/3d-tiles-renderer@0.5.4.patch)
+  const tiles = new TilesRenderer(new URL(ctx.tilesetUrl, pageView.href).href);
   orderStreaming(tiles, ctx.tier, ctx.bootTile);
   setRasterTier(ctx.tier);
   tiles.registerPlugin(new ContentFetchPlugin(ctx.ahead));

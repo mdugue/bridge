@@ -258,6 +258,12 @@ export function serveScene(
           aborter.abort();
           break;
         }
+        if (!app) {
+          // a call before the first frame (a resize, the sheet): made
+          // once the scene is up
+          beforeBoot.push(event);
+          break;
+        }
         void reply(message.id, () => {
           const member = app ? memberOf(app, message.m) : null;
           if (!member) {
@@ -278,6 +284,7 @@ export function serveScene(
       }
     }
   };
+  const beforeBoot: MessageEvent<ToScene>[] = [];
   port.addEventListener("message", onMessage);
   for (const event of early) {
     onMessage(event);
@@ -332,6 +339,9 @@ export function serveScene(
       },
       mirror: mirrorOf(booted),
     });
+    for (const event of beforeBoot.splice(0)) {
+      onMessage(event);
+    }
     sendFootprints();
     nextTurn(mirrorLoop);
   };

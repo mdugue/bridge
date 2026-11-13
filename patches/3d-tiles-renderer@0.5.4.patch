@@ -1,0 +1,26 @@
+diff --git a/build/renderer-k6QvS8mu.js b/build/renderer-k6QvS8mu.js
+index e1488294742fe675a86e2234bc899e89978f7369..dad536cfdee86886de428daec17791d608e7eb90 100644
+--- a/build/renderer-k6QvS8mu.js
++++ b/build/renderer-k6QvS8mu.js
+@@ -734,7 +734,7 @@ var ie = class {
+ 		let [r, i] = e.asset.version.split(".").map((e) => parseInt(e));
+ 		console.assert(r <= 1, "TilesRenderer: asset.version is expected to be a 1.x or a compatible version."), r === 1 && i > 0 && console.warn("TilesRenderer: tiles versions at 1.1 or higher have limited support. Some new extensions and features may not be supported.");
+ 		let a = t.replace(/\/[^/]*$/, "");
+-		a = new URL(a, window.location.href).toString(), this.preprocessNode(e.root, a, n);
++		a = new URL(a, globalThis.location.href).toString(), this.preprocessNode(e.root, a, n);
+ 	}
+ 	loadRootTileset() {
+ 		let e = this.rootURL;
+diff --git a/src/core/renderer/tiles/TilesRendererBase.js b/src/core/renderer/tiles/TilesRendererBase.js
+index 83c94fd2f67a511bc6f37721c18f9c4191ae61f5..9dccb5faf5daad0df8fbbf5751b04c288b221e72 100644
+--- a/src/core/renderer/tiles/TilesRendererBase.js
++++ b/src/core/renderer/tiles/TilesRendererBase.js
+@@ -1510,7 +1510,7 @@ export class TilesRendererBase {
+ 
+ 		// remove the last file path path-segment from the URL including the trailing slash
+ 		let basePath = url.replace( /\/[^/]*$/, '' );
+-		basePath = new URL( basePath, window.location.href ).toString();
++		basePath = new URL( basePath, globalThis.location.href ).toString();
+ 		this.preprocessNode( json.root, basePath, parent );
+ 
+ 	}

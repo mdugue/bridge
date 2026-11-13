@@ -99,7 +99,8 @@
   },
   "packageManager": "bun@1.4.4",
   "patchedDependencies": {
-    "cityjson-threejs-loader@0.4.0": "patches/cityjson-threejs-loader@0.4.0.patch"
+    "cityjson-threejs-loader@0.4.0": "patches/cityjson-threejs-loader@0.4.0.patch",
+    "3d-tiles-renderer@0.5.4": "patches/3d-tiles-renderer@0.5.4.patch"
   },
   "trustedDependencies": [
     "sharp"
