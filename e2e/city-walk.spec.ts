@@ -2080,6 +2080,15 @@ test.describe("a view link", { tag: "@desktop-look" }, () => {
     );
     const leftMs = await left.jsonValue();
     expect(leftMs).toBeLessThan(2000);
+    // nothing failed on the way out but the timestamps' read-back three
+    // logs once the device it waited on is gone (docs/rendering.md,
+    // "Workarounds for upstream bugs")
+    expect(linkErrors.page).toEqual([]);
+    expect(
+      linkErrors.console.filter(
+        (line) => !line.includes("THREE.Error resolving queries")
+      )
+    ).toEqual([]);
     await linkPage.locator(`a[href="${SITE}"]`).first().click();
     await linkPage.waitForURL((at) => at.pathname === SITE);
     await context.close();
