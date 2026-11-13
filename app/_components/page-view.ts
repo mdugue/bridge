@@ -40,7 +40,7 @@ export interface PageView {
   readonly hidden: boolean;
   readonly visibilityState: DocumentVisibilityState;
   readonly onLine: boolean;
-  /** the page's address and its query (`?trace=1`, `?gpu=webgl2`, …) */
+  /** the page's address and its query (`?trace=1`, `?scene=lite`, …) */
   readonly href: string;
   readonly search: string;
   addEventListener: (type: PageEventType, listener: Listener) => void;

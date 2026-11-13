@@ -195,17 +195,17 @@ Standort-Konfiguration nennt für Dresden fünfzehn davon; die erste ist die
 
 ## Rendering
 
-**three.js** — die JavaScript-Bibliothek, die über WebGPU (oder WebGL2) mit
+**three.js** — die JavaScript-Bibliothek, die über WebGPU mit
 der Grafikkarte spricht; die ganze Szene ist damit gebaut.
 
-**WebGPU / WebGL2** — die Schnittstellen des Browsers zur Grafikkarte. Der
-Viewer nutzt WebGPU, die neuere und schnellere, und weicht auf WebGL2 aus,
-wo ein Browser sie nicht hat; eine der beiden ist Voraussetzung.
+**WebGPU** — die neuere Schnittstelle des Browsers zur Grafikkarte. Der
+Viewer braucht sie; ein Browser ohne (ältere iPhones, Firefox auf manchen
+Systemen) bekommt statt der Stadt einen Hinweis.
 
 **Shader / Node-Material** — die kleinen Programme, mit denen die
 Grafikkarte jedes Pixel einfärbt. Hier ist jedes Material als
 *Node-Material* geschrieben (TSL von three.js): Der Look wird aus
-Bausteinen zusammengesetzt, die three.js für WebGPU oder WebGL2 übersetzt.
+Bausteinen zusammengesetzt, die three.js für WebGPU übersetzt.
 
 **Mesh / Dreieck** — alles Gezeichnete besteht aus Dreiecken. Ein Mesh ist
 eine Menge Dreiecke mit einem Material. Die Gebäude einer Kachel sind ein

@@ -138,11 +138,8 @@ export type ToPage =
 /** The worker's first word, before the page hands it the canvas. */
 export interface WorkerHello {
   t: "hello";
-  /** what the worker can draw with (scene-client.ts compares it with the
-   *  page's own) */
+  /** WebGPU gives an adapter here */
   gpu: boolean;
-  /** an offscreen WebGL2 context, for a page without WebGPU */
-  webgl2: boolean;
   offscreen: boolean;
   raf: boolean;
 }

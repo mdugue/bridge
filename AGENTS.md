@@ -101,7 +101,7 @@ space (`shader-chunks.ts`). The glTF extras key is `tileId`, never `tile`
   A material without per-tile data is a `sceneMaterial`.
 - WebGPU draws from at most **eight vertex buffers**, and the clay is
   **two inter-stage variables short** of sixteen. Past either a mesh
-  vanishes on WebGPU while WebGL2 (the headless e2e) still draws it.
+  vanishes (the headless e2e draws WebGPU too, ADR 0027).
 - A TSL `select` and a `Loop` body are scopes: in per-pixel graphs use
   `mix`/`step`, and take what a loop reads into a `toVar()` before it.
   A packed word or a hash seed reaches the fragment as a FLAT varying.
@@ -183,10 +183,10 @@ uploaded; nothing it names is fetched (ADR 0054).
 - QA views: the reference views of the GPU checklist (plan 019) are
   committed in `qa/views/` (`bun scripts/qa-views.ts` writes them; the
   index has each one's link); `bun run shots` renders them too.
-- URL knobs: `?scene=lite`, `?gpu=webgl2`, `?thread=main`,
-  `?safety=0…3`, `?trail=1`, `?trace=1`, `?inspect=1`, `?depth=standard`,
-  `?at=lat,lng`, `?snap=…` (a view link). URL parameters go in the query, never the
-  fragment; one that carries a place is named on the privacy page.
+- URL knobs: `?scene=lite`, `?thread=main`, `?safety=0…3`, `?trail=1`,
+  `?trace=1`, `?inspect=1`, `?depth=standard`, `?at=lat,lng`, `?snap=…`
+  (a view link). URL parameters go in the query, never the fragment; one
+  that carries a place is named on the privacy page.
 
 ## Conventions
 

@@ -161,7 +161,7 @@ export interface Trail {
   startedAt: string;
   url: string;
   userAgent: string;
-  /** "WebGPU", "WebGL2" or "?" before the renderer is up */
+  /** "WebGPU", or "?" before the renderer is up */
   backend: string;
   /** CSS size × devicePixelRatio, and the renderer's pixel ratio */
   screen: string;

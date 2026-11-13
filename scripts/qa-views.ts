@@ -523,7 +523,7 @@ export const QA_VIEWS: readonly QaView[] = [
   {
     name: "modell-comic",
     plans: ["079"],
-    query: "?gpu=webgl2&trail=1",
+    query: "?trail=1",
     checks:
       "Modell and Comic for the recovery checks: after a forced loss at level 1 the page comes back in both, at level 2 without either (the link itself is gated the same way).",
     pose: fly(TERRACE_RIVER, 300, 45, -35),

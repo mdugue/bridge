@@ -17,7 +17,7 @@ import { errorMessage } from "./scene-protocol";
 
 /** The worker's global, as far as it is used here. */
 const scope = self as unknown as ScenePort & {
-  navigator: { gpu?: unknown };
+  navigator: { gpu?: { requestAdapter: () => Promise<unknown> } };
 };
 
 interface InitMessage {
@@ -26,28 +26,15 @@ interface InitMessage {
   canvas: OffscreenCanvas;
 }
 
-/** Whether an offscreen canvas here gives a WebGL2 context (the probe's
- *  context is let go at once). */
-function offscreenWebgl2(): boolean {
-  if (typeof OffscreenCanvas === "undefined") {
-    return false;
-  }
+/** Whether WebGPU here gives an adapter: the only backend the scene
+ *  draws with (ADR 0027). */
+async function hasAdapter(): Promise<boolean> {
   try {
-    const gl = new OffscreenCanvas(1, 1).getContext("webgl2");
-    gl?.getExtension("WEBGL_lose_context")?.loseContext();
-    return gl !== null;
+    return (await scope.navigator.gpu?.requestAdapter()) != null;
   } catch {
     return false;
   }
 }
-
-const hello: WorkerHello = {
-  t: "hello",
-  gpu: scope.navigator.gpu !== undefined,
-  webgl2: scope.navigator.gpu === undefined && offscreenWebgl2(),
-  offscreen: typeof OffscreenCanvas !== "undefined",
-  raf: typeof requestAnimationFrame === "function",
-};
 
 const onInit = (event: MessageEvent<InitMessage>) => {
   if (event.data?.t !== "init") {
@@ -88,4 +75,13 @@ globalThis.addEventListener(
   }
 );
 scope.addEventListener("message", onInit);
-scope.postMessage(hello, []);
+const sayHello = async () => {
+  const hello: WorkerHello = {
+    t: "hello",
+    gpu: await hasAdapter(),
+    offscreen: typeof OffscreenCanvas !== "undefined",
+    raf: typeof requestAnimationFrame === "function",
+  };
+  scope.postMessage(hello, []);
+};
+void sayHello();

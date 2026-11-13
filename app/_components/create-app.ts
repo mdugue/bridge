@@ -854,9 +854,9 @@ export interface SceneApp {
 }
 
 /**
- * three's WebGPURenderer: WebGPU where the browser has it, its WebGL2
- * backend otherwise (or on `?gpu=webgl2`, scene-profile.ts). One renderer,
- * one set of node materials either way (ADR 0027).
+ * three's WebGPURenderer on WebGPU, the only backend the viewer draws with
+ * (ADR 0027): where three would fall back to WebGL2 (no adapter), the
+ * scene says the device cannot draw it.
  */
 async function createRenderer(
   canvas: HTMLCanvasElement | OffscreenCanvas,
@@ -874,17 +874,15 @@ async function createRenderer(
     canvas,
     antialias: false,
     powerPreference: "high-performance",
-    forceWebGL: budget.forceWebGL,
     // The GPU's time per frame for the heartbeat (lib/city/frame-timing.ts):
     // three asks for `timestamp-query` only where the adapter has it
     // (Chromium; not Safari) and writes two timestamps per pass.
-    trackTimestamp: timed && !budget.forceWebGL,
+    trackTimestamp: timed,
     // Depth from 1 at the near plane to 0 at the far one, in floats: the
     // float's precision then grows with the distance the 1/z mapping loses,
     // so surfaces kilometres off stop fighting. three turns the depth test,
     // the clear, the polygon offsets, the shadow maps and its depth helpers
-    // round itself, and falls back to the plain buffer on a WebGL2 without
-    // EXT_clip_control; what reads raw depth here asks
+    // round itself; what reads raw depth here asks
     // `reversedDepthBuffer` (stylize-effect.ts, view-ray.ts). `?depth=standard`
     // draws with the plain buffer, to compare.
     reversedDepthBuffer: reversedDepthFromSearch(pageView.search),
@@ -895,7 +893,7 @@ async function createRenderer(
       async () => await renderer.init()
     );
   } catch (error) {
-    // No adapter and no WebGL2 either (the preflight only sees that
+    // No adapter and no fallback either (the preflight only sees that
     // `navigator.gpu` exists): free what init made, and say why in the
     // HUD's words rather than three's raw backend error (kept as `cause`).
     renderer.dispose().catch(() => {
@@ -904,14 +902,13 @@ async function createRenderer(
     });
     throw new Error(NO_GPU_MESSAGE, { cause: error });
   }
-  // Fallen back to WebGL2 (no adapter): its timer queries would wrap every
-  // pass for nothing — only the WebGPU backend's are read back.
-  const backend = renderer.backend as {
-    isWebGPUBackend?: boolean;
-    trackTimestamp?: boolean;
-  };
-  if (backend.isWebGPUBackend !== true) {
-    backend.trackTimestamp = false;
+  // three fell back to WebGL2 (no adapter after all): not a backend the
+  // viewer draws with
+  if (!(renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend) {
+    renderer.dispose().catch(() => {
+      // the error below says what matters
+    });
+    throw new Error(NO_GPU_MESSAGE);
   }
   // The `lite` profile renders at half linear resolution (a quarter of the
   // pixels) and lets the browser upscale. The canvas fills the viewport and
@@ -1033,9 +1030,8 @@ function traceRenderer(
   trail: SceneTrail,
   safety: SafetyLevel
 ): void {
-  const backend = renderer.backend as { isWebGPUBackend?: boolean };
   trail.set({
-    backend: backend.isWebGPUBackend ? "WebGPU" : "WebGL2",
+    backend: "WebGPU",
     pixelRatio: renderer.getPixelRatio(),
     safety,
   });
@@ -1069,18 +1065,14 @@ interface ProbedDevice {
 
 /**
  * Settles once the renderer's WebGPU device is lost — after its destroy,
- * when the GPU process has taken it — or at once on the WebGL2 backend,
- * which has none. three ignores a loss for `destroyed` (no recovery runs).
+ * when the GPU process has taken it. three ignores a loss for `destroyed`
+ * (no recovery runs).
  */
 async function deviceGone(renderer: WebGPURenderer): Promise<void> {
   const backend = renderer.backend as {
-    isWebGPUBackend?: boolean;
     device?: { lost: Promise<unknown> } | null;
   };
-  const device = backend.isWebGPUBackend ? backend.device : null;
-  if (device) {
-    await device.lost;
-  }
+  await backend.device?.lost;
 }
 
 /**
@@ -1088,14 +1080,11 @@ async function deviceGone(renderer: WebGPURenderer): Promise<void> {
  * submitted. When iOS has taken Safari's GPU process, WebKit throws right
  * here ("Unable to make command encoder", "Unable to finish") — before
  * any device-lost arrives, and before a frame throws the same way. The
- * error's message, or null; the WebGL2 backend has nothing to probe.
+ * error's message, or null.
  */
 function probeGpu(renderer: WebGPURenderer): string | null {
-  const backend = renderer.backend as {
-    isWebGPUBackend?: boolean;
-    device?: ProbedDevice | null;
-  };
-  const device = backend.isWebGPUBackend ? backend.device : null;
+  const backend = renderer.backend as { device?: ProbedDevice | null };
+  const device = backend.device ?? null;
   if (!device) {
     return null;
   }
@@ -1297,10 +1286,9 @@ function reportTeardown(error: unknown): void {
 
 /**
  * The one teardown of an app, clean or failed: its registered cleanups, the
- * scene's GPU resources, then the renderer with its device (or, on the
- * WebGL2 backend, its context) — the next app (a StrictMode remount, a round
- * trip to /wissen) makes its own canvas, and a browser holds only a handful
- * of contexts; whatever still points at this one draws nothing.
+ * scene's GPU resources, then the renderer with its device — the next app
+ * (a StrictMode remount, a round trip to /wissen) makes its own canvas and
+ * device; whatever still points at this one draws nothing.
  */
 async function teardown(
   cleanups: (() => void)[],

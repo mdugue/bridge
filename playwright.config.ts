@@ -39,7 +39,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  // Software-rendered WebGL is CPU-bound, so parallel viewer pages steal frames
+  // Software-rendered WebGPU is CPU-bound, so parallel viewer pages steal frames
   // from each other: on a 4-core runner two workers roughly halve each spec's
   // frame rate and push both past their timeout. Serial is slower on paper and
   // far faster in practice here.

@@ -50,9 +50,8 @@ bun install
 bun dev        # bakes public/data, then serves https://localhost:3000 (self-signed)
 ```
 
-- **Backends**: the default picks WebGPU where the browser has it;
-  `?gpu=webgl2` forces the WebGL2 backend (`app/_components/scene-profile.ts`).
-  Check sections A–G on **both**.
+- **Backend**: WebGPU only (ADR 0027); the scene runs in a worker, and
+  `?thread=main` runs it on the page to compare (ADR 0061).
 - **Snapshots**: the in-app Snapshot panel ("Kopieren") copies the camera,
   the time and the look as JSON ("Link kopieren": a link that opens
   there). Save it as `shots/<name>.json`, then
@@ -87,7 +86,7 @@ level without sports grounds), `seam-eye` and `seam-fly` (the shadow
 camera's stream), `oblique-400-paper`, `-line`, `-figure` (dropped CPU
 copies), `ask-cone-tree`, `ask-round-crown`, `ask-bridge` and
 `traffic-albertstrasse` (the outline); `modell-comic` opened with
-`?gpu=webgl2&trail=1` for the recovery checks. Section N's:
+`?trail=1` for the recovery checks. Section N's:
 `modell-iso-low`, `modell-iso-high`, `modell-plan-low`,
 `modell-plan-high`, `modell-iso-line` against `modell-fly-low`
 (Modell); `frozen-start`, `neumarkt-dusk`, `elbufer-evening` (plan
@@ -100,7 +99,7 @@ checks have theirs in the index (069, 070, 071, 076, 077, 078, 080,
 
 ### A. Backends and boot
 
-- [ ] Boot on WebGPU and on `?gpu=webgl2`: no console errors, the
+- [ ] Boot in the worker and on `?thread=main`: no console errors, the
   crash-trail record (`window.crashTrail.current()`) shows the backend and
   no `error` events; first frame and `ready` times on a cold cache (write
   them down).
@@ -667,7 +666,7 @@ user-facing quality tier (Direction 5).
 Built and unit-tested headless only (SwiftShader, WebGL2): nothing below
 has run on WebGPU or on a phone. On the iPhone keep a cabled Web Inspector
 open (`crashTrail.current()` prints the trail with its beats); on the
-desktop use Chrome with WebGPU and repeat with `?gpu=webgl2`.
+desktop use Chrome with WebGPU.
 
 - [ ] **The ladder by hand.** `?safety=0`, `1`, `2`, `3` on the iPhone and
   on a desktop: each boots with its level's pixel ratio, shadow map and

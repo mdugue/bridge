@@ -42,12 +42,6 @@ export type SceneProfile = "full" | "lite";
 export type DeviceTier = "desktop" | "mobile";
 
 export interface SceneBudget {
-  /**
-   * `?gpu=webgl2`: WebGPURenderer on its WebGL2 backend even where WebGPU
-   * is available — what a browser without WebGPU gets, for QA and for
-   * comparing the two backends on one machine. Off by default.
-   */
-  forceWebGL: boolean;
   /** phones take the 2048² land-cover rasters (lib/city/tile.ts, MOBILE_RASTER_PX) */
   lowRasters: boolean;
   /** whether the rest of the site streams: always in `full`, in `lite` only with `?block=1` */
@@ -65,11 +59,6 @@ export interface SceneBudget {
 /** Parses the profile out of a `location.search` string. Pure, for tests. */
 export function sceneProfileFromSearch(search: string): SceneProfile {
   return new URLSearchParams(search).get("scene") === "lite" ? "lite" : "full";
-}
-
-/** `?gpu=webgl2` forces the renderer's WebGL2 backend. Pure. */
-export function forceWebGLFromSearch(search: string): boolean {
-  return new URLSearchParams(search).get("gpu") === "webgl2";
 }
 
 /** The reversed depth buffer (create-app.ts), unless the page asks for
@@ -107,7 +96,6 @@ export function sceneBudgetFor(
   const profile = sceneProfileFromSearch(search);
   const tier = deviceTierFromMedia(coarseNoHover);
   return {
-    forceWebGL: forceWebGLFromSearch(search),
     profile,
     safety,
     tier,

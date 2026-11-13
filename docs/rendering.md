@@ -309,9 +309,7 @@ change, not a re-bake
     colour target there is none of. `RingShadowNode`, installed as the
     light's `shadow.shadowNode` (the hook three's own CSM and tiled shadows
     use: no patch, ADR 0027), draws a layer with
-    `setRenderTarget(map, layer)`. Rely on the render's own clear: an
-    explicit `renderer.clear()` on a depth array throws on the WebGL2
-    backend.
+    `setRenderTarget(map, layer)`, and relies on the render's own clear.
   - **One camera.** All rings draw with the shadow's one camera, moved for
     each: three keeps its state per drawable and camera, so a camera per
     ring would cost a phone memory per object of every tile.
@@ -502,8 +500,7 @@ into the buffer carries `reversedDepth` and a projection to match. What
 reads raw depth on its own must ask: the styles' sky test and their
 shadow lookup (`stylize-effect.ts`, `StylizeInputs.reversedDepth`), the
 parallel view's pick ray (`view-ray.ts`), the scene target's depth type
-(`post-stack.ts`). A WebGL2 without `EXT_clip_control` keeps the plain
-buffer (three falls back and says so). `?depth=standard` draws with the
+(`post-stack.ts`). `?depth=standard` draws with the
 plain buffer, to compare.
 
 **What the stack builds follows the device tier** (`postProfileFor` in
@@ -1359,7 +1356,7 @@ cabled Web Inspector) print it as one line:
   the frame callback on the main thread (mean / slowest), the render call
   inside it (three encoding and submitting the passes), the GPU's time per
   frame from timestamp queries (`trackTimestamp`; only where the adapter
-  offers `timestamp-query` — Chromium's WebGPU, not Safari, not WebGL2),
+  offers `timestamp-query` — Chromium's WebGPU, not Safari),
   the fastest rate the loop ran (the 10th percentile of its frame
   intervals: 120 on a ProMotion display that it keeps up with) and the
   pixels drawn per frame (millions). A slow page with a short `cpu` and a
@@ -1433,8 +1430,7 @@ render does not unwind (its call depth stays a level deep, or the shadow
 pass's override stays on), and no later frame draws right. It is a loss
 only with a sign of the GPU running out — an allocation error, a memory
 emergency before it, a GPU the probe finds gone (`frameLoss`); otherwise
-it is a bug (`failed`, and every throw on WebGL2, which has nothing to
-probe): the page reloads at the same level, at most twice in ten
+it is a bug (`failed`): the page reloads at the same level, at most twice in ten
 minutes. Before the first frame the message fails the boot instead.
 
 **A GPU taken in the background is not the page's failure** (the resume
@@ -1589,7 +1585,7 @@ The minimap's picture is an image the sidebar loads when it shows.
 
 **The scene boots in a worker** (ADR 0061, `scene-client.ts`): the page
 starts `scene-worker.ts`, which first says what it can draw with
-(WebGPU, an offscreen WebGL2, `requestAnimationFrame`).
+(a WebGPU adapter, `requestAnimationFrame`).
 Where that matches the page, the page hands it the canvas as an
 `OffscreenCanvas` with the init (budget, size, site, look, the page's
 address and state); the worker asks for the tileset and the start tile

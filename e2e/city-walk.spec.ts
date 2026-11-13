@@ -54,16 +54,20 @@ const DESKTOP_VIEWPORT = { width: 800, height: 600 };
  */
 const SITE_VIEWPORT = { width: 400, height: 300 };
 
-// Software-rendered WebGL so the smoke test also runs on headless CI boxes
-// without a GPU (ANGLE -> SwiftShader).
+// Software-rendered WebGPU so the smoke test also runs on headless CI boxes
+// without a GPU: Dawn on SwiftShader's Vulkan, and Chrome's own Vulkan on
+// SwiftShader too — without it the canvas's swap chain finds no shared
+// image to present into and takes the GPU process down.
 test.use({
   launchOptions: {
     // the config's browser outside Playwright's store (playwright.config.ts)
     executablePath: process.env.PW_CHROMIUM,
     args: [
-      "--use-gl=angle",
+      "--enable-unsafe-webgpu",
+      "--use-webgpu-adapter=swiftshader",
+      "--enable-features=Vulkan",
+      "--use-vulkan=swiftshader",
       "--use-angle=swiftshader",
-      "--enable-unsafe-swiftshader",
     ],
   },
 });
@@ -405,12 +409,12 @@ async function dataUrl(page: Page, file: string): Promise<string> {
   return `/data${SITE}/${manifest.files[file] ?? file}`;
 }
 
-/** True when the browser has WebGL at all (render assertions need it). */
-async function hasWebGl(page: Page): Promise<boolean> {
-  return await page.evaluate(() => {
-    const probe = document.createElement("canvas");
-    return Boolean(probe.getContext("webgl2") ?? probe.getContext("webgl"));
-  });
+/** True when the browser gives a WebGPU adapter (render assertions need
+ *  it). */
+async function hasWebGpu(page: Page): Promise<boolean> {
+  return await page.evaluate(
+    async () => (await navigator.gpu?.requestAdapter()) != null
+  );
 }
 
 /** Turns one pointer type's drag across the canvas into synthetic events. */
@@ -423,7 +427,7 @@ async function dragAcrossCanvas(
     ({ kind, clientY }) => {
       const canvas = document.querySelector("canvas[data-engine]");
       if (!canvas) {
-        throw new Error("no WebGL canvas");
+        throw new Error("no scene canvas");
       }
       const fire = (type: string, x: number) =>
         canvas.dispatchEvent(
@@ -599,7 +603,7 @@ async function aimAtBuilding(page: Page): Promise<void> {
  */
 let page: Page;
 let errors: ErrorLog;
-let webgl = false;
+let gpu = false;
 
 /** Boots the shared desktop page for the enclosing describe. */
 function bootDesktopViewer(): void {
@@ -610,13 +614,13 @@ function bootDesktopViewer(): void {
     page = await context.newPage();
     errors = watchErrors(page);
     await page.goto(LITE);
-    webgl = await hasWebGl(page);
-    // On CI the SwiftShader flags above must yield WebGL; a silent skip
+    gpu = await hasWebGpu(page);
+    // On CI the SwiftShader flags above must yield WebGPU; a silent skip
     // would let a Chromium/Playwright bump turn the whole suite green.
     if (process.env.CI) {
-      expect(webgl).toBe(true);
+      expect(gpu).toBe(true);
     }
-    if (!webgl) {
+    if (!gpu) {
       return;
     }
     // Debug hook (dev/test builds only) is set after the first successful load.
@@ -628,13 +632,13 @@ function bootDesktopViewer(): void {
   });
 
   test.beforeEach(() => {
-    // Conditional runtime skip — render assertions are meaningless without WebGL.
-    test.skip(!webgl, "WebGL is genuinely unavailable in this environment");
+    // Conditional runtime skip — render assertions are meaningless without WebGPU.
+    test.skip(!gpu, "WebGPU is genuinely unavailable in this environment");
   });
 
   test.afterAll(async () => {
     // Errors logged after the last test's own check must not go unnoticed.
-    if (webgl) {
+    if (gpu) {
       expectNoErrors(errors);
     }
     await page?.context().close();
@@ -646,7 +650,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
   bootDesktopViewer();
 
   test("the renderer draws, with shadows, and every scene layer is built on the primary tile", async () => {
-    // Renderer booted -> exactly one sized WebGL canvas (the minimap adds
+    // Renderer booted -> exactly one sized scene canvas (the minimap adds
     // 2D canvases of its own; three.js tags its canvas with data-engine).
     const canvas = page.locator("canvas[data-engine]");
     await expect(canvas).toBeVisible({ timeout: slow(60_000) });
@@ -867,9 +871,11 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       undefined,
       { timeout: slow(45_000) }
     );
-    const state = await page.evaluate(() =>
-      window.__poc?.handle?.getCameraState()
-    );
+    const state = await page.evaluate(async () => {
+      // the HUD said it once it asked: the scene's pose follows in its turn
+      await window.__poc?.handle?.sync();
+      return window.__poc?.handle?.getCameraState();
+    });
     expect(state?.mode).toBe("walk");
     expect(Math.abs((state?.epsg.x ?? 0) - target.x)).toBeLessThan(1);
     expect(Math.abs((state?.epsg.y ?? 0) - target.y)).toBeLessThan(1);
@@ -1914,11 +1920,11 @@ test.describe("a view link", { tag: "@desktop-look" }, () => {
     const linkPage = await context.newPage();
     const linkErrors = watchErrors(linkPage);
     await linkPage.goto(snapshotHref(LITE, linked));
-    const gl = await hasWebGl(linkPage);
+    const gl = await hasWebGpu(linkPage);
     if (process.env.CI) {
       expect(gl).toBe(true);
     }
-    test.skip(!gl, "WebGL is genuinely unavailable in this environment");
+    test.skip(!gl, "WebGPU is genuinely unavailable in this environment");
     await linkPage.waitForFunction(
       () => window.__poc?.ready === true,
       undefined,
@@ -1980,12 +1986,12 @@ test.describe("mobile", { tag: "@phone" }, () => {
     const phoneErrors = watchErrors(phonePage);
 
     await phonePage.goto(LITE);
-    const phoneGl = await hasWebGl(phonePage);
+    const phoneGl = await hasWebGpu(phonePage);
     if (process.env.CI) {
       expect(phoneGl).toBe(true);
     }
-    // Conditional runtime skip — render assertions are meaningless without WebGL.
-    test.skip(!phoneGl, "WebGL is genuinely unavailable in this environment");
+    // Conditional runtime skip — render assertions are meaningless without WebGPU.
+    test.skip(!phoneGl, "WebGPU is genuinely unavailable in this environment");
     await phonePage.waitForFunction(
       () => window.__poc?.ready === true,
       undefined,
@@ -2083,7 +2089,7 @@ test.describe("mobile", { tag: "@phone" }, () => {
     await phonePage.evaluate(() => {
       const canvas = document.querySelector("canvas[data-engine]");
       if (!canvas) {
-        throw new Error("no WebGL canvas");
+        throw new Error("no scene canvas");
       }
       const fire = (type: string, pointerId: number) =>
         canvas.dispatchEvent(
@@ -2126,7 +2132,7 @@ test.describe("mobile", { tag: "@phone" }, () => {
       await phonePage.evaluate((event) => {
         const canvas = document.querySelector("canvas[data-engine]");
         if (!canvas) {
-          throw new Error("no WebGL canvas");
+          throw new Error("no scene canvas");
         }
         const rect = canvas.getBoundingClientRect();
         canvas.dispatchEvent(
@@ -2219,11 +2225,14 @@ test.describe("whole site streamed", () => {
     const tilesErrors = watchErrors(tilesPage);
     try {
       await tilesPage.goto(`${LITE}&block=1`);
-      const tilesGl = await hasWebGl(tilesPage);
+      const tilesGl = await hasWebGpu(tilesPage);
       if (process.env.CI) {
         expect(tilesGl).toBe(true);
       }
-      test.skip(!tilesGl, "WebGL is genuinely unavailable in this environment");
+      test.skip(
+        !tilesGl,
+        "WebGPU is genuinely unavailable in this environment"
+      );
 
       await tilesPage.waitForFunction(
         () => window.__poc?.ready === true,

@@ -262,23 +262,16 @@ async function helloOf(worker: Worker): Promise<WorkerHello | null> {
 }
 
 /**
- * The scene's worker, once it said it draws as the page would: WebGPU
- * where the page has it (the budget not asking for WebGL2), else WebGL2,
- * on an offscreen canvas with an animation frame. Rejects where it cannot.
+ * The scene's worker, once it said it draws: a WebGPU adapter, an
+ * offscreen canvas, an animation frame. Rejects where it cannot.
  */
-async function workerChannel(budget: SceneBudget): Promise<Channel> {
+async function workerChannel(): Promise<Channel> {
   const worker = new Worker(new URL("./scene-worker.ts", import.meta.url), {
     type: "module",
     name: "scene",
   });
   const hello = await helloOf(worker);
-  const pageGpu = "gpu" in navigator && !budget.forceWebGL;
-  // a worker with WebGPU has WebGL2 too (it skips the probe, which would
-  // cost a context)
-  const draws = pageGpu
-    ? hello?.gpu === true
-    : hello?.gpu === true || hello?.webgl2 === true;
-  if (!hello?.raf || !hello.offscreen || !draws) {
+  if (!hello?.raf || !hello.offscreen || !hello.gpu) {
     worker.terminate();
     throw new Error(hello ? NO_GPU_MESSAGE : "Die Ansicht startet nicht.");
   }
@@ -543,7 +536,7 @@ export async function startScene(
   try {
     let channel: Channel;
     if (sceneThreadOf(location.search) === "worker") {
-      channel = await workerChannel(opts.budget);
+      channel = await workerChannel();
       if (signal.aborted) {
         channel.end();
         throw new DOMException("CityWalk startup aborted", "AbortError");

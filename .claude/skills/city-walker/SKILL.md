@@ -54,10 +54,9 @@ wired by hand. The data layers' code stays in the scene chunk: the first `import
 load ≈ 33 KB gz (three leaves the scene's hoisted scope), more than the
 data layers moved (ADR 0040) — measure before splitting one off.
 
-**The renderer** is three r187's `WebGPURenderer` — its WebGPU backend, or
-its WebGL2 backend where the browser has no WebGPU (`?gpu=webgl2` forces it:
-`scene-profile.ts` `forceWebGL`; the preflight is `gpu-support.ts`). One
-path: every material is a **TSL node material**, there is no GLSL, no
+**The renderer** is three r187's `WebGPURenderer` on WebGPU only — a
+browser without an adapter gets the no-WebGPU message (the preflight is
+`gpu-support.ts`, the worker's hello checks the adapter). One path: every material is a **TSL node material**, there is no GLSL, no
 `onBeforeCompile`, no WebGLRenderer
 ([ADR 0027](../../../docs/adr/0027-webgpu-renderer-and-tsl.md)).
 The viewer imports classes and node materials from `three/webgpu`, TSL from
@@ -388,8 +387,7 @@ and therefore what keeps builds out of frames:
   the dolly zoom in runs and for every tile landing while Modell shows;
   `holdCut` holds for Modell's camera. `compileAsync` primes the **main pass only**:
   the shadow pass's pipelines for new casters still build in the frame that
-  first draws them, and the WebGL2 backend compiles synchronously — the
-  price of public API. Measure with a flight before adding machinery.
+  first draws them — the price of public API. Measure with a flight before adding machinery.
 - **Different graphs are different builds.** An optional raster that did
   not load leaves its term out of the terrain's colour node, so that tile
   builds apart; that is fine, but do not branch a graph on per-tile
@@ -525,8 +523,7 @@ Traps of the rings:
   rings; a tile's change goes through `invalidateShownTiles` (only the rings it
   can fall on, only if what shows changed), a change near the eye through
   `sunRig.invalidateShadow(undefined, finest)`.
-- **`renderer.clear()` on a depth array throws on the WebGL2 backend**; the
-  render's own clear is what draws a layer clean.
+- The render's own clear is what draws a shadow-array layer clean.
 - The stream's square (`lib/city/shadow-fit.ts`, `sunRig.shadowCamera`) only
   loads tiles: `fitShadowRadius` and `shadowFocusAhead` have no say over what
   is shadowed.
@@ -964,10 +961,10 @@ the boot reads it through `parseSnapshot` (a waiting GPU recovery wins,
 `lib/city/gpu-recovery.ts` `arrivalOf`). Another link is another page
 load.
 
-Headless e2e uses SwiftShader through the renderer's WebGL2 backend (headless
-Chromium has no WebGPU adapter) — shadows/AA look nothing like a real GPU, so
-use `--headed` for any lighting work. To check the fallback on a GPU, add
-`?gpu=webgl2` (`SHOTS_QUERY=gpu=webgl2`); to see a lighter page of the
+Headless e2e draws WebGPU over SwiftShader's Vulkan (flags in
+`e2e/city-walk.spec.ts`: without `--use-vulkan=swiftshader` the canvas
+cannot present and the GPU process dies) — shadows/AA look nothing like a
+real GPU, so use `--headed` for any lighting work. To see a lighter page of the
 safety ladder, `?safety=1`–`3` (ADR 0047: pixel ratio, shadow map, tile
 cache and governor a step down; nothing stored). Verify from **oblique** angles (a tree through
 a bridge is invisible looking straight down). Snapshot JSON shape:

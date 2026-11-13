@@ -9,7 +9,7 @@ The scene's script shared the page's thread with the HUD. While it booted
 (compiles, tile parsing, uploads) the page stalled, and a phone's sidebar
 sheet scrolled against a busy scene: the frame pace kept a scroll guard
 and a 12 fps cap behind the sheet to keep the scroll alive. Browsers draw
-WebGPU and WebGL2 into an `OffscreenCanvas` from a dedicated worker, and
+WebGPU into an `OffscreenCanvas` from a dedicated worker, and
 three's renderers run there since r180.
 
 ## Decision
@@ -27,9 +27,8 @@ three's renderers run there since r180.
 - The server runs in a module worker (`scene-worker.ts`) on the canvas's
   `OffscreenCanvas`; the page keeps input capture, pointer lock, layout,
   fonts and image composing. A browser that cannot draw from a worker —
-  its hello reports no WebGPU where the page has it, no WebGL2, no
-  `requestAnimationFrame` or no `OffscreenCanvas` — is told so, as one
-  without a GPU is; there is no fallback onto the page for old browsers.
+  its hello reports no WebGPU adapter, no `requestAnimationFrame` or no
+  `OffscreenCanvas` — is told so, as one without WebGPU is (ADR 0027); there is no fallback onto the page for old browsers.
   The same server runs on the page behind a `MessageChannel` only for
   debugging: `?thread=main` and three's Inspector (`?inspect=1`).
 - A lost GPU the page recovers from by a reload is listed in the init
