@@ -1110,18 +1110,18 @@ function probeGpu(renderer: WebGPURenderer): string | null {
 }
 
 /**
- * Frees the GPU before the page reloads. three's dispose first unhooks
- * every geometry's dispose listener — a geometry freed later (a compile
- * settling, the tile cache) can no longer reach three's destroyAttribute
- * with an attribute whose upload failed, which threw — then destroys the
- * device: WebKit otherwise frees its allocations only once the old
- * document is collected, after the new page started allocating in the
- * same process. Settles within RELEASE_WAIT_MS either way.
+ * Frees the GPU before the page reloads: the device goes at once
+ * (`disposeAndDestroy`) — WebKit otherwise frees its allocations only once
+ * the old document is collected, after the new page started allocating in
+ * the same process — and three's dispose unhooks every geometry's dispose
+ * listener, so a geometry freed later (a compile settling, the tile cache)
+ * can no longer reach three's destroyAttribute with an attribute whose
+ * upload failed, which threw. Settles within RELEASE_WAIT_MS either way.
  */
 async function releaseGpu(renderer: WebGPURenderer): Promise<void> {
   let released: Promise<void>;
   try {
-    released = renderer.dispose().catch(() => {
+    released = disposeAndDestroy(renderer).catch(() => {
       // a dispose that fails still lets the reload go on
     });
   } catch {
@@ -1378,10 +1378,28 @@ function stopWorkers(): void {
 /** The renderer and its device (or its context); the canvas is the
  *  page's (scene-host.ts takes it out). */
 async function releaseRenderer(renderer: WebGPURenderer): Promise<void> {
-  // Async: it destroys the device (or loses the context) at the end.
-  await renderer.dispose().catch(() => {
+  await disposeAndDestroy(renderer).catch(() => {
     // a dispose that fails leaves nothing more to free
   });
+}
+
+/**
+ * three's dispose with its device destroyed at once — upstream workaround
+ * (docs/rendering.md, "Workarounds for upstream bugs"): three r187 waits
+ * for the GPU's last timestamps before it destroys the device, behind every
+ * queued frame and compile (26 s on SwiftShader), while the device and its
+ * memory stay and the page waits. The device goes first; three's frees run
+ * a turn later, on a destroyed device, where freeing is allowed; the
+ * timestamps' read-back is refused (three logs it once) and three ignores
+ * a loss for `destroyed` (`deviceGone`). Rejects as three's dispose does.
+ */
+async function disposeAndDestroy(renderer: WebGPURenderer): Promise<void> {
+  const disposed = renderer.dispose();
+  const backend = renderer.backend as {
+    device?: { destroy: () => void } | null;
+  };
+  backend.device?.destroy();
+  await disposed;
 }
 
 /** The whole site's extent in EPSG coordinates (the minimap frame). */

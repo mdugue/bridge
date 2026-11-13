@@ -1405,11 +1405,11 @@ be no lighter; a tab-wide net of three in ten minutes covers a
 `?safety=N` page, whose level cannot rise. One incident raises the level
 once: the loss after the page's own memory emergency renews that raise
 (`raisedBy`), and a page killed after one raises nothing more on the next
-load. Before every reload `renderer.dispose()` runs (raced against
-300 ms): it unhooks the geometries' dispose listeners and destroys the
-device, which WebKit otherwise frees only once the old document is
-collected — after the new page has started allocating in the same
-process. A page hidden at that moment reloads once it is visible. The
+load. Before every reload the device is destroyed — WebKit otherwise
+frees its memory only once the old document is collected, after the new
+page has started allocating in the same process — and
+`renderer.dispose()` unhooks the geometries' dispose listeners (raced
+against 300 ms; `disposeAndDestroy`). A page hidden at that moment reloads once it is visible. The
 recovered page sets its pose before the stream's first update (its start
 tile is the one under the camera, `startTileOf`), **looking straight
 down** onto that tile — a pose that looks at the sky or out past the
@@ -1608,9 +1608,11 @@ scene sends when it changed; `__poc.handle` is that client, so its value
 calls are promises. A scene ends when it answers `dispose` — after its
 teardown, the renderer and its device released — or, a worker,
 3 s on (`WORKER_TEARDOWN_MS`; its device goes with it): `dispose()`
-settles then, and the next boot waits for it. A boot aborted on the way
-releases the worker's head start, and the page ends a worker that has
-not ended it 3 s later.
+settles then, and the next boot waits for it. The teardown does not
+wait for the GPU: the device is destroyed before three frees its objects
+(`disposeAndDestroy`; see "Workarounds for upstream bugs"). A boot
+aborted on the way releases the worker's head start, and the page ends
+a worker that has not ended it 3 s later.
 
 The **first frame** waits on the spawn tile's buildings and *any* of its
 terrain levels (`bootApp` in `create-app.ts`); the player is then placed
@@ -1919,6 +1921,20 @@ what to undo once a release fixes it. The comments at those sites say
 *upstream workaround* (`grep -rni "upstream workaround" app lib`). On a
 bump of the dependency, check each entry against its release notes, and
 drop the entry with its workaround.
+
+**three r187: `dispose()` waits for the GPU before it destroys the
+device.** `Renderer.dispose` ends in the backend's, which first awaits
+the timestamp-query pool's pending read-back (`mapAsync`), queued behind
+every frame and compile the GPU has not run yet, and destroys the device
+only then: 26 s on SwiftShader after a city's boot, with the device, its
+memory and the GPU process held while the page had already left (and the
+worker cut off after 3 s). *Worked around* in `disposeAndDestroy`
+(`create-app.ts`): the device is destroyed right after `dispose()` is
+called; three's frees then run on a destroyed device, the refused
+read-back is logged once (`THREE.Error resolving queries`), and three
+ignores a loss for `destroyed`. Teardown takes about 0.1 s. *Once fixed*
+(three destroys the device without waiting for the read-back): call
+`renderer.dispose()` alone again.
 
 **three r187: `compileAsync` is not re-entrant.** Since
 [#34506](https://github.com/mrdoob/three.js/pull/34506) the compile in

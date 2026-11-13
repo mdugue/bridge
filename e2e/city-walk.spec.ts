@@ -1991,7 +1991,7 @@ test.describe("desktop viewer, look", { tag: "@desktop-look" }, () => {
  * (the lite profile streams that one) is the link.
  */
 test.describe("a view link", { tag: "@desktop-look" }, () => {
-  test("opens the page at the linked view, and Link kopieren writes one", async ({
+  test("opens the page at the linked view, Link kopieren writes one, and leaving ends the scene", async ({
     browser,
   }) => {
     const parsed = parseSnapshot(
@@ -2054,6 +2054,43 @@ test.describe("a view link", { tag: "@desktop-look" }, () => {
       expect(back.snapshot.date).toBe(linked.date);
     }
     expectNoErrors(linkErrors);
+
+    // Leaving for the start page ends the scene: its teardown answers well
+    // inside the page's cut-off (scene-client.ts WORKER_TEARDOWN_MS, 3 s),
+    // not after three waited for the GPU's whole queue, and the start page
+    // takes a click.
+    await linkPage.evaluate(() => {
+      const handle = window.__poc?.handle;
+      if (!handle) {
+        return;
+      }
+      const dispose = handle.dispose.bind(handle);
+      handle.dispose = async () => {
+        const started = performance.now();
+        await dispose();
+        (window as { leftMs?: number }).leftMs = performance.now() - started;
+      };
+    });
+    await linkPage.getByRole("link", { name: "Andere Stadt wählen" }).click();
+    await linkPage.waitForURL((at) => at.pathname === "/");
+    const left = await linkPage.waitForFunction(
+      () => (window as { leftMs?: number }).leftMs,
+      undefined,
+      { timeout: slow(10_000) }
+    );
+    const leftMs = await left.jsonValue();
+    expect(leftMs).toBeLessThan(2000);
+    // nothing failed on the way out but the timestamps' read-back three
+    // logs once the device it waited on is gone (docs/rendering.md,
+    // "Workarounds for upstream bugs")
+    expect(linkErrors.page).toEqual([]);
+    expect(
+      linkErrors.console.filter(
+        (line) => !line.includes("THREE.Error resolving queries")
+      )
+    ).toEqual([]);
+    await linkPage.locator(`a[href="${SITE}"]`).first().click();
+    await linkPage.waitForURL((at) => at.pathname === SITE);
     await context.close();
   });
 });
