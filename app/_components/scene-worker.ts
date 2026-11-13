@@ -11,6 +11,7 @@ import type {
   SceneInit,
   ScenePort,
   ToScene,
+  WorkerAlive,
   WorkerHello,
 } from "./scene-protocol";
 import { errorMessage } from "./scene-protocol";
@@ -75,6 +76,9 @@ globalThis.addEventListener(
   }
 );
 scope.addEventListener("message", onInit);
+// at once: the page now waits for the adapter, no longer for the script
+const alive: WorkerAlive = { t: "alive" };
+scope.postMessage(alive, []);
 const sayHello = async () => {
   const hello: WorkerHello = {
     t: "hello",

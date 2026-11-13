@@ -217,7 +217,7 @@ import type { CpuBytes, DressingPartName, TileDressing } from "./tile-stream";
 import { loadGroundPlate } from "./ground-plate-layer";
 import type { GroundPlate } from "./ground-plate-layer";
 import { createNetworkWatch } from "./tile-retry";
-import { installMainYield } from "./main-yield";
+import { installMainYield, whenIdle } from "./main-yield";
 import {
   bootFrames,
   printTrace,
@@ -228,6 +228,7 @@ import {
 import { attachInspector } from "./inspector";
 import type { TouchControlsCallbacks } from "./touch-controls";
 import { pageView } from "./page-view";
+import type { PageEvent } from "./page-view";
 import { setFlagTime } from "./flag-cloth";
 import { createVegetationLod, setCrownTime } from "./vegetation-layer";
 import type { VegetationControl } from "./vegetation-layer";
@@ -650,7 +651,10 @@ export interface SceneApp {
    * `onDesign`.
    */
   design: DesignControls;
-  dispose: () => void;
+  /** Ends the scene; settles once its teardown is through (a teardown
+   *  error goes to the reports, never rejects): the page's worker is
+   *  ended only after it. */
+  dispose: () => Promise<void>;
   /**
    * Asks what stands at a screen point (NDC; the centre when omitted),
    * marks it and reports it through `onInquiry`; tests and QA call it.
@@ -4013,18 +4017,21 @@ async function bootApp(
   // Hidden, a phone's page lets go of every tile not in use; shown again,
   // it gets its cache back and probes the GPU before the next frame draws
   // (page-lifecycle.ts). The time away is the wall clock's: iOS stops
-  // `performance.now()` while the device sleeps.
-  const onVisibility = () =>
+  // `performance.now()` while the device sleeps. It is the page's, stamped
+  // on its event: a worker's message after a sleep lands late.
+  const onVisibility = (event: PageEvent) => {
+    const wall = event.wall ?? Date.now();
     runLifecycle(
       pageView.hidden
-        ? { kind: "hidden", wall: Date.now(), phone: budget.tier === "mobile" }
+        ? { kind: "hidden", wall, phone: budget.tier === "mobile" }
         : {
             kind: "shown",
-            wall: Date.now(),
+            wall,
             now: performance.now(),
             gpuFailure: () => probeGpu(renderer),
           }
     );
+  };
   pageView.addEventListener("visibilitychange", onVisibility);
   cleanups.push(() =>
     pageView.removeEventListener("visibilitychange", onVisibility)
@@ -4123,9 +4130,10 @@ async function bootApp(
   // moment after the gate at which nothing is loading and nothing waits to
   // be dressed.
 
-  // The picture styles' programs compile once the scene has loaded and the
-  // browser is idle, so the first switch to a style does not hitch — at no
-  // cost to the boot, which never draws a style the viewer did not pick.
+  // The picture styles' programs compile once the scene has loaded and its
+  // thread is idle (`whenIdle`), so the first switch to a style does not
+  // hitch — at no cost to the boot, which never draws a style the viewer
+  // did not pick.
   let stylesWarming = false;
   const warm = () => {
     if (!disposed) {
@@ -4138,11 +4146,7 @@ async function bootApp(
       return;
     }
     stylesWarming = true;
-    if (typeof requestIdleCallback === "function") {
-      requestIdleCallback(warm, { timeout: 4000 });
-    } else {
-      setTimeout(warm, 1000);
-    }
+    whenIdle(warm, 4000);
   }
 
   /** "Loaded" on the trace: the time since the veil dropped, and the
@@ -4471,12 +4475,12 @@ async function bootApp(
     getFootprints: currentFootprints,
     ...siteInfo,
     offset,
-    dispose: () => {
+    dispose: async () => {
       if (leave()) {
         // Same list, same order as a failed boot unwinds: animation loop ->
         // resize observer -> listeners -> touch -> post stack -> stream ->
         // lights -> sun rig.
-        void teardown(cleanups, scene, renderer).catch(reportTeardown);
+        await teardown(cleanups, scene, renderer).catch(reportTeardown);
       }
     },
     disposeForReload: async () => {

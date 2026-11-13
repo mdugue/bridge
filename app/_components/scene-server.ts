@@ -24,29 +24,30 @@ import type {
   ToScene,
 } from "./scene-protocol";
 
-/** The reports the scene's options carry (each becomes a message). */
-const REPORTS: readonly ReportName[] = [
-  "onBikeCounts",
-  "onBusy",
-  "onDesign",
-  "onError",
-  "onErrorCleared",
-  "onFatal",
-  "onFollowEnd",
-  "onFps",
-  "onInquiry",
-  "onLoaded",
-  "onModeChange",
-  "onModelView",
-  "onPose",
-  "onRaiseSafety",
-  "onReload",
-  "onSiteInfo",
-  "onStage",
-  "onStats",
-  "onTrafficHour",
-  "onTramStatus",
-];
+/** The reports the scene's options carry (each becomes a message), by
+ *  name: the record keeps the list whole. */
+const REPORTS: Record<ReportName, true> = {
+  onBikeCounts: true,
+  onBusy: true,
+  onDesign: true,
+  onError: true,
+  onErrorCleared: true,
+  onFatal: true,
+  onFollowEnd: true,
+  onFps: true,
+  onInquiry: true,
+  onLoaded: true,
+  onModeChange: true,
+  onModelView: true,
+  onPose: true,
+  onRaiseSafety: true,
+  onReload: true,
+  onSiteInfo: true,
+  onStage: true,
+  onStats: true,
+  onTrafficHour: true,
+  onTramStatus: true,
+};
 
 /** Every bitmap in a reply goes over, not across a copy. */
 function transfersOf(value: unknown): Transferable[] {
@@ -137,7 +138,7 @@ export function serveScene(
     }
   };
   const reports = Object.fromEntries(
-    REPORTS.map((name) => [
+    (Object.keys(REPORTS) as ReportName[]).map((name) => [
       name,
       (...a: unknown[]) => {
         // the footprints first: the page's stats handler reads them

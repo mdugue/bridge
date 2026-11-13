@@ -138,6 +138,7 @@ export function watchPage(
     onPage(pageState(), {
       type: event.type as PageEventType,
       persisted: (event as PageTransitionEvent).persisted,
+      wall: Date.now(),
     });
   for (const type of PAGE_EVENTS) {
     (type === "visibilitychange" ? document : window).addEventListener(

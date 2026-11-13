@@ -122,7 +122,8 @@ export function createNameplateAsk(deps: {
       !inquiry.orchard
     ) {
       // the register's species, as the card names the tree (the same
-      // file, fetched once between them)
+      // file and reading; the card on the page fetches its own copy,
+      // from the HTTP cache)
       const { index } = inquiry;
       if (key !== named) {
         named = null;

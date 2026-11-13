@@ -1585,8 +1585,12 @@ second time. Before, the first tile was asked for in the first frame.
 The minimap's picture is an image the sidebar loads when it shows.
 
 **The scene boots in a worker** (ADR 0061, `scene-client.ts`): the page
-starts `scene-worker.ts`, which first says what it can draw with
-(a WebGPU adapter, `requestAnimationFrame`).
+starts `scene-worker.ts`, which says it runs (`alive`) and then what it
+can draw with (a WebGPU adapter, `requestAnimationFrame`). The page waits
+up to 60 s for the script (a slow line's download) and 10 s more for the
+adapter; a script that never arrives is the network's ("network: …",
+`BootError`'s plain words), one that throws or stays silent "Die Ansicht
+startet nicht."
 Where that matches the page, the page hands it the canvas as an
 `OffscreenCanvas` with the init (budget, size, site, look, the page's
 address and state); the worker asks for the tileset and the start tile
@@ -1596,7 +1600,8 @@ worker gets the no-GPU message (`?thread=main` runs the same server on
 the page, for debugging). Everything the HUD reads every frame — the camera,
 the pose, Modell's state, what streams — comes back in the mirror the
 scene sends when it changed; `__poc.handle` is that client, so its value
-calls are promises. A scene ends when it answers `dispose` or, a worker,
+calls are promises. A scene ends when it answers `dispose` — after its
+teardown, the renderer and its device released — or, a worker,
 3 s on (`WORKER_TEARDOWN_MS`; its device goes with it): `dispose()`
 settles then, and the next boot waits for it. A boot aborted on the way
 releases the worker's head start, and the page ends a worker that has
@@ -1700,12 +1705,14 @@ fine level shows bare and its trees, lamps and rails arrive once its
 dressing is built — on a phone that blink of no trees is back, the price
 of a stream that keeps moving. A dressing's **ask sets** — what the
 inquiry probe can ask of its trees, monuments, decks, hedges, lamps and
-furniture — are built once it hangs, when the main thread is idle (at
-most 2 s on, `buildAsksWhenIdle`), not inside its build: they place
+furniture — are built once it hangs, when the scene's thread is idle (at
+most 2 s on, `buildAsksWhenIdle`; in the worker, which has no
+`requestIdleCallback`, a background `scheduler.postTask`, and in WebKit's
+a quarter-second timer — `whenIdle`), not inside its build: they place
 every canopy tree a second time for a card nobody may open (0.3 s of a
 dense tile's build in the local trace); a question that comes first
 builds them at once (`asksOf`) — on a saturated page the idle time can be
-minutes in coming (timers and idle callbacks wait behind three's compile
+minutes in coming (timers and idle tasks wait behind three's compile
 steps there; plan 069's Findings). **Ready** (`onLoaded`,
 `__poc.ready`) is the first moment after the gate at which the spawn tile
 is dressed, the renderer is idle and no dressing is pending; it also lifts

@@ -28,9 +28,13 @@ export interface PageState {
  *  the page (as PageTransitionEvent does, which a worker cannot make). */
 export class PageEvent extends Event {
   readonly persisted: boolean;
-  constructor(type: PageEventType, persisted = false) {
+  /** the page's wall clock when it happened (`Date.now()`), stamped on the
+   *  page; a DOM event (the scene on the page) has none: it is now */
+  readonly wall?: number;
+  constructor(type: PageEventType, persisted = false, wall?: number) {
     super(type);
     this.persisted = persisted;
+    this.wall = wall;
   }
 }
 
@@ -137,11 +141,11 @@ export const pageView: PageView = fed ?? documentView();
  */
 export function feedPageView(
   state: PageState,
-  event?: { persisted?: boolean; type: PageEventType }
+  event?: { persisted?: boolean; type: PageEventType; wall?: number }
 ): void {
   fed?.feed(
     state,
-    event ? new PageEvent(event.type, event.persisted) : undefined
+    event ? new PageEvent(event.type, event.persisted, event.wall) : undefined
   );
 }
 

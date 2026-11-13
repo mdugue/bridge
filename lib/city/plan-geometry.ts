@@ -590,7 +590,11 @@ export function planMesh(
   const groundOr = (p: PlanPoint) =>
     ground.own(p) ?? ground.at(p) ?? ground.fallback;
   for (const f of areas.filter(isBlock)) {
-    const low = Math.min(...openRing(f.rings[0] ?? []).map(groundOr));
+    // a loop, not a spread: a worker's stack takes no argument per point
+    let low = Number.POSITIVE_INFINITY;
+    for (const p of openRing(f.rings[0] ?? [])) {
+      low = Math.min(low, groundOr(p));
+    }
     writeBuilding(writer("building"), f.rings, low, f.height ?? 0);
   }
   for (const f of features) {

@@ -1,6 +1,6 @@
 # ADR 0061: The scene runs in a worker; the page hosts it
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-11
 
 ## Context

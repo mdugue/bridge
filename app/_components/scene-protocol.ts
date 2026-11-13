@@ -122,6 +122,9 @@ export type ToScene =
 export interface PageEventMessage {
   persisted?: boolean;
   type: PageEventType;
+  /** the page's wall clock when it happened (`Date.now()`): a hide's time
+   *  is the page's, not the worker's when the message landed */
+  wall: number;
 }
 
 /** The scene to the page. */
@@ -149,7 +152,16 @@ export type ToPage =
       res: PlateResolution;
     };
 
-/** The worker's first word, before the page hands it the canvas. */
+/** The worker's first word: its script arrived and runs (the page's wait
+ *  for it is a download's; for the hello after it, an adapter's). */
+export interface WorkerAlive {
+  t: "alive";
+}
+
+/** What the worker says, before the page hands it the canvas. */
+export type WorkerFirstWord = WorkerAlive | WorkerHello;
+
+/** The worker's second word: what it can draw with. */
 export interface WorkerHello {
   t: "hello";
   /** WebGPU gives an adapter here */

@@ -8,6 +8,7 @@
  * as of its last turn; calls that return a value return a promise; the
  * rest are told and ordered with everything else on the channel.
  */
+import { NETWORK_PREFIX } from "@/lib/city/fetch-retry";
 import type { GpuLoss } from "@/lib/city/gpu-safety";
 import type { LookState } from "@/lib/city/look-state";
 import type { MapFootprints } from "@/lib/city/minimap";
@@ -41,6 +42,7 @@ import type {
   SceneStatic,
   ToPage,
   ToScene,
+  WorkerFirstWord,
   WorkerHello,
 } from "./scene-protocol";
 import { inspectRequested } from "./scene-profile";
@@ -235,7 +237,11 @@ export function sceneThreadOf(search: string): SceneThread {
   return asked === "main" || inspectRequested(search) ? "main" : "worker";
 }
 
-/** How long a new scene worker has to say what it can draw with (ms). */
+/** How long a new scene worker's script has to arrive and run (ms): its
+ *  chunk on a slow line. */
+const LOAD_MS = 60_000;
+/** How long a running scene worker has to say what it can draw with (ms):
+ *  the WebGPU adapter it asks for. */
 const HELLO_MS = 10_000;
 
 /** One end of the channel and how to close it. */
@@ -245,25 +251,57 @@ interface Channel {
   thread: SceneThread;
 }
 
-/** What the worker said first, or null if it failed or kept silent. */
-async function helloOf(worker: Worker): Promise<WorkerHello | null> {
-  return await new Promise<WorkerHello | null>((resolve) => {
-    const done = (said: WorkerHello | null) => {
+/** What the worker said first; or why it did not: its script never ran
+ *  (not loaded — the network's), it threw, or it kept silent. */
+type HelloOutcome =
+  | { said: WorkerHello }
+  | { failed: "unloaded" | "threw" | "silent" };
+
+/** What the worker said first, or why it said nothing. The wait is
+ *  `LOAD_MS` until its script runs (its first word, `alive`), then
+ *  `HELLO_MS`. */
+async function helloOf(worker: Worker): Promise<HelloOutcome> {
+  return await new Promise<HelloOutcome>((resolve) => {
+    let running = false;
+    const done = (outcome: HelloOutcome) => {
       clearTimeout(timer);
       worker.removeEventListener("message", onMessage);
       worker.removeEventListener("error", onError);
-      resolve(said);
+      resolve(outcome);
     };
-    const onMessage = (event: MessageEvent<WorkerHello>) => {
-      if (event.data?.t === "hello") {
-        done(event.data);
+    const onMessage = (event: MessageEvent<WorkerFirstWord>) => {
+      if (event.data?.t === "alive") {
+        running = true;
+        clearTimeout(timer);
+        timer = setTimeout(() => done({ failed: "silent" }), HELLO_MS);
+      } else if (event.data?.t === "hello") {
+        done({ said: event.data });
       }
     };
-    const onError = () => done(null);
-    const timer = setTimeout(() => done(null), HELLO_MS);
+    // a script that did not load fires a bare error event (no message);
+    // one that threw, an ErrorEvent with the exception's
+    const onError = (event: Event) =>
+      done({
+        failed:
+          running || (event instanceof ErrorEvent && event.message)
+            ? "threw"
+            : "unloaded",
+      });
+    let timer = setTimeout(
+      () => done({ failed: running ? "silent" : "unloaded" }),
+      LOAD_MS
+    );
     worker.addEventListener("message", onMessage);
     worker.addEventListener("error", onError);
   });
+}
+
+/** The boot's message for a worker that never said hello: a script that
+ *  did not arrive is the network's (BootError says so in plain words). */
+function noHelloMessage(failed: "unloaded" | "threw" | "silent"): string {
+  return failed === "unloaded"
+    ? `${NETWORK_PREFIX}the scene's worker did not load`
+    : "Die Ansicht startet nicht.";
 }
 
 /**
@@ -275,10 +313,15 @@ async function workerChannel(): Promise<Channel> {
     type: "module",
     name: "scene",
   });
-  const hello = await helloOf(worker);
-  if (!hello?.raf || !hello.offscreen || !hello.gpu) {
+  const outcome = await helloOf(worker);
+  if ("failed" in outcome) {
     worker.terminate();
-    throw new Error(hello ? NO_GPU_MESSAGE : "Die Ansicht startet nicht.");
+    throw new Error(noHelloMessage(outcome.failed));
+  }
+  const hello = outcome.said;
+  if (!hello.raf || !hello.offscreen || !hello.gpu) {
+    worker.terminate();
+    throw new Error(NO_GPU_MESSAGE);
   }
   forwardErrors(worker);
   return { port: worker, thread: "worker", end: () => worker.terminate() };

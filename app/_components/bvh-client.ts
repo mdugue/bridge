@@ -59,8 +59,8 @@ const building = new WeakSet<BufferGeometry>();
 /** geometries whose arrays a dying worker took with it: drawn, never
  *  raycast again (treated as still building) */
 const lost = new WeakSet<BufferGeometry>();
-/** How long a build here, where the worker cannot, waits for an idle main
- *  thread at most (ms). */
+/** How long a build here, where the worker cannot, waits for an idle
+ *  scene thread at most (ms; `whenIdle`). */
 const IDLE_BUILD_MS = 1000;
 
 /** Whether `geometry`'s BVH is being built off the thread (its positions

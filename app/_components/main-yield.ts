@@ -46,17 +46,65 @@ export function installMainYield(): void {
   }
 }
 
+/** The fallback's wait where neither idle API exists (WebKit's worker). */
+const IDLE_FALLBACK_MS = 250;
+
+type PostTask = (
+  task: () => void,
+  opts: { priority: "background"; signal: AbortSignal }
+) => Promise<unknown>;
+
 /**
- * Runs `work` once the main thread is idle — at the latest after
- * `timeoutMs`, since a busy page never is. Where `requestIdleCallback` is
- * missing (Safari before 18) a timer of half that stands in. Returns what
- * cancels it.
+ * Runs `work` once the thread is idle — at the latest after `timeoutMs`,
+ * since a busy thread never is. The page has `requestIdleCallback`; the
+ * scene's worker (ADR 0061) has none in any browser, so there a
+ * background-priority `scheduler.postTask` stands in (Chromium and
+ * Firefox workers), raced against the timeout; where neither exists
+ * (WebKit) a short timer does. Returns what cancels it.
  */
 export function whenIdle(work: () => void, timeoutMs: number): () => void {
   if (typeof requestIdleCallback === "function") {
     const id = requestIdleCallback(work, { timeout: timeoutMs });
     return () => cancelIdleCallback(id);
   }
-  const id = setTimeout(work, timeoutMs / 2);
-  return () => clearTimeout(id);
+  const host = globalThis as unknown as {
+    scheduler?: { postTask?: PostTask };
+  };
+  const postTask = host.scheduler?.postTask;
+  if (typeof postTask !== "function") {
+    const id = setTimeout(work, Math.min(timeoutMs / 2, IDLE_FALLBACK_MS));
+    return () => clearTimeout(id);
+  }
+  const abort = new AbortController();
+  let done = false;
+  const run = () => {
+    if (!done) {
+      done = true;
+      clearTimeout(timer);
+      work();
+    }
+  };
+  const timer = setTimeout(() => {
+    abort.abort();
+    run();
+  }, timeoutMs);
+  const background = async () => {
+    try {
+      await postTask.call(host.scheduler, run, {
+        priority: "background",
+        signal: abort.signal,
+      });
+    } catch (error) {
+      // an abort is ours; anything else `work` threw, and stays loud
+      if (!abort.signal.aborted) {
+        throw error;
+      }
+    }
+  };
+  void background();
+  return () => {
+    done = true;
+    clearTimeout(timer);
+    abort.abort();
+  };
 }
