@@ -1608,7 +1608,13 @@ scene sends when it changed; `__poc.handle` is that client, so its value
 calls are promises. A scene ends when it answers `dispose` — after its
 teardown, the renderer and its device released — or, a worker,
 3 s on (`WORKER_TEARDOWN_MS`; its device goes with it): `dispose()`
-settles then, and the next boot waits for it. A boot aborted on the way
+settles then, and the next boot waits for it. The teardown does not
+wait for the GPU: compiles still queued for their turn never start
+(`closeTurns`, `compile-lanes.ts`), and the device is destroyed as three's
+dispose begins — three would first wait for its last timestamps, behind
+every queued frame and compile (26 s on SwiftShader), with the device,
+its memory and the GPU process's compiles held all the while; three logs
+the refused read-back once. A boot aborted on the way
 releases the worker's head start, and the page ends a worker that has
 not ended it 3 s later.
 

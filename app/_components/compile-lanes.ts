@@ -21,6 +21,9 @@
  */
 const turns = new WeakMap<object, Promise<void>>();
 
+/** Renderers whose scene is going: their queued compiles never start. */
+const closed = new WeakSet<object>();
+
 /** How many compiles each renderer has queued or in flight. */
 const queued = new WeakMap<object, number>();
 
@@ -29,6 +32,17 @@ const queued = new WeakMap<object, number>();
  *  waits for its turn). */
 export function compilesQueued(renderer: object): number {
   return queued.get(renderer) ?? 0;
+}
+
+/**
+ * The scene on `renderer` is going (create-app.ts `teardown`): a compile
+ * still waiting for its turn settles without starting, as no frame will
+ * draw it. Otherwise a teardown that came while the styles or a tile were
+ * queued kept the GPU process compiling pipelines one by one, seconds
+ * after the page had left.
+ */
+export function closeTurns(renderer: object): void {
+  closed.add(renderer);
 }
 
 /**
@@ -55,7 +69,13 @@ export async function compileInTurn(
   start: () => Promise<void>
 ): Promise<void> {
   const before = turns.get(renderer) ?? Promise.resolve();
-  const compiling = before.then(start);
+  const turn = async (): Promise<void> => {
+    await before;
+    if (!closed.has(renderer)) {
+      await start();
+    }
+  };
+  const compiling = turn();
   turns.set(
     renderer,
     compiling.catch(() => {

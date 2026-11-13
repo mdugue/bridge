@@ -130,7 +130,7 @@ import {
 import type { OutlineSelection } from "./selection-outline";
 import { trafficMesh } from "./traffic-flow";
 import { createCityCollider } from "./collision";
-import { compilesQueued } from "./compile-lanes";
+import { closeTurns, compilesQueued } from "./compile-lanes";
 import { createDemolitions } from "./demolitions";
 import { createDesignLayer } from "./design-layer";
 import type { DesignLayer, DesignStatus } from "./design-layer";
@@ -1312,6 +1312,7 @@ async function teardown(
   scene: Scene,
   renderer: WebGPURenderer
 ): Promise<void> {
+  closeTurns(renderer);
   try {
     try {
       runCleanups(cleanups);
@@ -1345,6 +1346,7 @@ async function teardownWhole(
     total: number;
   }) => void
 ): Promise<void> {
+  closeTurns(renderer);
   try {
     try {
       runCleanups(cleanups);
@@ -1378,10 +1380,20 @@ function stopWorkers(): void {
 /** The renderer and its device (or its context); the canvas is the
  *  page's (scene-host.ts takes it out). */
 async function releaseRenderer(renderer: WebGPURenderer): Promise<void> {
-  // Async: it destroys the device (or loses the context) at the end.
-  await renderer.dispose().catch(() => {
+  // three frees its objects at once, then waits for the GPU's last
+  // timestamps before it destroys the device: behind a queue of frames
+  // and compiles that took seconds (26 s on SwiftShader), while the device
+  // and its memory stayed and the page waited for the answer. The device
+  // goes now instead: what is queued is dropped, the timestamps' read-back
+  // is refused, and three ignores a loss for `destroyed` (`deviceGone`).
+  const disposed = renderer.dispose().catch(() => {
     // a dispose that fails leaves nothing more to free
   });
+  const backend = renderer.backend as {
+    device?: { destroy: () => void } | null;
+  };
+  backend.device?.destroy();
+  await disposed;
 }
 
 /** The whole site's extent in EPSG coordinates (the minimap frame). */
