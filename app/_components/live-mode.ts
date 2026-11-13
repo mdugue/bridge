@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import { gridConvergenceDeg } from "@/lib/city/crs";
 import { normalizeDeg, placementOf } from "@/lib/city/geolocation";
 import { useSite } from "./site-context";
-import type { CityWalkHandle } from "./create-app";
+import type { CityWalkHandle } from "./scene-client";
 import {
   orientationNeedsPermission,
   requestOrientationPermission,
@@ -186,9 +186,13 @@ export function useLiveMode(
   const ended = useCallback(() => {
     if (onRef.current) {
       release();
+      // an aim or fix still in flight to the scene would set the follow
+      // again: these land after it (and end nothing, so say nothing)
+      handleRef.current?.setFollowAim(null);
+      handleRef.current?.setFollowPosition(null);
       say("Live beendet — du steuerst wieder selbst");
     }
-  }, [release, say]);
+  }, [handleRef, release, say]);
 
   const available =
     live || on || (coarse && orientationNeedsPermission() && !refused);

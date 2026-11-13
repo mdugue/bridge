@@ -73,7 +73,7 @@ import type { PlayerPose } from "@/lib/city/pose";
 import { sunTimesOn } from "@/lib/city/sun";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { cn } from "cn";
-import type { CityWalkHandle } from "./create-app";
+import type { CityWalkHandle } from "./scene-client";
 import { DataLayersPanel } from "./data-layers-panel";
 import type { MapPicture } from "@/lib/city/minimap";
 import { Minimap } from "./minimap";
@@ -950,10 +950,10 @@ export const SceneSidebar = (props: SceneSidebarProps) => {
               canTravel={props.canTravel}
               onForget={() => props.setRememberedView(null)}
               onRemember={() => {
-                const here = handleRef.current?.captureViewpoint();
-                if (here) {
-                  props.setRememberedView(here);
-                }
+                void handleRef.current
+                  ?.captureViewpoint()
+                  .then((here) => props.setRememberedView(here))
+                  .catch(() => null);
               }}
               onRestore={() => {
                 if (props.rememberedView) {

@@ -133,7 +133,7 @@ jobs:
   # Dresden tile in 165 s where its two siblings, from the same cache, took
   # 24–31 s — the shard ran out of its budget in the build. The browser's
   # share of a test is negligible next to SwiftShader's frames, so a lighter
-  # driver (Lightpanda has no WebGL at all) gains nothing; what helps is
+  # driver (Lightpanda has no WebGPU at all) gains nothing; what helps is
   # fewer frames per runner. Building once and handing the result to the
   # shards was measured and left: the build output is ~550 MB compressed
   # (.next and public/data, 2026-11-11), whose upload and four downloads
@@ -143,7 +143,7 @@ jobs:
   e2e:
     name: E2E (${{ matrix.shard.name }})
     runs-on: ubuntu-latest
-    # The viewer specs drive the real scene through software-rendered WebGL,
+    # The viewer specs drive the real scene through software-rendered WebGPU,
     # one worker at a time (see playwright.config.ts). A shared runner is
     # about half the speed of a developer machine, so leave headroom: a tight
     # budget cancels the job mid-run and reports nothing at all, which is

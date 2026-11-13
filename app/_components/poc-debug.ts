@@ -7,12 +7,17 @@
  * It publishes the objects the HUD itself drives — the scene handle and the
  * look store — rather than a hand-copied mirror of their members: a member
  * added to either is available to the specs without an edit here, and
- * nothing can be left out of a registration list.
+ * nothing can be left out of a registration list. What the render loop
+ * counts and the probes the specs set on it live with the scene, which may
+ * run in a worker (poc-scene.ts, ADR 0061): here they are accessors that
+ * read the scene's last mirror and send the probes on.
  */
 
 import type { VeilState } from "@/lib/city/load-frontier";
 import type { LookState } from "@/lib/city/look-state";
-import type { CityWalkHandle, CityWalkStats } from "./create-app";
+import type { CityWalkStats } from "./create-app";
+import type { PocCounts, PocProbe } from "./poc-scene";
+import type { CityWalkHandle } from "./scene-client";
 
 export interface PocDebugInfo {
   /**
@@ -75,69 +80,79 @@ const enabled =
   process.env.NODE_ENV === "development" ||
   process.env.NEXT_PUBLIC_POC_DEBUG === "1";
 
-export function updatePocDebug(patch: Partial<PocDebugInfo>): void {
+/** The booted scene's side of the hook (scene-client.ts). */
+export interface PocScene {
+  /** what the scene counted, as of its last mirror */
+  counts: () => PocCounts | null;
+  /** the specs' probes, sent to the scene */
+  probe: (probe: PocProbe) => void;
+}
+
+let scene: PocScene | null = null;
+const probe: PocProbe = {};
+
+/** A count the hook reads from the scene's last mirror. */
+const counted = (key: "frames" | "regressed" | "shadowRenders") => ({
+  enumerable: true,
+  get: () => scene?.counts()?.[key] ?? (key === "regressed" ? undefined : 0),
+});
+
+/** A probe the specs set on the hook, sent on to the scene. */
+const probed = (key: "frameMs" | "hold" | "veil") => ({
+  enumerable: true,
+  get: () => probe[key],
+  set: (value: unknown) => {
+    // reason: each key takes its own member's type from the specs
+    (probe as Record<string, unknown>)[key] = value;
+    // the key alone: a whole copy would ask its stale step again
+    scene?.probe({ [key]: value });
+  },
+});
+
+/** The hook on the window, made once with its accessors. */
+function pocInfo(): PocDebugInfo {
+  if (window.__poc) {
+    return window.__poc;
+  }
+  const poc = { firstFrame: false, ready: false } as PocDebugInfo;
+  Object.defineProperties(poc, {
+    frames: counted("frames"),
+    shadowRenders: counted("shadowRenders"),
+    regressed: counted("regressed"),
+    hold: probed("hold"),
+    frameMs: probed("frameMs"),
+    veil: probed("veil"),
+    step: {
+      enumerable: true,
+      // the scene counts it down as it draws
+      get: () => scene?.counts()?.step ?? probe.step,
+      set: (value: number | undefined) => {
+        probe.step = value;
+        scene?.probe({ step: value });
+      },
+    },
+  });
+  window.__poc = poc;
+  return poc;
+}
+
+export function updatePocDebug(
+  patch: Partial<Omit<PocDebugInfo, keyof PocCounts | keyof PocProbe>>
+): void {
+  if (enabled) {
+    Object.assign(pocInfo(), patch);
+  }
+}
+
+/** The booted scene behind the hook's counters and probes; the probes set
+ *  before it booted go to it at once. */
+export function connectPocScene(next: PocScene | null): void {
   if (!enabled) {
     return;
   }
-  window.__poc = {
-    firstFrame: false,
-    ready: false,
-    frames: 0,
-    shadowRenders: 0,
-    ...window.__poc,
-    ...patch,
-  };
-}
-
-/** True while the e2e specs hold the render loop (`hold`); never in a
- *  production build. */
-export function pocFramesHeld(): boolean {
-  const poc = enabled ? window.__poc : undefined;
-  if (poc?.hold !== true) {
-    return false;
-  }
-  // counted down by the frames drawn (`tickPocFrame`), not the ones
-  // asked for: the pace may skip one
-  return (poc.step ?? 0) <= 0;
-}
-
-/** The probe's loading veil (`veil`), if one is set; never in a
- *  production build. */
-export function pocVeil(): PocDebugInfo["veil"] {
-  return enabled ? window.__poc?.veil : undefined;
-}
-
-let virtualMs: number | null = null;
-/** how far the probe's clock has drifted from the wall clock: kept after
- *  `frameMs` is cleared, so the clock never runs backwards */
-let offsetMs = 0;
-
-/** The time the frame's clock reads: the wall clock's, or a probe's fixed
- *  step (`frameMs`). Never anything but `time` in a production build. */
-export function pocFrameTime(time: number): number {
-  const frameMs = enabled ? window.__poc?.frameMs : undefined;
-  if (frameMs === undefined) {
-    virtualMs = null;
-    return time + offsetMs;
-  }
-  virtualMs = virtualMs === null ? time + offsetMs : virtualMs + frameMs;
-  offsetMs = virtualMs - time;
-  return virtualMs;
-}
-
-/** Called once per rendered frame from the animation loop. */
-export function tickPocFrame(shadowRendered: boolean): void {
-  if (!enabled) {
-    return;
-  }
-  const poc = window.__poc;
-  if (poc) {
-    poc.frames += 1;
-    if ((poc.step ?? 0) > 0) {
-      poc.step = (poc.step ?? 0) - 1;
-    }
-    if (shadowRendered) {
-      poc.shadowRenders += 1;
-    }
-  }
+  pocInfo();
+  scene = next;
+  // the boot carried them, a step among them: these are the ones set
+  // since, and a step set before would be asked twice
+  next?.probe({ hold: probe.hold, frameMs: probe.frameMs, veil: probe.veil });
 }

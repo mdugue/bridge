@@ -63,7 +63,10 @@ const Viewer = async ({ params }: Props) => {
   }
   // The manifest and the tileset it names, on their way with the HTML:
   // the viewer's own fetches then find them (as its fetch asks: CORS mode,
-  // same-origin credentials).
+  // same-origin credentials). The tileset is fetched by the scene worker
+  // (ADR 0061), which does not see the page's preloads: it finds the file
+  // in the HTTP cache (content-hashed, immutable), so the browser's
+  // "preloaded but not used" warning for it is expected.
   for (const href of firstFetches(built)) {
     preload(href, { as: "fetch", crossOrigin: "anonymous" });
   }

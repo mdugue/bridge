@@ -26,7 +26,7 @@ import { RENDER_STYLE_BY_ID, styleInstant } from "@/lib/city/render-style";
 import type { RenderStyle } from "@/lib/city/render-style";
 import { siteAttribution } from "@/lib/city/site";
 import type { Site } from "@/lib/city/site";
-import type { CityWalkHandle } from "./create-app";
+import type { CityWalkHandle } from "./scene-client";
 import type { ModelHud } from "./model-rig";
 import type { CapturedImage } from "./scene-capture";
 
@@ -241,7 +241,7 @@ function withLegend(
   image: CapturedImage,
   info: ExportContext
 ): HTMLCanvasElement {
-  const { canvas } = image;
+  const { image: canvas } = image;
   const unit = Math.max(1, image.imagePxPerCssPx);
   const mpp = info.model
     ? info.model.metresPerPixel / image.imagePxPerCssPx
@@ -260,6 +260,8 @@ function withLegend(
   }
   ctx.drawImage(canvas, 0, 0);
   legend(ctx, canvas.width, unit, info, mpp, null, canvas.height);
+  // the frame's pixels are on the sheet now
+  canvas.close();
   return out;
 }
 
@@ -338,21 +340,26 @@ export async function saveShadowStudy(
   let unit = 1;
   let labelW = 0;
   let labelH = 0;
-  let first: CapturedImage | null = null;
+  let first: { height: number; imagePxPerCssPx: number; width: number } | null =
+    null;
   try {
     for (let i = 0; i < panels.length; i += 1) {
       const panel = panels[i];
       h.setSun(panel.date);
       const image = await h.captureImage();
       if (!sheet) {
-        first = image;
-        f = Math.min(1, SHEET_MAX_W / (cols * image.canvas.width));
+        first = {
+          width: image.image.width,
+          height: image.image.height,
+          imagePxPerCssPx: image.imagePxPerCssPx,
+        };
+        f = Math.min(1, SHEET_MAX_W / (cols * image.image.width));
         unit = Math.max(1, image.imagePxPerCssPx * f * 1.5);
         labelW = 96 * unit;
         labelH = 24 * unit;
         sheet = document.createElement("canvas");
-        sheet.width = Math.round(labelW + cols * image.canvas.width * f);
-        sheet.height = Math.round(labelH + rows * image.canvas.height * f);
+        sheet.width = Math.round(labelW + cols * image.image.width * f);
+        sheet.height = Math.round(labelH + rows * image.image.height * f);
         ctx = sheet.getContext("2d");
         if (!ctx) {
           throw new Error("2D canvas unsupported");
@@ -360,15 +367,16 @@ export async function saveShadowStudy(
         ctx.fillStyle = PAPER;
         ctx.fillRect(0, 0, sheet.width, sheet.height);
       }
-      const w = image.canvas.width * f;
-      const hgt = image.canvas.height * f;
+      const w = image.image.width * f;
+      const hgt = image.image.height * f;
       ctx?.drawImage(
-        image.canvas,
+        image.image,
         labelW + panel.col * w,
         labelH + panel.row * hgt,
         w,
         hgt
       );
+      image.image.close();
       onProgress?.(i + 1, panels.length);
     }
   } finally {
@@ -377,8 +385,8 @@ export async function saveShadowStudy(
   if (!(sheet && ctx && first)) {
     return;
   }
-  const w = first.canvas.width * f;
-  const hgt = first.canvas.height * f;
+  const w = first.width * f;
+  const hgt = first.height * f;
   ctx.fillStyle = INK;
   ctx.font = `600 ${11 * unit}px ${FONT}`;
   ctx.textBaseline = "middle";

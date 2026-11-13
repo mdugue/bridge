@@ -287,7 +287,7 @@ export interface FrameSigns {
   allocation: boolean;
   /** the page had a memory emergency */
   emergency: boolean;
-  /** whether the GPU still takes work (create-app's probe; WebGL2: yes) */
+  /** whether the GPU still takes work (create-app's probe) */
   answers: () => boolean;
 }
 

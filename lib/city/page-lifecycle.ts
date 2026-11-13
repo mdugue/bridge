@@ -72,7 +72,8 @@ export interface LifecycleOptions {
   shadowHoldMs: number;
   /**
    * Whether the page reloads to recover this loss (gpu-recovery's answer,
-   * create-app's `onGpuLost`): asked once per stop, and only on a page not
+   * as the page listed it for create-app's `reloadable`): asked once per
+   * stop, and only on a page not
    * disposed. One that throws (the recovery's capture failed) is no reload:
    * noted as "recovery failed", and the page says the GPU failed — the
    * throw never escapes `dispatch`, so the render stops all the same.

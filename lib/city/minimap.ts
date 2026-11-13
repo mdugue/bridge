@@ -87,7 +87,9 @@ export interface FootprintPoly {
 export interface MapFootprints {
   outlines: readonly FootprintPoly[];
   tiles: readonly {
-    gone: (object: number) => boolean;
+    /** (a set, not a test: the footprints cross from the scene's worker,
+     *  ADR 0061) */
+    gone: ReadonlySet<number>;
     pack: FootprintPack;
   }[];
 }

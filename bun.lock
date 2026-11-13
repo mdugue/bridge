@@ -82,6 +82,7 @@
     "sharp",
   ],
   "patchedDependencies": {
+    "3d-tiles-renderer@0.5.4": "patches/3d-tiles-renderer@0.5.4.patch",
     "cityjson-threejs-loader@0.4.0": "patches/cityjson-threejs-loader@0.4.0.patch",
   },
   "packages": {

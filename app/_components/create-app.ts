@@ -35,11 +35,11 @@ import {
   SLICE_MS,
   setSliceBudget,
 } from "@/lib/city/build-steps";
-import { createStillness } from "@/lib/city/frame-pace";
-import type { FramePace } from "@/lib/city/frame-pace";
+import { createFramePace, createStillness } from "@/lib/city/frame-pace";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import { shadowTilesStream } from "@/lib/city/gpu-safety";
 import type { GpuLoss, SafetyLevel } from "@/lib/city/gpu-safety";
+import { TEARDOWN_WAIT_MS } from "./scene-protocol";
 import { bootingPose } from "@/lib/city/boot-start";
 import { createGround } from "@/lib/city/ground";
 import { createPageLifecycle } from "@/lib/city/page-lifecycle";
@@ -53,11 +53,7 @@ import type { LookKey, LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
 import type { BikeCounter } from "@/lib/city/bike-counts";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
-import {
-  nextRenderStyle,
-  RENDER_STYLE_BY_ID,
-  styleInstant,
-} from "@/lib/city/render-style";
+import { RENDER_STYLE_BY_ID, styleInstant } from "@/lib/city/render-style";
 import type { RenderStyle } from "@/lib/city/render-style";
 import { minimapOf } from "@/lib/city/minimap";
 import type { MapFootprints, MapPicture } from "@/lib/city/minimap";
@@ -107,7 +103,6 @@ import { stopNicheWorker } from "./window-niche-client";
 import type { GlideOptions } from "./camera-flight";
 import { createCameraPose } from "./camera-pose";
 import type { FollowAim } from "./camera-pose";
-import { canvasSizeFor } from "./canvas-size";
 import { createModelRig } from "./model-rig";
 import type { ModelHud, ModelRig, ViewMode } from "./model-rig";
 import { setViewDirection } from "./view-direction";
@@ -135,12 +130,14 @@ import {
 import type { OutlineSelection } from "./selection-outline";
 import { trafficMesh } from "./traffic-flow";
 import { createCityCollider } from "./collision";
+import { compilesQueued } from "./compile-lanes";
 import { createDemolitions } from "./demolitions";
 import { createDesignLayer } from "./design-layer";
 import type { DesignLayer, DesignStatus } from "./design-layer";
 import { cutsGround, foldedThing, groundKeptUnderDesign } from "./design-site";
 import { graphOf, setGraph } from "./material-slots";
 import type { CrashTrail } from "./crash-trail";
+import type { NameplateDeps } from "./nameplate-layer";
 import { leafLitterAt, seasonAt, seasonShiftFor } from "@/lib/city/tree-season";
 import { crownLeaf, footLitter } from "./tree-foot";
 import { bootAhead } from "./boot-ahead";
@@ -150,10 +147,9 @@ import { readFootprints } from "@/lib/city/footprint-pack";
 import type { FootprintPack } from "@/lib/city/footprint-pack";
 import type { MovementMode } from "./fps-movement";
 import { NO_GPU_MESSAGE } from "./gpu-support";
-import { raiseSafety } from "./gpu-safety";
 import { pageLeaving } from "./net-gate";
 import { createSceneFog, installSceneFog, VALLEY_HAZE } from "./height-fog";
-import { attachKeyboardControls } from "./keyboard-controls";
+import type { KeyboardActions } from "./keyboard-controls";
 import { createLampLights, LAMP_LIGHTS } from "./lamp-layer";
 import { createLampReflections, uniqueHeads } from "./lamp-reflections";
 import {
@@ -167,18 +163,17 @@ import { setMapAltitude } from "./map-overlay";
 import type { TramCarsStatus } from "./tram-cars";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import {
+  notePocRegressed,
   pocFramesHeld,
   pocFrameTime,
   pocVeil,
   tickPocFrame,
-  updatePocDebug,
-} from "./poc-debug";
+} from "./poc-scene";
 import { createPostStack } from "./post-stack";
 import type { FocusInfo, PostStack } from "./post-stack";
 import { createNameplate } from "./nameplate-layer";
 import {
   cityHides,
-  coverBoxes,
   createNameplateAsk,
   landmarkFactsHref,
 } from "./nameplate-ask";
@@ -187,6 +182,7 @@ import type { SceneCensus } from "./scene-census";
 import { retainOpenSkyTexture } from "./sky-light";
 import {
   aoSamplesFor,
+  inspectRequested,
   postProfileFor,
   pixelRatioFor,
   shadowMapSizeFor,
@@ -194,9 +190,10 @@ import {
   tileCacheBytesFor,
 } from "./scene-profile";
 import type { SceneBudget } from "./scene-profile";
-import { createSunRig, sunStateAt } from "./sun-rig";
+import { createSunRig } from "./sun-rig";
 import { createSceneEnvironment, sceneNight } from "./scene-environment";
-import type { SunState } from "./sun-rig";
+import { sunStateAt } from "@/lib/city/sun";
+import type { SunState } from "@/lib/city/sun";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
   bufferBytes,
@@ -220,7 +217,7 @@ import type { CpuBytes, DressingPartName, TileDressing } from "./tile-stream";
 import { loadGroundPlate } from "./ground-plate-layer";
 import type { GroundPlate } from "./ground-plate-layer";
 import { createNetworkWatch } from "./tile-retry";
-import { installMainYield } from "./main-yield";
+import { installMainYield, whenIdle } from "./main-yield";
 import {
   bootFrames,
   printTrace,
@@ -228,8 +225,10 @@ import {
   streamTimings,
   traceRequested,
 } from "./stream-timing";
-import { attachInspector, inspectRequested } from "./inspector";
-import { attachTouchControls } from "./touch-controls";
+import { attachInspector } from "./inspector";
+import type { TouchControlsCallbacks } from "./touch-controls";
+import { pageView } from "./page-view";
+import type { PageEvent } from "./page-view";
 import { setFlagTime } from "./flag-cloth";
 import { createVegetationLod, setCrownTime } from "./vegetation-layer";
 import type { VegetationControl } from "./vegetation-layer";
@@ -273,11 +272,6 @@ const EMERGENCY_SHADOW_HOLD_MS = 120_000;
 const EMERGENCY_GAP_MS = 5000;
 /** How long a reload waits for the old device to be destroyed. */
 const RELEASE_WAIT_MS = 300;
-/**
- * How long a reload to a heavier page waits for the whole app to be gone
- * (`disposeForReload`): the device reports itself destroyed well within it.
- */
-const TEARDOWN_WAIT_MS = 2000;
 /** How near the camera (m, in plan, to the tile's box) a building tile
  *  gets its BVH before any ray needs it. */
 const BVH_NEAR_M = 400;
@@ -328,7 +322,7 @@ export interface CityWalkStats {
   terrainVertexCount: number;
 }
 
-/** `CityWalkHandle.getGpuDebug`'s report. */
+/** `SceneApp.getGpuDebug`'s report. */
 export interface GpuDebug {
   drawables: number;
   /** distinct index / vertex buffers under the scene, and their bytes */
@@ -413,7 +407,7 @@ function sitePicture(extras: unknown, tilesetUrl: string): MapPicture | null {
 
 /** What the HUD knows of the site from the tileset alone (`onSiteInfo`). */
 export type SiteInfo = Pick<
-  CityWalkHandle,
+  SceneApp,
   | "landmarks"
   | "latLng"
   | "mapPicture"
@@ -426,6 +420,23 @@ export type SiteInfo = Pick<
   photoCredits: readonly string[];
 };
 
+/** The canvas's CSS size and the device's pixel ratio, as the page
+ *  measures them (scene-host.ts); a size without area is never sent. */
+export interface CanvasSize {
+  dpr: number;
+  height: number;
+  width: number;
+}
+
+/** What the scene writes to the page's crash trail (crash-trail.ts): the
+ *  page keeps it, the scene only notes. */
+export type SceneTrail = Pick<CrashTrail, "beat" | "note" | "set">;
+
+/**
+ * The scene's options: plain data and callbacks. Where the scene runs in a
+ * worker (ADR 0061) scene-server.ts makes them from the page's init message
+ * and turns every callback into a message to the page.
+ */
 export interface CityWalkOptions {
   /**
    * The render budget (profile, device tier, whether the neighbour tiles
@@ -433,7 +444,11 @@ export interface CityWalkOptions {
    * here takes its numbers from it instead of reading the window.
    */
   budget: SceneBudget;
-  container: HTMLElement;
+  /** what the scene draws into: the page's canvas, or that canvas handed
+   *  to the scene's worker (`transferControlToOffscreen`) */
+  canvas: HTMLCanvasElement | OffscreenCanvas;
+  /** its size when the scene starts (`resize` follows it) */
+  size: CanvasSize;
   /**
    * Where a recovered page's player stood (gpu-recovery.ts, the snapshot's
    * camera): the boot places the camera there before the stream's first
@@ -465,16 +480,21 @@ export interface CityWalkOptions {
    *  network, tile-retry.ts): the HUD's message goes. */
   onErrorCleared?: () => void;
   /**
-   * The GPU is gone for good, or a frame threw and left three's renderer
-   * in a state no later frame draws right (the render stopped) — `how`:
-   * lost in use, reclaimed by iOS while the page was in the background,
-   * or failed — a frame that threw on a GPU still working, a bug
-   * (lib/city/gpu-safety.ts). The reload to run when the page recovers by
-   * itself (gpu-recovery.ts, a reload where the player stood): the scene
-   * runs it once the old device is freed, and once the page is in view.
-   * Null: the HUD says the graphics failed (`onFatal`).
+   * Whether the page recovers by itself from a stop of this kind — the GPU
+   * gone for good, or a frame that threw and left three's renderer in a
+   * state no later frame draws right — `how`: lost in use, reclaimed by
+   * iOS while the page was in the background, or failed — a frame that
+   * threw on a GPU still working, a bug (lib/city/gpu-safety.ts). The
+   * page's answer, asked when the scene boots (gpu-recovery.ts
+   * `wouldRecover`). No: the HUD says the graphics failed (`onFatal`).
    */
-  onGpuLost?: (how: GpuLoss) => (() => void) | null;
+  reloadable?: (how: GpuLoss) => boolean;
+  /** The render stopped and the GPU is freed: the page recovers by a
+   *  reload where the player stood (gpu-recovery.ts), once in view. */
+  onReload?: (how: GpuLoss) => void;
+  /** A memory emergency: the next page starts a level lighter
+   *  (gpu-safety.ts `raiseSafety`, the page's storage). */
+  onRaiseSafety?: () => void;
   /**
    * The render stopped after the first frame and the page did not recover
    * by itself: the graphics failed as a whole, not one layer. `message` is
@@ -488,14 +508,10 @@ export interface CityWalkOptions {
    * stages, style switches and GPU trouble there and beats every couple of
    * seconds, so a page the browser kills leaves a trace.
    */
-  trail?: CrashTrail;
-  /**
-   * The loop's pace while the HUD covers the scene or the scene stands
-   * still (lib/city/frame-pace.ts): the HUD sets the one, the scene the
-   * other, the loop asks it before every frame. Without one every frame
-   * draws.
-   */
-  pace?: FramePace;
+  trail?: SceneTrail;
+  /** the nameplate's letters, drawn by the page in its web faces
+   *  (nameplate-glyphs.ts `plateLetters`) */
+  letters: NameplateDeps["letters"];
   /** Every layer has streamed in (the scene is complete). */
   onLoaded?: () => void;
   /**
@@ -568,6 +584,9 @@ export interface CityWalkOptions {
   /** the head start the page made for that tileset and this start
    *  (boot-ahead.ts); without one the boot makes its own */
   ahead?: BootAhead;
+  /** the page's `performance.timeOrigin`: a worker's clock starts later,
+   *  and `boot:page-to-viewer` counts from the page's navigation */
+  pageOrigin?: number;
 }
 
 /** The BVH worker's holds on these tiles' indexes. */
@@ -581,11 +600,6 @@ function heldIndexes(cities: Iterable<CityLayer>): Promise<void>[] {
   return held;
 }
 
-/**
- * The imperative surface the HUD (and, in dev/test builds, `window.__poc`)
- * drives. The look values are NOT here: they live in the look store passed in
- * through CityWalkOptions, which the scene subscribes to.
- */
 /** What the HUD drives of the design layer. */
 export type DesignControls = Pick<
   DesignLayer,
@@ -602,7 +616,30 @@ export type DesignControls = Pick<
   | "status"
 >;
 
-export interface CityWalkHandle {
+/** An HUD panel over the canvas, in NDC: [x0, y0, x1, y1]. */
+export type CoverBox = [number, number, number, number];
+
+/**
+ * The keys the scene acts on (keyboard-controls.ts on the page): R and I
+ * act under the pointer, which the page knows (NDC; the centre without
+ * one); V's style change is the page's own (its look store).
+ */
+export type SceneKeys = Omit<
+  KeyboardActions,
+  "cycleStyle" | "demolish" | "inquire"
+> & {
+  demolish: (ndc?: { x: number; y: number }) => void;
+  inquire: (ndc?: { x: number; y: number }) => void;
+};
+
+/**
+ * The scene's imperative surface, where it runs (scene-server.ts serves it
+ * to the page; the HUD drives it through scene-client.ts's `CityWalkHandle`,
+ * in dev/test builds `window.__poc` too). The look values are NOT here:
+ * they live in the look store passed in through CityWalkOptions, which the
+ * scene subscribes to.
+ */
+export interface SceneApp {
   /** Restores a camera pose captured by getCameraState (snapshot replay). */
   applyCameraState: (state: CameraState) => void;
   /** Removes the inquiry mark (the card was closed). */
@@ -614,7 +651,10 @@ export interface CityWalkHandle {
    * `onDesign`.
    */
   design: DesignControls;
-  dispose: () => void;
+  /** Ends the scene; settles once its teardown is through (a teardown
+   *  error goes to the reports, never rejects): the page's worker is
+   *  ended only after it. */
+  dispose: () => Promise<void>;
   /**
    * Asks what stands at a screen point (NDC; the centre when omitted),
    * marks it and reports it through `onInquiry`; tests and QA call it.
@@ -644,8 +684,25 @@ export interface CityWalkHandle {
   /** The site's walks (lib/city/walks.ts), when the tileset names them:
    *  the Erkunden panel's Spaziergänge. */
   walksUrl: string | null;
-  /** Opt-in pointer-lock mouse-look (desktop); Esc exits natively. */
-  enterImmersive: () => void;
+  /** The canvas's new size (scene-host.ts follows the page's layout). */
+  resize: (size: CanvasSize) => void;
+  /** The HUD's panels over the canvas: the nameplate keeps clear of them. */
+  setCovers: (boxes: readonly CoverBox[]) => void;
+  /** The page's loading veil is gone: `boot:veil-drop` on the trace,
+   *  and the spans it ends and starts (stream-timing.ts). */
+  veilDropped: () => void;
+  /** A still or covered scene draws its next frames: what the page asks
+   *  of it shows (scene-server.ts wakes it for every call). */
+  wake: () => void;
+  /** The HUD covers the scene (a phone's sidebar sheet): it draws only
+   *  what is asked of it, and while it moves (lib/city/frame-pace.ts). */
+  setCovered: (covered: boolean) => void;
+  /** The visitor only listens (the Hörmodus): the scene barely draws. */
+  setListening: (listening: boolean) => void;
+  /** What the page's pointer adapter (touch-controls.ts) drives. */
+  touch: TouchControlsCallbacks;
+  /** What the page's keyboard adapter (keyboard-controls.ts) drives. */
+  keys: SceneKeys;
   /**
    * The page is about to reload after the render stopped (the failure
    * card's buttons): frees the GPU — three's renderer and its device —
@@ -715,6 +772,10 @@ export interface CityWalkHandle {
      * post passes' first frames, anything a compile missed).
      */
     framedBuilds: { other: number; shadow: number };
+    /** compiles queued or in flight (compile-lanes.ts `compilesQueued`):
+     *  a tile shows after its compile wait even if its compile has not
+     *  had its turn yet, and what it hides until dark builds then */
+    compilesQueued: number;
     /** estimated GPU bytes of geometry + textures + shadow map */
     gpuBytes: number;
     /**
@@ -805,12 +866,13 @@ export interface CityWalkHandle {
 }
 
 /**
- * three's WebGPURenderer: WebGPU where the browser has it, its WebGL2
- * backend otherwise (or on `?gpu=webgl2`, scene-profile.ts). One renderer,
- * one set of node materials either way (ADR 0027).
+ * three's WebGPURenderer on WebGPU, the only backend the viewer draws with
+ * (ADR 0027): where three would fall back to WebGL2 (no adapter), the
+ * scene says the device cannot draw it.
  */
 async function createRenderer(
-  container: HTMLElement,
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  size: CanvasSize,
   budget: SceneBudget,
   /** the heartbeat will take the GPU's frame times (a trail is kept) */
   timed: boolean
@@ -819,22 +881,23 @@ async function createRenderer(
   // carries the AA (post-stack.ts); a multisampled canvas would only be
   // resolved for a full-screen quad.
   const renderer = new WebGPURenderer({
+    // the page's canvas, or that canvas in the scene's worker (ADR 0061):
+    // its CSS box is the page's, so three never styles it
+    canvas,
     antialias: false,
     powerPreference: "high-performance",
-    forceWebGL: budget.forceWebGL,
     // The GPU's time per frame for the heartbeat (lib/city/frame-timing.ts):
     // three asks for `timestamp-query` only where the adapter has it
     // (Chromium; not Safari) and writes two timestamps per pass.
-    trackTimestamp: timed && !budget.forceWebGL,
+    trackTimestamp: timed,
     // Depth from 1 at the near plane to 0 at the far one, in floats: the
     // float's precision then grows with the distance the 1/z mapping loses,
     // so surfaces kilometres off stop fighting. three turns the depth test,
     // the clear, the polygon offsets, the shadow maps and its depth helpers
-    // round itself, and falls back to the plain buffer on a WebGL2 without
-    // EXT_clip_control; what reads raw depth here asks
+    // round itself; what reads raw depth here asks
     // `reversedDepthBuffer` (stylize-effect.ts, view-ray.ts). `?depth=standard`
     // draws with the plain buffer, to compare.
-    reversedDepthBuffer: reversedDepthFromSearch(window.location.search),
+    reversedDepthBuffer: reversedDepthFromSearch(pageView.search),
   });
   try {
     await streamTimings.timed(
@@ -842,7 +905,7 @@ async function createRenderer(
       async () => await renderer.init()
     );
   } catch (error) {
-    // No adapter and no WebGL2 either (the preflight only sees that
+    // No adapter and no fallback either (the preflight only sees that
     // `navigator.gpu` exists): free what init made, and say why in the
     // HUD's words rather than three's raw backend error (kept as `cause`).
     renderer.dispose().catch(() => {
@@ -851,14 +914,13 @@ async function createRenderer(
     });
     throw new Error(NO_GPU_MESSAGE, { cause: error });
   }
-  // Fallen back to WebGL2 (no adapter): its timer queries would wrap every
-  // pass for nothing — only the WebGPU backend's are read back.
-  const backend = renderer.backend as {
-    isWebGPUBackend?: boolean;
-    trackTimestamp?: boolean;
-  };
-  if (backend.isWebGPUBackend !== true) {
-    backend.trackTimestamp = false;
+  // three fell back to WebGL2 (no adapter after all): not a backend the
+  // viewer draws with
+  if (!(renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend) {
+    renderer.dispose().catch(() => {
+      // the error below says what matters
+    });
+    throw new Error(NO_GPU_MESSAGE);
   }
   // The `lite` profile renders at half linear resolution (a quarter of the
   // pixels) and lets the browser upscale. The canvas fills the viewport and
@@ -867,14 +929,10 @@ async function createRenderer(
   // headless suite, where every pixel is shaded on the CPU. Fill-rate is what
   // the post stack costs, and the post stack is most of a frame.
   renderer.setPixelRatio(
-    pixelRatioFor(
-      budget.profile,
-      budget.tier,
-      window.devicePixelRatio,
-      budget.safety
-    )
+    pixelRatioFor(budget.profile, budget.tier, size.dpr, budget.safety)
   );
-  renderer.setSize(container.clientWidth, container.clientHeight);
+  // (the page sizes the canvas's box: `false` leaves its style alone)
+  renderer.setSize(size.width, size.height, false);
   renderer.shadowMap.enabled = true;
   // getRenderInfo reads the last rendered frame: the loop resets the
   // counters itself, right before it draws (a held frame keeps them).
@@ -890,11 +948,6 @@ async function createRenderer(
   // castShadow:false) and the rig re-renders the map from inside the render
   // loop whenever its camera-following frustum moves. The ~640k-triangle
   // depth pass is what gets skipped.
-  renderer.domElement.style.display = "block";
-  // Touch gestures (look/pinch/double-tap) need the browser to keep its
-  // hands off scrolling and double-tap zoom on the canvas.
-  renderer.domElement.style.touchAction = "none";
-  container.append(renderer.domElement);
   return renderer;
 }
 
@@ -939,11 +992,6 @@ function framedBuildCounter(renderer: WebGPURenderer) {
 }
 
 /**
- * Tells the crash trail what the renderer runs on, and chains its public
- * device-lost and GPU-error callbacks through it (three's own handlers
- * still run: they log and stop the renderer).
- */
-/**
  * Whether a camera moved since the last call (a different camera counts):
  * its position, its turn and its projection (Modell's zoom).
  *
@@ -984,14 +1032,18 @@ function watchMotion(): (view: Camera) => boolean {
   };
 }
 
+/**
+ * Tells the crash trail what the renderer runs on, and chains its public
+ * device-lost and GPU-error callbacks through it (three's own handlers
+ * still run: they log and stop the renderer).
+ */
 function traceRenderer(
   renderer: WebGPURenderer,
-  trail: CrashTrail,
+  trail: SceneTrail,
   safety: SafetyLevel
 ): void {
-  const backend = renderer.backend as { isWebGPUBackend?: boolean };
   trail.set({
-    backend: backend.isWebGPUBackend ? "WebGPU" : "WebGL2",
+    backend: "WebGPU",
     pixelRatio: renderer.getPixelRatio(),
     safety,
   });
@@ -1025,18 +1077,14 @@ interface ProbedDevice {
 
 /**
  * Settles once the renderer's WebGPU device is lost — after its destroy,
- * when the GPU process has taken it — or at once on the WebGL2 backend,
- * which has none. three ignores a loss for `destroyed` (no recovery runs).
+ * when the GPU process has taken it. three ignores a loss for `destroyed`
+ * (no recovery runs).
  */
 async function deviceGone(renderer: WebGPURenderer): Promise<void> {
   const backend = renderer.backend as {
-    isWebGPUBackend?: boolean;
     device?: { lost: Promise<unknown> } | null;
   };
-  const device = backend.isWebGPUBackend ? backend.device : null;
-  if (device) {
-    await device.lost;
-  }
+  await backend.device?.lost;
 }
 
 /**
@@ -1044,14 +1092,11 @@ async function deviceGone(renderer: WebGPURenderer): Promise<void> {
  * submitted. When iOS has taken Safari's GPU process, WebKit throws right
  * here ("Unable to make command encoder", "Unable to finish") — before
  * any device-lost arrives, and before a frame throws the same way. The
- * error's message, or null; the WebGL2 backend has nothing to probe.
+ * error's message, or null.
  */
 function probeGpu(renderer: WebGPURenderer): string | null {
-  const backend = renderer.backend as {
-    isWebGPUBackend?: boolean;
-    device?: ProbedDevice | null;
-  };
-  const device = backend.isWebGPUBackend ? backend.device : null;
+  const backend = renderer.backend as { device?: ProbedDevice | null };
+  const device = backend.device ?? null;
   if (!device) {
     return null;
   }
@@ -1088,24 +1133,6 @@ async function releaseGpu(renderer: WebGPURenderer): Promise<void> {
       setTimeout(resolve, RELEASE_WAIT_MS);
     }),
   ]);
-}
-
-/**
- * Runs `then` now, or once the page is in view again: a page reloaded in
- * the background boots hidden, which is where iOS takes GPUs away.
- */
-function whenVisible(then: () => void): void {
-  if (!document.hidden) {
-    then();
-    return;
-  }
-  const onShow = () => {
-    if (!document.hidden) {
-      document.removeEventListener("visibilitychange", onShow);
-      then();
-    }
-  };
-  document.addEventListener("visibilitychange", onShow);
 }
 
 /**
@@ -1192,7 +1219,7 @@ function siteLatLng(
 
 export async function createCityWalkApp(
   opts: CityWalkOptions
-): Promise<CityWalkHandle> {
+): Promise<SceneApp> {
   // before the first build: WebKit's slices otherwise wait for a clamped
   // timer (main-yield.ts)
   installMainYield();
@@ -1200,19 +1227,24 @@ export async function createCityWalkApp(
   // hydration, this chunk (on a page opened at the city's route; one come
   // to from another page counts from that page's load).
   if (streamTimings.markedAt("boot:viewer-start") === undefined) {
-    streamTimings.since("boot:page-to-viewer", 0);
+    const navigation =
+      opts.pageOrigin === undefined
+        ? 0
+        : opts.pageOrigin - performance.timeOrigin;
+    streamTimings.since("boot:page-to-viewer", navigation);
     streamTimings.markOnce("boot:viewer-start");
   }
   // The tileset and the boot tile's first contents, under way while the
   // renderer starts and the scene is set up (boot-ahead.ts): the page's
   // own head start when it made one for this tileset, or one from here.
-  const tilesetHref = new URL(opts.tilesetUrl, window.location.href).href;
+  const tilesetHref = new URL(opts.tilesetUrl, pageView.href).href;
   const ahead =
     opts.ahead?.url === tilesetHref
       ? opts.ahead
       : bootAhead(tilesetHref, opts, opts.signal);
   const renderer = await createRenderer(
-    opts.container,
+    opts.canvas,
+    opts.size,
     opts.budget,
     opts.trail !== undefined
   ).catch((error: unknown) => {
@@ -1239,12 +1271,12 @@ export async function createCityWalkApp(
   ];
   // `?trace=1`: the stream's timings on the browser's timeline, the long
   // tasks counted, the summary printed once loaded (stream-timing.ts).
-  const tracing = traceRequested(window.location.search);
+  const tracing = traceRequested(pageView.search);
   if (tracing) {
     cleanups.push(startTrace());
   }
   // `?inspect=1`: three's Inspector over the canvas (inspector.ts)
-  if (inspectRequested(window.location.search)) {
+  if (inspectRequested(pageView.search)) {
     // a QA aid: a chunk that fails to load leaves the boot as it was
     cleanups.push(
       await attachInspector(renderer).catch(() => () => {
@@ -1257,7 +1289,8 @@ export async function createCityWalkApp(
   } catch (error) {
     // Centralized teardown: covers both abort (StrictMode remount) and real
     // load failures — otherwise the dead canvas would linger in the DOM.
-    void teardown(cleanups, scene, renderer).catch(reportTeardown);
+    // The failure goes out only once the renderer is released.
+    await teardown(cleanups, scene, renderer).catch(reportTeardown);
     throw error;
   }
 }
@@ -1270,10 +1303,9 @@ function reportTeardown(error: unknown): void {
 
 /**
  * The one teardown of an app, clean or failed: its registered cleanups, the
- * scene's GPU resources, then the renderer with its device (or, on the
- * WebGL2 backend, its context) — the next app (a StrictMode remount, a round
- * trip to /wissen) makes its own canvas, and a browser holds only a handful
- * of contexts; whatever still points at this one draws nothing.
+ * scene's GPU resources, then the renderer with its device — the next app
+ * (a StrictMode remount, a round trip to /wissen) makes its own canvas and
+ * device; whatever still points at this one draws nothing.
  */
 async function teardown(
   cleanups: (() => void)[],
@@ -1343,14 +1375,13 @@ function stopWorkers(): void {
   stopNicheWorker();
 }
 
-/** The renderer and its device (or its context), and its canvas. */
+/** The renderer and its device (or its context); the canvas is the
+ *  page's (scene-host.ts takes it out). */
 async function releaseRenderer(renderer: WebGPURenderer): Promise<void> {
   // Async: it destroys the device (or loses the context) at the end.
-  const released = renderer.dispose().catch(() => {
+  await renderer.dispose().catch(() => {
     // a dispose that fails leaves nothing more to free
   });
-  renderer.domElement.remove();
-  await released;
 }
 
 /** The whole site's extent in EPSG coordinates (the minimap frame). */
@@ -1391,7 +1422,7 @@ const sceneCensusOf = (roots: (Object3D | undefined)[]): SceneCensus =>
 /** Now, as the lifecycle machine's signals carry it. */
 const signalTime = () => ({
   now: performance.now(),
-  hidden: document.hidden,
+  hidden: pageView.hidden,
 });
 
 async function bootApp(
@@ -1400,8 +1431,10 @@ async function bootApp(
   scene: Scene,
   cleanups: (() => void)[],
   ahead: BootAhead
-): Promise<CityWalkHandle> {
-  const { container, budget } = opts;
+): Promise<SceneApp> {
+  const { budget } = opts;
+  // the canvas's CSS size, as the page last measured it (`resize`)
+  let viewSize: CanvasSize = opts.size;
   let disposed = false;
   // A boot that fails or is aborted is torn down without `leave()`: what
   // still resolves afterwards (a plate, a stats timer, a cut-out) must
@@ -1413,7 +1446,7 @@ async function bootApp(
 
   const camera = new PerspectiveCamera(
     DEFAULT_FOV,
-    container.clientWidth / Math.max(container.clientHeight, 1),
+    viewSize.width / Math.max(viewSize.height, 1),
     0.3,
     6000
   );
@@ -1824,8 +1857,8 @@ async function bootApp(
     [
       {
         camera: streamCamera,
-        width: container.clientWidth,
-        height: container.clientHeight,
+        width: viewSize.width,
+        height: viewSize.height,
       },
       // at a resolution for streaming, not the map's: it loads what casts
       // into the view, never a finer terrain level (shadow-fit.ts)
@@ -1847,7 +1880,7 @@ async function bootApp(
     tier: budget.tier,
     safety: budget.safety,
     held: () => renderer.info.memory.total,
-    shedding: () => budget.tier === "mobile" && document.hidden,
+    shedding: () => budget.tier === "mobile" && pageView.hidden,
     note: (detail) => opts.trail?.note("memory", detail),
   });
   cleanups.push(tileMemory.dispose);
@@ -2077,15 +2110,18 @@ async function bootApp(
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
   recompileWith = postStack.recompile;
+  // The HUD's panels over the canvas as the page last sent them
+  // (`setCovers`): the nameplate keeps clear of them.
+  let covers: readonly CoverBox[] = [];
   // The thing asked, named in the city beside it (nameplate-layer.ts):
   // drawn after the frame, onto the canvas.
   const nameplate = createNameplate({
     lens,
     depthTexture: postStack.sceneDepth,
-    fonts: () => opts.container,
+    letters: opts.letters,
     hidden: (view, points) => cityHides(view, points, stream.visibleCities()),
     groundAt: (x, z) => siteGround.underWorld(x, z),
-    hud: () => coverBoxes(renderer.domElement),
+    hud: () => covers,
     phone: budget.tier === "mobile",
     sunDirection,
     sunShadow: sunRig.shadowMap,
@@ -2188,12 +2224,17 @@ async function bootApp(
   // When the trees' crown tiers are picked (stepVegetation, below): on the
   // pose tick, and in the next frame when the tiles in view change.
   const crownTiers = createLodSchedule();
-  // The still pace (lib/city/frame-pace.ts): a scene that stands still
-  // draws fewer frames; a look change, like any input, wakes it.
+  // The loop's pace (lib/city/frame-pace.ts): a scene that stands still
+  // draws fewer frames, one the HUD covers only what is asked of it; a
+  // look change, like any input or call, wakes it.
+  const pace = createFramePace();
   const stillness = createStillness();
+  // (a call while the HUD covers the scene draws only its tail: it ends
+  // no stillness, or a still scene would draw on for STILL_AFTER_MS)
   const wakeStill = () => {
-    stillness.wake(performance.now());
-    opts.pace?.setStill(false);
+    if (pace.wake()) {
+      stillness.wake(performance.now());
+    }
   };
   let dataLayersMove = false;
   let sceneStill = false;
@@ -2307,8 +2348,8 @@ async function bootApp(
   });
   // Modell (plan 055): the parallel camera and the dolly zooms in and out.
   const viewportCss = () => ({
-    width: container.clientWidth,
-    height: container.clientHeight,
+    width: viewSize.width,
+    height: viewSize.height,
   });
   /** Which camera the tile renderer streams for, and what the frame looks like. */
   const swapCamera = (parallel: boolean) => {
@@ -2540,9 +2581,10 @@ async function bootApp(
       ...(dataLayers.current()?.asks() ?? []),
       ...(design?.asks() ?? []),
     ],
+    // the page's CSS size: an OffscreenCanvas has no layout of its own
     viewport: () => ({
-      width: renderer.domElement.clientWidth || 1,
-      height: renderer.domElement.clientHeight || 1,
+      width: Math.max(viewSize.width, 1),
+      height: Math.max(viewSize.height, 1),
     }),
     toSite: (p) => [p.x + offset.cx, offset.cy - p.z],
     // an instance a design's site folded away is not there to be asked
@@ -2628,7 +2670,8 @@ async function bootApp(
   };
   // Modell's pinch zooms by the change since the last event.
   let lastPinch = 1;
-  const canvasControls = attachTouchControls(renderer.domElement, {
+  // The pointer's gestures on the canvas (touch-controls.ts on the page).
+  const touch: TouchControlsCallbacks = {
     // A click asks (a drag looks, a double click glides there); a finger's
     // tap does not — on glass a tap is too easily a missed drag.
     onTap: (ndcX, ndcY, pointerType) => {
@@ -2711,8 +2754,7 @@ async function bootApp(
         pose.travelTo(hit);
       }
     },
-  });
-  cleanups.push(canvasControls.detach);
+  };
 
   let fps = 0;
   // Geometry + tracked textures + the shadow map; the post stack's screen
@@ -2837,8 +2879,7 @@ async function bootApp(
         const pack = footprints.get(tile.id);
         if (pack) {
           tiles.push({
-            gone: (i: number) =>
-              gone?.has(i) === true || replaced?.has(i) === true,
+            gone: new Set([...(gone ?? []), ...(replaced ?? [])]),
             pack,
           });
         } else {
@@ -3096,90 +3137,48 @@ async function bootApp(
   };
   const demolishAtCrosshair = () => demolishAt();
 
-  // Where the mouse rests over the scene: `I` and `R` act on what is
-  // under the pointer, as a hover shortcut does — there is no dot in the
-  // middle to aim with. Without a pointer there (a touch screen, the
-  // pointer off the canvas or locked in immersive mode) they act at the
-  // centre. Kept in client pixels and turned into NDC when a key asks, so
-  // a canvas resized or locked since the last move is read as it is now.
-  let hover: { x: number; y: number } | undefined;
-  const canvas = renderer.domElement;
-  const onHover = (e: PointerEvent) => {
-    hover =
-      e.pointerType === "mouse" ? { x: e.clientX, y: e.clientY } : undefined;
-  };
-  const onLeave = () => {
-    hover = undefined;
-  };
-  const aim = (): { x: number; y: number } | undefined => {
-    if (!hover || document.pointerLockElement === canvas) {
-      return undefined;
-    }
-    const r = canvas.getBoundingClientRect();
-    return {
-      x: ((hover.x - r.left) / r.width) * 2 - 1,
-      y: -(((hover.y - r.top) / r.height) * 2 - 1),
-    };
-  };
-  canvas.addEventListener("pointermove", onHover);
-  canvas.addEventListener("pointerleave", onLeave);
-  cleanups.push(
-    () => {
-      canvas.removeEventListener("pointermove", onHover);
-      canvas.removeEventListener("pointerleave", onLeave);
+  // The keys (keyboard-controls.ts on the page): `I` and `R` act under
+  // the pointer, which the page knows (NDC; the centre without one).
+  const keys: SceneKeys = {
+    // Modell takes the keys while it owns the frame (pan, turn, scale)
+    press: (code) =>
+      modelRig.owns() ? modelRig.press(code) : pose.press(code),
+    release: (code) => {
+      pose.release(code);
+      modelRig.release(code);
     },
-    attachKeyboardControls(
-      { document, window },
-      {
-        // Modell takes the keys while it owns the frame (pan, turn, scale)
-        press: (code) =>
-          modelRig.owns() ? modelRig.press(code) : pose.press(code),
-        release: (code) => {
-          pose.release(code);
-          modelRig.release(code);
-        },
-        releaseAll: () => {
-          pose.releaseAll();
-          modelRig.releaseAll();
-        },
-        toggleMode: () =>
-          modelRig.owns() ? modelRig.leave("fly") : pose.toggleMode(),
-        toggleModel: () =>
-          modelRig.owns() ? modelRig.leave() : modelRig.enter(),
-        demolish: () => demolishAt(aim()),
-        // I asks under the pointer, or at the centre in pointer lock,
-        // where there is no pointer to click with.
-        inquire: () => {
-          inquireAt(aim());
-        },
-        cycleStyle: () =>
-          opts.look.set({ style: nextRenderStyle(opts.look.get().style) }),
-        viewpoint: (index) => {
-          const view = opts.site.viewpoints[index];
-          if (!view) {
-            return;
-          }
-          if (modelRig.owns()) {
-            modelRig.centreOn(vantageTarget(view));
-          } else {
-            pose.flyToViewpoint(view);
-          }
-        },
+    releaseAll: () => {
+      pose.releaseAll();
+      modelRig.releaseAll();
+    },
+    toggleMode: () =>
+      modelRig.owns() ? modelRig.leave("fly") : pose.toggleMode(),
+    toggleModel: () => (modelRig.owns() ? modelRig.leave() : modelRig.enter()),
+    demolish: (ndc) => demolishAt(ndc),
+    inquire: (ndc) => {
+      inquireAt(ndc);
+    },
+    viewpoint: (index) => {
+      const view = opts.site.viewpoints[index];
+      if (!view) {
+        return;
       }
-    )
-  );
+      if (modelRig.owns()) {
+        modelRig.centreOn(vantageTarget(view));
+      } else {
+        pose.flyToViewpoint(view);
+      }
+    },
+  };
 
-  const resizeObserver = new ResizeObserver(() => {
-    // a container without area keeps the last size (canvas-size.ts)
-    const canvasSize = canvasSizeFor(container);
-    if (!canvasSize) {
-      return;
-    }
-    const { width, height } = canvasSize;
+  /** The canvas's new size, from the page (scene-host.ts). */
+  const resize = (size: CanvasSize) => {
+    viewSize = size;
+    const { width, height } = size;
     wakeStill();
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
+    renderer.setSize(width, height, false);
     postStack.setSize();
     modelRig.resize();
     stream.tiles.setResolution(
@@ -3187,9 +3186,7 @@ async function bootApp(
       width,
       height
     );
-  });
-  resizeObserver.observe(container);
-  cleanups.push(() => resizeObserver.disconnect());
+  };
 
   // Crosshair autofocus for the photographic DoF (crosshair-focus.ts),
   // throttled like the pose (`tickFocus`).
@@ -3274,7 +3271,7 @@ async function bootApp(
     postStack.setRegressed(regressed);
     if (regressed !== regressedNow) {
       regressedNow = regressed;
-      updatePocDebug({ regressed });
+      notePocRegressed(regressed);
     }
   };
 
@@ -3547,20 +3544,15 @@ async function bootApp(
   // pure machine (lib/city/page-lifecycle.ts, ADR 0047): the renderer,
   // the stream and the document feed it signals, and `runLifecycle`
   // carries out the effects it answers with, in the trail's order.
-  // `onGpuLost` is asked once per stop; its reload waits for the effect.
-  // One that throws is no reload: the machine catches it, so the render
-  // still stops and the page says the GPU failed ("recovery failed").
-  let reloadNow: (() => void) | null = null;
+  // The page said at the boot which stops it recovers from by a reload
+  // (`reloadable`); the reload is the page's, once the GPU is freed.
   let shadowResume: ReturnType<typeof setTimeout> | undefined;
   cleanups.push(() => clearTimeout(shadowResume));
   const lifecycle = createPageLifecycle({
     emergencyGapMs: EMERGENCY_GAP_MS,
     shadowHoldMs: EMERGENCY_SHADOW_HOLD_MS,
-    mayReload: (how) => {
-      reloadNow = opts.onGpuLost?.(how) ?? null;
-      return reloadNow !== null;
-    },
-    hiddenAt: document.hidden ? Date.now() : null,
+    mayReload: (how) => opts.reloadable?.(how) ?? false,
+    hiddenAt: pageView.hidden ? Date.now() : null,
   });
   type Effects = {
     [K in LifecycleEffect["kind"]]: (
@@ -3573,11 +3565,8 @@ async function bootApp(
       void renderer.setAnimationLoop(null);
       capture.drop();
     },
-    reload: () => {
-      const reload = reloadNow;
-      if (reload) {
-        void releaseGpu(renderer).then(() => whenVisible(reload));
-      }
+    reload: ({ how }) => {
+      void releaseGpu(renderer).then(() => opts.onReload?.(how));
     },
     fatal: (e) => {
       if (!e.beforeFirstFrame) {
@@ -3599,9 +3588,7 @@ async function bootApp(
         EMERGENCY_SHADOW_HOLD_MS + GOVERN_MS
       );
     },
-    raiseSafety: () => {
-      raiseSafety(budget.safety, { by: opts.trail?.startedAt });
-    },
+    raiseSafety: () => opts.onRaiseSafety?.(),
   };
   const runLifecycle = (signal: LifecycleSignal): void => {
     for (const effect of lifecycle.dispatch(signal)) {
@@ -3720,30 +3707,11 @@ async function bootApp(
     timesGpu:
       timedBackend.isWebGPUBackend === true &&
       timedBackend.trackTimestamp === true &&
-      !inspectRequested(window.location.search),
+      !inspectRequested(pageView.search),
     basePixelRatio: capture.basePixelRatio,
-    pace: opts.pace,
+    pace,
     resized: () => postStack.setSize(),
     note: (step) => opts.trail?.note("resolution", step),
-  });
-  // Input wakes a still scene for the very next frame (the pose steps only
-  // in drawn frames, the hover's outline follows the pointer).
-  // A pointer moving over the HUD is not the scene's (its hover outline
-  // reads the canvas alone).
-  const wakeEvents = ["pointerdown", "wheel", "keydown", "touchstart"] as const;
-  for (const type of wakeEvents) {
-    window.addEventListener(type, wakeStill, { capture: true, passive: true });
-  }
-  renderer.domElement.addEventListener("pointermove", wakeStill, {
-    passive: true,
-  });
-  cleanups.push(() => {
-    for (const type of wakeEvents) {
-      window.removeEventListener(type, wakeStill, { capture: true });
-    }
-    renderer.domElement.removeEventListener("pointermove", wakeStill);
-    // the pace outlives this app (the HUD's): the next starts awake
-    opts.pace?.setStill(false);
   });
   const viewMoved = watchMotion();
   let cameraMovedAt = Number.NEGATIVE_INFINITY;
@@ -3766,9 +3734,6 @@ async function bootApp(
     const resting =
       time - cameraMovedAt >= CAMERA_REST_MS && !exporting && !dataLayersMove;
     setSliceBudget(resting ? REST_SLICE_MS : SLICE_MS, SLICE_BUDGET_HOLD_MS);
-    if (!opts.pace) {
-      return;
-    }
     // (the loading veil breathes, sweeps and lifts at the full rate)
     // (a lens still growing in or pulling focus draws at the full rate:
     // paced, it steps in jumps)
@@ -3781,7 +3746,7 @@ async function bootApp(
       loadVeil.shown() ||
       sunRig.shadowBusy();
     sceneStill = stillness.frame(time, busy);
-    opts.pace.setStill(sceneStill);
+    pace.setStill(sceneStill);
   };
   // A ray through the buildings and a march over the ground, ten times a
   // second: only where there is a lens blur to focus (not on a phone),
@@ -3843,7 +3808,7 @@ async function bootApp(
     clock: ({ dt }) => {
       // (not over a gap the pace held: the HUD's readout, in the very
       // sheet that paces the loop, would read the pace)
-      if (dt > 0 && opts.pace?.heldBefore() !== true) {
+      if (dt > 0 && !pace.heldBefore()) {
         fps = fps === 0 ? 1 / dt : fps * 0.9 + (1 / dt) * 0.1;
       }
     },
@@ -3981,9 +3946,10 @@ async function bootApp(
       meter.held();
       return;
     }
-    // Held back while the phone's sidebar covers the scene, still while it
-    // scrolls (lib/city/frame-pace.ts); the same clamp covers the gap.
-    if (opts.pace && !opts.pace.draws(time)) {
+    // Held back while the scene stands still, and while the phone's
+    // sidebar covers it to what is asked of it (lib/city/frame-pace.ts);
+    // the same clamp covers the gap.
+    if (!pace.draws(time)) {
       return;
     }
     try {
@@ -4020,7 +3986,7 @@ async function bootApp(
         frames,
         fps: rate,
         // a rate the pace held down is not the device's
-        paced: opts.pace?.takePaced() === true ? true : undefined,
+        paced: pace.takePaced() ? true : undefined,
         gpuMB: gpuBytes() / 1_048_576,
         rasterMB: trackedTextureBytes() / 1_048_576,
         heldMB: renderer.info.memory.total / 1_048_576,
@@ -4032,7 +3998,7 @@ async function bootApp(
         cities: stream.visibleCities().length,
         dressings: stream.dressings.size,
         ...streamByKind(stream),
-        online: navigator.onLine,
+        online: pageView.onLine,
         style: lastStyle,
         mode: pose.getMode(),
         heightM: camera.position.y - groundUnderCamera(),
@@ -4052,21 +4018,24 @@ async function bootApp(
   // Hidden, a phone's page lets go of every tile not in use; shown again,
   // it gets its cache back and probes the GPU before the next frame draws
   // (page-lifecycle.ts). The time away is the wall clock's: iOS stops
-  // `performance.now()` while the device sleeps.
-  const onVisibility = () =>
+  // `performance.now()` while the device sleeps. It is the page's, stamped
+  // on its event: a worker's message after a sleep lands late.
+  const onVisibility = (event: PageEvent) => {
+    const wall = event.wall ?? Date.now();
     runLifecycle(
-      document.hidden
-        ? { kind: "hidden", wall: Date.now(), phone: budget.tier === "mobile" }
+      pageView.hidden
+        ? { kind: "hidden", wall, phone: budget.tier === "mobile" }
         : {
             kind: "shown",
-            wall: Date.now(),
+            wall,
             now: performance.now(),
             gpuFailure: () => probeGpu(renderer),
           }
     );
-  document.addEventListener("visibilitychange", onVisibility);
+  };
+  pageView.addEventListener("visibilitychange", onVisibility);
   cleanups.push(() =>
-    document.removeEventListener("visibilitychange", onVisibility)
+    pageView.removeEventListener("visibilitychange", onVisibility)
   );
 
   // The load after the first frame (lib/city/boot-phases.ts): declared
@@ -4162,9 +4131,10 @@ async function bootApp(
   // moment after the gate at which nothing is loading and nothing waits to
   // be dressed.
 
-  // The picture styles' programs compile once the scene has loaded and the
-  // browser is idle, so the first switch to a style does not hitch — at no
-  // cost to the boot, which never draws a style the viewer did not pick.
+  // The picture styles' programs compile once the scene has loaded and its
+  // thread is idle (`whenIdle`), so the first switch to a style does not
+  // hitch — at no cost to the boot, which never draws a style the viewer
+  // did not pick.
   let stylesWarming = false;
   const warm = () => {
     if (!disposed) {
@@ -4177,11 +4147,7 @@ async function bootApp(
       return;
     }
     stylesWarming = true;
-    if (typeof requestIdleCallback === "function") {
-      requestIdleCallback(warm, { timeout: 4000 });
-    } else {
-      setTimeout(warm, 1000);
-    }
+    whenIdle(warm, 4000);
   }
 
   /** "Loaded" on the trace: the time since the veil dropped, and the
@@ -4195,7 +4161,7 @@ async function bootApp(
       streamTimings.since("boot:veil-to-loaded", veil);
     }
     streamTimings.markOnce("boot:loaded");
-    if (!traceRequested(window.location.search)) {
+    if (!traceRequested(pageView.search)) {
       return;
     }
     printTrace("loaded");
@@ -4325,7 +4291,32 @@ async function bootApp(
       return inquireAt(ndc);
     },
     nameplateShown: () => nameplate.shown(),
-    enterImmersive: canvasControls.lockPointer,
+    resize,
+    setCovers: (boxes) => {
+      covers = boxes;
+    },
+    veilDropped: () => {
+      // how late the veil's timer fired after the light stage: what a
+      // busy page shows as a load frozen at 52 % (stream-timing.ts)
+      streamTimings.markOnce("boot:veil-drop");
+      const light = streamTimings.markedAt("boot:light-done");
+      if (light !== undefined) {
+        streamTimings.since("boot:light-to-veil", light);
+      }
+    },
+    wake: wakeStill,
+    setCovered: (covered) => {
+      pace.setCovered(covered);
+      wakeStill();
+    },
+    setListening: (listening) => {
+      pace.setListening(listening);
+      wakeStill();
+    },
+    // input wakes a still scene for the very next frame (the pose steps
+    // only in drawn frames): scene-server wakes it before every call
+    touch,
+    keys,
     releaseGpu: async () => await releaseGpu(renderer),
     flyTo: (position, lookAt) => {
       wakeStill();
@@ -4405,6 +4396,7 @@ async function bootApp(
       passes: renderer.info.render.frameCalls,
       triangles: renderer.info.render.triangles,
       framedBuilds: { ...framedBuilds.counts },
+      compilesQueued: compilesQueued(renderer),
       // counted now: a debug read, on demand
       gpuBytes: gpuBytesWith(estimateGeometryBytes(scene)),
       memory: { ...renderer.info.memory },
@@ -4484,12 +4476,12 @@ async function bootApp(
     getFootprints: currentFootprints,
     ...siteInfo,
     offset,
-    dispose: () => {
+    dispose: async () => {
       if (leave()) {
         // Same list, same order as a failed boot unwinds: animation loop ->
         // resize observer -> listeners -> touch -> post stack -> stream ->
         // lights -> sun rig.
-        void teardown(cleanups, scene, renderer).catch(reportTeardown);
+        await teardown(cleanups, scene, renderer).catch(reportTeardown);
       }
     },
     disposeForReload: async () => {

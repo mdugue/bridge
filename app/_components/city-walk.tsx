@@ -1,6 +1,5 @@
 "use client";
 
-import { createFramePace } from "@/lib/city/frame-pace";
 import { ARRIVAL_PARAM, arrivalOf, placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
@@ -45,7 +44,6 @@ import type { Snapshot } from "@/lib/city/snapshot";
 import { arrivalOf as recoveryArrival } from "@/lib/city/gpu-recovery";
 import { restoresLook } from "@/lib/city/gpu-safety";
 import { AltitudeStick } from "./altitude-stick";
-import { bootAhead } from "./boot-ahead";
 import { BootError } from "./boot-error";
 import { ControlHintBar } from "./control-hints";
 import { CrashReport } from "./crash-report";
@@ -56,8 +54,8 @@ import { GpuFailureCard } from "./gpu-failure-card";
 import { pageRecovery } from "./gpu-recovery";
 import { raiseSafety, resetSafety } from "./gpu-safety";
 import { VEIL_HOLD_MS } from "./handover";
-import { streamTimings } from "./stream-timing";
-import type { CityWalkHandle } from "./create-app";
+import { createScenePace, settle, startScene } from "./scene-client";
+import type { CityWalkHandle } from "./scene-client";
 import { LoadScreen } from "./load-screen";
 import { HudToolbar } from "./hud-toolbar";
 import type { HudTool } from "./hud-toolbar";
@@ -82,6 +80,7 @@ import { SceneSidebar } from "./scene-sidebar";
 import { WalkCard } from "./walk-player";
 import { useAskScene } from "./ask-scene";
 import { SidebarPace } from "./sidebar-pace";
+import { whenVisible } from "./page-visible";
 import {
   afterTask,
   createSceneStatus,
@@ -99,6 +98,7 @@ import { useSite } from "./site-context";
 import { VirtualJoystick } from "./virtual-joystick";
 import { missingPrerequisite } from "./gpu-support";
 import { useOnce } from "./use-once";
+import { TEARDOWN_WAIT_MS } from "./scene-protocol";
 
 /**
  * *Frag die Stadt* (ADR 0056): the chat client, its tool schemas and the
@@ -140,9 +140,6 @@ interface StartPick {
   label: string;
   view?: ViewpointGeometry;
 }
-
-/** The three.js half of the viewer, loaded beside the HUD (create-app.ts). */
-const loadScene = async () => await import("./create-app");
 
 /**
  * Two phases, one handover. `loading` is the full-bleed Laden screen; `running`
@@ -422,6 +419,27 @@ const nothingToClean = (): void => {
   // the boot has not begun: no scene, no listeners, no timers
 };
 
+/** How long a reload waits at most for the scene to let its GPU go (ms). */
+const RELOAD_WAIT_MS = 1000;
+/** How long a reload waits at most for the whole scene to go (ms): just
+ *  past the scene's own bound, so its answer comes first. */
+const TEARDOWN_RELOAD_WAIT_MS = TEARDOWN_WAIT_MS + 500;
+
+/** Reloads the page once the scene let its GPU go (`letGo`), failed to,
+ *  or kept silent for `waitMs`: the reload comes either way. */
+async function reloadWithin(
+  letGo: Promise<void> | undefined,
+  waitMs = RELOAD_WAIT_MS
+): Promise<void> {
+  await Promise.race([
+    letGo?.catch(() => null),
+    new Promise((resolve) => {
+      setTimeout(resolve, waitMs);
+    }),
+  ]);
+  location.reload();
+}
+
 /** (image-export.ts is the scene's: loaded with it, not with the HUD) */
 const saveImageLazily = async (
   h: CityWalkHandle,
@@ -594,7 +612,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   const handleRef = useRef<CityWalkHandle | null>(null);
   // the render loop's pace behind the phone's sidebar (sidebar-pace.tsx):
   // one for the page, every boot's loop asks it
-  const pace = useOnce(createFramePace);
+  const pace = useOnce(createScenePace);
   const applySceneTime = useCallback(
     (date: Date, preview?: boolean) => handleRef.current?.setSun(date, preview),
     []
@@ -702,8 +720,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
         recovery.current?.capture() ?? null
       );
     }
-    const released = handleRef.current?.releaseGpu() ?? Promise.resolve();
-    void released.then(() => location.reload());
+    void reloadWithin(handleRef.current?.releaseGpu());
   };
   /**
    * *Qualität*'s way back to full detail: level 0 from the next page on,
@@ -723,8 +740,10 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
         { kind: "reset" },
         recovery.current?.capture() ?? null
       );
-      const gone = handleRef.current?.disposeForReload() ?? Promise.resolve();
-      void gone.then(() => location.reload());
+      void reloadWithin(
+        handleRef.current?.disposeForReload(),
+        TEARDOWN_RELOAD_WAIT_MS
+      );
     }
     return true;
   };
@@ -915,39 +934,29 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
     lastBoot.current = new Promise((resolve) => {
       settled = resolve;
     });
-    // The tileset and the first tile's contents, asked for beside the
-    // scene's chunk (boot-ahead.ts) — once the last boot's teardown is
-    // through: what they bring is not held beside the scene that goes (a
+    // The scene starts once the last boot's teardown is through: what it
+    // asks for (boot-ahead.ts: the tileset and the first tile's contents,
+    // beside the scene's chunk) is not held beside the scene that goes (a
     // phone's peak at a change of place). The first boot waits on nothing.
     const initialCamera = start ? start.camera : arrival.snapshot?.camera;
-    const ahead = previous.then(() =>
-      aborter.signal.aborted
-        ? undefined
-        : bootAhead(
-            new URL(tilesetUrl, window.location.href).href,
-            { initialCamera, initialView: start?.view },
-            aborter.signal
-          )
-    );
-    void ahead
-      .then(loadScene)
-      .then(async ({ createCityWalkApp }) => {
+    void previous
+      .then(async () => {
         if (aborter.signal.aborted) {
           throw new DOMException("CityWalk startup aborted", "AbortError");
         }
-        return await createCityWalkApp({
+        return await startScene({
           container,
           budget,
           look,
+          pace,
           site,
           tilesetUrl,
-          ahead: await ahead,
           initialCamera,
           initialView: start?.view,
           initialDate: timeNow(),
           signal: aborter.signal,
           trail,
-          pace,
+          reloadable: () => recoveries.recoverable(budget.safety),
           // Everything the scene only reports goes to the store, for the
           // widgets that show it (scene-status.ts) — while this boot is
           // the page's.
@@ -955,17 +964,32 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
             footprints: () => handleRef.current?.getFootprints(),
             live: () => !aborter.signal.aborted,
           }),
-          // A loss raises the level as this page's (`by`): after its own
-          // memory emergency the same incident, renewed rather than raised
-          // again (gpu-safety.ts).
-          onGpuLost: (how) =>
-            !aborter.signal.aborted &&
-            recoveries.onLoss(how, recovery.current?.capture() ?? null, {
-              level: budget.safety,
-              raise: (from) => raiseSafety(from, { by: trail.startedAt }),
-            })
-              ? () => location.reload()
-              : null,
+          // The render stopped and the scene freed its GPU: a loss raises
+          // the level as this page's (`by`) — after its own memory
+          // emergency the same incident, renewed rather than raised again
+          // (gpu-safety.ts) — and the page reloads where the player stood
+          // once in view; one it may not recover from says so.
+          onReload: (how) => {
+            if (aborter.signal.aborted) {
+              return;
+            }
+            const recovers = recoveries.onLoss(
+              how,
+              recovery.current?.capture() ?? null,
+              {
+                level: budget.safety,
+                raise: (from) => raiseSafety(from, { by: trail.startedAt }),
+              }
+            );
+            if (recovers) {
+              whenVisible(() => location.reload());
+            } else {
+              sceneStatus.set("gpuFailure", `GPU ${how}`);
+            }
+          },
+          onRaiseSafety: () => {
+            raiseSafety(budget.safety, { by: trail.startedAt });
+          },
           onFollowEnd: () => {
             if (!aborter.signal.aborted) {
               liveEnded.current();
@@ -973,10 +997,10 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
           },
         });
       })
-      .then((h) => {
+      .then((h): Promise<void> | null => {
         if (aborter.signal.aborted) {
-          h.dispose();
-          return null;
+          // the next boot waits for this one's teardown (lastBoot)
+          return h.dispose();
         }
         handle = h;
         handleRef.current = h;
@@ -1018,13 +1042,9 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
         // Then the glass is removed, in one frame, with nothing in between.
         veilTimer = setTimeout(() => {
           setVeilUp(false);
-          // how late the veil's timer fired after the light stage: what a
-          // busy page shows as a load frozen at 52 % (stream-timing.ts)
-          streamTimings.markOnce("boot:veil-drop");
-          const light = streamTimings.markedAt("boot:light-done");
-          if (light !== undefined) {
-            streamTimings.since("boot:light-to-veil", light);
-          }
+          // the trace's veil marks are the scene's: its thread times the
+          // light stage and the load (stream-timing.ts)
+          h.veilDropped();
         }, VEIL_HOLD_MS);
         // The dressing (vegetation, lamps, rails, walls) and the terrain BVHs wait until
         // then: each is a long synchronous task, and the frames while the city
@@ -1067,7 +1087,16 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
       clearTimeout(veilTimer);
       clearTimeout(streamFallback);
       handleRef.current = null;
-      handle?.dispose();
+      if (handle) {
+        // the next boot waits for this teardown too: a worker ends up to
+        // seconds later, and two devices are not held at once
+        const gone = handle.dispose();
+        const booted = lastBoot.current;
+        lastBoot.current = (async () => {
+          await booted;
+          await gone;
+        })();
+      }
       // The hook must not keep a disposed scene callable (or alive): the
       // next boot republishes.
       updatePocDebug({
@@ -1278,7 +1307,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
                 onClose={closeInquiry}
                 onPreview={(i) => handleRef.current?.previewCandidate(i)}
                 onSelect={(i) => {
-                  handleRef.current?.selectCandidate(i);
+                  settle(handleRef.current?.selectCandidate(i));
                 }}
               />
               {/* a phone's walk sheet owns the bottom: the stick and the

@@ -42,7 +42,7 @@ const PREVIOUS_KEY = STORAGE_KEYS.trailPrevious;
  *  reports and the crash card's text. */
 const TRAIL_QUERY = [
   "scene",
-  "gpu",
+  "thread",
   "block",
   "safety",
   "trail",

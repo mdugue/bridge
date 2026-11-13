@@ -34,7 +34,7 @@ function traceGone(
   const { objectEnd, ringEnd, xy } = pack;
   ctx.beginPath();
   for (let object = 0; object < objectEnd.length; object += 1) {
-    if (!gone(object)) {
+    if (!gone.has(object)) {
       continue;
     }
     for (

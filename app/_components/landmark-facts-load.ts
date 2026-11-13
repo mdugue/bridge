@@ -1,8 +1,10 @@
 /**
  * The site's landmark facts (`landmark-facts.json`, lib/city/landmark-facts.ts),
- * fetched once for the page by whoever asks first — the nameplate or the
- * inquiry card — and indexed once: both read the same index, so they
- * cannot disagree. A fetch that fails or takes longer than
+ * fetched once per thread by whoever asks first there and indexed once:
+ * the nameplate in the scene's worker (ADR 0061) and the inquiry card on
+ * the page each fetch it (the second from the HTTP cache: the file is
+ * content-hashed and immutable) and index it alike, so they cannot
+ * disagree. A fetch that fails or takes longer than
  * `FACTS_TIMEOUT_MS` is not kept: the next landmark asks again; a file
  * that is not one is kept as none.
  */

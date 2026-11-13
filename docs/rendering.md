@@ -310,9 +310,7 @@ change, not a re-bake
     colour target there is none of. `RingShadowNode`, installed as the
     light's `shadow.shadowNode` (the hook three's own CSM and tiled shadows
     use: no patch, ADR 0027), draws a layer with
-    `setRenderTarget(map, layer)`. Rely on the render's own clear: an
-    explicit `renderer.clear()` on a depth array throws on the WebGL2
-    backend.
+    `setRenderTarget(map, layer)`, and relies on the render's own clear.
   - **One camera.** All rings draw with the shadow's one camera, moved for
     each: three keeps its state per drawable and camera, so a camera per
     ring would cost a phone memory per object of every tile.
@@ -503,8 +501,7 @@ into the buffer carries `reversedDepth` and a projection to match. What
 reads raw depth on its own must ask: the styles' sky test and their
 shadow lookup (`stylize-effect.ts`, `StylizeInputs.reversedDepth`), the
 parallel view's pick ray (`view-ray.ts`), the scene target's depth type
-(`post-stack.ts`). A WebGL2 without `EXT_clip_control` keeps the plain
-buffer (three falls back and says so). `?depth=standard` draws with the
+(`post-stack.ts`). `?depth=standard` draws with the
 plain buffer, to compare.
 
 **What the stack builds follows the device tier** (`postProfileFor` in
@@ -960,8 +957,8 @@ the safety levels 1, 2 and 3:
 | Land-cover rasters | L0 4096², its splat 2048² (85 → 21 MiB with mips, since 2026-10-10), L1 1024² | L0 2048², L1 1024²; no sports raster | as the tier |
 | Close-range rasters of a fine level (paving, edges, sports grounds, markings, colonies) | 2048² within 0.75 m a pixel of the view, their 1024² twins beyond 1.1 (`lib/city/ground-reach.ts`) | same | as the tier |
 | GTAO samples | 16 | 8 | 8 |
-| Frames behind the sidebar (`lib/city/frame-pace.ts`) | every frame (the panel floats beside the scene) | 12 fps while its sheet covers the scene, none while it scrolls and 250 ms after (the scene shared the GPU with the compositor drawing the scroll, and the scroll lagged the finger); the sheet's backdrop is not blurred | as the tier |
-| Frames while the scene stands still (`frame-pace.ts`, `createStillness`) | 30 fps once the camera has not moved for 1 s, everything is loaded and neither the traffic nor the trams run; any input on the page (a pointer moving over the canvas only), a look change, a new hour, a glide to a viewpoint, a resize or a stream wakes it for the next frame (a resize to a container without area is skipped: the canvas keeps its last size, `canvas-size.ts`, since WebGPU fails a 0 × 0 swap chain). The resolution scale steps up there by the GPU's time alone, and the HUD's fps readout keeps the last moving rate | same | as the tier (a SwiftShader frame takes longer than the pace's interval, so it holds none) |
+| Frames behind the sidebar (`lib/city/frame-pace.ts`) | every frame (the panel floats beside the scene) | while its sheet covers the scene, only what the HUD asks for: a call draws 0.5 s at 12 fps and does not end the scene's standing still, a scene that moves (a glide, a stream landing) keeps 12 fps, a still one draws nothing else (the scene shares the GPU with the compositor drawing the sheet's scroll); the sheet's backdrop is not blurred | as the tier |
+| Frames while the scene stands still (`frame-pace.ts`, `createStillness`) | 30 fps once the camera has not moved for 1 s, everything is loaded and neither the traffic nor the trams run; any input on the canvas or a key, any call from the HUD (not while the sidebar's sheet covers the scene), a look change, a new hour, a glide to a viewpoint, a resize or a stream wakes it for the next frame (a resize to a container without area is skipped: the canvas keeps its last size, `canvas-size.ts`, since WebGPU fails a 0 × 0 swap chain). The resolution scale steps up there by the GPU's time alone, and the HUD's fps readout keeps the last moving rate | same | as the tier (a SwiftShader frame takes longer than the pace's interval, so it holds none) |
 | Frames in *Frag die Stadt*'s Hörmodus (`frame-pace.ts`, `setListening`, ADR 0057) | 2 fps while the scene stands still, 30 while a glide or the live mode moves it (no two kept frames further apart than the loop's 0.05 s time step, at 24–144 Hz); the city shows through a soft vignette | same | as the tier |
 | Rich crowns at most (`vegetation-lod.ts`) | 2 500 (≈ 3.6 M triangles) | 800 | as the tier |
 | Real lamp lights (`LAMP_LIGHTS`, every lit fragment shades each, by day too) | 3 | 1 | as the tier |
@@ -1360,7 +1357,7 @@ cabled Web Inspector) print it as one line:
   the frame callback on the main thread (mean / slowest), the render call
   inside it (three encoding and submitting the passes), the GPU's time per
   frame from timestamp queries (`trackTimestamp`; only where the adapter
-  offers `timestamp-query` — Chromium's WebGPU, not Safari, not WebGL2),
+  offers `timestamp-query` — Chromium's WebGPU, not Safari),
   the fastest rate the loop ran (the 10th percentile of its frame
   intervals: 120 on a ProMotion display that it keeps up with) and the
   pixels drawn per frame (millions). A slow page with a short `cpu` and a
@@ -1434,8 +1431,7 @@ render does not unwind (its call depth stays a level deep, or the shadow
 pass's override stays on), and no later frame draws right. It is a loss
 only with a sign of the GPU running out — an allocation error, a memory
 emergency before it, a GPU the probe finds gone (`frameLoss`); otherwise
-it is a bug (`failed`, and every throw on WebGL2, which has nothing to
-probe): the page reloads at the same level, at most twice in ten
+it is a bug (`failed`): the page reloads at the same level, at most twice in ten
 minutes. Before the first frame the message fails the boot instead.
 
 **A GPU taken in the background is not the page's failure** (the resume
@@ -1588,6 +1584,34 @@ scene's setup. The stream takes each from there once
 second time. Before, the first tile was asked for in the first frame.
 The minimap's picture is an image the sidebar loads when it shows.
 
+**The scene boots in a worker** (ADR 0061, `scene-client.ts`): the page
+starts `scene-worker.ts`, which says it runs (`alive`) and then what it
+can draw with (a WebGPU adapter, `requestAnimationFrame`). The page waits
+up to 60 s for the script (a slow line's download) and 10 s more for the
+adapter; a script that never arrives is the network's ("network: …",
+`BootError`'s plain words) — so is a chunk the worker's bootstrap could
+not fetch before `alive` (the bundler's classic bootstrap pulls the
+scene's chunks with `importScripts`, and a failed one throws a
+NetworkError) — one that throws or stays silent "Die Ansicht startet
+nicht." An aborted boot (a StrictMode remount, a navigation) stops
+waiting at once and ends the worker, so the next boot does not wait on
+it.
+Where that matches the page, the page hands it the canvas as an
+`OffscreenCanvas` with the init (budget, size, site, look, the page's
+address and state); the worker asks for the tileset and the start tile
+(its own `boot-ahead`) while the scene's chunk loads, and serves the
+scene from there (`scene-server.ts`); a browser that cannot draw from a
+worker gets the no-GPU message (`?thread=main` runs the same server on
+the page, for debugging). Everything the HUD reads every frame — the camera,
+the pose, Modell's state, what streams — comes back in the mirror the
+scene sends when it changed; `__poc.handle` is that client, so its value
+calls are promises. A scene ends when it answers `dispose` — after its
+teardown, the renderer and its device released — or, a worker,
+3 s on (`WORKER_TEARDOWN_MS`; its device goes with it): `dispose()`
+settles then, and the next boot waits for it. A boot aborted on the way
+releases the worker's head start, and the page ends a worker that has
+not ended it 3 s later.
+
 The **first frame** waits on the spawn tile's buildings and *any* of its
 terrain levels (`bootApp` in `create-app.ts`); the player is then placed
 again on the spawn tile's ground, which did not exist when the pose was
@@ -1686,12 +1710,14 @@ fine level shows bare and its trees, lamps and rails arrive once its
 dressing is built — on a phone that blink of no trees is back, the price
 of a stream that keeps moving. A dressing's **ask sets** — what the
 inquiry probe can ask of its trees, monuments, decks, hedges, lamps and
-furniture — are built once it hangs, when the main thread is idle (at
-most 2 s on, `buildAsksWhenIdle`), not inside its build: they place
+furniture — are built once it hangs, when the scene's thread is idle (at
+most 2 s on, `buildAsksWhenIdle`; in the worker, which has no
+`requestIdleCallback`, a background `scheduler.postTask`, and in WebKit's
+a quarter-second timer — `whenIdle`), not inside its build: they place
 every canopy tree a second time for a card nobody may open (0.3 s of a
 dense tile's build in the local trace); a question that comes first
 builds them at once (`asksOf`) — on a saturated page the idle time can be
-minutes in coming (timers and idle callbacks wait behind three's compile
+minutes in coming (timers and idle tasks wait behind three's compile
 steps there; plan 069's Findings). **Ready** (`onLoaded`,
 `__poc.ready`) is the first moment after the gate at which the spawn tile
 is dressed, the renderer is idle and no dressing is pending; it also lifts
@@ -1865,11 +1891,15 @@ tiles, `boot:spawn-wait`), its last steps before the light stage
 (`boot:scene-compile`, `boot:place` — the spawn tile's BVH among it —
 and `boot:light-wait`), `boot:frame` (the first 60 frames at the start
 pose), `boot:first-shadow-frame`, `boot:light-to-veil`,
-`boot:veil-to-loaded`. With `?trace=1` each span also lands on the
-browser's own timeline (DevTools' and Web Inspector's *Timings* track)
-with its tile id, the long tasks are counted where the browser reports
-them (Chromium; Safari has none), and the page prints the table once
-loaded and 20 s later (`console.table`). The names are a contract for
+`boot:veil-to-loaded`. The timings are the scene's thread's: the page
+tells it when the veil dropped (`veilDropped`) and when it navigated (the
+init's `pageOrigin`), so every boot span is measured there. With
+`?trace=1` each span also lands on that thread's timeline (DevTools' and
+Web Inspector's *Timings* track) with its tile id, and the scene prints
+the table once loaded and 20 s later (`console.table`). The long tasks
+(`longtask`) and the crash trail's `heapMB` are the page's alone: a
+worker reports neither, so they are counted only with `?thread=main`
+(Chromium; Safari reports no long tasks). The names are a contract for
 later perf work: add one rather than rename one. None of it reaches the
 crash trail or the reports — a tile's id names where the player was.
 

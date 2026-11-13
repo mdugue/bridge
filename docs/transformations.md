@@ -5597,8 +5597,11 @@ GPU**.
   placement, turned by the context's TrueNorth (`≈ assumed`: approximate, the panel says so) put
   its origin in the Land's coordinates (`lib/city/ifc-georef.ts`);
   geometry already in them keeps its place. An
-  OBJ (metres, Y up, its MTL and textures from the picked files) and a
-  Rhino .3dm (its unit, Z up turned to Y up, placed `◎ detected` by its
+  OBJ (metres, Y up, its MTL and textures from the picked files, the
+  textures decoded by `createImageBitmap` in the scene's worker) and a
+  Rhino .3dm (its unit, Z up turned to Y up, its textures and text dots
+  left out — three's loader draws them through the DOM, which the
+  worker has not; the panel says so —, placed `◎ detected` by its
   earth anchor where one is set — its elevation as NHN unless it says
   ground level or the earth's centre, or is unread and Rhino's default
   0, then set on the ground; hidden

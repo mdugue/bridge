@@ -20,8 +20,8 @@ level — ADR 0047 —, a few preferences; the full list is on `/datenschutz`).
 ## Prerequisites
 
 - [Bun](https://bun.sh) 1.4+ (the version in `package.json` `packageManager`)
-- A browser with WebGPU, or WebGL2 as the fallback (three's
-  `WebGPURenderer` picks its WebGL2 backend; `?gpu=webgl2` forces it)
+- A browser with WebGPU (Chrome, Edge, Safari on iOS/macOS 26); the
+  scene draws from a worker on an `OffscreenCanvas` (ADR 0061)
 - For any site other than Dresden, or to re-run the bakes:
   [uv](https://docs.astral.sh/uv/) (it installs the Python and the geo
   libraries in `pipeline/`)

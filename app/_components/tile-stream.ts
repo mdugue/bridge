@@ -176,6 +176,7 @@ import { tileNichesOffThread } from "./window-niche-client";
 import type { NicheResult } from "./window-niche-client";
 import { nicheInput } from "./window-niche-layer";
 import type { NicheField } from "./window-niche-layer";
+import { pageView } from "./page-view";
 
 /**
  * The world as it streams in: OGC 3D Tiles (lib/city/tileset.ts) through
@@ -1950,7 +1951,7 @@ export class DressingPlugin {
   }
 
   private readonly url = (file: string): string =>
-    new URL(file, new URL(this.ctx.tilesetUrl, window.location.href)).href;
+    new URL(file, new URL(this.ctx.tilesetUrl, pageView.href)).href;
 
   async processTileModel(scene: Object3D, tile: object): Promise<void> {
     this.tileOf.set(scene, tile);
@@ -2907,7 +2908,10 @@ export function createTileStream(
   world: Group,
   cameras: { camera: Camera; height: number; width: number }[]
 ): TileStream {
-  const tiles = new TilesRenderer(ctx.tilesetUrl);
+  // the page's address, not a worker's script's: the renderer resolves the
+  // tileset's own paths against the URL it is given (and, for a relative
+  // one, against `location`, patches/3d-tiles-renderer@0.5.4.patch)
+  const tiles = new TilesRenderer(new URL(ctx.tilesetUrl, pageView.href).href);
   orderStreaming(tiles, ctx.tier, ctx.bootTile);
   setRasterTier(ctx.tier);
   tiles.registerPlugin(new ContentFetchPlugin(ctx.ahead));
