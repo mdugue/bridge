@@ -621,7 +621,9 @@ function mergeMeshes(features: readonly PlanFeature[]): PlanFeature[] {
   for (const f of features) {
     if (f.kind === "mesh") {
       const list = meshes.get(f.cls) ?? [];
-      list.push(...f.triangles);
+      for (const t of f.triangles) {
+        list.push(t);
+      }
       meshes.set(f.cls, list);
     } else {
       out.push(f);
