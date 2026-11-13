@@ -38,6 +38,7 @@ from bake.roofs import (
     region_polygons,
     regular_polygon,
     run,
+    surface_grid,
 )
 
 X0, Y0, SIZE = 400_000.0, 5_600_000.0, 200
@@ -637,3 +638,36 @@ def test_straightening_loses_no_part_where_a_short_edge_lies_on_its_neighbour():
     c = shapely.Polygon([(10, 0), (20, 0), (20, 10), (10, 10), (10, 5)])
     out = _straightened([a, b, c])
     assert [round(p.area, 3) for p in out] == [round(p.area, 3) for p in (a, b, c)]
+
+
+def test_a_stage_houses_hip_is_written_as_its_four_planes_facets():
+    # the stage house again: its roof a face drawn as flanks, which the
+    # file carries as facets — the ridge and the hips straight lines the
+    # build draws in place of the 1 m grid's cut-off corners
+    r, c = np.indices((60, 60)) + 0.5
+    inside = (np.abs(r - 30) < 12) & (np.abs(c - 30) < 10)
+    hip = 18 + np.minimum(12 - np.abs(r - 30), 10 - np.abs(c - 30)) * 0.8
+    dom = ndi.gaussian_filter(np.where(inside, hip, 10.0), 0.6)
+    own = np.ones(dom.shape, bool)
+    m = measured_model(dom, own, own, np.zeros_like(own), 20)
+    rid = int(m.lab[30, 30])
+    assert m.faces[rid] and rid in m.planes
+    grid = Grid((X0, Y0, X0 + 60, Y0 + 60))
+    part = shapely.box(X0 + 20, Y0 + 18, X0 + 40, Y0 + 42)
+    z = 20.0
+    surface = surface_grid(m, rid, grid, part, z)
+    facets = surface["facets"]
+    assert len(facets) == 4
+    assert np.isclose(sum(shapely.Polygon(f["rings"][0]).area for f in facets), part.area)
+    # two trapezia along the ridge, a triangle at either end (a hip may end
+    # beside its corner of the outline: one point more)
+    corners = sorted(len(f["rings"][0]) - 1 for f in facets)
+    assert all(n <= most for n, most in zip(corners, [4, 4, 5, 5], strict=True))
+    for f in facets:
+        a, b, c = f["plane"]
+        assert np.isclose(np.hypot(b, c), 0.8, atol=0.05)
+        # on its plane the roof the scan shows, at the facet's middle
+        p = shapely.Polygon(f["rings"][0]).representative_point()
+        height = z + a + b * (p.x - surface["x"]) + c * (p.y - surface["y"])
+        row, col = int(Y0 + 60 - p.y), int(p.x - X0)
+        assert abs(height - dom[row, col]) < 0.6

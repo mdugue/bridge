@@ -98,7 +98,7 @@ from rasterio.transform import from_origin
 from rasterio.windows import from_bounds
 from scipy import ndimage as ndi
 
-from . import roof_planes
+from . import roof_facets, roof_planes
 from .common import Tile, feature, geometry_json, overlaps, write_geojson
 from .roof_planes import fill_nearest
 from .skyview import burn_triangles
@@ -538,6 +538,9 @@ class Model:
     faces: np.ndarray  # per label, whether the region is drawn as its surface
     surface: np.ndarray  # per cell, the measured surface the faces show
     blur: np.ndarray | None = None  # per cell, a wall's blur the model splits at half height
+    # per face drawn as flanks or planes: its window, each cell's plane
+    # there and the planes (z = a + b·col + c·row on the window's cells)
+    planes: dict | None = None
 
     def judged(self, cells: np.ndarray) -> np.ndarray:
         """`cells` the model is judged on: its own, less a wall's blur it
@@ -569,19 +572,20 @@ def _regions(h, own, face, small_cells, with_faces, narrow):
     return merge_regions(lab, h, small_cells, faces, thin=with_faces, narrow=with_faces and narrow)
 
 
-def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None):
+def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None, ways=None):
     """The surface the faces are drawn with — each as flanks, planes or one
     curve (`roof_planes.plausible_fit`), fitted on its own face cells
     (what it took in follows it) —, the faces that are none of them (each
     with whether it was judged as flanks alone), and
-    per face drawn as flanks its window, fit and eaves (`_straight_eaves`).
+    per face drawn as flanks its window, fit and eaves (`_straight_eaves`)
+    and its window, each cell's plane and the planes (`Model.planes`).
     A face most of whose cells only the flank rule found (`flank_only`) is
     drawn as flanks or not at all. `fits`: the fits of earlier rounds, by
     the face's cells (a face no round changed is not fitted again)."""
     fits = {} if fits is None else fits
     surface = h.copy()
     implausible = []
-    gables = {}
+    gables, planes = {}, {}
     for rid in np.flatnonzero(faces):
         mine = lab == rid
         if not mine.any():
@@ -593,7 +597,7 @@ def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None):
         key = (win[0].start, win[1].start, cells.shape, cells.tobytes(), flanks, landmark)
         if key not in fits:
             fits[key] = roof_planes.plausible_fit(
-                h[win], cells, SLOPE, RES, EXTEND_CELLS, landmark, flanks
+                h[win], cells, SLOPE, RES, EXTEND_CELLS, landmark, flanks, ways
             )
         fit = fits[key]
         if fit is None:
@@ -602,8 +606,10 @@ def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None):
         sub = surface[win]
         sub[mine[win]] = fit[0][mine[win]]
         if fit[1] is not None:
-            gables[int(rid)] = (win, *fit)
-    return surface, implausible, gables
+            gables[int(rid)] = (win, fit[0], fit[1])
+        if len(fit) > 2:
+            planes[int(rid)] = (win, fit[2], fit[3])
+    return surface, implausible, gables, planes
 
 
 def _straight_eaves(h, lab, faces, surface, gables, small_cells: int) -> np.ndarray:
@@ -801,8 +807,8 @@ def measured_model(
         face, flank_only = (c.copy() for c in scan.cells())
     for rounds in range(PLAUSIBLE_ROUNDS + 1):
         lab, faces = _regions(h, own, face, small_cells, with_faces, narrow)
-        surface, implausible, gables = _plausible_faces(
-            h, lab, faces, face, landmark, flank_only, scan.fits
+        surface, implausible, gables, planes = _plausible_faces(
+            h, lab, faces, face, landmark, flank_only, scan.fits, scan.ways
         )
         if not implausible:
             break
@@ -820,7 +826,7 @@ def measured_model(
     # `gables` holds only faces drawn as flanks (an implausible one is none)
     blur = _straight_eaves(h, lab, faces, surface, gables, small_cells)
     level = _region_medians(lab, h, int(lab.max()))
-    return Model(lab, level, faces, surface, blur)
+    return Model(lab, level, faces, surface, blur, planes)
 
 
 @dataclass
@@ -834,6 +840,8 @@ class Scan:
     # the faces' fits by window and cells (`_plausible_faces`): a face no
     # round and no second model changed is not fitted again
     fits: dict = field(default_factory=dict)
+    # the ways a flank rises square to the building's walls (`wall_ways`)
+    ways: np.ndarray | None = None
 
     def cells(self) -> tuple[np.ndarray, np.ndarray]:
         """The face cells and those only the flank rule found (`_face_cells`)."""
@@ -881,7 +889,7 @@ def surface_grid(model: Model, rid: int, grid: Grid, poly: shapely.Geometry, z: 
     r1 = min(int(np.ceil((grid.ymax - y0) / RES)) + 2, grid.rows)
     mine = model.lab[r0:r1, c0:c1] == rid
     sub = extend_face(model.surface[r0:r1, c0:c1], mine)
-    return {
+    out = {
         "x": round(grid.xmin + c0 * RES, 2),
         "y": round(grid.ymax - r0 * RES, 2),
         "res": RES,
@@ -889,6 +897,48 @@ def surface_grid(model: Model, rid: int, grid: Grid, poly: shapely.Geometry, z: 
         "rows": int(sub.shape[0]),
         "dz": np.round((sub - z) * 100).astype(int).ravel().tolist(),
     }
+    facets = _facets(model, rid, grid, poly, (out["x"], out["y"], z))
+    if facets:
+        out["facets"] = facets
+    return out
+
+
+def _facets(model: Model, rid: int, grid: Grid, poly, frame) -> list[dict] | None:
+    """A face drawn as flanks or planes, as its planes' polygons (`roof_facets`):
+    each one's rings and its plane [a, b, c], the height a + b·(x − x0) +
+    c·(y − y0) from `frame` (x0, y0, z0: the surface grid's corner and the
+    part's `z`). None for any other face, or one whose cells are not all
+    on their plane."""
+    if not model.planes or rid not in model.planes:
+        return None
+    win, near, planes = model.planes[rid]
+    rows, cols = np.nonzero(model.lab[win] == rid)
+    coef = np.zeros((max(planes) + 1, 3))
+    for k, p in planes.items():
+        coef[k] = p
+    on = coef[near[rows, cols]]
+    drawn = model.surface[win][rows, cols]
+    if not len(rows) or np.abs(on[:, 0] + on[:, 1] * cols + on[:, 2] * rows - drawn).max() > 1e-3:
+        return None
+    wx, wy = grid.xmin + win[1].start * RES, grid.ymax - win[0].start * RES
+    cut = roof_facets.face_facets(near, planes, (wx, wy), poly, RES)
+    if cut is None:
+        return None
+    x0, y0, z0 = frame
+    out = []
+    for (a, b, c), cell in cut:
+        rings = [cell.exterior, *cell.interiors]
+        out.append(
+            {
+                "plane": [
+                    round(float(a + b * (x0 - wx) + c * (y0 - wy) - z0), 3),
+                    round(float(b), 5),
+                    round(float(c), 5),
+                ],
+                "rings": [[[round(x, 2), round(y, 2)] for x, y in r.coords] for r in rings],
+            }
+        )
+    return out
 
 
 @dataclass
@@ -1506,7 +1556,8 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
         return None
     # one scan for every judgement and model of these cells (the models'
     # `known` cells are the judged ones)
-    scan = Scan(scan_surface(dom, judged), own)
+    ways = roof_planes.wall_ways(building_walls(footprint).dirs)
+    scan = Scan(scan_surface(dom, judged), own, ways=ways)
     if miss_lod2 <= MISS_SHARE and (
         level_share(roof, dom, scan.h, judged) < LEVEL_SHARE
         or pitch_holds(roof, scan.h, own, judged)
@@ -1599,8 +1650,9 @@ def run(tile: Tile) -> None:
     ]
     # the provider's LoD2 and DOM1, under its credit line
     write_geojson(out, feats, tile.epsg, f"{tile.credit} (LoD2, DOM1)")
-    faces = sum(1 for r in found for p in r.parts if p.surface)
+    faces = [p.surface for r in found for p in r.parts if p.surface]
     print(
         f"{tile.id}: {len(found)} of {len(objects)} roofs rebuilt from DOM1 "
-        f"({len(feats)} parts, {faces} of them measured faces)"
+        f"({len(feats)} parts, {len(faces)} of them measured faces, "
+        f"{sum('facets' in s for s in faces)} drawn as their planes' facets)"
     )

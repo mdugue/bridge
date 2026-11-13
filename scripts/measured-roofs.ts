@@ -6,7 +6,10 @@
  * Every part of an object is a prism from the object's own LoD2 base (the
  * lowest vertex of its LoD2 shell: where its walls stood on the ground
  * before) up to the part's roof — flat at its measured `z`, or, for a face
- * (a pitched roof, a vault, a dome), its measured surface: an
+ * (a pitched roof, a vault, a dome), its measured surface: where the bake
+ * drew it as planes, its facets (`facetPrism`: each plane's polygon flat
+ * on its plane, a ridge, a hip, a valley the straight line two of them
+ * share, a step of more than the scan can tell between two a wall); else an
  * error-bounded TIN of the surface grid (`FACE_TIN_MAX_ERROR`), its
  * vertices inside the outline triangulated with the outline's own points
  * where the height along it bends, the walls' tops on those same points —
@@ -549,6 +552,170 @@ function facePrism(
   }
 }
 
+/** Two facets' heights at a corner within this (m) of each other are one
+ *  height there: a crease (the corner lies on the bake's centimetre grid,
+ *  not on the two planes' crossing itself), or two planes the scan cannot
+ *  tell from two that meet (the bake's FLANK_TOL_M: a cell this far off a
+ *  plane is still on it) — drawn as a step that would be a sliver of wall
+ *  a hand high across the roof. Further apart, a step. */
+const FACET_STEP_M = 0.5;
+
+/** A corner's key on the bake's centimetre grid. */
+function cornerKey(p: Point2): string {
+  return `${Math.round(p[0] * 100)},${Math.round(p[1] * 100)}`;
+}
+
+/** An edge's key, the same from either end. */
+function edgeKey(a: Point2, b: Point2): string {
+  return [cornerKey(a), cornerKey(b)].sort().join("|");
+}
+
+/** A face's facets: each one's rings (the outside on the right of every
+ *  edge) and its height at a point. */
+interface Facet {
+  normal: number[];
+  rings: Point2[][];
+  z: (p: Point2) => number;
+}
+
+function surfaceFacets(s: MeasuredSurface, top: number): Facet[] {
+  return (s.facets ?? []).map((f) => {
+    const [a, b, c] = f.plane;
+    return {
+      normal: unit([-b, -c, 1]),
+      rings: f.rings
+        .map((ring, i) => openRing(ring, i === 0))
+        .filter((ring) => ring.length >= 3),
+      z: (p: Point2) => top + a + b * (p[0] - s.x) + c * (p[1] - s.y),
+    };
+  });
+}
+
+/** Per corner, each facet's height there: its plane's, or the mean of
+ *  those of the facets meeting there within FACET_STEP_M of the lowest of
+ *  them, so a crease has no crack; never under `base`. */
+function facetHeights(facets: readonly Facet[], base: number) {
+  const at = new Map<string, { facet: number; z: number }[]>();
+  for (const [facet, f] of facets.entries()) {
+    for (const p of f.rings.flat()) {
+      const key = cornerKey(p);
+      const list = at.get(key) ?? [];
+      if (!list.some((e) => e.facet === facet)) {
+        list.push({ facet, z: Math.max(f.z(p), base) });
+      }
+      at.set(key, list);
+    }
+  }
+  for (const list of at.values()) {
+    list.sort((x, y) => x.z - y.z);
+    for (let i = 0; i < list.length;) {
+      let j = i + 1;
+      while (j < list.length && list[j].z - list[i].z <= FACET_STEP_M) {
+        j += 1;
+      }
+      const mean = list.slice(i, j).reduce((sum, e) => sum + e.z, 0) / (j - i);
+      for (let k = i; k < j; k += 1) {
+        list[k].z = mean;
+      }
+      i = j;
+    }
+  }
+  return (facet: number, p: Point2): number =>
+    at.get(cornerKey(p))?.find((e) => e.facet === facet)?.z ?? base;
+}
+
+/** One vertex a prism pushes. */
+type Pushed = [number, number, number, number, (readonly number[])?];
+
+/** A wall along a → b (the outside on its right) from `low` up to `high`
+ *  at either end; the triangles of no height left out. */
+function wallQuad(
+  a: Point2,
+  b: Point2,
+  low: readonly number[],
+  high: readonly number[],
+  out: Pushed[]
+): void {
+  if (high[1] - low[1] > 1e-6) {
+    out.push(
+      [0, a[0], a[1], low[0]],
+      [0, b[0], b[1], low[1]],
+      [0, b[0], b[1], high[1]]
+    );
+  }
+  if (high[0] - low[0] > 1e-6) {
+    out.push(
+      [0, a[0], a[1], low[0]],
+      [0, b[0], b[1], high[1]],
+      [0, a[0], a[1], high[0]]
+    );
+  }
+}
+
+/** A face drawn as planes: each facet a flat roof on its plane (shaded
+ *  with the plane's own normal), a wall wherever a facet's edge has no
+ *  neighbour (the outline: from `base`) or a lower one (a step: from the
+ *  neighbour's height). Null where the facets do not cover the outline. */
+function facetPrism(
+  rings: Point2[][],
+  facets: readonly Facet[],
+  base: number
+): Pushed[] | null {
+  const height = facetHeights(facets, base);
+  const out: Pushed[] = [];
+  const edges = new Map<string, number[]>();
+  let covered = 0;
+  for (const [index, f] of facets.entries()) {
+    const [contour, ...holes] = f.rings;
+    if (contour === undefined) {
+      continue;
+    }
+    const all = f.rings.flat();
+    const tris = ShapeUtils.triangulateShape(
+      contour.map(([x, y]) => new Vector2(x, y)),
+      holes.map((h) => h.map(([x, y]) => new Vector2(x, y)))
+    );
+    for (const [a, b, c] of tris) {
+      const [p, q, r] = [all[a], all[b], all[c]];
+      const area = cross2(p, q, r);
+      covered += Math.abs(area) / 2;
+      // counter-clockwise from above
+      for (const v of area > 0 ? [p, q, r] : [p, r, q]) {
+        out.push([1, v[0], v[1], height(index, v), f.normal]);
+      }
+    }
+    for (const ring of f.rings) {
+      for (let i = 0; i < ring.length; i += 1) {
+        const key = edgeKey(ring[i], ring[(i + 1) % ring.length]);
+        edges.set(key, [...(edges.get(key) ?? []), index]);
+      }
+    }
+  }
+  const area = rings.reduce((sum, ring) => sum + signedArea(ring) / 2, 0);
+  if (Math.abs(covered - area) > COVER_TOLERANCE * area) {
+    return null;
+  }
+  for (const [index, f] of facets.entries()) {
+    for (const ring of f.rings) {
+      for (let i = 0; i < ring.length; i += 1) {
+        const a = ring[i];
+        const b = ring[(i + 1) % ring.length];
+        const other = edges.get(edgeKey(a, b))?.find((k) => k !== index);
+        const high = [height(index, a), height(index, b)];
+        const low =
+          other === undefined
+            ? [base, base]
+            : [
+                Math.min(height(other, a), high[0]),
+                Math.min(height(other, b), high[1]),
+              ];
+        wallQuad(a, b, low, high, out);
+      }
+    }
+  }
+  return out;
+}
+
 /** A flat part: walls from `base` to `top` and a flat roof at `top`. */
 function flatPrism(rings: Point2[][], base: number, top: number, push: Push) {
   const [contour, ...holes] = rings;
@@ -619,7 +786,16 @@ function addPrism(f: MeasuredRoofFeature, base: number, push: Push): void {
   }
   const rings = [contour, ...inner.map((h) => openRing(h, false))];
   const surface = f.properties?.surface;
-  if (surface) {
+  // a face drawn as planes: its facets; where they do not cover it, and on
+  // every other face, the surface grid
+  const planes = surface?.facets
+    ? facetPrism(rings, surfaceFacets(surface, top), base)
+    : null;
+  if (planes) {
+    for (const v of planes) {
+      push(...v);
+    }
+  } else if (surface) {
     facePrism(rings, faceTin(surface, top), base, top, push);
   } else {
     flatPrism(rings, base, top, push);
