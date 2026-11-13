@@ -5,7 +5,7 @@ import type { RefObject } from "react";
 import { arrivalHref, placementOf, siteHolding } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import { useOtherSites, useSite } from "./site-context";
-import type { CityWalkHandle } from "./create-app";
+import type { CityWalkHandle } from "./scene-client";
 import {
   canLocate,
   describeFailure,

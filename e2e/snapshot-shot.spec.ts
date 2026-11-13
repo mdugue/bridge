@@ -180,15 +180,16 @@ for (const { path: file, name } of snapshotFiles()) {
     // GPU took longer than any fixed sleep). By night no shadow map is
     // drawn, so after `shadowless` frames the plate is taken without one.
     await page.waitForFunction(
-      ({ frames, shadows, settle, shadowless }) => {
+      async ({ frames, shadows, settle, shadowless }) => {
         const poc = window.__poc;
+        const focus = await poc?.handle?.getFocusDebug();
         const drawn = (poc?.frames ?? 0) - frames;
         return (
           drawn >= settle &&
           // the move regressed the post stack: DoF is back once it is
           // still, and grown in fully where the style draws it
           !poc?.regressed &&
-          (poc?.handle?.getFocusDebug().settled ?? true) &&
+          (focus?.settled ?? true) &&
           // the rings redraw one a frame, the wide ones at a distance
           !poc?.handle?.shadowBusy() &&
           // a plate far from the spawn waits for its own tiles to land

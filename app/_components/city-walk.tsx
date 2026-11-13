@@ -1,6 +1,5 @@
 "use client";
 
-import { createFramePace } from "@/lib/city/frame-pace";
 import { ARRIVAL_PARAM, arrivalOf, placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
@@ -45,7 +44,6 @@ import type { Snapshot } from "@/lib/city/snapshot";
 import { arrivalOf as recoveryArrival } from "@/lib/city/gpu-recovery";
 import { restoresLook } from "@/lib/city/gpu-safety";
 import { AltitudeStick } from "./altitude-stick";
-import { bootAhead } from "./boot-ahead";
 import { BootError } from "./boot-error";
 import { ControlHintBar } from "./control-hints";
 import { CrashReport } from "./crash-report";
@@ -57,7 +55,8 @@ import { pageRecovery } from "./gpu-recovery";
 import { raiseSafety, resetSafety } from "./gpu-safety";
 import { VEIL_HOLD_MS } from "./handover";
 import { streamTimings } from "./stream-timing";
-import type { CityWalkHandle } from "./create-app";
+import { createScenePace, settle, startScene } from "./scene-client";
+import type { CityWalkHandle } from "./scene-client";
 import { LoadScreen } from "./load-screen";
 import { HudToolbar } from "./hud-toolbar";
 import type { HudTool } from "./hud-toolbar";
@@ -82,6 +81,7 @@ import { SceneSidebar } from "./scene-sidebar";
 import { WalkCard } from "./walk-player";
 import { useAskScene } from "./ask-scene";
 import { SidebarPace } from "./sidebar-pace";
+import { whenVisible } from "./page-visible";
 import {
   afterTask,
   createSceneStatus,
@@ -140,9 +140,6 @@ interface StartPick {
   label: string;
   view?: ViewpointGeometry;
 }
-
-/** The three.js half of the viewer, loaded beside the HUD (create-app.ts). */
-const loadScene = async () => await import("./create-app");
 
 /**
  * Two phases, one handover. `loading` is the full-bleed Laden screen; `running`
@@ -594,7 +591,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   const handleRef = useRef<CityWalkHandle | null>(null);
   // the render loop's pace behind the phone's sidebar (sidebar-pace.tsx):
   // one for the page, every boot's loop asks it
-  const pace = useOnce(createFramePace);
+  const pace = useOnce(createScenePace);
   const applySceneTime = useCallback(
     (date: Date, preview?: boolean) => handleRef.current?.setSun(date, preview),
     []
@@ -915,39 +912,29 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
     lastBoot.current = new Promise((resolve) => {
       settled = resolve;
     });
-    // The tileset and the first tile's contents, asked for beside the
-    // scene's chunk (boot-ahead.ts) — once the last boot's teardown is
-    // through: what they bring is not held beside the scene that goes (a
+    // The scene starts once the last boot's teardown is through: what it
+    // asks for (boot-ahead.ts: the tileset and the first tile's contents,
+    // beside the scene's chunk) is not held beside the scene that goes (a
     // phone's peak at a change of place). The first boot waits on nothing.
     const initialCamera = start ? start.camera : arrival.snapshot?.camera;
-    const ahead = previous.then(() =>
-      aborter.signal.aborted
-        ? undefined
-        : bootAhead(
-            new URL(tilesetUrl, window.location.href).href,
-            { initialCamera, initialView: start?.view },
-            aborter.signal
-          )
-    );
-    void ahead
-      .then(loadScene)
-      .then(async ({ createCityWalkApp }) => {
+    void previous
+      .then(async () => {
         if (aborter.signal.aborted) {
           throw new DOMException("CityWalk startup aborted", "AbortError");
         }
-        return await createCityWalkApp({
+        return await startScene({
           container,
           budget,
           look,
+          pace,
           site,
           tilesetUrl,
-          ahead: await ahead,
           initialCamera,
           initialView: start?.view,
           initialDate: timeNow(),
           signal: aborter.signal,
           trail,
-          pace,
+          reloadable: recoveries.recoverable(budget.safety),
           // Everything the scene only reports goes to the store, for the
           // widgets that show it (scene-status.ts) — while this boot is
           // the page's.
@@ -955,17 +942,32 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
             footprints: () => handleRef.current?.getFootprints(),
             live: () => !aborter.signal.aborted,
           }),
-          // A loss raises the level as this page's (`by`): after its own
-          // memory emergency the same incident, renewed rather than raised
-          // again (gpu-safety.ts).
-          onGpuLost: (how) =>
-            !aborter.signal.aborted &&
-            recoveries.onLoss(how, recovery.current?.capture() ?? null, {
-              level: budget.safety,
-              raise: (from) => raiseSafety(from, { by: trail.startedAt }),
-            })
-              ? () => location.reload()
-              : null,
+          // The render stopped and the scene freed its GPU: a loss raises
+          // the level as this page's (`by`) — after its own memory
+          // emergency the same incident, renewed rather than raised again
+          // (gpu-safety.ts) — and the page reloads where the player stood
+          // once in view; one it may not recover from says so.
+          onReload: (how) => {
+            if (aborter.signal.aborted) {
+              return;
+            }
+            const recovers = recoveries.onLoss(
+              how,
+              recovery.current?.capture() ?? null,
+              {
+                level: budget.safety,
+                raise: (from) => raiseSafety(from, { by: trail.startedAt }),
+              }
+            );
+            if (recovers) {
+              whenVisible(() => location.reload());
+            } else {
+              sceneStatus.set("gpuFailure", `GPU ${how}`);
+            }
+          },
+          onRaiseSafety: () => {
+            raiseSafety(budget.safety, { by: trail.startedAt });
+          },
           onFollowEnd: () => {
             if (!aborter.signal.aborted) {
               liveEnded.current();
@@ -1278,7 +1280,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
                 onClose={closeInquiry}
                 onPreview={(i) => handleRef.current?.previewCandidate(i)}
                 onSelect={(i) => {
-                  handleRef.current?.selectCandidate(i);
+                  settle(handleRef.current?.selectCandidate(i));
                 }}
               />
               {/* a phone's walk sheet owns the bottom: the stick and the

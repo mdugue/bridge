@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import { gridConvergenceDeg } from "@/lib/city/crs";
 import { normalizeDeg, placementOf } from "@/lib/city/geolocation";
 import { useSite } from "./site-context";
-import type { CityWalkHandle } from "./create-app";
+import type { CityWalkHandle } from "./scene-client";
 import {
   orientationNeedsPermission,
   requestOrientationPermission,

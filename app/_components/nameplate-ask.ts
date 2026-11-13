@@ -230,35 +230,3 @@ export function cityHides(
   }
   return hidden / points.length;
 }
-
-/**
- * The HUD's panels over the canvas: those marked `data-scene-cover`, and
- * the phone's sidebar sheet, which the vendored sidebar renders without
- * our props (components/ui stays as `shadcn add` wrote it).
- */
-const COVER_SELECTOR =
-  "[data-scene-cover], [data-slot='sidebar'][data-mobile='true']";
-
-/** The HUD's panels over the canvas as NDC boxes [x0, y0, x1, y1]. */
-export function coverBoxes(
-  canvas: HTMLElement
-): [number, number, number, number][] {
-  if (typeof document === "undefined") {
-    return [];
-  }
-  const c = canvas.getBoundingClientRect();
-  if (c.width <= 0 || c.height <= 0) {
-    return [];
-  }
-  const out: [number, number, number, number][] = [];
-  for (const el of document.querySelectorAll(COVER_SELECTOR)) {
-    const r = el.getBoundingClientRect();
-    if (r.width <= 0 || r.height <= 0) {
-      continue;
-    }
-    const nx = (x: number) => ((x - c.left) / c.width) * 2 - 1;
-    const ny = (y: number) => 1 - ((y - c.top) / c.height) * 2;
-    out.push([nx(r.left), ny(r.bottom), nx(r.right), ny(r.top)]);
-  }
-  return out;
-}

@@ -17,10 +17,11 @@
  * keeps it.
  */
 export function installMainYield(): void {
-  if (typeof window === "undefined" || typeof MessageChannel === "undefined") {
+  if (typeof MessageChannel === "undefined") {
     return;
   }
-  const host = window as unknown as {
+  // (the page's global, or the scene worker's: ADR 0061)
+  const host = globalThis as unknown as {
     scheduler?: { yield?: () => Promise<void> };
   };
   if (typeof host.scheduler?.yield === "function") {

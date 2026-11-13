@@ -109,7 +109,7 @@ export interface NetworkWatch {
 
 export interface NetworkWatchOptions {
   tiles: HealableTiles;
-  trail?: CrashTrail;
+  trail?: Pick<CrashTrail, "note">;
   /** the first frame is up, or the app is gone: the boot waits no more */
   bootOver: () => boolean;
   /** the boot gives up on the network (its error's message starts

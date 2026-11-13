@@ -113,6 +113,13 @@ export interface RecoverySession {
    */
   onLoss: (how: GpuLoss, snapshot: string | null, ladder: Ladder) => boolean;
   /**
+   * The stops this page would recover from now, at `level`, by what is
+   * stored (`onLoss` without its writes): the scene asks it when it boots,
+   * since it may run in a worker that cannot ask at the stop (ADR 0061).
+   * A loss in use also needs its raise stored, which only `onLoss` finds.
+   */
+  recoverable: (level: SafetyLevel) => GpuLoss[];
+  /**
    * The player asks for a reload; the caller reloads. *Leichter weiter*: a
    * level lighter and back where the player stood, past every cap — the
    * raise first, whatever the store. *Qualität*'s reset: the place kept,
@@ -186,6 +193,20 @@ export function createRecoverySession(
     },
     landed: take,
     abandoned: take,
+    recoverable: (level) => {
+      if (!store) {
+        return [];
+      }
+      try {
+        const history = historyOf(read(store));
+        const at = now();
+        return (["lost", "reclaimed", "failed"] as const).filter((how) =>
+          mayRecover(how, level, history, at)
+        );
+      } catch {
+        return [];
+      }
+    },
     onLoss: (how, snapshot, ladder) => {
       if (!store) {
         return false;

@@ -39,7 +39,8 @@ import {
   shadowDeadZone,
   shadowFocusAhead,
 } from "@/lib/city/shadow-fit";
-import { sunDirectionWorld } from "@/lib/city/sun";
+import { altitudeOf, nightFactorAt, sunDirectionWorld } from "@/lib/city/sun";
+import type { SunState } from "@/lib/city/sun";
 import { shadowMapBytesFor } from "./scene-profile";
 import { createSkyReflection } from "./sky-reflection";
 import type { RingArea, RingView } from "@/lib/city/shadow-rings";
@@ -47,45 +48,7 @@ import { createSunRings } from "./sun-rings";
 import type { ShadowRingNodes } from "./sun-rings";
 import type { V3, V4 } from "./shader-chunks";
 
-export interface SunState {
-  aboveHorizon: boolean;
-  altitudeDeg: number;
-  /** 0 (full day) → 1 (civil dusk and below): drives the street-lamp ignition */
-  nightFactor: number;
-}
-
-/** smoothstep ramping 1→0 as x rises from edge0 to edge1 (edges may invert). */
-function smoothstepDown(edge0: number, edge1: number, x: number): number {
-  const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
-  return t * t * (3 - 2 * t);
-}
-
-/** The night factor at a sun altitude (°): 0 by day, 1 from civil dusk
- *  (−6°) — what lights the lamps, and what the picture styles' nights
- *  follow (stylize-effect.ts, paper-scene.ts). */
-export function nightFactorAt(altitudeDeg: number): number {
-  return smoothstepDown(2, -6, altitudeDeg);
-}
-
-/** The sun's altitude (°) from its world direction's height. */
-function altitudeOf(y: number): number {
-  return (Math.asin(Math.min(Math.max(y, -1), 1)) * 180) / Math.PI;
-}
-
-/** Where the sun stands at `date` over `latLng`, without moving the rig:
- *  what the HUD shows for the instant it asked for. */
-export function sunStateAt(
-  date: Date,
-  latLng: { lat: number; lng: number }
-): SunState {
-  const d = sunDirectionWorld(date, latLng.lat, latLng.lng);
-  const altitudeDeg = altitudeOf(d.y);
-  return {
-    aboveHorizon: d.y > 0,
-    altitudeDeg,
-    nightFactor: nightFactorAt(altitudeDeg),
-  };
-}
+export type { SunState } from "@/lib/city/sun";
 
 export interface SunRig {
   /** Frees the shadow map — a render target disposeObject3D never reaches. */

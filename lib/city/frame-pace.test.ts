@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   COVERED_FPS,
+  COVERED_TAIL_MS,
   createFramePace,
   createStillness,
   LISTENING_FPS,
   LISTENING_MOVING_FPS,
-  SCROLL_QUIET_MS,
   STILL_FPS,
 } from "./frame-pace";
 
@@ -27,45 +27,47 @@ function drawn(
 }
 
 describe("frame pace", () => {
-  test("an uncovered scene draws every frame, scroll or not", () => {
+  test("an uncovered scene draws every frame", () => {
     const pace = createFramePace();
-    pace.noteScroll(0);
     expect(drawn(pace, 0)).toBe(60);
     expect(pace.takePaced()).toBe(false);
   });
 
-  test("a covered scene draws at its rate", () => {
+  test("a covered scene draws nothing it was not asked for", () => {
     const pace = createFramePace();
     pace.setCovered(true);
-    expect(drawn(pace, 0)).toBe(COVERED_FPS);
+    expect(drawn(pace, 0)).toBe(0);
     expect(pace.takePaced()).toBe(true);
     expect(pace.takePaced()).toBe(false);
   });
 
-  test("a covered scene holds still while its cover scrolls", () => {
+  test("asked, a covered scene draws at its rate for a while, then stops", () => {
     const pace = createFramePace();
     pace.setCovered(true);
-    pace.noteScroll(0);
-    expect(drawn(pace, 0, Math.floor(SCROLL_QUIET_MS / FRAME))).toBe(0);
-    // quiet again: back at the covered rate
-    expect(pace.draws(SCROLL_QUIET_MS)).toBe(true);
+    pace.request();
+    const tail = Math.floor(COVERED_TAIL_MS / FRAME);
+    const n = drawn(pace, 0, tail);
+    expect(n).toBeGreaterThanOrEqual(
+      Math.floor((COVERED_TAIL_MS / 1000) * COVERED_FPS)
+    );
+    expect(n).toBeLessThanOrEqual(
+      Math.ceil((COVERED_TAIL_MS / 1000) * COVERED_FPS) + 1
+    );
+    expect(drawn(pace, tail * FRAME + FRAME, 60)).toBe(0);
   });
 
-  test("uncovering ends a hold at once", () => {
+  test("uncovering draws at once, an ask or not", () => {
     const pace = createFramePace();
     pace.setCovered(true);
-    pace.noteScroll(0);
+    expect(pace.draws(0)).toBe(false);
     pace.setCovered(false);
     expect(pace.draws(FRAME)).toBe(true);
-    // a scroll while uncovered holds nothing once covered again
-    pace.noteScroll(2 * FRAME);
-    pace.setCovered(true);
-    expect(pace.draws(1000)).toBe(true);
   });
 
   test("a frame after held ones says so; the next one in a row does not", () => {
     const pace = createFramePace();
     pace.setCovered(true);
+    pace.request();
     expect(pace.draws(0)).toBe(true);
     expect(pace.heldBefore()).toBe(false);
     expect(pace.draws(FRAME)).toBe(false);
@@ -113,7 +115,9 @@ describe("still pace", () => {
     const pace = createFramePace();
     pace.setStill(true);
     pace.setCovered(true);
-    expect(drawn(pace, 0)).toBe(COVERED_FPS);
+    pace.request();
+    // asked: the covered rate, slower than the still one
+    expect(drawn(pace, 0, 30)).toBe(COVERED_FPS / 2);
   });
 });
 

@@ -10,7 +10,6 @@ import type { TimeChange } from "@/lib/city/ask-tools";
 import { SITE_ZONE, zonedTime } from "@/lib/city/bike-counts";
 import { cardCredits } from "@/lib/city/card-lines";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
-import type { FramePace } from "@/lib/city/frame-pace";
 import { inquiryCard } from "@/lib/city/inquiry";
 import type { Inquiry } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
@@ -21,7 +20,7 @@ import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-scene-tools";
-import type { CityWalkHandle } from "./create-app";
+import type { CityWalkHandle, ScenePace } from "./scene-client";
 import { untilAborted } from "./fetch-optional";
 import { loadLandmarkFacts } from "./landmark-facts-load";
 import { sleep, visibleMs } from "./net-gate";
@@ -169,7 +168,7 @@ export function useAskScene(
   look: LookState,
   time: SceneTime,
   site: Site,
-  pace: FramePace
+  pace: ScenePace
 ): AskScene {
   const { current, setInstant } = time;
   return useMemo(() => {
@@ -220,7 +219,7 @@ export function useAskScene(
         }
         // at the view's subject (Modell's pivot), and once the tiles
         // there have come: a miss is asked again — never mid-glide
-        let asked: Inquiry | null = h.inquireAt(h.focusNdc());
+        let asked: Inquiry | null = await h.inquireAt(h.focusNdc());
         for (let i = 0; !asked && i < MISS_RETRIES; i += 1) {
           await sleep(MISS_RETRY_MS, signal);
           const still = !h.viewMoving() || (await standing(h, gone, signal));
@@ -230,7 +229,7 @@ export function useAskScene(
           if (!still) {
             return MOVING;
           }
-          asked = h.inquireAt(h.focusNdc());
+          asked = await h.inquireAt(h.focusNdc());
         }
         if (!asked) {
           return {

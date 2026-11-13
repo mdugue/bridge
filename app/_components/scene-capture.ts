@@ -8,9 +8,11 @@ import type { ModelCamera } from "./model-camera";
  *  still meanwhile. */
 const CAPTURE_HOLD_MS = 1500;
 
-/** A captured frame and how many of its pixels make a CSS pixel. */
+/** A captured frame and how many of its pixels make a CSS pixel. A
+ *  bitmap, not a canvas: it crosses from the scene's worker to the page
+ *  without a copy (ADR 0061), where image-export.ts frames it. */
 export interface CapturedImage {
-  canvas: HTMLCanvasElement;
+  image: ImageBitmap;
   imagePxPerCssPx: number;
 }
 
@@ -28,8 +30,8 @@ interface Capture {
   fullH: number;
   w: number;
   h: number;
-  out: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
+  out: OffscreenCanvas;
+  ctx: OffscreenCanvasRenderingContext2D;
   imagePxPerCssPx: number;
 }
 
@@ -109,9 +111,7 @@ export function createSceneCapture(ctx: SceneCaptureContext): SceneCapture {
     );
     const fullW = Math.round(w * scale);
     const fullH = Math.round(h * scale);
-    const out = document.createElement("canvas");
-    out.width = fullW;
-    out.height = fullH;
+    const out = new OffscreenCanvas(fullW, fullH);
     const ctx2d = out.getContext("2d");
     if (!ctx2d) {
       request.reject(new Error("2D canvas unsupported"));
@@ -183,7 +183,10 @@ export function createSceneCapture(ctx: SceneCaptureContext): SceneCapture {
     }
     if (c.next >= c.tiles.length) {
       capture = null;
-      c.request.resolve({ canvas: c.out, imagePxPerCssPx: c.imagePxPerCssPx });
+      c.request.resolve({
+        image: c.out.transferToImageBitmap(),
+        imagePxPerCssPx: c.imagePxPerCssPx,
+      });
     }
   };
 

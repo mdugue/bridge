@@ -21,6 +21,7 @@ import {
 } from "@/lib/city/motion-blur";
 import type { F, V3, V4 } from "./shader-chunks";
 import type { ViewLens } from "./view-lens";
+import { pageView } from "./page-view";
 
 /** Reads along a pixel's way (a phone's FXAA reads about as many). */
 const TAPS = 8;
@@ -103,7 +104,7 @@ export function createMotionBlur(
     gate.on = false;
     gate.below = 0;
   };
-  document.addEventListener("visibilitychange", forget);
+  pageView.addEventListener("visibilitychange", forget);
 
   return {
     over: (source, occlusion) => {
@@ -152,6 +153,6 @@ export function createMotionBlur(
       held = true;
       return blurred;
     },
-    dispose: () => document.removeEventListener("visibilitychange", forget),
+    dispose: () => pageView.removeEventListener("visibilitychange", forget),
   };
 }

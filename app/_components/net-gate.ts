@@ -1,5 +1,7 @@
 import { createVisibleClock } from "@/lib/city/fetch-retry";
 import type { RetryEnv, RetryNote } from "@/lib/city/fetch-retry";
+import { pageView } from "./page-view";
+import type { PageView } from "./page-view";
 
 /**
  * The page's one view of its network, for every retry
@@ -23,16 +25,13 @@ import type { RetryEnv, RetryNote } from "@/lib/city/fetch-retry";
  *  navigator.onLine is a hint (a missed "online" event would strand it). */
 const OFFLINE_PROBE_MS = 15_000;
 
-type Events = Pick<EventTarget, "addEventListener" | "removeEventListener">;
-
-/** The browser page as the gate reads it (a fake one in the tests). */
+/** The browser page as the gate reads it (page-view.ts; a fake one in
+ *  the tests), and a monotonic clock (ms). */
 export interface GatePage {
-  /** "online", "offline", "pagehide", "pageshow" */
-  window: Events;
-  /** "visibilitychange" */
-  document: Events & { readonly visibilityState: DocumentVisibilityState };
-  navigator: { readonly onLine: boolean };
-  /** a monotonic clock (ms) */
+  page: Pick<
+    PageView,
+    "addEventListener" | "onLine" | "removeEventListener" | "visibilityState"
+  >;
   now: () => number;
 }
 
@@ -51,14 +50,14 @@ function abortError(): DOMException {
   return new DOMException("The operation was aborted.", "AbortError");
 }
 
-export function createNetGate(page: GatePage): NetGate {
+export function createNetGate({ page, now }: GatePage): NetGate {
   let leaving = false;
-  const visible = () => page.document.visibilityState !== "hidden";
-  const usable = () => visible() && (page.navigator.onLine ?? true);
-  const clock = createVisibleClock(visible(), page.now());
+  const visible = () => page.visibilityState !== "hidden";
+  const usable = () => visible() && (page.onLine ?? true);
+  const clock = createVisibleClock(visible(), now());
   const wakers = new Set<() => void>();
   const changed = () => {
-    clock.set(visible(), page.now());
+    clock.set(visible(), now());
     if (usable()) {
       // (each waker deletes itself: a Set iterates on safely)
       for (const wake of wakers) {
@@ -66,15 +65,15 @@ export function createNetGate(page: GatePage): NetGate {
       }
     }
   };
-  page.window.addEventListener("online", changed);
-  page.window.addEventListener("offline", changed);
-  page.document.addEventListener("visibilitychange", changed);
-  page.window.addEventListener("pagehide", () => {
+  page.addEventListener("online", changed);
+  page.addEventListener("offline", changed);
+  page.addEventListener("visibilitychange", changed);
+  page.addEventListener("pagehide", () => {
     leaving = true;
     changed();
   });
-  page.window.addEventListener("pageshow", (event) => {
-    if ((event as PageTransitionEvent).persisted) {
+  page.addEventListener("pageshow", (event) => {
+    if (event.persisted) {
       leaving = false;
     }
     changed();
@@ -118,20 +117,20 @@ export function createNetGate(page: GatePage): NetGate {
         listener();
       }
     };
-    page.window.addEventListener("online", wake);
-    page.document.addEventListener("visibilitychange", wake);
-    page.window.addEventListener("pageshow", wake);
+    page.addEventListener("online", wake);
+    page.addEventListener("visibilitychange", wake);
+    page.addEventListener("pageshow", wake);
     return () => {
-      page.window.removeEventListener("online", wake);
-      page.document.removeEventListener("visibilitychange", wake);
-      page.window.removeEventListener("pageshow", wake);
+      page.removeEventListener("online", wake);
+      page.removeEventListener("visibilitychange", wake);
+      page.removeEventListener("pageshow", wake);
     };
   };
   return {
     visible,
     usable,
     leaving: () => leaving,
-    visibleMs: () => clock.visibleMs(page.now()),
+    visibleMs: () => clock.visibleMs(now()),
     whenUsable: waitUsable,
     onUsableAgain: listenUsable,
   };
@@ -143,14 +142,7 @@ const retryWatchers = new Set<(note: RetryNote) => void>();
 /** The page's gate, made on first use; none outside a browser (a unit
  *  test), where the page counts as visible, online and staying. */
 function pageGate(): NetGate | null {
-  if (!gate && typeof window !== "undefined") {
-    gate = createNetGate({
-      window,
-      document,
-      navigator,
-      now: () => performance.now(),
-    });
-  }
+  gate ??= createNetGate({ page: pageView, now: () => performance.now() });
   return gate;
 }
 
@@ -208,7 +200,7 @@ export async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 /** The page's state in a give-up's message and a load-error's detail. */
 export function describeNet(): string {
   const nav = globalThis.navigator as Navigator | undefined;
-  const vis = typeof document === "undefined" ? "?" : document.visibilityState;
+  const vis = pageView.visibilityState;
   return `online=${String(nav?.onLine !== false)} vis=${vis}`;
 }
 

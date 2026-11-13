@@ -176,6 +176,7 @@ import { tileNichesOffThread } from "./window-niche-client";
 import type { NicheResult } from "./window-niche-client";
 import { nicheInput } from "./window-niche-layer";
 import type { NicheField } from "./window-niche-layer";
+import { pageView } from "./page-view";
 
 /**
  * The world as it streams in: OGC 3D Tiles (lib/city/tileset.ts) through
@@ -1942,7 +1943,7 @@ export class DressingPlugin {
   }
 
   private readonly url = (file: string): string =>
-    new URL(file, new URL(this.ctx.tilesetUrl, window.location.href)).href;
+    new URL(file, new URL(this.ctx.tilesetUrl, pageView.href)).href;
 
   async processTileModel(scene: Object3D, tile: object): Promise<void> {
     this.tileOf.set(scene, tile);

@@ -729,8 +729,10 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     });
     // The click glides there: where it lands is the glide's target (the
     // glide itself takes dozens of software-rendered frames).
-    const pose = await page.evaluate(() => {
+    const pose = await page.evaluate(async () => {
       const handle = window.__poc?.handle;
+      // the click reached the scene: its glide is in the mirror
+      await handle?.sync();
       return handle?.getGlideTarget() ?? handle?.getPose();
     });
     // 50 m on a 2 km tile — loose enough for the rounding a click position
@@ -1360,12 +1362,12 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       // I asks under the pointer, not at the centre: find a spot off the
       // middle (clear of the panel on the right) where another building
       // stands, rest the pointer there and press I.
-      const off = await page.evaluate(() => {
+      const off = await page.evaluate(async () => {
         const h = window.__poc?.handle;
         if (!h) {
           throw new Error("scene handle not published");
         }
-        const centre = h.inquireAt();
+        const centre = await h.inquireAt();
         const same =
           centre?.kind === "building"
             ? new Set(centre.tree.map((o) => `${centre.tile}:${o.objectIndex}`))
@@ -1380,7 +1382,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
           [0.25, 0.35],
         ];
         for (const [x, y] of spots) {
-          const asked = h.inquireAt({ x, y });
+          const asked = await h.inquireAt({ x, y });
           if (
             asked?.kind === "building" &&
             !same.has(`${asked.tile}:${asked.picked.objectIndex}`)
@@ -1408,8 +1410,8 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     });
     // the nameplate: a building with a name or an address is named in
     // the scene while the question stands (present, never judged)
-    const named = await page.evaluate(() => {
-      const asked = window.__poc?.handle?.inquireAt();
+    const named = await page.evaluate(async () => {
+      const asked = await window.__poc?.handle?.inquireAt();
       return (
         asked?.kind === "building" &&
         asked.tree.some((o) => o.facts.addr !== "" || o.facts.name !== "")
@@ -1471,7 +1473,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       [east, north]
     );
     await waitForFrames(page, 1);
-    const asked = await page.evaluate(() => window.__poc?.handle?.inquireAt());
+    const asked = await page.evaluate(
+      async () => await window.__poc?.handle?.inquireAt()
+    );
     expect(asked?.kind).toBe("tree");
     await withFramesHeld(page, async () => {
       const card = page.getByTestId("inquiry-card");
@@ -1560,7 +1564,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       async (bytes) => {
         const design = window.__poc?.handle?.design;
         await design?.load([new File([new Uint8Array(bytes)], "block.glb")]);
-        return design?.status() ?? null;
+        return (await design?.status()) ?? null;
       },
       [...glb]
     );
@@ -1575,7 +1579,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       { timeout: slow(30_000) }
     );
     await waitForFrames(page, 1);
-    await page.evaluate(() => window.__poc?.handle?.design.remove());
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
     await page.waitForFunction(
       (n) => (window.__poc?.stats?.layerStats.city.triangles ?? 0) === n,
       before,
@@ -1592,7 +1598,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     const status = await page.evaluate(async (text) => {
       const design = window.__poc?.handle?.design;
       await design?.load([new File([text], "block.ifc")]);
-      return design?.status() ?? null;
+      return (await design?.status()) ?? null;
     }, ifc);
     expect(status?.source).toBe("file");
     expect(status?.note).toContain("IfcMapConversion");
@@ -1613,7 +1619,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       api.flyTo({ x, y: 140, z: z + 90 }, { x, y: 122, z });
     });
     await waitForFrames(page, 1);
-    const asked = await page.evaluate(() => window.__poc?.handle?.inquireAt());
+    const asked = await page.evaluate(
+      async () => await window.__poc?.handle?.inquireAt()
+    );
     expect(asked?.kind).toBe("design");
     await withFramesHeld(page, async () => {
       const card = page.getByTestId("inquiry-card");
@@ -1624,7 +1632,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
     });
-    await page.evaluate(() => window.__poc?.handle?.design.remove());
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
     expectNoErrors(errors);
   });
 
@@ -1632,16 +1642,16 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     const obj = await page.evaluate(async (text) => {
       const design = window.__poc?.handle?.design;
       await design?.load([new File([text], "block.obj")]);
-      return design?.status() ?? null;
+      return (await design?.status()) ?? null;
     }, designBlockObj());
     expect(obj?.source).toBe("here");
     expect(obj?.triangles).toBe(12);
     expect(obj?.size).toEqual([40, 30, 20]);
     // read in centimetres it shrinks about its foot, which stays
-    const cm = await page.evaluate(() => {
+    const cm = await page.evaluate(async () => {
       const design = window.__poc?.handle?.design;
-      design?.setScale({ unit: "cm", factor: 1 });
-      return design?.status() ?? null;
+      await design?.setScale({ unit: "cm", factor: 1 });
+      return (await design?.status()) ?? null;
     });
     expect(cm?.scale).toEqual({ unit: "cm", factor: 1 });
     expect(cm?.size[2]).toBeCloseTo(0.2, 6);
@@ -1652,7 +1662,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       async (bytes) => {
         const design = window.__poc?.handle?.design;
         await design?.load([new File([new Uint8Array(bytes)], "block.3dm")]);
-        return design?.status() ?? null;
+        return (await design?.status()) ?? null;
       },
       await designBlock3dm(412_300, 5_657_420, 112)
     );
@@ -1661,7 +1671,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(rhino?.placement.north).toBeCloseTo(5_657_420, 1);
     expect(rhino?.placement.base).toBeCloseTo(112, 3);
     expect(rhino?.hidden ?? 0).toBeGreaterThan(0);
-    await page.evaluate(() => window.__poc?.handle?.design.remove());
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
     expectNoErrors(errors);
   });
 
@@ -1672,7 +1684,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       async (text) => {
         const design = window.__poc?.handle?.design;
         await design?.load([new File([text], "plan.dxf")]);
-        return design?.status() ?? null;
+        return (await design?.status()) ?? null;
       },
       designPlanDxf([412_300, 5_657_420])
     );
@@ -1688,13 +1700,15 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       async (bytes) => {
         const design = window.__poc?.handle?.design;
         await design?.load([new File([new Uint8Array(bytes)], "plan.gpkg")]);
-        return design?.status() ?? null;
+        return (await design?.status()) ?? null;
       },
       await designPlanGpkg([412_300, 5_657_420])
     );
     expect(gpkg?.note).toContain("Rasen");
     expect(gpkg?.placement.north).toBeCloseTo(5_657_400, 0);
-    await page.evaluate(() => window.__poc?.handle?.design.remove());
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
     expectNoErrors(errors);
   });
 
@@ -1789,21 +1803,23 @@ test.describe("desktop viewer, look", { tag: "@desktop-look" }, () => {
     // Night (scene-environment.ts): the lamps' halos and pools are drawn
     // by their shared materials after dark only, and compiled ahead by day
     // all the same — a first night builds nothing inside a frame.
-    const builtBefore = await page.evaluate(() => {
+    const builtBefore = await page.evaluate(async () => {
       const handle = window.__poc?.handle;
       if (!handle) {
         throw new Error("handle not published");
       }
-      const before = handle.getRenderInfo().framedBuilds.other;
+      const info = await handle.getRenderInfo();
+      const before = info.framedBuilds.other;
       handle.setSun(new Date("2026-07-15T23:00:00.000Z"));
       return before;
     });
     let builtAfter: number;
     try {
       await waitForFrames(page, 2);
-      builtAfter = await page.evaluate(
-        () => window.__poc?.handle?.getRenderInfo().framedBuilds.other ?? -1
-      );
+      builtAfter = await page.evaluate(async () => {
+        const info = await window.__poc?.handle?.getRenderInfo();
+        return info?.framedBuilds.other ?? -1;
+      });
     } finally {
       // back to day for the tests after, whether or not the night held;
       // its shadow redraw lands here, not in theirs

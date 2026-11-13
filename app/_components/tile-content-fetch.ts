@@ -4,6 +4,7 @@ import { abortError } from "@/lib/city/task-gate";
 import type { AheadRequest } from "./boot-ahead";
 import { eitherSignal, fetchBytes } from "./fetch-optional";
 import type { FetchedBytes } from "./fetch-optional";
+import { pageView } from "./page-view";
 
 /** Rejects with the abort once `signal` fires, after `then`; `stop` ends
  *  the watch. */
@@ -108,7 +109,7 @@ export class ContentFetchPlugin {
       if (!got.ok) {
         return new Response(null, { status: got.status });
       }
-      return new URL(url, window.location.href).pathname.endsWith(".json")
+      return new URL(url, pageView.href).pathname.endsWith(".json")
         ? new Response(got.bytes, { status: got.status })
         : got.bytes.buffer;
     } finally {
