@@ -22,8 +22,9 @@
  * Each step waits for the one before it; a warmer publishes nothing. One
  * tile per warmer: a process's memory grows with every tile it bakes, and
  * a whole cold site in one process peaks near twice its heaviest tile
- * (München 4.47 GiB, its heaviest tile alone 2.4), so Vercel's 4-core,
- * 8.6 GB builder holds one cold site at a time but two tiles; and a free
+ * (München 4.47 GiB, its heaviest tile alone 2.4, on 2026-10-31), so
+ * Vercel's 4-core, 8.6 GB builder holds one cold site at a time but three
+ * tiles (two until 2026-11-11, `TILE_PEAK`); and a free
  * slot takes the next tile, so a slot that frees late still finds work.
  *
  * Measured cold on 2026-10-31, all seven sites on a box held to Vercel's
@@ -84,8 +85,13 @@ export function bakeMode(
  * 8.6 GB builder (80 %: 6.9 GB), four CI's 16.8 GB runner. Every other
  * process stays under `PROCESS_PEAK` (a ground warmer 0.6 GiB at most, a
  * site's publishing run 1.12 GiB — Dresden's —, a small site's plain run).
+ * Since 2026-11-11 the buildings' bands are cut where their wall bends, not
+ * every metre, and a dense tile's mesh is a third of the triangles: that
+ * tile reaches 1.26 GiB (1.35 GB) with three others beside it, the next
+ * 1.20, so about 1.56 GB on Vercel's Bun — counted at 2.0 GB, three tiles
+ * at once fit its builder (6.0 of 6.9 GB).
  */
-export const TILE_PEAK = 3.2e9;
+export const TILE_PEAK = 2e9;
 export const PROCESS_PEAK = 1.6e9;
 /**
  * A whole site baked cold in one process, as every site is baked without

@@ -631,6 +631,16 @@ test.each(tiles)(
           expect(y).toBeLessThanOrEqual(s.y);
           expect(y).toBeGreaterThanOrEqual(s.y - s.rows * s.res);
         }
+        // its planes' polygons: closed rings inside that grid too
+        for (const facet of s.facets ?? []) {
+          expect(facet.rings.every(isRing)).toBe(true);
+          for (const [x, y] of facet.rings.flat()) {
+            expect(x).toBeGreaterThanOrEqual(s.x);
+            expect(x).toBeLessThanOrEqual(s.x + s.cols * s.res);
+            expect(y).toBeLessThanOrEqual(s.y);
+            expect(y).toBeGreaterThanOrEqual(s.y - s.rows * s.res);
+          }
+        }
       }
     }
   }

@@ -57,7 +57,8 @@ def _feed_zip(path: Path) -> Path:
     }
     with zipfile.ZipFile(path, "w") as z:
         for name, text in rows.items():
-            z.writestr(name, text)
+            # dated, as a feed's tables are: the days are counted from it
+            z.writestr(zipfile.ZipInfo(name, (2026, 10, 1, 4, 0, 0)), text)
     return path
 
 
@@ -145,7 +146,21 @@ def test_a_bridge_track_is_marked_on_its_pattern():
     assert at[0] == 0
 
 
-def test_the_file_is_written(tmp_path):
+def test_the_days_count_from_the_feeds_date_or_its_first_service_day(tmp_path):
+    feed = T.site_trams(_feed_zip(tmp_path / "f.zip"), _site(), EPSG)
+    assert feed["published"] == "2026-10-01"
+    assert T.feed_date({**feed, "published": "2026-10-05"}) == datetime.date(2026, 10, 5)
+    # a zip without dates: the calendar's first day
+    assert T.feed_date({**feed, "published": "1980-01-01"}) == datetime.date(2026, 10, 1)
+
+
+class _NoClock(datetime.date):
+    @classmethod
+    def today(cls):
+        raise AssertionError("the timetable bake read the clock")
+
+
+def test_the_file_is_written(tmp_path, monkeypatch):
     raw = tmp_path / "raw" / "sn"
     data = tmp_path / "data"
     # the feed is shared by every provider: beside their raw folders
@@ -168,8 +183,12 @@ def test_the_file_is_written(tmp_path):
         ],
     }
     (data / "dlm" / "tram_t.geojson").write_text(json.dumps(tracks))
-    T.run_site(raw, data, _site(), EPSG, datetime.date(2026, 10, 1))
-    doc = json.loads((data / "transit" / "trams.json").read_text())
+    # the days are counted from the feed's date: the same feed bakes the
+    # same file on any day
+    monkeypatch.setattr(datetime, "date", _NoClock)
+    T.run_site(raw, data, _site(), EPSG)
+    out = data / "transit" / "trams.json"
+    doc = json.loads(out.read_text())
     assert "DELFI" in doc["attribution"] and "OpenStreetMap" in doc["attribution"]
     assert doc["days"]["weekday"]["date"] == "2026-10-01"
     # the filtered feed is cached beside the raw one
@@ -213,3 +232,17 @@ def test_a_cached_cut_without_agencies_is_derived_again(tmp_path):
     feed = T.cached_site_trams(tmp_path, _site(), EPSG)
     assert feed is not None and feed["agencies"] == {"r11": "Verkehrsverbund Oberelbe"}
     assert "agencies" in json.loads(stale.read_text())
+
+
+def test_a_zip_whose_entries_carry_no_date_counts_as_1980(tmp_path):
+    path = tmp_path / "undated.zip"
+    with zipfile.ZipFile(path, "w") as z:
+        info = zipfile.ZipInfo("stops.txt")
+        info.date_time = (1980, 0, 0, 0, 0, 0)
+        z.writestr(info, "stop_id\n")
+    with zipfile.ZipFile(path) as z:
+        assert T._zip_date(z) == datetime.date(1980, 1, 1)
+    empty = tmp_path / "empty.zip"
+    zipfile.ZipFile(empty, "w").close()
+    with zipfile.ZipFile(empty) as z:
+        assert T._zip_date(z) == datetime.date(1980, 1, 1)

@@ -5,7 +5,9 @@
  * prepare-data.ts into public/data/<site>/, the folder its route /<site>
  * streams from. Then the index, public/data/sites.json
  * (lib/city/site-index.ts), which the start page lists and the route
- * prerenders from; folders of sites no longer built are pruned.
+ * prerenders from; folders of sites no longer built are pruned. With
+ * `PREPARE_SITES=dresden bun dev` only those sites are prepared and the
+ * others stay served as they were built last (site-choice.ts).
  *
  * A site is served exactly when its data is on disk at build time: in a
  * fresh clone that is every site whose folder is committed (ADR 0037 — all
@@ -37,8 +39,10 @@ import { SERVER_WISSEN_DIR, STADTWISSEN_FILE } from "../lib/city/stadtwissen";
 import type { StadtwissenIndex } from "../lib/city/stadtwissen";
 import { MANIFEST_FILE, tileIds } from "../lib/city/tile";
 import type { DataManifest } from "../lib/city/tile";
-import { SITES, siteById } from "../sites";
+import { TILESET_FILE } from "../lib/city/tileset";
+import { SITES } from "../sites";
 import type { SiteId } from "../sites";
+import { chosenSites } from "./site-choice";
 import {
   bakeLimits,
   createSlots,
@@ -171,23 +175,31 @@ async function prepareAll(
   return failed;
 }
 
-const named = process.argv.slice(2);
-for (const id of named) {
-  if (!siteById(id)) {
-    fail(`unknown site "${id}"; known: ${Object.keys(SITES).join(", ")}`);
-  }
+const chosen = chosenSites({
+  env: process.env.PREPARE_SITES,
+  known: Object.keys(SITES),
+  named: process.argv.slice(2),
+  ready: (id) => isReady(id as SiteId),
+  built: (id) => existsSync(path.join(OUT_DIR, id, MANIFEST_FILE)),
+});
+if (chosen.unknown !== undefined) {
+  fail(
+    `unknown site "${chosen.unknown}"; known: ${Object.keys(SITES).join(", ")}`
+  );
 }
-const ids = (
-  named.length > 0
-    ? named
-    : Object.keys(SITES).filter((id) => isReady(id as SiteId))
+const ids = chosen.prepare as SiteId[];
+/** prepared now, or left as built last (`PREPARE_SITES`): all served */
+const served = Object.keys(SITES).filter(
+  (id) => chosen.prepare.includes(id) || chosen.keep.includes(id)
 ) as SiteId[];
 if (ids.length === 0) {
   fail("no site has its data on disk — run `bun run site --all`");
 }
-const skipped = Object.keys(SITES).filter((id) => !ids.includes(id as SiteId));
+const skipped = Object.keys(SITES).filter(
+  (id) => !served.includes(id as SiteId)
+);
 log(
-  `building ${ids.join(", ")}${skipped.length > 0 ? ` (not ready or not named: ${skipped.join(", ")})` : ""}`
+  `building ${ids.join(", ")}${chosen.keep.length > 0 ? ` (left as built last: ${chosen.keep.join(", ")})` : ""}${skipped.length > 0 ? ` (not ready or not named: ${skipped.join(", ")})` : ""}`
 );
 
 const { limits, warm } = (() => {
@@ -224,11 +236,12 @@ if (failed.length > 0) {
   fail(`${failed.join(", ")} failed`);
 }
 const index: SiteIndex = { version: 1, sites: [] };
-for (const id of ids) {
+for (const id of served) {
   const manifest = JSON.parse(
     readFileSync(path.join(OUT_DIR, id, MANIFEST_FILE), "utf-8")
   ) as DataManifest;
   const map = manifest.files[SITE_MAP_FILE];
+  const tileset = manifest.files[TILESET_FILE];
   const statsPath = path.join(OUT_DIR, id, SITE_STATS_FILE);
   const stats = existsSync(statsPath)
     ? parseSiteStats(JSON.parse(readFileSync(statsPath, "utf-8")))
@@ -236,6 +249,7 @@ for (const id of ids) {
   index.sites.push({
     id,
     ...(map ? { map: `${siteDataBase(id)}/${map}` } : {}),
+    ...(tileset ? { tileset: `${siteDataBase(id)}/${tileset}` } : {}),
     ...(stats ? { stats } : {}),
   });
 }
@@ -244,18 +258,18 @@ writeFileSync(
   path.join(OUT_DIR, SITE_INDEX_FILE),
   `${JSON.stringify(index, null, 2)}\n`
 );
-publishServerWissen(ids);
+publishServerWissen(served);
 // Anything else at the top of public/data is a site no longer built, or the
 // single-site layout that came before (its files sat there directly).
 let pruned = 0;
 for (const entry of readdirSync(OUT_DIR)) {
-  if (entry !== SITE_INDEX_FILE && !ids.includes(entry as SiteId)) {
+  if (entry !== SITE_INDEX_FILE && !served.includes(entry as SiteId)) {
     rmSync(path.join(OUT_DIR, entry), { recursive: true });
     pruned += 1;
   }
 }
 log(
-  `${ids.length} site(s) in public/data${pruned > 0 ? `, ${pruned} stale entries pruned` : ""}`
+  `${served.length} site(s) in public/data${pruned > 0 ? `, ${pruned} stale entries pruned` : ""}`
 );
 
 /**

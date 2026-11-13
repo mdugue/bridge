@@ -2,8 +2,8 @@
  * Step 1 of scripts/prepare-data.ts: each tile's side files, published as
  * they are, with the lines' levels (lines.ts), or baked (side-bakes.ts).
  * A value module (bake-entries.ts `KEY_VALUES`): the buildings and the
- * terrain read its published names, values their keys carry, and no key
- * walks it.
+ * terrain hand its published names on to the tileset (lib/city/tileset.ts
+ * `CityFiles`, `TerrainFiles`); no key carries them and none walks it.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { parseBakeFile } from "../../lib/city/bake-file";
@@ -52,6 +52,29 @@ function checkedBytes(
     parseBakeFile(FACADES_FILE, JSON.parse(bytes.toString()), source);
   }
   return bytes;
+}
+
+/** A raster baked from another side file (`bakedFrom`), published; none
+ *  where an optional one's source is absent (its twin goes without it). */
+async function bakedTwin(artifact: TileArtifact): Promise<string | undefined> {
+  const from = artifact.bakedFrom;
+  if (!from) {
+    return undefined;
+  }
+  const source = sideFileSource(SITE, from.file);
+  const src = at(source);
+  if (existsSync(src)) {
+    return await publishClassRaster(
+      artifact.file,
+      src,
+      from.raster,
+      from.channels
+    );
+  }
+  if (artifact.required) {
+    fail(`missing source file ${source}${HINT}`);
+  }
+  return undefined;
 }
 
 /** Publishes every side file of the tiles this run bakes, into `sideFiles`.
@@ -104,20 +127,11 @@ export async function publishSideFiles(): Promise<void> {
         kind === "platform" &&
         existsSync(at(sideFileSource(SITE, artifact.file)))
       ) {
-        names[kind] = publishPlatforms(artifact.file);
+        names[kind] = await publishPlatforms(artifact.file);
         continue;
       }
       if (artifact.bakedFrom) {
-        const source = sideFileSource(SITE, artifact.bakedFrom.file);
-        const src = at(source);
-        if (!existsSync(src)) {
-          fail(`missing source file ${source}${HINT}`);
-        }
-        names[kind] = await publishClassRaster(
-          artifact.file,
-          src,
-          artifact.bakedFrom.raster
-        );
+        names[kind] = await bakedTwin(artifact);
         continue;
       }
       const source = sideFileSource(SITE, artifact.file);

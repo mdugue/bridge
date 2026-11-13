@@ -6,7 +6,7 @@
  * and the LoD2 objects whose ALKIS function says roof (`Überdachung`,
  * `Carport`), which LoD2 models as a solid block down to the ground — a
  * platform under one vanished, a fuel station's pumps stood inside it
- * (scripts/bake-city-mesh.ts `withOpenRoofs`). Both stand on the same
+ * (scripts/city-roofs.ts `withOpenRoofs`). Both stand on the same
  * posts (`roofPosts`) under a slab of the same depth (`roofDepth`). Flat
  * non-indexed triangles wound counter-clockwise seen from outside, like
  * every structure. No THREE, no DOM.

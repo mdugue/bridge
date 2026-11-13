@@ -45,7 +45,12 @@ import {
   applyFacadeReadings,
   isFacadeReadings,
 } from "@/lib/city/facade-reading";
-import { textureBytes, trackTexture } from "./three-utils";
+import {
+  paddedPositionBytes,
+  textureBytes,
+  trackedBytesOf,
+  trackTexture,
+} from "./three-utils";
 import { createClayMaterial } from "./visual-style";
 import type { StyleResources } from "./visual-style";
 
@@ -115,6 +120,11 @@ export interface CityLayer {
   /** what the table's columns and the texture packed from them keep on the
    *  page's process (bytes): the mark writes into the texture's data */
   tableBytes: number;
+  /** what the tile holds beyond its glTF as the tile cache estimates that
+   *  (tile-stream.ts `calculateBytesUsed`): the table and its texture's
+   *  data on the page, the texture on the GPU, and the two bytes a vertex
+   *  the quantised positions are padded with there (`paddedPositionBytes`) */
+  heldBytes: number;
   tile: string;
 }
 
@@ -429,13 +439,17 @@ export function dressCity(
       object.visible = hangsShown(at, alive, hidden);
     }
   };
+  const tableBytes =
+    typedBytes(table) + (objects.texture.image.data as Float32Array).byteLength;
   const layer: CityLayer = {
     tile,
     mesh,
     table,
-    tableBytes:
-      typedBytes(table) +
-      (objects.texture.image.data as Float32Array).byteLength,
+    tableBytes,
+    heldBytes:
+      tableBytes +
+      trackedBytesOf(objects.texture) +
+      paddedPositionBytes(geometry),
     alive,
     demolish: (objectIndex) => {
       const doomed = doomedObjects(table.ensemble, objectIndex);

@@ -518,3 +518,78 @@ test("the tie: every extras key the table reads is written by some row of the ar
     }
   }
 });
+
+test("far: a kind reads its twin where the content names one beside its file", () => {
+  const fine = extrasOf({
+    surface: "p.png",
+    surfaceFar: "p-far.png",
+    edges: "e.png",
+    markings: "m.png",
+    markingsLow: "m-low.png",
+    markingsTable: "m.json",
+    sportFar: "s-far.png",
+  });
+  expect(rasterFiles(fine, "surface", false, true)?.raster).toBe("p-far.png");
+  expect(rasterFiles(fine, "surface", false)?.raster).toBe("p.png");
+  // no twin named: the file itself, near or far
+  expect(rasterFiles(fine, "edges", false, true)?.raster).toBe("e.png");
+  // a phone's twin is its far file too
+  expect(rasterFiles(fine, "markings", false, true)?.raster).toBe("m-low.png");
+  expect(rasterFiles(fine, "markings", true, true)?.raster).toBe("m-low.png");
+  // a twin without the file it stands in for is not read
+  expect(rasterFiles(fine, "sport", false, true)).toBeNull();
+});
+
+test("a swap: the twin lands on the GPU at once, the dropped set leaves the holder's weight and is freed", async () => {
+  serve();
+  const { renderer, uploads } = fakeRenderer();
+  const rasters = rastersWith({ renderer });
+  const extras = extrasOf({ surface: "p-8x8.png", surfaceFar: "p-4x4.png" });
+  const root = {};
+  const hold = rasters.holder(root);
+  const near = landed(await hold.acquire("surface", extras));
+  hold.settle();
+  const nearBytes = rasters.bytesOf(root);
+  expect(nearBytes).toBe(trackedBytesOf(near));
+  uploads.length = 0;
+  const far = landed(
+    await hold.acquire("surface", extras, undefined, { far: true, now: true })
+  );
+  expect(far).not.toBe(near);
+  expect(uploads.map((u) => u.texture)).toContain(far);
+  hold.drop(near);
+  await tick();
+  expect(trackedBytesOf(near)).toBe(0);
+  expect(rasters.bytesOf(root)).toBe(trackedBytesOf(far));
+  expect(rasters.bytesOf(root)).toBeLessThan(nearBytes);
+  // dropped once: a second drop, or of what it never took, changes nothing
+  hold.drop(near);
+  hold.drop(undefined);
+  expect(rasters.bytesOf(root)).toBe(trackedBytesOf(far));
+  hold.release();
+  await tick();
+  expect(trackedBytesOf(far)).toBe(0);
+});
+
+test("a swap to the same file (a phone's twin) keeps it held and weighed once", async () => {
+  serve({ "m.json": null });
+  const rasters = rastersWith({ low: true });
+  const extras = extrasOf({
+    cultivated: "c-8x8.png",
+    cultivatedLow: "c-4x4.png",
+  });
+  const root = {};
+  const hold = rasters.holder(root);
+  const near = landed(await hold.acquire("colonies", extras));
+  hold.settle();
+  const bytes = rasters.bytesOf(root);
+  const far = await hold.acquire("colonies", extras, undefined, { far: true });
+  expect(far).toBe(near);
+  hold.drop(near);
+  await tick();
+  expect(trackedBytesOf(near)).toBeGreaterThan(0);
+  expect(rasters.bytesOf(root)).toBe(bytes);
+  hold.release();
+  await tick();
+  expect(trackedBytesOf(near)).toBe(0);
+});

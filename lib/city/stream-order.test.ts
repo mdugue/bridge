@@ -49,6 +49,13 @@ const baked = (id: string, x: number): BakedTile => ({
   bounds: [x, 0, x + 2000, 2000],
   city: URIS.city(id),
   cityFar: URIS.far(id),
+  files: {
+    city: {},
+    terrain: {
+      0: { landcover: "", landcoverLow: "" },
+      1: { landcover: "", landcoverLow: "" },
+    },
+  },
   id,
   terrain: { 0: URIS.fine(id), 1: URIS.coarse(id) },
   zRange: [100, 150],

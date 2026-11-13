@@ -114,20 +114,9 @@ interface Hit {
   level: number;
 }
 
-/** The nearest point of a bed's centreline to (x, y), between its ends
- *  (flat ends: a bed reaches no point beyond them), and the level there. */
-function nearestOn(bed: Bed, x: number, y: number): Hit | null {
-  let best: Hit | null = null;
-  const last = bed.coords.length - 2;
-  for (let i = 0; i <= last; i += 1) {
-    const hit = onSegment(bed, i, x, y);
-    if (hit && (!best || hit.d < best.d)) {
-      best = hit;
-    }
-  }
-  return best;
-}
-
+/** The nearest point of a bed's segment `i` to (x, y) — none beyond the
+ *  bed's ends (flat ends: a bed reaches no point beyond them) — and the
+ *  level there. */
 function onSegment(bed: Bed, i: number, x: number, y: number): Hit | null {
   const [ax, ay] = bed.coords[i];
   const [bx, by] = bed.coords[i + 1];
@@ -387,17 +376,4 @@ export class BedIndex {
   get size(): number {
     return this.beds.length;
   }
-}
-
-/** The nearest bed's level under (x, y) and how far its centreline is, or
- *  null beyond every bed's ends (tests, checks). */
-export function bedAt(beds: readonly Bed[], x: number, y: number): Hit | null {
-  let best: Hit | null = null;
-  for (const bed of beds) {
-    const hit = nearestOn(bed, x, y);
-    if (hit && (!best || hit.d < best.d)) {
-      best = hit;
-    }
-  }
-  return best;
 }

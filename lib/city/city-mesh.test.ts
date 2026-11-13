@@ -6,7 +6,6 @@ import {
   OBJECT_FLAG_GROUNDED,
   countBuildings,
   doomedObjects,
-  footprintPolys,
   hasObjectFlag,
   isTrafficStructure,
   liveTriangles,
@@ -171,13 +170,10 @@ test("liveTriangles drops the triangles of dead objects", () => {
   expect([...liveTriangles(index, featureIds, () => true)]).toEqual(index);
 });
 
-test("countBuildings and footprintPolys follow the alive set", () => {
+test("countBuildings follows the alive set", () => {
   const t = objectTable(rows);
   expect(countBuildings(t.building, () => true)).toBe(2);
   expect(countBuildings(t.building, (i) => i !== 2)).toBe(1);
-  const footprints = rows.map((r) => r.footprints);
-  expect(footprintPolys(footprints, () => true)).toHaveLength(3);
-  expect(footprintPolys(footprints, (i) => i !== 2)).toHaveLength(1);
 });
 
 test("LoD2 traffic structures (ALKIS 53001, bridges) leave the building mesh", () => {

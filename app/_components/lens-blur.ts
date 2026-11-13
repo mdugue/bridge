@@ -165,15 +165,19 @@ export function createLensBlur(
   const reach = rtt(
     Fn(() => {
       const at = uv();
-      let near: F = float(0);
+      // One statement a tile, into a variable: as one expression the 169
+      // reads nest 169 `max` deep, past what Chrome's WGSL parser takes
+      // ("maximum parser recursive depth reached") — the pass then never
+      // built on WebGPU, while WebGL2 (the headless e2e) drew it.
+      const near = float(0).toVar();
       for (let y = -REACH_TILES; y <= REACH_TILES; y += 1) {
         for (let x = -REACH_TILES; x <= REACH_TILES; x += 1) {
           const off = vec2(x * TILE, y * TILE).mul(pixel);
-          const { r } = tiles.sample(at.add(off));
+          const r = tiles.sample(at.add(off)).r.toVar();
           // only as far as its circle reaches: the nearest two pixels of
           // tiles this many apart lie a tile less apart
           const apart = (Math.max(Math.abs(x), Math.abs(y)) - 1) * TILE;
-          near = apart > 0 ? max(near, r.mul(step(apart, r))) : max(near, r);
+          near.assign(max(near, apart > 0 ? r.mul(step(apart, r)) : r));
         }
       }
       return vec4(near, 0, 0, 1);

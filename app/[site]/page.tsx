@@ -2,8 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { cn } from "cn";
 import { notFound } from "next/navigation";
+import { preload } from "react-dom";
 import { siteTitle } from "@/lib/city/site";
-import { builtSite, builtSites } from "../_lib/built-sites";
+import { builtSite, builtSites, firstFetches } from "../_lib/built-sites";
 import { CityWalkClient } from "../_components/city-walk-client";
 import { NAMEPLATE_FONT_VARIABLES } from "./nameplate-fonts";
 
@@ -59,6 +60,12 @@ const Viewer = async ({ params }: Props) => {
   const built = builtSite(siteId);
   if (!built) {
     notFound();
+  }
+  // The manifest and the tileset it names, on their way with the HTML:
+  // the viewer's own fetches then find them (as its fetch asks: CORS mode,
+  // same-origin credentials).
+  for (const href of firstFetches(built)) {
+    preload(href, { as: "fetch", crossOrigin: "anonymous" });
   }
   return (
     <CityWalkClient

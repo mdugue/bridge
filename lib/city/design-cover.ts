@@ -377,12 +377,14 @@ export function coveredShare(
  *  `share`: what the design takes. */
 export function coveredObjects(
   mask: PlanMask,
-  footprints: readonly (readonly (readonly [number, number][])[])[],
+  /** how many objects the tile has, and each one's footprint (its rings) */
+  objects: number,
+  ringsOf: (object: number) => readonly (readonly [number, number][])[],
   share = COVER_SHARE
 ): Set<number> {
   const out = new Set<number>();
-  for (let i = 0; i < footprints.length; i += 1) {
-    const polys = footprints[i];
+  for (let i = 0; i < objects; i += 1) {
+    const polys = ringsOf(i);
     if (polys.length > 0 && coveredShare(mask, polys) >= share) {
       out.add(i);
     }

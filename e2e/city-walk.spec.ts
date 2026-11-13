@@ -1,5 +1,6 @@
 import { SHADOW_RINGS } from "../lib/city/shadow-rings";
 import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import path from "node:path";
 import { Document, WebIO } from "@gltf-transform/core";
 import { expect, test } from "@playwright/test";
@@ -8,6 +9,7 @@ import { fromArrayBuffer } from "geotiff";
 import proj4 from "proj4";
 import type { LookValues } from "../lib/city/look-controls";
 import { utmToLatLng } from "../lib/city/crs";
+import { readFootprints, unpackedFootprints } from "../lib/city/footprint-pack";
 import { EYE_HEIGHT } from "../lib/city/pose";
 import {
   parseSnapshot,
@@ -524,9 +526,11 @@ async function aimAtBuilding(page: Page): Promise<void> {
   // building whose bounding-box centre lies inside it — a perimeter block's
   // centre is its courtyard, and the ray would hit the ground.
   const footprintsRes = await page.request.get(
-    await dataUrl(page, "footprints_33412_5656_2_sn.json")
+    await dataUrl(page, "footprints_33412_5656_2_sn.fpr.gz")
   );
-  const footprints = (await footprintsRes.json()) as [number, number][][][];
+  const pack = readFootprints(gunzipSync(await footprintsRes.body()));
+  expect(pack).not.toBeNull();
+  const footprints = pack ? unpackedFootprints(pack) : [];
   const target = footprints
     .filter((polys) => polys.length === 1)
     .map(([ring]) => {
@@ -583,11 +587,11 @@ async function aimAtBuilding(page: Page): Promise<void> {
  * state. `serial` makes that ordering a guarantee and stops a broken boot from
  * being reported five times over.
  *
- * Two groups, two boots: CI runs each on a runner of its own (ci.yml, the e2e
- * matrix, by the `@desktop-hud` and `@desktop-render` tags). SwiftShader
- * leaves no room for a second page on the same cores, so a second runner is
- * the only way to run them side by side, and one more boot (~20 s on a
- * runner) is cheaper than the minute and a half the second group takes.
+ * Three groups, three boots: CI runs each on a runner of its own (ci.yml, the
+ * e2e matrix, by the `@desktop-hud`, `@desktop-render` and `@desktop-look`
+ * tags). SwiftShader leaves no room for a second page on the same cores, so
+ * another runner is the only way to run them side by side, and one more boot
+ * (~20 s on a runner) is cheaper than the minutes each group takes.
  */
 let page: Page;
 let errors: ErrorLog;
@@ -1387,6 +1391,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
         return null;
       });
       expect(off).not.toBeNull();
+      // (the search asked, so its card is up: only a mounted card hears
+      // the key)
+      await expect(card).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
       await page.mouse.move(
@@ -1718,6 +1725,16 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(trianglesAfter).toBeLessThan(trianglesBefore);
     expectNoErrors(errors);
   });
+});
+
+/**
+ * The look controls and the motion-keyed quality, on a page of their own:
+ * CI runs them, with the view link below, on a runner of their own (the
+ * `@desktop-look` shard), since the rendering group above had grown to
+ * twice the other shards. Each sets the pose and the time it needs itself.
+ */
+test.describe("desktop viewer, look", { tag: "@desktop-look" }, () => {
+  bootDesktopViewer();
 
   /**
    * The style/post controls, each bound to real rendered frames: a shader that
@@ -1805,10 +1822,10 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // every step). Asserted through __poc.regressed rather than pixels — the
     // pass's visual delta is exactly what SwiftShader renders least like a
     // GPU.
-    // On foot: the specs before leave the camera flying, 50 m over these
-    // frames, where the finest ring rightly redraws. What they asked of the
-    // rings is drawn first, one a frame (the last of them ends with a
-    // `setSun`, which asks all four).
+    // On foot: a camera left flying, 50 m over these frames, rightly
+    // redraws the finest ring. What the test before asked of the rings is
+    // drawn first, one a frame (it ends with a `setSun`, which asks all
+    // four).
     await page.evaluate(() => {
       const handle = window.__poc?.handle;
       const state = handle?.getCameraState();
@@ -1854,7 +1871,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
  * the link is read at the boot. A committed QA view on the spawn tile
  * (the lite profile streams that one) is the link.
  */
-test.describe("a view link", { tag: "@desktop-render" }, () => {
+test.describe("a view link", { tag: "@desktop-look" }, () => {
   test("opens the page at the linked view, and Link kopieren writes one", async ({
     browser,
   }) => {
@@ -2143,8 +2160,8 @@ test.describe("mobile", { tag: "@phone" }, () => {
  * every tile in the tileset (scene-profile.ts). The specs above stream the
  * spawn tile alone, so this is the one that walks the multi-tile path — tile
  * events arriving while the spawn tile boots, dressings queued for several
- * tiles, the site-wide minimap footprints. A load event that throws there
- * leaves `ready` false forever, which is exactly what this waits on.
+ * tiles. A load event that throws there leaves `ready` false forever,
+ * which is exactly what this waits on.
  */
 test.describe("whole site streamed", () => {
   // A retry would start the same long boot again and run the job past
@@ -2194,19 +2211,6 @@ test.describe("whole site streamed", () => {
       expect(stats?.city.meshes ?? 0).toBeGreaterThan(1);
       expect(stats?.vegetation.instances ?? 0).toBeGreaterThan(1000);
 
-      // The minimap names every site tile's footprints up front, streamed
-      // or not: some lie west of the spawn tile (412 000 E).
-      const westmost = await tilesPage.evaluate(() => {
-        const polys = window.__poc?.handle?.getFootprints() ?? [];
-        let minX = Number.POSITIVE_INFINITY;
-        for (const poly of polys) {
-          for (const [x] of poly.pts) {
-            minX = Math.min(minX, x);
-          }
-        }
-        return minX;
-      });
-      expect(westmost).toBeLessThan(412_000);
       expectNoErrors(tilesErrors);
     } finally {
       await context.close();

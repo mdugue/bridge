@@ -171,6 +171,7 @@ def site_trams(zip_path: Path, bounds, epsg: int) -> dict:
         for c in _rows(z, "calendar_dates.txt"):
             if c["service_id"] in services:
                 exceptions[c["service_id"]][c["date"]] = c["exception_type"]
+        published = _zip_date(z)
     used = {t["route"] for t in kept.values()}
     return {
         "routes": {rid: routes[rid] for rid in used},
@@ -179,7 +180,21 @@ def site_trams(zip_path: Path, bounds, epsg: int) -> dict:
         "trips": {tid: {**t, "times": sorted(times[tid])} for tid, t in sorted(kept.items())},
         "calendar": calendar,
         "exceptions": exceptions,
+        # the newest of the feed's tables: the day it was put together
+        "published": published.isoformat(),
     }
+
+
+def _zip_date(z: zipfile.ZipFile) -> datetime.date:
+    """The newest date of the archive's entries; 1980-01-01 (the DOS
+    epoch, `feed_date`'s "without dates") for entries that carry none."""
+    newest = datetime.date(1980, 1, 1)
+    for info in z.infolist():
+        try:
+            newest = max(newest, datetime.date(*info.date_time[:3]))
+        except ValueError:
+            continue  # (an entry zipped without a date: month and day 0)
+    return newest
 
 
 def gtfs_dir(raw: Path) -> Path:
@@ -220,8 +235,8 @@ def cached_site_trams(folder: Path, bounds, epsg: int) -> dict | None:
             cached = json.loads(cache.read_text())
         except ValueError:
             cached = None  # unreadable (an older, interrupted write): derived again
-        if cached is not None and "agencies" in cached:
-            return cached  # (a cut from before the agencies is derived again)
+        if cached is not None and "published" in cached:
+            return cached  # (a cut from before its date is derived again)
     feed = site_trams(zip_path, bounds, epsg)
     part = cache.with_name(cache.name + ".part")
     part.write_text(json.dumps(feed))
@@ -255,6 +270,18 @@ def kind_of(day: datetime.date) -> str | None:
     if wd in (1, 2, 3):
         return "weekday"
     return {5: "saturday", 6: "sunday"}.get(wd)
+
+
+def feed_date(feed: dict) -> datetime.date:
+    """The day the days are counted from: the feed's own date, not the
+    clock — the same feed bakes the same file whenever it is baked. A
+    feed zipped without dates (1980) counts from its first service day."""
+    published = datetime.date.fromisoformat(feed["published"])
+    starts = [c["start_date"] for c in feed["calendar"].values()]
+    if not starts:
+        return published
+    first = datetime.datetime.strptime(min(starts), "%Y%m%d").date()
+    return max(published, first)
 
 
 def pick_days(feed: dict, start: datetime.date) -> dict[str, datetime.date]:
@@ -531,14 +558,14 @@ def build_timetable(feed: dict, tracks: Tracks, days: dict[str, datetime.date]) 
     }
 
 
-def run_site(raw: Path, data: Path, bounds, epsg: int, today: datetime.date | None = None) -> None:
+def run_site(raw: Path, data: Path, bounds, epsg: int) -> None:
     folder = gtfs_dir(raw)
     feed = cached_site_trams(folder, bounds, epsg)
     if feed is None:
         print(f"no GTFS feed at {folder / 'nv_free.zip'} — skipping the timetable trams")
         return
     tracks = read_tracks(data)
-    days = pick_days(feed, today or datetime.date.today())
+    days = pick_days(feed, feed_date(feed))
     doc = {
         "attribution": ATTRIBUTION,
         "crs": {"type": "name", "properties": {"name": f"urn:ogc:def:crs:EPSG::{epsg}"}},

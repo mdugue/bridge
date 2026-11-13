@@ -18,6 +18,7 @@ import type { GreyRaster } from "@/lib/city/png-raster";
 import { createTaskGate } from "@/lib/city/task-gate";
 import { fetchBytes, isAbortError } from "./fetch-optional";
 import type { DeviceTier } from "./scene-profile";
+import { streamTimings } from "./stream-timing";
 import { textureBytes, trackTexture } from "./three-utils";
 
 /**
@@ -59,6 +60,17 @@ export function setRasterTier(tier: DeviceTier): void {
   rasterGate.setLimit(RASTER_TURNS[tier]);
   uploadAtDecode = tier === "mobile";
 }
+
+/**
+ * The rasters' downloads, a few at a time and the nearest tile's first
+ * (lib/city/fetch-order.ts): a boot asks for some fifty at once, and
+ * sharing the line evenly they all land together — the spawn tile's ground
+ * with the farthest tile's. Six at once keeps a fast line busy (a raster
+ * is 0.01–1.5 MB) and gives a slow one's whole width to the tiles at the
+ * eye. A raster asked for without a rank goes ahead of the ranked ones.
+ */
+export const RASTER_FETCHES = 6;
+const fetchGate = createTaskGate(RASTER_FETCHES);
 
 /**
  * A raster's PNG bytes, through the viewer's one fetch policy
@@ -284,25 +296,50 @@ export async function loadDataRaster(
   look: RasterLook,
   opts: {
     inspect?: RasterInspect;
+    /** its place in the downloads' line: its tile's distance from the eye
+     *  (lib/city/fetch-order.ts); first, unset */
+    rank?: number;
     renderer?: WebGPURenderer;
     signal?: AbortSignal;
   } = {}
 ): Promise<LoadedRaster | null> {
-  const { inspect, renderer, signal } = opts;
+  const { inspect, rank, renderer, signal } = opts;
   try {
-    const bytes = await fetchRasterBytes(url, signal);
+    // (the four parts of a raster's wait, apart: its place in the
+    // downloads' line, the network, its turn at the decode gate, and the
+    // inflate with the upload — `?trace=1` tells which one a slow ground
+    // waits for)
+    const asked = streamTimings.now();
+    const bytes = await fetchGate.run(
+      async () => {
+        streamTimings.since("raster:fetch-wait", asked);
+        return await streamTimings.timed(
+          "raster:fetch",
+          async () => await fetchRasterBytes(url, signal)
+        );
+      },
+      signal,
+      rank
+    );
+    const queued = streamTimings.now();
     return await inRasterTurn(async () => {
-      const raster = await decodeRaster(bytes, look, signal);
-      if (!raster) {
-        return null;
+      streamTimings.since("raster:turn-wait", queued);
+      const started = streamTimings.now();
+      try {
+        const raster = await decodeRaster(bytes, look, signal);
+        if (!raster) {
+          return null;
+        }
+        if (inspect && raster.data) {
+          inspect(raster.data, raster.width, raster.height);
+        }
+        applyLook(raster, look);
+        uploadNow(raster.texture, renderer);
+        const { texture, width, height } = raster;
+        return { texture, width, height };
+      } finally {
+        streamTimings.since("raster:decode", started);
       }
-      if (inspect && raster.data) {
-        inspect(raster.data, raster.width, raster.height);
-      }
-      applyLook(raster, look);
-      uploadNow(raster.texture, renderer);
-      const { texture, width, height } = raster;
-      return { texture, width, height };
     }, signal);
   } catch (error) {
     if (isAbortError(error)) {
