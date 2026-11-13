@@ -17,6 +17,7 @@ import {
   snapshotHref,
 } from "../lib/city/snapshot";
 import { tfwToBounds } from "../lib/city/tfw";
+import { SWIFTSHADER_WEBGPU } from "./swiftshader-webgpu";
 
 /**
  * Inner waits scale with the machine. Without a GPU every frame is rendered in
@@ -55,22 +56,8 @@ const DESKTOP_VIEWPORT = { width: 800, height: 600 };
 const SITE_VIEWPORT = { width: 400, height: 300 };
 
 // Software-rendered WebGPU so the smoke test also runs on headless CI boxes
-// without a GPU: Dawn on SwiftShader's Vulkan, and Chrome's own Vulkan on
-// SwiftShader too — without it the canvas's swap chain finds no shared
-// image to present into and takes the GPU process down.
-test.use({
-  launchOptions: {
-    // the config's browser outside Playwright's store (playwright.config.ts)
-    executablePath: process.env.PW_CHROMIUM,
-    args: [
-      "--enable-unsafe-webgpu",
-      "--use-webgpu-adapter=swiftshader",
-      "--enable-features=Vulkan",
-      "--use-vulkan=swiftshader",
-      "--use-angle=swiftshader",
-    ],
-  },
-});
+// without a GPU (swiftshader-webgpu.ts).
+test.use({ launchOptions: SWIFTSHADER_WEBGPU });
 
 /** Page/console errors seen since the last `expectNoErrors`. */
 interface ErrorLog {

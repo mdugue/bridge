@@ -10,19 +10,26 @@ import {
 } from "../lib/city/snapshot";
 import type { Snapshot } from "../lib/city/snapshot";
 import { siteById } from "../sites";
+import { SWIFTSHADER_WEBGPU } from "./swiftshader-webgpu";
 
 /**
  * Big crisp canvas for inspecting shadow/edge artifacts — or, with
  * `SHOTS_SMALL=1`, 800 × 500 at 1× (the same 16:10) and fifteen minutes to
  * load: what a software-rendered container (the routines' street-photo
  * check, docs/routines.md) can draw, with `SHOTS_QUERY=scene=lite&block=1`.
- * Dresden's `lite` boot took 7–11 minutes there (2026-10-31).
+ * Dresden's `lite` boot took 7–11 minutes there (2026-10-31). That path
+ * draws WebGPU on SwiftShader's Vulkan (swiftshader-webgpu.ts); the headed
+ * real-GPU path keeps the browser's own adapter.
  */
 const SHOTS_SMALL = Boolean(process.env.SHOTS_SMALL);
 const READY_MS = SHOTS_SMALL ? 900_000 : 120_000;
 test.use(
   SHOTS_SMALL
-    ? { viewport: { width: 800, height: 500 }, deviceScaleFactor: 1 }
+    ? {
+        viewport: { width: 800, height: 500 },
+        deviceScaleFactor: 1,
+        launchOptions: SWIFTSHADER_WEBGPU,
+      }
     : { viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 }
 );
 

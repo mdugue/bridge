@@ -1,7 +1,7 @@
 # e2e
 
 - Headless specs run `/dresden?scene=lite` (WebGPU over SwiftShader's
-  Vulkan, flags in `city-walk.spec.ts`) and assert presence, never pixels
+  Vulkan, flags in `swiftshader-webgpu.ts`) and assert presence, never pixels
   (ADR 0018). Budget them in frames, share
   one booted page per group, wrap HUD-only steps in `withFramesHeld`, and
   give a spec without a sidebar a small viewport. An untagged spec lands
