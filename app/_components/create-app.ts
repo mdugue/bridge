@@ -1289,7 +1289,8 @@ export async function createCityWalkApp(
   } catch (error) {
     // Centralized teardown: covers both abort (StrictMode remount) and real
     // load failures — otherwise the dead canvas would linger in the DOM.
-    void teardown(cleanups, scene, renderer).catch(reportTeardown);
+    // The failure goes out only once the renderer is released.
+    await teardown(cleanups, scene, renderer).catch(reportTeardown);
     throw error;
   }
 }

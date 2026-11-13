@@ -257,17 +257,51 @@ type HelloOutcome =
   | { said: WorkerHello }
   | { failed: "unloaded" | "threw" | "silent" };
 
+/** A failed chunk fetch in the worker's bootstrap: the bundler emits a
+ *  classic script that pulls the scene's chunks with `importScripts`, and
+ *  one that does not arrive throws a NetworkError before `alive`. */
+const UNLOADED_RE = /importScripts|NetworkError|failed to load/iu;
+
+/** Why a worker's error event ended its hello: before `alive`, a bare
+ *  event (the script itself did not load) or a chunk fetch that failed is
+ *  the network's; anything else, or anything after `alive`, threw. */
+export function errorOutcome(
+  running: boolean,
+  message: string | undefined
+): "unloaded" | "threw" {
+  if (running) {
+    return "threw";
+  }
+  return !message || UNLOADED_RE.test(message) ? "unloaded" : "threw";
+}
+
+/** The boot's own abort, as the rest of the boot rejects with. */
+function bootAborted(): DOMException {
+  return new DOMException("CityWalk startup aborted", "AbortError");
+}
+
 /** What the worker said first, or why it said nothing. The wait is
  *  `LOAD_MS` until its script runs (its first word, `alive`), then
- *  `HELLO_MS`. */
-async function helloOf(worker: Worker): Promise<HelloOutcome> {
-  return await new Promise<HelloOutcome>((resolve) => {
+ *  `HELLO_MS`; an abort of the boot (`signal`) rejects at once. */
+async function helloOf(
+  worker: Worker,
+  signal: AbortSignal
+): Promise<HelloOutcome> {
+  return await new Promise<HelloOutcome>((resolve, reject) => {
     let running = false;
-    const done = (outcome: HelloOutcome) => {
+    const stop = () => {
       clearTimeout(timer);
       worker.removeEventListener("message", onMessage);
       worker.removeEventListener("error", onError);
+      signal.removeEventListener("abort", onAbort);
+    };
+    const done = (outcome: HelloOutcome) => {
+      stop();
       resolve(outcome);
+    };
+    const onAbort = () => {
+      stop();
+      reject(bootAborted());
     };
     const onMessage = (event: MessageEvent<WorkerFirstWord>) => {
       if (event.data?.t === "alive") {
@@ -278,21 +312,24 @@ async function helloOf(worker: Worker): Promise<HelloOutcome> {
         done({ said: event.data });
       }
     };
-    // a script that did not load fires a bare error event (no message);
-    // one that threw, an ErrorEvent with the exception's
     const onError = (event: Event) =>
       done({
-        failed:
-          running || (event instanceof ErrorEvent && event.message)
-            ? "threw"
-            : "unloaded",
+        failed: errorOutcome(
+          running,
+          event instanceof ErrorEvent ? event.message : undefined
+        ),
       });
     let timer = setTimeout(
       () => done({ failed: running ? "silent" : "unloaded" }),
       LOAD_MS
     );
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
     worker.addEventListener("message", onMessage);
     worker.addEventListener("error", onError);
+    signal.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -308,12 +345,18 @@ function noHelloMessage(failed: "unloaded" | "threw" | "silent"): string {
  * The scene's worker, once it said it draws: a WebGPU adapter, an
  * offscreen canvas, an animation frame. Rejects where it cannot.
  */
-async function workerChannel(): Promise<Channel> {
+async function workerChannel(signal: AbortSignal): Promise<Channel> {
   const worker = new Worker(new URL("./scene-worker.ts", import.meta.url), {
     type: "module",
     name: "scene",
   });
-  const outcome = await helloOf(worker);
+  let outcome: HelloOutcome;
+  try {
+    outcome = await helloOf(worker, signal);
+  } catch (error) {
+    worker.terminate();
+    throw error;
+  }
   if ("failed" in outcome) {
     worker.terminate();
     throw new Error(noHelloMessage(outcome.failed));
@@ -590,10 +633,10 @@ export async function startScene(
   try {
     let channel: Channel;
     if (sceneThreadOf(location.search) === "worker") {
-      channel = await workerChannel();
+      channel = await workerChannel(signal);
       if (signal.aborted) {
         channel.end();
-        throw new DOMException("CityWalk startup aborted", "AbortError");
+        throw bootAborted();
       }
       const offscreen = canvas.transferControlToOffscreen();
       channel.port.postMessage({ t: "init", init, canvas: offscreen }, [
@@ -665,7 +708,7 @@ async function bootOver(
         if (channel.thread === "worker") {
           grace = setTimeout(() => {
             done();
-            reject(new DOMException("CityWalk startup aborted", "AbortError"));
+            reject(bootAborted());
           }, WORKER_TEARDOWN_MS);
         }
       };

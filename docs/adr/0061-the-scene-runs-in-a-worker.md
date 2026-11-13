@@ -24,8 +24,10 @@ three's renderers run there since r180.
   whose getters read the mirror the scene sends when it changed, whose
   value calls return promises, and whose `sync()` waits for the mirror
   after a write.
-- The server runs in a module worker (`scene-worker.ts`) on the canvas's
-  `OffscreenCanvas`; the page keeps input capture, pointer lock, layout,
+- The server runs in a worker (`scene-worker.ts`, created as
+  `new Worker(…, { type: "module" })`; the bundler emits a classic
+  bootstrap that loads the scene's chunks with `importScripts`) on the
+  canvas's `OffscreenCanvas`; the page keeps input capture, pointer lock, layout,
   fonts and image composing. A browser that cannot draw from a worker —
   its hello reports no WebGPU adapter, no `requestAnimationFrame` or no
   `OffscreenCanvas` — is told so, as one without WebGPU is (ADR 0027); there is no fallback onto the page for old browsers.

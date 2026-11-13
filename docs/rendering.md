@@ -1589,8 +1589,13 @@ starts `scene-worker.ts`, which says it runs (`alive`) and then what it
 can draw with (a WebGPU adapter, `requestAnimationFrame`). The page waits
 up to 60 s for the script (a slow line's download) and 10 s more for the
 adapter; a script that never arrives is the network's ("network: …",
-`BootError`'s plain words), one that throws or stays silent "Die Ansicht
-startet nicht."
+`BootError`'s plain words) — so is a chunk the worker's bootstrap could
+not fetch before `alive` (the bundler's classic bootstrap pulls the
+scene's chunks with `importScripts`, and a failed one throws a
+NetworkError) — one that throws or stays silent "Die Ansicht startet
+nicht." An aborted boot (a StrictMode remount, a navigation) stops
+waiting at once and ends the worker, so the next boot does not wait on
+it.
 Where that matches the page, the page hands it the canvas as an
 `OffscreenCanvas` with the init (budget, size, site, look, the page's
 address and state); the worker asks for the tileset and the start tile

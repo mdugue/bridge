@@ -24,6 +24,20 @@ import type {
   ToScene,
 } from "./scene-protocol";
 
+/** Waits for `value` when it is a promise; its error is its caller's. */
+async function settled(value: unknown): Promise<void> {
+  try {
+    await value;
+  } catch {
+    // the call's own reply carries the error
+  }
+}
+
+/** A call that tears the scene down. */
+function isDispose(m: string): boolean {
+  return m === "dispose" || m === "disposeForReload";
+}
+
 /** The reports the scene's options carry (each becomes a message), by
  *  name: the record keeps the list whole. */
 const REPORTS: Record<ReportName, true> = {
@@ -155,6 +169,8 @@ export function serveScene(
   let lastMirror = "";
   const synced: (() => void)[] = [];
   let disposed = false;
+  /** The first dispose's teardown, settled or not. */
+  let disposing: Promise<void> | null = null;
   const pushMirror = () => {
     if (!app || disposed) {
       return;
@@ -273,6 +289,15 @@ export function serveScene(
           beforeBoot.push(event);
           break;
         }
+        if (disposed && isDispose(message.m) && disposing) {
+          // a second dispose (one told while `ready` was on its way, then
+          // the handle's) is answered when the first teardown is done
+          const first = disposing;
+          void reply(message.id, async () => {
+            await first;
+          });
+          break;
+        }
         if (disposed) {
           // a disposed scene takes no call; one that waits is answered
           if (message.id !== undefined) {
@@ -285,6 +310,7 @@ export function serveScene(
           }
           break;
         }
+        let ran: unknown;
         void reply(message.id, () => {
           const member = app ? memberOf(app, message.m) : null;
           if (!member) {
@@ -292,9 +318,12 @@ export function serveScene(
           }
           // what the page asks shows, on a still or covered scene too
           app?.wake();
-          return member(...message.a);
+          ran = member(...message.a);
+          return ran;
         });
-        if (message.m === "dispose" || message.m === "disposeForReload") {
+        if (isDispose(message.m)) {
+          // its outcome, for a later dispose to wait on (never rejects)
+          disposing = settled(ran);
           disposed = true;
           clearInterval(idleMirror);
         }
