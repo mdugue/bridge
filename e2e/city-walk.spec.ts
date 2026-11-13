@@ -1445,8 +1445,13 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("inquiry-card")).toBeHidden();
     });
+    // the mirror after the Escape's call has reached the scene
     expect(
-      await page.evaluate(() => window.__poc?.handle?.nameplateShown() ?? null)
+      await page.evaluate(async () => {
+        const handle = window.__poc?.handle;
+        await handle?.sync();
+        return handle?.nameplateShown() ?? null;
+      })
     ).toBeNull();
     expectNoErrors(errors);
   });
@@ -1816,7 +1821,19 @@ test.describe("desktop viewer, look", { tag: "@desktop-look" }, () => {
     }
     // Night (scene-environment.ts): the lamps' halos and pools are drawn
     // by their shared materials after dark only, and compiled ahead by day
-    // all the same — a first night builds nothing inside a frame.
+    // all the same — a first night builds nothing inside a frame. On
+    // SwiftShader a tile shows after its compile wait while its compile
+    // still waits for its turn: the night is asked once they have all run.
+    await expect
+      .poll(
+        async () =>
+          await page.evaluate(async () => {
+            const info = await window.__poc?.handle?.getRenderInfo();
+            return info?.compilesQueued ?? -1;
+          }),
+        { timeout: slow(120_000) }
+      )
+      .toBe(0);
     const builtBefore = await page.evaluate(async () => {
       const handle = window.__poc?.handle;
       if (!handle) {
