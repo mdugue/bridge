@@ -169,7 +169,7 @@ import { footMaterialFor } from "./tree-foot";
 import { follow } from "./feature-seam";
 import type { Watch } from "./feature-seam";
 import type { DressingEnvironment } from "./scene-environment";
-import { setClaySkyView } from "./visual-style";
+import { setClayHorizon, setClaySkyView } from "./visual-style";
 import type { StyleResources } from "./visual-style";
 import { dressWalls } from "./wall-layer";
 import { tileNichesOffThread } from "./window-niche-client";
@@ -439,6 +439,9 @@ interface Dressed {
   nicheCopyBytes?: number;
   /** the city's hold on its shared sky-view raster (not weighed) */
   svf?: RasterHold;
+  /** the city's hold on its terrain's horizon (not weighed): the skyline
+   *  its windows and glass mirror (city-mirror.ts) */
+  horizon?: RasterHold;
   terrain?: TerrainLayer;
 }
 
@@ -1712,6 +1715,11 @@ export class DressingPlugin {
    * free those again.
    */
   private readonly compiles = new Map<Object3D, number>();
+  /** tile → its horizon raster's name, as its terrain's extras give it
+   *  (`shareHorizon`) */
+  private readonly horizonNames = new Map<string, string>();
+  /** tile → the city tile waiting for its terrain to name its horizon */
+  private readonly horizonWaiting = new Map<string, () => void>();
   /** each content root's own geometries (its glTF's and the water's), and
    *  the roots whose own compile still runs (disposeContentNow) */
   private readonly contentOf = new WeakMap<Object3D, Set<BufferGeometry>>();
@@ -2082,6 +2090,7 @@ export class DressingPlugin {
     if (extras.svf) {
       this.shareSkyView(scene, entry, extras);
     }
+    this.shareHorizon(scene, entry, extras.tileId);
     // What street photos say about the facades lands after the buildings
     // show; until then (and without it) they are drawn as before.
     if (extras.facades) {
@@ -2220,6 +2229,60 @@ export class DressingPlugin {
     });
   }
 
+  /**
+   * The facades' skyline (the horizon the terrain reads for its far
+   * shadows) lands after the buildings show; the clay mirrors the sky
+   * alone until then. A building tile's extras do not name it: its
+   * terrain's do, so a city tile that comes first waits for its terrain's
+   * name (`noteHorizon`). Held until the city tile leaves — the terrain
+   * holds the same raster, so it costs no byte more.
+   */
+  private shareHorizon(scene: Object3D, entry: Dressed, tileId: string): void {
+    const raster = this.horizonNames.get(tileId);
+    if (!raster) {
+      this.horizonWaiting.set(tileId, () => {
+        if (this.dressed.get(scene) === entry) {
+          this.shareHorizon(scene, entry, tileId);
+        }
+      });
+      return;
+    }
+    const bounds = this.ctx.tileBounds(tileId);
+    entry.horizon?.release();
+    entry.horizon = this.rasters.holder(scene, { weighed: false });
+    const named: CityExtras & { horizon: string } = {
+      kind: "city",
+      tileId,
+      horizon: raster,
+    };
+    void entry.horizon.acquire("horizon", named).then((texture) => {
+      const { city } = entry;
+      if (texture && bounds && city && this.dressed.get(scene) === entry) {
+        const [minX, minY, maxX, maxY] = bounds;
+        const { cx, cy } = this.ctx.offset;
+        setClayHorizon(
+          city.mesh.material as MeshStandardNodeMaterial,
+          texture,
+          [minX - cx, maxY - cy],
+          [maxX - minX, maxY - minY]
+        );
+      }
+      return null;
+    });
+  }
+
+  /** A terrain level names its tile's horizon: a city tile waiting for it
+   *  takes it now (`shareHorizon`). */
+  private noteHorizon(extras: TerrainExtras): void {
+    if (!extras.horizon) {
+      return;
+    }
+    this.horizonNames.set(extras.tileId, extras.horizon);
+    const waiting = this.horizonWaiting.get(extras.tileId);
+    this.horizonWaiting.delete(extras.tileId);
+    waiting?.();
+  }
+
   /** Dresses a terrain level's ground and queues the rest of its dressing
    *  (`dressed`: built and compiled — wrapped, since an async function
    *  would wait for a promise it returns). */
@@ -2234,6 +2297,7 @@ export class DressingPlugin {
     // when other tiles' dressings have started (one shared matrix gave the
     // water sheets another tile's frame — their triangles chosen over dry
     // land, the river left without them).
+    this.noteHorizon(extras);
     scene.updateMatrix();
     mesh.updateMatrix();
     const toData = new Matrix4().multiplyMatrices(scene.matrix, mesh.matrix);
@@ -2722,6 +2786,7 @@ export class DressingPlugin {
       free(() => dressed.city?.dispose());
     }
     dressed.svf?.release();
+    dressed.horizon?.release();
     if (dressed.terrain) {
       this.stream.terrains.delete(dressed.terrain);
       free(() => dressed.terrain?.dispose());
