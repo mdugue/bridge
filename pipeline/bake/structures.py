@@ -485,7 +485,7 @@ def shaped_roof(
     model = roofs.measured_model(dom, inside, known, s.green[win], small)
     if model is None or (model.level.size < 2 and not model.faces.any()):
         return None
-    if roofs.miss_share(model.heights(), dom, known & (model.lab > 0)) > roofs.KEEP_SHARE:
+    if roofs.miss_share(model.heights(), dom, model.judged(known)) > roofs.KEEP_SHARE:
         return None
     parts = []
     miss = roofs.drawn_miss(model, grid, dom, known)

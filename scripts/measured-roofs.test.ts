@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import type { MeasuredRoofFeature } from "../lib/city/features";
+import type {
+  MeasuredRoofFeature,
+  MeasuredSurface,
+} from "../lib/city/features";
 import { measuredRoofMesh, measuredRoofsById } from "./measured-roofs";
 
 /** A 20 × 20 m part with a 10 × 10 m courtyard, both rings as given. */
@@ -189,4 +192,137 @@ test("a face shades smoothly over itself, a ridge stays sharp, walls and flat pa
     // one normal a point over each slope; the ridge keeps both
     expect(normals.size).toBe(Math.abs(x - 10.5) < 1e-6 ? 2 : 1);
   }
+});
+
+/** The gable part with its two flanks as facets, the ridge at x = `ridge`
+ *  (the grid's own gable has it at 10.5), the east flank `step` metres
+ *  lower than the plane it would share the ridge on. The courtyard's hole
+ *  is cut along the ridge: both flanks reach around it. */
+function facetPart(z: number, ridge = 10.5, step = 0) {
+  const part = gablePart(z);
+  const west: [number, number][][] = [
+    [
+      [0, 0],
+      [ridge, 0],
+      [ridge, 5],
+      [5, 5],
+      [5, 15],
+      [ridge, 15],
+      [ridge, 20],
+      [0, 20],
+      [0, 0],
+    ],
+  ];
+  const east: [number, number][][] = [
+    [
+      [ridge, 0],
+      [20, 0],
+      [20, 20],
+      [ridge, 20],
+      [ridge, 15],
+      [15, 15],
+      [15, 5],
+      [ridge, 5],
+      [ridge, 0],
+    ],
+  ];
+  // from the surface's corner (x −2): 5 m at the ridge, 0.5 m a metre down
+  const top = 5 - step;
+  const facets: NonNullable<MeasuredSurface["facets"]> = [
+    { plane: [5 - (ridge + 2) / 2, 0.5, 0], rings: west },
+    { plane: [top + (ridge + 2) / 2, -0.5, 0], rings: east },
+  ];
+  return {
+    ...part,
+    properties: {
+      ...part.properties,
+      surface: { ...part.properties.surface, facets },
+    },
+  } satisfies MeasuredRoofFeature;
+}
+
+test("a face drawn as planes is its facets: the ridge one straight edge, each flank flat", () => {
+  // the ridge between two cell centres of the grid, which would cut it off
+  const ridge = 10.3;
+  const mesh = measuredRoofMesh([facetPart(110, ridge)], 100, { cx: 0, cy: 0 });
+  let area = 0;
+  for (const { c, n } of triangles(mesh.positions)) {
+    if (Math.abs(n[2]) > 1e-6) {
+      expect(Math.sign(n[2])).toBe(1);
+      area += n[2] / 2;
+      continue;
+    }
+    // walls along the outline alone (none along the ridge), facing out
+    const out = (c[0] - 10) * n[0] + (c[1] - 10) * n[1];
+    const onCourtyard = Math.max(Math.abs(c[0] - 10), Math.abs(c[1] - 10)) < 6;
+    expect(Math.sign(out)).toBe(onCourtyard ? -1 : 1);
+    expect(Math.abs(n[0]) < 1e-9 && Math.abs(c[0] - ridge) < 1e-6).toBe(false);
+  }
+  expect(area).toBeCloseTo(300, 6);
+  const roof = mesh.isRoof.filter((r) => r === 1).length / 3;
+  // two 8-corner flanks: 6 triangles each
+  expect(roof).toBe(12);
+  for (let i = 0; i < mesh.isRoof.length; i += 1) {
+    const [x, , z] = mesh.positions.slice(i * 3, i * 3 + 3);
+    const n = mesh.normals.slice(i * 3, i * 3 + 3);
+    if (mesh.isRoof[i] === 1) {
+      // exactly on its plane, the ridge at its full height; its own normal
+      expect(z).toBeCloseTo(115 - Math.abs(x - ridge) / 2, 9);
+      expect(Math.abs(n[0] / n[2])).toBeCloseTo(0.5, 9);
+    } else {
+      expect(n.every(Number.isNaN)).toBe(true);
+    }
+  }
+});
+
+test("two facets a step apart stand a wall between them, facing the lower", () => {
+  const mesh = measuredRoofMesh([facetPart(110, 10.5, 2)], 100, {
+    cx: 0,
+    cy: 0,
+  });
+  const steps = triangles(mesh.positions).filter(
+    ({ c, n }) => Math.abs(n[2]) < 1e-6 && Math.abs(c[0] - 10.5) < 1e-6
+  );
+  // along the ridge either side of the courtyard: 2 quads
+  expect(steps).toHaveLength(4);
+  for (const { c, n } of steps) {
+    // facing east, where the roof is lower, between the two planes
+    expect(n[0]).toBeGreaterThan(0);
+    expect(c[2]).toBeGreaterThan(113);
+    expect(c[2]).toBeLessThan(115);
+  }
+});
+
+test("two facets the scan cannot tell from two that meet share their border's height", () => {
+  // 0.3 m apart along the ridge: under the scan's tolerance, no sliver of wall
+  const mesh = measuredRoofMesh([facetPart(110, 10.5, 0.3)], 100, {
+    cx: 0,
+    cy: 0,
+  });
+  for (const { c, n } of triangles(mesh.positions)) {
+    expect(Math.abs(n[2]) < 1e-6 && Math.abs(c[0] - 10.5) < 1e-6).toBe(false);
+  }
+  for (let i = 0; i < mesh.isRoof.length; i += 1) {
+    const [x, , z] = mesh.positions.slice(i * 3, i * 3 + 3);
+    if (mesh.isRoof[i] === 1 && Math.abs(x - 10.5) < 1e-6) {
+      // the mean of the two planes there
+      expect(z).toBeCloseTo(114.85, 9);
+    }
+  }
+});
+
+test("facets that do not cover the outline leave the face to its grid", () => {
+  const whole = facetPart(110);
+  const [west] = whole.properties.surface.facets;
+  const half = {
+    ...whole,
+    properties: {
+      ...whole.properties,
+      surface: { ...whole.properties.surface, facets: [west] },
+    },
+  };
+  const offset = { cx: 0, cy: 0 };
+  expect(measuredRoofMesh([half], 100, offset)).toEqual(
+    measuredRoofMesh([gablePart(110)], 100, offset)
+  );
 });

@@ -8,9 +8,11 @@ import rasterio
 import shapely
 from rasterio import features as rfeatures
 from rasterio.transform import from_origin
+from scipy import ndimage as ndi
 from shapely import affinity
 
 from bake.common import Tile
+from bake.roof_planes import Fit
 from bake.roofs import (
     LEVEL_MISS_SHARE,
     LEVEL_SHARE,
@@ -23,6 +25,7 @@ from bake.roofs import (
     _majority,
     _narrow,
     _polygonal,
+    _split_collars,
     _straightened,
     building_walls,
     clean_cover,
@@ -37,6 +40,7 @@ from bake.roofs import (
     region_polygons,
     regular_polygon,
     run,
+    surface_grid,
 )
 
 X0, Y0, SIZE = 400_000.0, 5_600_000.0, 200
@@ -393,6 +397,21 @@ def test_a_wing_beside_a_low_roof_ends_along_its_eave_not_the_scans_blur(phase):
     assert np.ptp(ends) <= 1
 
 
+def test_a_stage_houses_wall_blur_is_split_at_half_height_not_a_collar():
+    # a stage house 20 × 24 m, its hipped roof from 18 m at the eave to
+    # 24 m, over a flat roof at 10 m; the scan grades its 8 m wall over a
+    # few cells, which the bands once drew as a collar round its roof
+    r, c = np.indices((60, 60)) + 0.5
+    inside = (np.abs(r - 30) < 12) & (np.abs(c - 30) < 10)
+    hip = 18 + np.minimum(np.minimum(12 - np.abs(r - 30), 10 - np.abs(c - 30)) * 0.8, 6.0)
+    dom = ndi.gaussian_filter(np.where(inside, hip, 10.0), 1.0)
+    own = np.ones(dom.shape, bool)
+    m = measured_model(dom, own, own, np.zeros_like(own), 20)
+    assert not [z for z in m.level if 11.5 < z < 16.5]
+    tower = m.lab == m.lab[30, 30]
+    assert abs(int(tower.sum()) - int(inside.sum())) <= 0.05 * inside.sum()
+
+
 def test_a_courtyard_drawn_from_the_scan_has_the_walls_straight_corners_of_the_building():
     def turned(w, h, cx, cy, deg):
         box = shapely.box(-w / 2, -h / 2, w / 2, h / 2)
@@ -621,3 +640,61 @@ def test_straightening_loses_no_part_where_a_short_edge_lies_on_its_neighbour():
     c = shapely.Polygon([(10, 0), (20, 0), (20, 10), (10, 10), (10, 5)])
     out = _straightened([a, b, c])
     assert [round(p.area, 3) for p in out] == [round(p.area, 3) for p in (a, b, c)]
+
+
+def test_a_stage_houses_hip_is_written_as_its_four_planes_facets():
+    # the stage house again: its roof a face drawn as flanks, which the
+    # file carries as facets — the ridge and the hips straight lines the
+    # build draws in place of the 1 m grid's cut-off corners
+    r, c = np.indices((60, 60)) + 0.5
+    inside = (np.abs(r - 30) < 12) & (np.abs(c - 30) < 10)
+    hip = 18 + np.minimum(12 - np.abs(r - 30), 10 - np.abs(c - 30)) * 0.8
+    dom = ndi.gaussian_filter(np.where(inside, hip, 10.0), 0.6)
+    own = np.ones(dom.shape, bool)
+    m = measured_model(dom, own, own, np.zeros_like(own), 20)
+    rid = int(m.lab[30, 30])
+    assert m.faces[rid] and rid in m.planes
+    grid = Grid((X0, Y0, X0 + 60, Y0 + 60))
+    part = shapely.box(X0 + 20, Y0 + 18, X0 + 40, Y0 + 42)
+    z = 20.0
+    surface = surface_grid(m, rid, grid, part, z)
+    facets = surface["facets"]
+    assert len(facets) == 4
+    assert np.isclose(sum(shapely.Polygon(f["rings"][0]).area for f in facets), part.area)
+    # two trapezia along the ridge, a triangle at either end (a hip may end
+    # beside its corner of the outline: one point more)
+    corners = sorted(len(f["rings"][0]) - 1 for f in facets)
+    assert all(n <= most for n, most in zip(corners, [4, 4, 5, 5], strict=True))
+    for f in facets:
+        a, b, c = f["plane"]
+        assert np.isclose(np.hypot(b, c), 0.8, atol=0.05)
+        # on its plane the roof the scan shows, at the facet's middle
+        p = shapely.Polygon(f["rings"][0]).representative_point()
+        height = z + a + b * (p.x - surface["x"]) + c * (p.y - surface["y"])
+        row, col = int(Y0 + 60 - p.y), int(p.x - X0)
+        assert abs(height - dom[row, col]) < 0.6
+
+
+def test_a_collar_beside_a_lower_sloped_face_goes_down_onto_that_faces_plane():
+    # a flank falling east to a wall's blur three cells wide, then a lower
+    # face drawn as a plane rising east (its median far above its edge):
+    # the blur's foot lies on that plane carried past its edge, not at the
+    # face's median
+    rows, cols = 20, 30
+    c = np.indices((rows, cols))[1] + 0.5
+    lab = np.zeros((rows, cols), np.int64)
+    lab[:, :10], lab[:, 10:13], lab[:, 13:] = 1, 2, 3
+    flank = 20 - 0.5 * c
+    low = 8 + 0.4 * (c - 13.5)
+    h = np.where(lab == 1, flank, low)
+    h[:, 10], h[:, 11], h[:, 12] = 14.0, 11.0, 8.0
+    faces = np.array([False, True, False, True])
+    surface = h.copy()
+    win = (slice(0, rows), slice(0, cols))
+    eave = np.where(lab == 1, 15.0, np.nan)
+    gables = {1: (win, flank, eave)}
+    drawn = {1: (win, Fit(flank, eave)), 3: (win, Fit(low))}
+    blur = _split_collars(h, lab, faces, surface, gables, drawn)
+    assert blur[:, 10:13].all() and not blur[:, :10].any() and not blur[:, 13:].any()
+    assert (lab[:, 10] == 1).all() and (lab[:, 12] == 3).all()
+    assert np.allclose(surface[:, 12], low[:, 12])
