@@ -143,10 +143,6 @@ export interface WorkerHello {
   gpu: boolean;
   /** an offscreen WebGL2 context, for a page without WebGPU */
   webgl2: boolean;
-  /** GLTFLoader decodes with createImageBitmap here; where it would not
-   *  (no createImageBitmap, Safari before 17) it reaches for an <img>,
-   *  which a worker has none of */
-  bitmaps: boolean;
   offscreen: boolean;
   raf: boolean;
 }

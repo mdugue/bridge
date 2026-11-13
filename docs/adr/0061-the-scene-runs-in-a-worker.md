@@ -25,17 +25,16 @@ three's renderers run there since r180.
   value calls return promises, and whose `sync()` waits for the mirror
   after a write.
 - The server runs in a module worker (`scene-worker.ts`) on the canvas's
-  `OffscreenCanvas`, and the page keeps input capture, pointer lock,
-  layout, fonts and image composing. Where the worker cannot draw as the
-  page would — its hello reports no WebGPU where the page has it, no
-  WebGL2, no `requestAnimationFrame`, no `OffscreenCanvas`, or a loader
-  that would decode images through `<img>` — the same server runs on the
-  page behind a `MessageChannel`. One render path either way.
-  `?thread=main|worker` chooses by hand; `?inspect=1` keeps the page.
-- A worker that fails before the first frame (not the scene's boot) is
-  retried once on the page on a new canvas. A lost GPU the page recovers
-  from by a reload is listed in the init (`reloadable`); the scene
-  releases its device, then reports `onReload`.
+  `OffscreenCanvas`; the page keeps input capture, pointer lock, layout,
+  fonts and image composing. A browser that cannot draw from a worker —
+  its hello reports no WebGPU where the page has it, no WebGL2, no
+  `requestAnimationFrame` or no `OffscreenCanvas` — is told so, as one
+  without a GPU is; there is no fallback onto the page for old browsers.
+  The same server runs on the page behind a `MessageChannel` only for
+  debugging: `?thread=main` and three's Inspector (`?inspect=1`).
+- A lost GPU the page recovers from by a reload is listed in the init
+  (`reloadable`); the scene releases its device, then reports
+  `onReload`.
 - Behind a covering sheet the scene draws only what is asked of it: a
   call wakes it for half a second at 12 fps; nothing else draws.
 
@@ -49,6 +48,10 @@ three's renderers run there since r180.
   holds the GPU process and can still stall the compositor.
 - Errors and unhandled rejections in the worker reach the page's crash
   trail as page errors.
+- A dependency that reads `window` breaks in the worker: 3DTilesRendererJS
+  resolves tileset paths against `window.location`, patched to
+  `globalThis.location` (`patches/3d-tiles-renderer@0.5.4.patch`) until
+  upstream changes it.
 
 ## Alternatives
 

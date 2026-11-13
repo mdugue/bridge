@@ -183,7 +183,7 @@ uploaded; nothing it names is fetched (ADR 0054).
 - QA views: the reference views of the GPU checklist (plan 019) are
   committed in `qa/views/` (`bun scripts/qa-views.ts` writes them; the
   index has each one's link); `bun run shots` renders them too.
-- URL knobs: `?scene=lite`, `?gpu=webgl2`, `?thread=main|worker`,
+- URL knobs: `?scene=lite`, `?gpu=webgl2`, `?thread=main`,
   `?safety=0…3`, `?trail=1`, `?trace=1`, `?inspect=1`, `?depth=standard`,
   `?at=lat,lng`, `?snap=…` (a view link). URL parameters go in the query, never the
   fragment; one that carries a place is named on the privacy page.

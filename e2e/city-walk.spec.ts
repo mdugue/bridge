@@ -58,6 +58,8 @@ const SITE_VIEWPORT = { width: 400, height: 300 };
 // without a GPU (ANGLE -> SwiftShader).
 test.use({
   launchOptions: {
+    // the config's browser outside Playwright's store (playwright.config.ts)
+    executablePath: process.env.PW_CHROMIUM,
     args: [
       "--use-gl=angle",
       "--use-angle=swiftshader",
@@ -552,13 +554,15 @@ async function aimAtBuilding(page: Page): Promise<void> {
   expect(target).toBeDefined();
   const [centreX, centreY] = target?.centre ?? [0, 0];
   await page.evaluate(
-    ([easting, northing]) => {
+    async ([easting, northing]) => {
       const api = window.__poc?.handle;
       if (!api) {
         throw new Error("scene handle not published");
       }
-      // Stand on the ground there to learn its height, then hover above.
+      // Stand on the ground there to learn its height, then hover above
+      // (the scene answers in its own turn: sync reads the pose after it).
       api.teleportTo(easting, northing);
+      await api.sync();
       const ground = api.getCameraState().pos.y - 1.7;
       // EPSG:25833 -> world: x = X - cx, z = -(Y - cy), y = elevation.
       const x = easting - api.offset.cx;
@@ -748,11 +752,12 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // no building, stair or deck lifts the camera here (ADR 0032), so its
     // height is the measured ground plus the eye.
     const at = { x: 412_060, y: 5_656_745 };
-    const state = await page.evaluate(({ x, y }) => {
+    const state = await page.evaluate(async ({ x, y }) => {
       const api = window.__poc?.handle;
       // On foot (the spawn view is aerial): the teleport then stands there.
       api?.setMovementMode("walk");
       api?.teleportTo(x, y);
+      await api?.sync();
       return api?.getCameraState();
     }, at);
     expect(state?.mode).toBe("walk");
@@ -1013,9 +1018,11 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       () => window.__poc?.handle?.getPose().heading ?? 0
     );
     await dragAcrossCanvas(page, "mouse", 300);
-    const headingAfter = await page.evaluate(
-      () => window.__poc?.handle?.getPose().heading ?? 0
-    );
+    const headingAfter = await page.evaluate(async () => {
+      // the drag's turns reached the scene
+      await window.__poc?.handle?.sync();
+      return window.__poc?.handle?.getPose().heading ?? 0;
+    });
     expect(Math.abs(headingAfter - headingBefore)).toBeGreaterThan(0.2);
     expectNoErrors(errors);
   });
@@ -1458,12 +1465,13 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(tree).toBeDefined();
     const [east, north] = tree?.geometry.coordinates ?? [0, 0];
     await page.evaluate(
-      ([e, n]) => {
+      async ([e, n]) => {
         const api = window.__poc?.handle;
         if (!api) {
           throw new Error("scene handle not published");
         }
         api.teleportTo(e, n);
+        await api.sync();
         const ground = api.getCameraState().pos.y - 1.7;
         const x = e - api.offset.cx;
         const z = -(n - api.offset.cy);
@@ -2029,7 +2037,11 @@ test.describe("mobile", { tag: "@phone" }, () => {
       // a hidden toolbar has no box, and two missing boxes compare equal
       expect(flyingBox).not.toBeNull();
       await flyButton.tap();
-      await expect(phonePage.getByTestId("altitude-stick")).toHaveCount(0);
+      // the mode is the scene's: it answers once its turn comes, which a
+      // software-rendered compile in the worker can hold for seconds
+      await expect(phonePage.getByTestId("altitude-stick")).toHaveCount(0, {
+        timeout: slow(30_000),
+      });
       // The stick sits above the toolbar, so the toolbar doesn't jump.
       const walkingBox = await toolbar.boundingBox();
       expect(walkingBox?.y).toBe(flyingBox?.y);
@@ -2055,9 +2067,11 @@ test.describe("mobile", { tag: "@phone" }, () => {
       () => window.__poc?.handle?.getPose().heading ?? 0
     );
     await dragAcrossCanvas(phonePage, "touch", 400);
-    const headingAfter = await phonePage.evaluate(
-      () => window.__poc?.handle?.getPose().heading ?? 0
-    );
+    const headingAfter = await phonePage.evaluate(async () => {
+      // the drag's turns reached the scene
+      await window.__poc?.handle?.sync();
+      return window.__poc?.handle?.getPose().heading ?? 0;
+    });
     expect(Math.abs(headingAfter - headingBefore)).toBeGreaterThan(0.2);
 
     // Double-tap on the ground ahead travels there. Synthetic events with

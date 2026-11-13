@@ -1589,17 +1589,17 @@ The minimap's picture is an image the sidebar loads when it shows.
 
 **The scene boots in a worker** (ADR 0061, `scene-client.ts`): the page
 starts `scene-worker.ts`, which first says what it can draw with
-(WebGPU, an offscreen WebGL2, `requestAnimationFrame`, image bitmaps).
+(WebGPU, an offscreen WebGL2, `requestAnimationFrame`).
 Where that matches the page, the page hands it the canvas as an
 `OffscreenCanvas` with the init (budget, size, site, look, the page's
 address and state); the worker asks for the tileset and the start tile
 (its own `boot-ahead`) while the scene's chunk loads, and serves the
-scene from there (`scene-server.ts`). Otherwise the page does the same
-on its own thread. Everything the HUD reads every frame — the camera,
+scene from there (`scene-server.ts`); a browser that cannot draw from a
+worker gets the no-GPU message (`?thread=main` runs the same server on
+the page, for debugging). Everything the HUD reads every frame — the camera,
 the pose, Modell's state, what streams — comes back in the mirror the
 scene sends when it changed; `__poc.handle` is that client, so its value
-calls are promises. A worker that dies before the first frame is
-retried once on the page.
+calls are promises.
 
 The **first frame** waits on the spawn tile's buildings and *any* of its
 terrain levels (`bootApp` in `create-app.ts`); the player is then placed

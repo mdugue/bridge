@@ -24,6 +24,7 @@ import type {
   SceneApp,
   SceneKeys,
 } from "./create-app";
+import { NO_GPU_MESSAGE } from "./gpu-support";
 import { inspectRequested } from "./inspector";
 import type { ModelHud, ViewMode } from "./model-rig";
 import { plateLetters } from "./nameplate-glyphs";
@@ -220,21 +221,13 @@ export interface StartSceneOptions extends SceneReports {
 }
 
 /**
- * Where the scene runs: `?thread=main` or `?thread=worker` (the QA's A/B),
- * on the page under three's Inspector (`?inspect=1`, which hangs its panel
- * on the page), and otherwise in a worker wherever the page can hand one
- * its canvas.
+ * Where the scene runs: in a worker (ADR 0061), or on the page when asked
+ * for debugging — `?thread=main` (the QA's A/B) or three's Inspector
+ * (`?inspect=1`, which hangs its panel on the page).
  */
 export function sceneThreadOf(search: string): SceneThread {
   const asked = new URLSearchParams(search).get("thread");
-  if (asked === "main" || inspectRequested(search)) {
-    return "main";
-  }
-  const canHand =
-    typeof Worker !== "undefined" &&
-    typeof HTMLCanvasElement !== "undefined" &&
-    "transferControlToOffscreen" in HTMLCanvasElement.prototype;
-  return canHand ? "worker" : "main";
+  return asked === "main" || inspectRequested(search) ? "main" : "worker";
 }
 
 /** How long a new scene worker has to say what it can draw with (ms). */
@@ -247,23 +240,9 @@ interface Channel {
   thread: SceneThread;
 }
 
-/**
- * The worker, once it said it draws as the page would: WebGPU where the
- * page has it (the budget not asking for WebGL2), an animation frame, an
- * offscreen canvas. Null where it did not or could not say so in time:
- * the scene then runs on the page.
- */
-async function workerChannel(budget: SceneBudget): Promise<Worker | null> {
-  let worker: Worker;
-  try {
-    worker = new Worker(new URL("./scene-worker.ts", import.meta.url), {
-      type: "module",
-      name: "scene",
-    });
-  } catch {
-    return null;
-  }
-  const hello = await new Promise<WorkerHello | null>((resolve) => {
+/** What the worker said first, or null if it failed or kept silent. */
+async function helloOf(worker: Worker): Promise<WorkerHello | null> {
+  return await new Promise<WorkerHello | null>((resolve) => {
     const done = (said: WorkerHello | null) => {
       clearTimeout(timer);
       worker.removeEventListener("message", onMessage);
@@ -280,17 +259,31 @@ async function workerChannel(budget: SceneBudget): Promise<Worker | null> {
     worker.addEventListener("message", onMessage);
     worker.addEventListener("error", onError);
   });
+}
+
+/**
+ * The scene's worker, once it said it draws as the page would: WebGPU
+ * where the page has it (the budget not asking for WebGL2), else WebGL2,
+ * on an offscreen canvas with an animation frame. Rejects where it cannot.
+ */
+async function workerChannel(budget: SceneBudget): Promise<Channel> {
+  const worker = new Worker(new URL("./scene-worker.ts", import.meta.url), {
+    type: "module",
+    name: "scene",
+  });
+  const hello = await helloOf(worker);
   const pageGpu = "gpu" in navigator && !budget.forceWebGL;
-  // WebGPU where the page has it; else WebGL2, which a worker with WebGPU
-  // also has (the probe is skipped there: it would cost a context)
+  // a worker with WebGPU has WebGL2 too (it skips the probe, which would
+  // cost a context)
   const draws = pageGpu
     ? hello?.gpu === true
     : hello?.gpu === true || hello?.webgl2 === true;
-  if (!hello?.raf || !hello.offscreen || !hello.bitmaps || !draws) {
+  if (!hello?.raf || !hello.offscreen || !draws) {
     worker.terminate();
-    return null;
+    throw new Error(hello ? NO_GPU_MESSAGE : "Die Ansicht startet nicht.");
   }
-  return worker;
+  forwardErrors(worker);
+  return { port: worker, thread: "worker", end: () => worker.terminate() };
 }
 
 /** The scene on the page: the same server behind a MessageChannel. */
@@ -546,57 +539,26 @@ export async function startScene(
     covered: opts.pace.covered,
     listening: opts.pace.listening,
   };
-  let canvas = sceneCanvas(container);
-  let channel: Channel | null = null;
-  if (sceneThreadOf(location.search) === "worker") {
-    const worker = await workerChannel(opts.budget);
-    if (worker && !signal.aborted) {
-      forwardErrors(worker);
-      const offscreen = canvas.transferControlToOffscreen();
-      worker.postMessage({ t: "init", init, canvas: offscreen }, [offscreen]);
-      channel = {
-        port: worker,
-        thread: "worker",
-        end: () => worker.terminate(),
-      };
-    } else {
-      worker?.terminate();
-    }
-  }
-  if (signal.aborted) {
-    canvas.remove();
-    throw new DOMException("CityWalk startup aborted", "AbortError");
-  }
+  const canvas = sceneCanvas(container);
   try {
-    return await bootOver(
-      channel ?? (await mainChannel(init, canvas, signal)),
-      opts,
-      canvas
-    );
+    let channel: Channel;
+    if (sceneThreadOf(location.search) === "worker") {
+      channel = await workerChannel(opts.budget);
+      if (signal.aborted) {
+        channel.end();
+        throw new DOMException("CityWalk startup aborted", "AbortError");
+      }
+      const offscreen = canvas.transferControlToOffscreen();
+      channel.port.postMessage({ t: "init", init, canvas: offscreen }, [
+        offscreen,
+      ]);
+    } else {
+      channel = await mainChannel(init, canvas, signal);
+    }
+    return await bootOver(channel, opts, canvas);
   } catch (error) {
     canvas.remove();
-    const workerFailed =
-      channel?.thread === "worker" &&
-      !signal.aborted &&
-      error instanceof Error &&
-      error.name === "SceneWorkerError";
-    if (!workerFailed) {
-      throw error;
-    }
-    // the worker itself failed (not the scene's boot): once more, on the
-    // page, on a canvas of its own (the first is the worker's for good)
-    opts.trail?.note("scene worker failed", error.message);
-    canvas = sceneCanvas(container);
-    try {
-      return await bootOver(
-        await mainChannel(init, canvas, signal),
-        opts,
-        canvas
-      );
-    } catch (error_) {
-      canvas.remove();
-      throw error_;
-    }
+    throw error;
   }
 }
 
@@ -642,7 +604,11 @@ async function bootOver(
     // an abort: the boot aborts itself, and its "failed" follows
     const onAbort = () => client.tell("dispose", []);
     info = await new Promise<SceneStatic>((resolve, reject) => {
-      opts.signal.addEventListener("abort", onAbort, { once: true });
+      if (opts.signal.aborted) {
+        onAbort();
+      } else {
+        opts.signal.addEventListener("abort", onAbort, { once: true });
+      }
       const onMessage = (event: MessageEvent<ToPage>) => {
         const message = event.data;
         if (message.t === "ready") {
@@ -656,9 +622,7 @@ async function bootOver(
       };
       const onWorkerError = (event: ErrorEvent) => {
         done();
-        const error = new Error(event.message || "the scene worker failed");
-        error.name = "SceneWorkerError";
-        reject(error);
+        reject(new Error(event.message || "the scene worker failed"));
       };
       const done = () => {
         opts.signal.removeEventListener("abort", onAbort);

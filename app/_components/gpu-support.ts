@@ -34,13 +34,25 @@ export const NO_GPU_MESSAGE =
 
 /**
  * What this browser lacks for the viewer, as the sentence the HUD shows, or
- * null. WebGPU (or WebGL2) renders; DecompressionStream inflates the
- * pre-gzipped tile content (tile-stream.ts) — without it every tile would
- * fail with a bare ReferenceError instead of this explanation.
+ * null. WebGPU (or WebGL2) renders, from a worker on an OffscreenCanvas;
+ * DecompressionStream inflates the pre-gzipped tile content
+ * (tile-stream.ts) — without it every tile would fail with a bare
+ * ReferenceError instead of this explanation.
  */
 export function missingPrerequisite(): string | null {
   if (!hasGpu()) {
     return NO_GPU_MESSAGE;
+  }
+  if (
+    typeof Worker === "undefined" ||
+    !("transferControlToOffscreen" in HTMLCanvasElement.prototype)
+  ) {
+    // the scene draws from a worker (ADR 0061)
+    return (
+      "Dieser Browser ist zu alt für den Viewer (er kann nicht aus einem " +
+      "Worker zeichnen, z. B. Safari vor 16.4). Bitte den Browser " +
+      "aktualisieren."
+    );
   }
   if (typeof DecompressionStream === "undefined") {
     return (

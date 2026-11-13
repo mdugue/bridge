@@ -17,7 +17,7 @@ import { errorMessage } from "./scene-protocol";
 
 /** The worker's global, as far as it is used here. */
 const scope = self as unknown as ScenePort & {
-  navigator: { gpu?: unknown; userAgent: string };
+  navigator: { gpu?: unknown };
 };
 
 interface InitMessage {
@@ -41,24 +41,10 @@ function offscreenWebgl2(): boolean {
   }
 }
 
-/** GLTFLoader's own test for an ImageBitmapLoader (three r187,
- *  GLTFParser): a Safari before 17 takes the <img> path. */
-function decodesToBitmaps(userAgent: string): boolean {
-  if (typeof createImageBitmap !== "function") {
-    return false;
-  }
-  if (!/^(?:(?!chrome|android).)*safari/iu.test(userAgent)) {
-    return true;
-  }
-  const major = /Version\/(?<major>\d+)/u.exec(userAgent)?.groups?.major;
-  return major !== undefined && Number(major) >= 17;
-}
-
 const hello: WorkerHello = {
   t: "hello",
   gpu: scope.navigator.gpu !== undefined,
   webgl2: scope.navigator.gpu === undefined && offscreenWebgl2(),
-  bitmaps: decodesToBitmaps(scope.navigator.userAgent),
   offscreen: typeof OffscreenCanvas !== "undefined",
   raf: typeof requestAnimationFrame === "function",
 };
