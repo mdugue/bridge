@@ -6,6 +6,7 @@ import {
   createStillness,
   LISTENING_FPS,
   LISTENING_MOVING_FPS,
+  STILL_AFTER_MS,
   STILL_FPS,
 } from "./frame-pace";
 
@@ -46,7 +47,7 @@ describe("frame pace", () => {
     const pace = createFramePace();
     pace.setCovered(true);
     pace.setStill(true);
-    pace.request();
+    pace.wake();
     const tail = Math.floor(COVERED_TAIL_MS / FRAME);
     const n = drawn(pace, 0, tail);
     expect(n).toBeGreaterThanOrEqual(
@@ -56,6 +57,67 @@ describe("frame pace", () => {
       Math.ceil((COVERED_TAIL_MS / 1000) * COVERED_FPS) + 1
     );
     expect(drawn(pace, tail * FRAME + FRAME, 60)).toBe(0);
+  });
+
+  test("a covered ask ends no stillness: a still scene stops after the tail", () => {
+    // the loop: the pace decides, a drawn frame tells the stillness
+    const pace = createFramePace();
+    const stillness = createStillness();
+    pace.setCovered(true);
+    stillness.frame(0, false);
+    pace.setStill(stillness.frame(STILL_AFTER_MS, false));
+    const at = 2 * STILL_AFTER_MS;
+    if (pace.wake()) {
+      stillness.wake(at);
+    }
+    let last = Number.NaN;
+    for (let i = 0; i < 120; i += 1) {
+      const now = at + i * FRAME;
+      if (pace.draws(now)) {
+        last = now;
+        pace.setStill(stillness.frame(now, false));
+      }
+    }
+    expect(last - at).toBeLessThan(COVERED_TAIL_MS);
+    // (its last frame lies within a covered frame of its end)
+    expect(last - at).toBeGreaterThan(COVERED_TAIL_MS - 1000 / COVERED_FPS - 1);
+  });
+
+  test("a covered ask that starts a move draws as long as it moves", () => {
+    const pace = createFramePace();
+    const stillness = createStillness();
+    pace.setCovered(true);
+    stillness.frame(0, false);
+    pace.setStill(stillness.frame(STILL_AFTER_MS, false));
+    const at = 2 * STILL_AFTER_MS;
+    expect(pace.wake()).toBe(false);
+    // a glide of 1.5 s: the camera moves in every frame drawn
+    let last = Number.NaN;
+    for (let i = 0; i < 240; i += 1) {
+      const now = at + i * FRAME;
+      if (pace.draws(now)) {
+        last = now;
+        pace.setStill(stillness.frame(now, now - at < 1500));
+      }
+    }
+    expect(last - at).toBeGreaterThan(1500 + STILL_AFTER_MS - 100);
+  });
+
+  test("covered, still and listened to: an ask draws its tail at the covered rate", () => {
+    const pace = createFramePace();
+    pace.setCovered(true);
+    pace.setStill(true);
+    pace.setListening(true);
+    pace.wake();
+    expect(drawn(pace, 0, 30)).toBe(COVERED_FPS / 2);
+  });
+
+  test("an uncovered ask ends the stillness, a covered one does not", () => {
+    const pace = createFramePace();
+    pace.setStill(true);
+    expect(pace.wake()).toBe(true);
+    pace.setCovered(true);
+    expect(pace.wake()).toBe(false);
   });
 
   test("a covered scene that moves draws at the covered rate", () => {
@@ -82,7 +144,7 @@ describe("frame pace", () => {
   test("a frame after held ones says so; the next one in a row does not", () => {
     const pace = createFramePace();
     pace.setCovered(true);
-    pace.request();
+    pace.wake();
     expect(pace.draws(0)).toBe(true);
     expect(pace.heldBefore()).toBe(false);
     expect(pace.draws(FRAME)).toBe(false);
@@ -130,7 +192,7 @@ describe("still pace", () => {
     const pace = createFramePace();
     pace.setStill(true);
     pace.setCovered(true);
-    pace.request();
+    pace.wake();
     // asked: the covered rate, slower than the still one
     expect(drawn(pace, 0, 30)).toBe(COVERED_FPS / 2);
   });

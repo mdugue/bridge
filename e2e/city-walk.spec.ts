@@ -197,6 +197,33 @@ function designBlockObj() {
   ].join("\n");
 }
 
+/** The block as OBJ in a textured material of its MTL (`block.mtl`,
+ *  `map_Kd block.png`). */
+function designBlockObjTextured() {
+  const faces = designBlockObj()
+    .split("\n")
+    .filter((line) => line.startsWith("f "))
+    .map((line) => {
+      const [a, b, c, d] = line.slice(2).split(" ");
+      return `f ${a}/1 ${b}/2 ${c}/3 ${d}/4`;
+    });
+  const obj = [
+    "mtllib block.mtl",
+    ...designBlockObj()
+      .split("\n")
+      .filter((line) => line.startsWith("v ")),
+    "vt 0 0",
+    "vt 1 0",
+    "vt 1 1",
+    "vt 0 1",
+    "usemtl putz",
+    ...faces,
+    "",
+  ].join("\n");
+  const mtl = ["newmtl putz", "Kd 1 1 1", "map_Kd block.png", ""].join("\n");
+  return { obj, mtl };
+}
+
 /**
  * The block as a Rhino .3dm in millimetres, Z up, its earth anchor at
  * (`east`, `north`) in EPSG:25833 and `height` m.
@@ -1690,6 +1717,41 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(rhino?.placement.north).toBeCloseTo(5_657_420, 1);
     expect(rhino?.placement.base).toBeCloseTo(112, 3);
     expect(rhino?.hidden ?? 0).toBeGreaterThan(0);
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
+    expectNoErrors(errors);
+  });
+
+  test("an OBJ's textures decode in the scene's worker", async () => {
+    // three's TextureLoader makes an <img>, which the worker has not
+    const plain = await page.evaluate(async (text) => {
+      const design = window.__poc?.handle?.design;
+      await design?.load([new File([text], "block.obj")]);
+      return (await design?.status()) ?? null;
+    }, designBlockObj());
+    const textured = await page.evaluate(async ({ obj, mtl }) => {
+      const canvas = new OffscreenCanvas(64, 64);
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = "#c86450";
+        ctx.fillRect(0, 0, 64, 64);
+      }
+      const png = await canvas.convertToBlob({ type: "image/png" });
+      const design = window.__poc?.handle?.design;
+      await design?.load([
+        new File([obj], "block.obj"),
+        new File([mtl], "block.mtl"),
+        new File([png], "block.png"),
+      ]);
+      return (await design?.status()) ?? null;
+    }, designBlockObjTextured());
+    expect(textured?.triangles).toBe(12);
+    expect(textured?.note).toBeNull();
+    expect(textured?.hasLooks).toBe(true);
+    expect(textured?.texturesDropped).toBe(false);
+    // the decoded texture is weighed with it
+    expect(textured?.bytes ?? 0).toBeGreaterThan(plain?.bytes ?? 0);
     await page.evaluate(async () => {
       await window.__poc?.handle?.design.remove();
     });

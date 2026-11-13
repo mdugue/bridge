@@ -35,9 +35,10 @@ three's renderers run there since r180.
   (`reloadable`); the scene releases its device, then reports
   `onReload`.
 - Behind a covering sheet the scene draws only what is asked of it: a
-  call wakes it for half a second at 12 fps, and a scene that moves (a
-  glide a call started, a stream landing) keeps that rate; a still one
-  draws nothing else.
+  call draws half a second at 12 fps and does not end the scene's
+  standing still; a scene that moves in those frames (a glide a call
+  started, a stream landing) keeps that rate; a still one draws nothing
+  else.
 
 ## Consequences
 
@@ -52,7 +53,11 @@ three's renderers run there since r180.
 - A dependency that reads `window` breaks in the worker: 3DTilesRendererJS
   resolves tileset paths against `window.location`, patched to
   `globalThis.location` (`patches/3d-tiles-renderer@0.5.4.patch`) until
-  upstream changes it.
+  upstream changes it. three's TextureLoader makes an `<img>`: an OBJ's
+  textures decode through `createImageBitmap` (`design-bitmap-texture.ts`),
+  and a Rhino file's textures and text dots, which three's 3DMLoader
+  draws through the DOM, are left out, the panel saying so
+  (`design-formats.ts`).
 
 ## Alternatives
 

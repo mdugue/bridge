@@ -186,9 +186,13 @@ export function useLiveMode(
   const ended = useCallback(() => {
     if (onRef.current) {
       release();
+      // an aim or fix still in flight to the scene would set the follow
+      // again: these land after it (and end nothing, so say nothing)
+      handleRef.current?.setFollowAim(null);
+      handleRef.current?.setFollowPosition(null);
       say("Live beendet — du steuerst wieder selbst");
     }
-  }, [release, say]);
+  }, [handleRef, release, say]);
 
   const available =
     live || on || (coarse && orientationNeedsPermission() && !refused);

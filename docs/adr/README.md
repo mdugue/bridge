@@ -40,7 +40,7 @@ how it is built.
 | [0057](./0057-the-sprachfuehrer-speaks-with-the-browsers-voice.md) | The Sprachführer speaks and listens with the browser's own voice, and the scene rests while it does |
 | [0059](./0059-one-schema-per-file-a-bake-hands-over.md) | Every file a bake hands over to TypeScript has one strict zod schema; the build parses it and fails on a mismatch, a test parses every committed file, the viewer takes the types only |
 | [0060](./0060-glass-fronts-read-from-street-photos-by-an-image-model.md) | Glass fronts are read from street photos of any camera by an open image model at fetch time, never in the viewer; the photos' glass is the material where no source names one |
-| [0061](./0061-the-scene-runs-in-a-worker.md) | The scene runs in a worker on an OffscreenCanvas and touches no DOM; the page hosts it, and runs the same server itself where the worker cannot draw as it would |
+| [0061](./0061-the-scene-runs-in-a-worker.md) | The scene runs in a worker on an OffscreenCanvas and touches no DOM; the page hosts it; a browser whose worker cannot draw is told so, and the page runs the same server only for debugging (`?thread=main`, `?inspect=1`) |
 
 ## Numbering
 

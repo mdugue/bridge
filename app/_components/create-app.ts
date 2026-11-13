@@ -39,6 +39,7 @@ import { createFramePace, createStillness } from "@/lib/city/frame-pace";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import { shadowTilesStream } from "@/lib/city/gpu-safety";
 import type { GpuLoss, SafetyLevel } from "@/lib/city/gpu-safety";
+import { TEARDOWN_WAIT_MS } from "./scene-protocol";
 import { bootingPose } from "@/lib/city/boot-start";
 import { createGround } from "@/lib/city/ground";
 import { createPageLifecycle } from "@/lib/city/page-lifecycle";
@@ -270,11 +271,6 @@ const EMERGENCY_SHADOW_HOLD_MS = 120_000;
 const EMERGENCY_GAP_MS = 5000;
 /** How long a reload waits for the old device to be destroyed. */
 const RELEASE_WAIT_MS = 300;
-/**
- * How long a reload to a heavier page waits for the whole app to be gone
- * (`disposeForReload`): the device reports itself destroyed well within it.
- */
-const TEARDOWN_WAIT_MS = 2000;
 /** How near the camera (m, in plan, to the tile's box) a building tile
  *  gets its BVH before any ray needs it. */
 const BVH_NEAR_M = 400;
@@ -2228,10 +2224,12 @@ async function bootApp(
   // look change, like any input or call, wakes it.
   const pace = createFramePace();
   const stillness = createStillness();
+  // (a call while the HUD covers the scene draws only its tail: it ends
+  // no stillness, or a still scene would draw on for STILL_AFTER_MS)
   const wakeStill = () => {
-    stillness.wake(performance.now());
-    pace.setStill(false);
-    pace.request();
+    if (pace.wake()) {
+      stillness.wake(performance.now());
+    }
   };
   let dataLayersMove = false;
   let sceneStill = false;

@@ -1,9 +1,9 @@
 /**
  * What the page and the scene say to each other (ADR 0061). The scene runs
- * in a worker where the browser draws there as it would on the page, and
- * on the page otherwise — over the same messages either way, so nothing
- * the HUD does depends on where it runs (scene-client.ts is the page's
- * end, scene-server.ts the scene's). Every message is plain data the
+ * in a worker; only for debugging (`?thread=main`, `?inspect=1`) on the
+ * page, behind a MessageChannel — over the same messages either way, so
+ * nothing the HUD does depends on where it runs (scene-client.ts is the
+ * page's end, scene-server.ts the scene's). Every message is plain data the
  * structured clone carries; the ones that hand bytes over say so.
  */
 import type { GpuLoss } from "@/lib/city/gpu-safety";
@@ -89,11 +89,20 @@ export type GlideMessage = Omit<GlideOptions, "onProgress"> & {
   progress?: number;
 };
 
-/** An error as it crosses (an Error's class does not). */
+/** An error as it crosses (an Error's class does not); its stack is the
+ *  side's that threw. */
 export interface ErrorMessage {
   message: string;
   name: string;
+  stack?: string;
 }
+
+/**
+ * How long the scene's `disposeForReload` waits at most for the whole app
+ * to be gone (ms): the device reports itself destroyed well within it.
+ * The page's reload waits a little longer (city-walk.tsx).
+ */
+export const TEARDOWN_WAIT_MS = 2000;
 
 /** The page to the scene. */
 export type ToScene =
@@ -165,16 +174,20 @@ export interface ScenePort {
 /** An error as it crosses. */
 export function errorMessage(error: unknown): ErrorMessage {
   return error instanceof Error
-    ? { name: error.name, message: error.message }
+    ? { name: error.name, message: error.message, stack: error.stack }
     : { name: "Error", message: String(error) };
 }
 
-/** The error again on the other side: an abort stays one. */
-export function errorFrom({ name, message }: ErrorMessage): Error {
+/** The error again on the other side, with the stack it was thrown with:
+ *  an abort stays one. */
+export function errorFrom({ name, message, stack }: ErrorMessage): Error {
   if (name === "AbortError") {
     return new DOMException(message, "AbortError");
   }
   const error = new Error(message);
   error.name = name;
+  if (stack) {
+    error.stack = stack;
+  }
   return error;
 }

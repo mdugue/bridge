@@ -1,7 +1,8 @@
 /**
- * The page's end of the scene (ADR 0061): starts it — in its own worker
- * where the browser draws there as it does on the page, on the page
- * otherwise — and hands the HUD `CityWalkHandle`, the one surface it
+ * The page's end of the scene (ADR 0061): starts it — in its own worker;
+ * on the page only for debugging (`?thread=main`, `?inspect=1`), and a
+ * browser whose worker cannot draw is told so — and hands the HUD
+ * `CityWalkHandle`, the one surface it
  * drives the scene through. Reads the HUD makes at once (where the camera
  * stands, what the stream is busy with) answer from the scene's mirror,
  * as of its last turn; calls that return a value return a promise; the
@@ -558,7 +559,7 @@ export async function startScene(
     } else {
       channel = await mainChannel(init, canvas, signal);
     }
-    return await bootOver(channel, opts, canvas);
+    return await bootOver(channel, opts, canvas, init.reloadable);
   } catch (error) {
     canvas.remove();
     throw error;
@@ -573,11 +574,13 @@ function pocProbeNow(): PocProbe {
     : {};
 }
 
-/** Waits for the scene's first frame over `channel`, then makes the handle. */
+/** Waits for the scene's first frame over `channel`, then makes the handle;
+ *  `initReloadable`: the recoverable stops the init carried. */
 async function bootOver(
   channel: Channel,
   opts: StartSceneOptions,
-  canvas: HTMLCanvasElement
+  canvas: HTMLCanvasElement,
+  initReloadable: GpuLoss[]
 ): Promise<CityWalkHandle> {
   const client = clientOf(channel, opts, canvas);
   const stops: (() => void)[] = [];
@@ -684,8 +687,10 @@ async function bootOver(
   const covers = setInterval(measureCovers, COVERS_MS);
   stops.push(() => clearInterval(covers));
   // the stops recoverable now: the records age, and the scene decides at
-  // the stop, where it cannot ask (a message, not a call: it wakes nothing)
-  let lastReloadable = JSON.stringify(opts.reloadable());
+  // the stop, where it cannot ask (a message, not a call: it wakes nothing);
+  // the scene holds the init's list, so one that aged during the boot is
+  // sent at the first tick
+  let lastReloadable = JSON.stringify(initReloadable);
   const reloadable = setInterval(() => {
     const now = opts.reloadable();
     const said = JSON.stringify(now);

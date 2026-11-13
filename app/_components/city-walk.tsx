@@ -98,6 +98,7 @@ import { useSite } from "./site-context";
 import { VirtualJoystick } from "./virtual-joystick";
 import { missingPrerequisite } from "./gpu-support";
 import { useOnce } from "./use-once";
+import { TEARDOWN_WAIT_MS } from "./scene-protocol";
 
 /**
  * *Frag die Stadt* (ADR 0056): the chat client, its tool schemas and the
@@ -420,14 +421,20 @@ const nothingToClean = (): void => {
 
 /** How long a reload waits at most for the scene to let its GPU go (ms). */
 const RELOAD_WAIT_MS = 1000;
+/** How long a reload waits at most for the whole scene to go (ms): just
+ *  past the scene's own bound, so its answer comes first. */
+const TEARDOWN_RELOAD_WAIT_MS = TEARDOWN_WAIT_MS + 500;
 
 /** Reloads the page once the scene let its GPU go (`letGo`), failed to,
- *  or kept silent for `RELOAD_WAIT_MS`: the reload comes either way. */
-async function reloadWithin(letGo: Promise<void> | undefined): Promise<void> {
+ *  or kept silent for `waitMs`: the reload comes either way. */
+async function reloadWithin(
+  letGo: Promise<void> | undefined,
+  waitMs = RELOAD_WAIT_MS
+): Promise<void> {
   await Promise.race([
     letGo?.catch(() => null),
     new Promise((resolve) => {
-      setTimeout(resolve, RELOAD_WAIT_MS);
+      setTimeout(resolve, waitMs);
     }),
   ]);
   location.reload();
@@ -733,7 +740,10 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
         { kind: "reset" },
         recovery.current?.capture() ?? null
       );
-      void reloadWithin(handleRef.current?.disposeForReload());
+      void reloadWithin(
+        handleRef.current?.disposeForReload(),
+        TEARDOWN_RELOAD_WAIT_MS
+      );
     }
     return true;
   };
