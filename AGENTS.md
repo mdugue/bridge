@@ -17,7 +17,8 @@ The build bakes each city's LoD2 CityJSON, DGM1 and derived layers into an
 **OGC 3D Tiles** tileset of glTF; the browser streams it with
 **3DTilesRendererJS** and renders it with **three.js on WebGPURenderer**
 and TSL node materials. No database, no accounts (ADR 0001). React owns the
-HUD, three.js the canvas (ADR 0002).
+HUD, three.js the canvas (ADR 0002), which the scene draws from a worker
+(ADR 0061).
 
 ## Commands
 
@@ -74,6 +75,12 @@ bun scripts/walks.ts <site> check             # check a written walk (docs/walks
 ## Hard rules
 
 Breaking one of these breaks something that tests may not catch.
+
+**Worker.** Scene modules touch no DOM: they read the page through
+`page-view.ts`, and what only the page has (input, layout, web fonts,
+pointer lock) comes as a call over `scene-protocol.ts` (oxlint guards
+`document`, `window`, `location`). A HUD read is the mirror or a promise;
+a spec that writes then reads awaits `handle.sync()` (ADR 0061).
 
 **Frame.** Data stays in the provider's UTM (25833 Saxony and Berlin,
 25832 Hamburg, Bavaria, NRW). `x = E − cx`, `z = −(N − cy)`, `y` = height;
@@ -176,9 +183,9 @@ uploaded; nothing it names is fetched (ADR 0054).
 - QA views: the reference views of the GPU checklist (plan 019) are
   committed in `qa/views/` (`bun scripts/qa-views.ts` writes them; the
   index has each one's link); `bun run shots` renders them too.
-- URL knobs: `?scene=lite`, `?gpu=webgl2`, `?safety=0…3`, `?trail=1`,
-  `?trace=1`, `?inspect=1`, `?depth=standard`, `?at=lat,lng`,
-  `?snap=…` (a view link). URL parameters go in the query, never the
+- URL knobs: `?scene=lite`, `?gpu=webgl2`, `?thread=main|worker`,
+  `?safety=0…3`, `?trail=1`, `?trace=1`, `?inspect=1`, `?depth=standard`,
+  `?at=lat,lng`, `?snap=…` (a view link). URL parameters go in the query, never the
   fragment; one that carries a place is named on the privacy page.
 
 ## Conventions

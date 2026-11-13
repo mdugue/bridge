@@ -263,6 +263,8 @@ export function serveScene(
           if (!member) {
             throw new Error(`scene: no ${message.m} here`);
           }
+          // what the page asks shows, on a still or covered scene too
+          app?.wake();
           return member(...message.a);
         });
         if (message.m === "dispose" || message.m === "disposeForReload") {

@@ -685,6 +685,9 @@ export interface SceneApp {
   setCovers: (boxes: readonly CoverBox[]) => void;
   /** The HUD covers the scene (a phone's sidebar sheet): it draws only
    *  what is asked of it (lib/city/frame-pace.ts). */
+  /** a still or covered scene draws its next frames: what the page asks
+   *  of it shows (scene-server.ts wakes it for every call) */
+  wake: () => void;
   setCovered: (covered: boolean) => void;
   /** The visitor only listens (the Hörmodus): the scene barely draws. */
   setListening: (listening: boolean) => void;
@@ -4298,6 +4301,7 @@ async function bootApp(
     setCovers: (boxes) => {
       covers = boxes;
     },
+    wake: wakeStill,
     setCovered: (covered) => {
       pace.setCovered(covered);
       wakeStill();

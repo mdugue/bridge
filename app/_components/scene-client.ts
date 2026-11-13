@@ -717,8 +717,8 @@ async function bootOver(
   );
 }
 
-/** How long the page waits for a disposed worker's teardown before it ends
- *  it (ms): its GPU device goes with it either way. */
+/** How long the page waits at most for a disposed worker's answer before
+ *  it ends it (ms): its GPU device goes with it either way. */
 const WORKER_TEARDOWN_MS = 3000;
 
 function handleOf(
@@ -812,18 +812,18 @@ function handleOf(
       await finish(client.ask("disposeForReload", []));
     },
     dispose: () => {
-      // a worker's device goes with the worker, after a while for its own
-      // teardown; on the page the scene tears itself down in the turns
-      // after its answer
-      const gone = client.ask("dispose", []).then(
-        async () =>
-          await new Promise((resolve) => {
-            setTimeout(
-              resolve,
-              channel.thread === "worker" ? WORKER_TEARDOWN_MS : 0
-            );
-          })
-      );
+      // the scene tears itself down and answers; a worker that does not
+      // answer in time is ended all the same (its device goes with it)
+      const answered = client.ask("dispose", []);
+      const gone =
+        channel.thread === "worker"
+          ? Promise.race([
+              answered,
+              new Promise((resolve) => {
+                setTimeout(resolve, WORKER_TEARDOWN_MS);
+              }),
+            ])
+          : answered;
       void finish(gone);
     },
   };

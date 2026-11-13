@@ -32,9 +32,13 @@ fallback, one restart), its script posting `{ ready: true }` last.
 `app/_components/create-app.ts` is the spine: it builds the renderer, scene, a
 `PerspectiveCamera`, a `world` group (Z-up data frame, rotated −90° about X to
 Y-up), reads the tileset's extras (CRS, recenter offset, tile bounds), starts
-streaming the site and the animation loop, and returns a `CityWalkHandle`
-(the imperative API the React HUD calls) once the spawn tile's buildings and
-any of its terrain levels are on screen — the first frame. The fixed
+streaming the site and the animation loop, and returns a `SceneApp` once
+the spawn tile's buildings and any of its terrain levels are on screen —
+the first frame. It runs in a worker on an `OffscreenCanvas` where it can
+and touches no DOM (ADR 0061): `scene-server.ts` serves it over messages,
+and the HUD drives it through `scene-client.ts`'s `CityWalkHandle`, whose
+getters read a mirror and whose value calls (`getRenderInfo`,
+`getFocusDebug`, `inquireAt`, `design.*`, …) return promises. The fixed
 lamp-light pool and the fog floor are created before the first frame and
 retargeted/lowered as tiles land. The data layers are not wired into
 `bootApp` by hand: they start on their first switch-on (`startOnce`,

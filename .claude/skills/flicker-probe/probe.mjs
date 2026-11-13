@@ -71,7 +71,7 @@ for (const style of styles) {
   // (lib/city/lens.ts `stepLens`): a pair taken before it settles diffs
   // that as flicker
   for (let i = 0; i < 240; i++) {
-    if (await page.evaluate(() => window.__poc.handle.getFocusDebug().settled ?? true)) break;
+    if (await page.evaluate(async () => (await window.__poc.handle.getFocusDebug()).settled ?? true)) break;
     await frames(1);
   }
   await page.screenshot({ path: `${outDir}/${style}.a.png`, timeout: 300_000 });

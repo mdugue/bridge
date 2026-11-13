@@ -12,9 +12,9 @@ tests drive.
 
 ## Decision
 
-`app/_components/create-app.ts` builds the scene and returns a handle;
-`city-walk.tsx` mounts it and talks to it through the handle and the
-scene-status store. React never touches a three.js object. Pure, DOM-free
+`app/_components/create-app.ts` builds the scene; `city-walk.tsx` starts
+it through `scene-client.ts` (in a worker where it can, ADR 0061) and
+talks to it through the handle and the scene-status store. React never touches a three.js object. Pure, DOM-free
 logic lives in `lib/city/` with unit tests (`lib/city/purity.test.ts`
 keeps it free of the DOM and the renderer).
 
