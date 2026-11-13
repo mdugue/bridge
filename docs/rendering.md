@@ -1769,8 +1769,10 @@ its body (`STALL_MS`: a browser leaves a request on a silent connection
 pending for minutes, and the boot waited on it) — the first try at once, each
 retry once the page is usable, visible and online, or visible and called
 offline every 15 s (`net-gate.ts`). The budget counts the page's visible
-time, offline or not — a phone in a pocket spends nothing, one in a
-tunnel ends in a give-up: 20 s for a tile's content, 8 s for an optional
+time from a request's first failure, offline or not — a phone in a
+pocket spends nothing, one in a tunnel ends in a give-up, and a body
+read that broke after running longer than the budget still gets its
+retries (it used to give up with one attempt): 20 s for a tile's content, 8 s for an optional
 side file or a raster, 20 s for the manifest, 60 s for the tileset. A
 tile that retries stays LOADING, so its coarse level stays drawn and the
 boot keeps waiting. One that gives up is FAILED and healed
