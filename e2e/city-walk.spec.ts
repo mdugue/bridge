@@ -226,9 +226,15 @@ function designBlockObjTextured() {
 
 /**
  * The block as a Rhino .3dm in millimetres, Z up, its earth anchor at
- * (`east`, `north`) in EPSG:25833 and `height` m.
+ * (`east`, `north`) in EPSG:25833 and `height` m; with `dot`, a TextDot
+ * beside it, which three's loader would draw through a `<canvas>`.
  */
-async function designBlock3dm(east: number, north: number, height: number) {
+async function designBlock3dm(
+  east: number,
+  north: number,
+  height: number,
+  dot = false
+) {
   const { default: rhino3dm } = await import("rhino3dm");
   const rhino = await rhino3dm();
   const doc = new rhino.File3dm();
@@ -271,6 +277,9 @@ async function designBlock3dm(east: number, north: number, height: number) {
     data: { attributes: { position: { itemSize: 3, array } } },
   });
   doc.objects().add(mesh, new rhino.ObjectAttributes());
+  if (dot) {
+    doc.objects().addTextDot("A", [0, 0, 0], new rhino.ObjectAttributes());
+  }
   return [...doc.toByteArray()];
 }
 
@@ -1717,6 +1726,20 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(rhino?.placement.north).toBeCloseTo(5_657_420, 1);
     expect(rhino?.placement.base).toBeCloseTo(112, 3);
     expect(rhino?.hidden ?? 0).toBeGreaterThan(0);
+    expect(rhino?.note).not.toContain("Textpunkte");
+    // a TextDot is taken out in the Rhino worker (the prelude), the rest loads
+    const dotted = await page.evaluate(
+      async (bytes) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([new Uint8Array(bytes)], "dot.3dm")]);
+        return (await design?.status()) ?? null;
+      },
+      await designBlock3dm(412_300, 5_657_420, 112, true)
+    );
+    expect(dotted?.note).toContain("Geo-Ankerpunkt");
+    expect(dotted?.note).toContain("Textpunkte");
+    expect(dotted?.triangles).toBe(rhino?.triangles);
+    expect(dotted?.size).toEqual(rhino?.size);
     await page.evaluate(async () => {
       await window.__poc?.handle?.design.remove();
     });
