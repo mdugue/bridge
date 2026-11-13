@@ -18,6 +18,7 @@ import {
   cameraPosition,
   clamp,
   color,
+  distance,
   dot,
   exp,
   float,
@@ -106,6 +107,11 @@ export const LAMP_TRACK_REACH_M = 15;
  *  lamp still shows (fading from the first), and the shared array. */
 interface MirrorSet {
   count: UniformNode<"int", number>;
+  /** the eye the lamps were chosen for (world) and how far from it, on
+   *  the ground plan, the farthest of them stands (m): beyond that and a
+   *  lamp's range no pixel takes light from the set (`streetLight`) */
+  eye: UniformNode<"vec3", Vector3>;
+  far: UniformNode<"float", number>;
   heads: UniformArrayNode<"vec4">;
   reach: readonly [number, number];
   slots: Readonly<Record<DeviceTier, number>>;
@@ -119,6 +125,8 @@ function mirrorSet(
     slots,
     reach,
     count: uniform(0, "int"),
+    eye: uniform(new Vector3()),
+    far: uniform(0),
     // the heads (world, Y-up; w: their fade 0…1)
     heads: uniformArray(
       Array.from(
@@ -298,8 +306,24 @@ export function streetLight(n: V3): V3 {
     const at = positionWorld.toVar();
     const normal = n.toVar();
     const total = float(0).toVar();
+    // No lamp of the set lights a surface a lamp's range beyond the
+    // farthest of them: the far city, most of a view's pixels, runs the
+    // loop not at all. (Measured from the eye the lamps were chosen for,
+    // not the camera: Modell's stands elsewhere.)
+    const near = step(
+      distance(at.xz, STREET.eye.xz),
+      STREET.far.add(LAMP_RANGE_M)
+    );
+    // (a variable: the loop's condition would work the bound out again
+    // at every lamp)
+    const lamps = int(float(STREET.count).mul(near)).toVar();
     Loop(
-      { start: int(0), end: STREET.count, type: "int", condition: "<" },
+      {
+        start: int(0),
+        end: lamps,
+        type: "int",
+        condition: "<",
+      },
       ({ i }) => {
         const head = STREET.heads.element(i);
         const to = head.xyz.sub(at);
@@ -706,16 +730,7 @@ export function glintEaser(most: number) {
   const glints = new Map<string, Glint>();
   const order: Glint[] = [];
   let last: number | null = null;
-  return (
-    wanted: readonly Vector4[],
-    n: number,
-    now: number,
-    out: Vector4[]
-  ) => {
-    const dt =
-      last === null ? Number.POSITIVE_INFINITY : Math.max(0, now - last);
-    last = now;
-    const ease = 1 - Math.exp(-dt / GLINT_EASE_S);
+  const want = (wanted: readonly Vector4[], n: number) => {
     for (const g of glints.values()) {
       g.wanted = 0;
     }
@@ -729,6 +744,23 @@ export function glintEaser(most: number) {
       };
       g.wanted = w.w;
       glints.set(key, g);
+    }
+  };
+  /** `fresh`: `wanted` is a new choice (else the last one still stands,
+   *  and the glints only ease on toward it). */
+  return (
+    wanted: readonly Vector4[],
+    n: number,
+    now: number,
+    out: Vector4[],
+    fresh = true
+  ) => {
+    const dt =
+      last === null ? Number.POSITIVE_INFINITY : Math.max(0, now - last);
+    last = now;
+    const ease = 1 - Math.exp(-dt / GLINT_EASE_S);
+    if (fresh) {
+      want(wanted, n);
     }
     order.length = 0;
     for (const [key, g] of glints) {
@@ -751,6 +783,12 @@ export function glintEaser(most: number) {
   };
 }
 
+/** How often (a second) the lamps are ranked for the eye: ranking sorts
+ *  every lamp within reach and keys each chosen one, which a frame need
+ *  not pay for — a walker moves 15 cm between two choices, and a flight's
+ *  larger steps are eased like a tile's landing (`GLINT_EASE_S`). */
+export const RANK_HZ = 10;
+
 /** A set's per-frame choice for a tier: what it keeps between frames. */
 function chooser(set: MirrorSet, tier: DeviceTier) {
   const most = set.slots[tier];
@@ -759,10 +797,32 @@ function chooser(set: MirrorSet, tier: DeviceTier) {
   const out = set.heads.array as Vector4[];
   const pick = { most, reach: set.reach };
   const ease = glintEaser(most);
+  let n = 0;
+  let ranked: readonly Vector3[] | null = null;
+  let rankedAt = Number.NEGATIVE_INFINITY;
   return (heads: readonly Vector3[], eye: Vector3, now: number) => {
-    const n =
-      heads.length > 0 ? rankReflected(heads, eye, pick, wanted, scratch) : 0;
-    set.count.value = ease(wanted, n, now, out);
+    // The choice is made anew RANK_HZ times a second, and at once when the
+    // lamps change (a tile lands or leaves, night falls); the glints ease
+    // toward it every frame.
+    // (a clock set back ranks at once)
+    const fresh =
+      heads !== ranked || now < rankedAt || now - rankedAt >= 1 / RANK_HZ;
+    if (fresh) {
+      ranked = heads;
+      rankedAt = now;
+      n =
+        heads.length > 0 ? rankReflected(heads, eye, pick, wanted, scratch) : 0;
+    }
+    const count = ease(wanted, n, now, out, fresh);
+    set.count.value = count;
+    // (the lamps shown, not the choice: one fading out after the eye has
+    // gone elsewhere still lights its street)
+    let far = 0;
+    for (let i = 0; i < count; i += 1) {
+      far = Math.max(far, Math.hypot(out[i].x - eye.x, out[i].z - eye.z));
+    }
+    set.eye.value.copy(eye);
+    set.far.value = far;
   };
 }
 

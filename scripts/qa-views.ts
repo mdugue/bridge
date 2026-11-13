@@ -36,7 +36,7 @@ import type {
 import { cityMeshSourceFiles, dgmSourceFiles } from "../lib/city/tile";
 import type { CityJsonDocument } from "../lib/city/types";
 import { siteById } from "../sites";
-import { cityFrame } from "./bake-city-mesh";
+import { cityFrame } from "./city-lod2";
 import type { Dgm } from "./bake-tiles";
 import { readDgmFile } from "./dgm-cache";
 

@@ -50,6 +50,7 @@ import {
   muralsSource,
   parseMurals,
 } from "../lib/city/murals";
+import type { MinimapExtras } from "../lib/city/minimap";
 import type { MuralExtras } from "../lib/city/murals";
 import { PROVENANCE_FILE, siteProvenance } from "../lib/city/provenance";
 import type { ProvenanceRecord } from "../lib/city/provenance";
@@ -115,6 +116,7 @@ import { bakeCity } from "./prepare/city";
 import { bakeTerrain, dropTerrain } from "./prepare/terrain";
 import { bakePlate } from "./prepare/plate";
 import { publishHero } from "./prepare/hero";
+import { publishMinimap } from "./prepare/minimap";
 import { publishStats } from "./prepare/stats";
 import { publishStadtwissen } from "./prepare/stadtwissen";
 
@@ -181,6 +183,7 @@ for (let i = 0; i < TILES.length; i += 1) {
     bounds: tileExtentOf(SITE.tiles[i]),
     city: city.file,
     cityFar: city.far,
+    files: { city: city.files, terrain: { 0: fine.files, 1: coarse.files } },
     terrain: { 0: fine.file, 1: coarse.file },
     zRange: [
       Number.isFinite(minZ) ? minZ : 0,
@@ -343,11 +346,16 @@ await publishStadtwissen(
 type SiteExtras = TilesetExtras &
   PlateExtras &
   LandmarkFactsExtras &
+  MinimapExtras &
   MuralExtras &
   WalksExtras;
 
+// the minimap's picture of the site (scripts/prepare/minimap.ts)
+const map = await publishMinimap(footprintFiles);
+
 const extras: SiteExtras = {
   site: SITE.id,
+  ...(map ? { map } : {}),
   landmarks: siteLandmarks(
     TILES.map(landmarkFile).filter((f): f is LandmarkFile => f !== undefined)
   ),
@@ -366,7 +374,6 @@ const extras: SiteExtras = {
     id: t.id,
     bounds: t.bounds,
     footprints: footprintFiles.get(t.id) ?? "",
-    minimap: sideFiles.get(t.id)?.landcoverSmall ?? "",
     bridges: sideFiles.get(t.id)?.bridge,
     ask: pickFiles(sideFiles.get(t.id) ?? {}, ASK_KINDS),
   })),

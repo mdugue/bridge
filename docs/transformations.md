@@ -750,10 +750,11 @@ visual-variable codebook is in
   client packs it into an RGBA32F texture the clay node reads with
   `textureLoad`
   (`lib/city/city-mesh.ts` `packObjectTexels`), so the style lives once per
-  building, not once per vertex. Footprints go to `footprints_<tile>.json`
-  for the minimap (which draws the bridge decks from each tile's `bridge`
-  file too, in the colour of the class they carry — the class raster
-  shows the river under them). Demolish = filter the building tree out of the index
+  building, not once per vertex. Footprints go, packed, to `footprints_<tile>.fpr.gz`
+  (`lib/city/footprint-pack.ts`), and as ink into the site's one minimap picture (`minimap.webp`,
+  `scripts/bake-minimap.ts`, cover per pixel from `lib/city/footprint-figure.ts`), which also holds the bridge decks from each tile's `bridge`
+  file, in the colour of the class they carry — the class raster
+  shows the river under them. Demolish = filter the building tree out of the index
   buffer + rebuild the BVH; BVH picking/collision, each tile's BVH built
   when a ray first reaches it (`ensureCityBvh`, plan 069,
   [ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)), not as it
@@ -932,7 +933,7 @@ visual-variable codebook is in
   the ALKIS roofs on posts (`51009_1610` Überdachung, `51009_1611`
   Carport) as solid blocks down to the ground: a platform under one
   vanished, a fuel station's pumps stood inside it.
-  `scripts/bake-city-mesh.ts` (`withOpenRoofs`) cuts their walls to a
+  `scripts/city-roofs.ts` (`withOpenRoofs`) cuts their walls to a
   fascia as deep as the slab above, drops the floor and adds an underside
   and the same posts, where at least 1.8 m stays clear (a bin shelter or a
   cellar entrance under that reads as well as a block); they take no
@@ -1530,10 +1531,14 @@ visual-variable codebook is in
   lays each piece on its host's LoD2 wall, which stands up to a couple
   of decimetres off the footprint line and is often turned a little
   against it, and bends a few centimetres along a long stretch (rays
-  every metre against the host's triangles, the band laid piece by piece
-  through them, `wallShiftKnots` — one line fitted through five rays
-  sank the 6 cm Gurtgesims into the wall where it bulged; a mitre meets
-  where the two shifted walls meet),
+  every metre against the host's triangles, `wallShiftKnots` — one line
+  fitted through five rays sank the 6 cm Gurtgesims into the wall where
+  it bulged; the band is laid piece by piece through the knots the wall
+  needs, `thinned`: a knot stays only where the line between its
+  neighbours would sink the band more than 1 cm into the wall as read
+  there or stand it more than 3 cm off, so a flat wall is one piece and
+  a tile's bands a fifth of the triangles a piece every metre made; a
+  mitre meets where the two shifted walls meet),
   and appends a stone band 7 cm proud of it whose front rolls over a
   12 cm quarter-round shoulder into its top, shaded smooth (no hard
   edge), with square ends (`lib/city/plinths.ts`, `appendPlinths`); the
@@ -1624,7 +1629,7 @@ visual-variable codebook is in
   lined stood open into its interior — the bake writes the ceiling's
   plan, the walls along it (and across it at a shut end) and its portals
   (`dlm/passages_<t>.geojson`). The
-  building bake (`bake-city-mesh.ts` `withPassages`, the geometry in
+  building bake (`city-passages.ts` `withPassages`, the geometry in
   `lib/city/building-passages.ts`) gives it its clear height —
   `maxheight:physical` or `maxheight` where plausible, else the larger of
   3.8 m for a drive, 5 m for a track (a contact wire's lowest in a
@@ -2139,7 +2144,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   without windows, no window fitting the storey), and the landmark's
   Wikidata item → one ENUM column `drawn` of the same table, a short
   `key=value;…` text (`lib/city/drawn-facts.ts`, `drawnOf` and
-  `assignWindows` in `scripts/bake-city-mesh.ts`). The card's *Daten*
+  `assignWindows` in `scripts/city-windows.ts`). The card's *Daten*
   section reads it with the object's style row and lists every drawn
   value with its source, its badge and a link to the place (OSM's objects
   there, Mapillary's photos there, the Wikidata item:
@@ -5428,8 +5433,9 @@ GPU**.
   committed) → `pipeline/bake/transit.py`, **site-wide** →
   `data/dresden/transit/trams.json` (≈ 680 KB): 12 lines, 127 stop patterns, 264
   running-time profiles, 2 598 / 2 002 / 1 629 trips on a working day /
-  Saturday / Sunday (the busiest day of each kind in the next three weeks:
-  3 October 2026, a holiday, lost to the 10th). The feed has no shapes:
+  Saturday / Sunday (the busiest day of each kind in the three weeks from
+  the feed's date: 3 October 2026, a holiday, lost to the 10th). The feed
+  has no shapes:
   each leg is laid on the OSM tram tracks (`tram_<tile>.geojson`) as the
   shortest way between the tracks near its two platforms, a metre from
   platform to track weighing three of way, so a car keeps to the track

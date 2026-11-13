@@ -133,10 +133,10 @@ const VALUE_EXPORTS: Record<string, Record<string, string>> = {
     spawnFrame: "the buildings' bake, whose entries list frame.ts",
   },
   "scripts/prepare/side-files.ts": {
-    colonyCrops: "the terrain's extras, a value in its key",
+    colonyCrops: "the terrain's files, named in the tileset",
     Published: "a type",
     publishSideFiles: "the side files' own step",
-    sideFiles: "published names, in the extras the keys carry",
+    sideFiles: "published names, in the tileset; no key carries them",
   },
 };
 

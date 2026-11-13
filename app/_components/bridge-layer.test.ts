@@ -571,11 +571,13 @@ test("a curved deck's frame holds inside every triangle, not only at its corners
     line: Array.from({ length: 160 }, () => 120),
   });
   bridge.geometry.coordinates = [ring];
-  const top = buildRail({ ...empty, bridges: [bridge] }, ctx)
-    .children[0] as Mesh;
-  const pos = top.geometry.getAttribute("position");
-  const nrm = top.geometry.getAttribute("normal");
-  const frame = top.geometry.getAttribute("aDeck");
+  // (the mesh is indexed: read triangle by triangle)
+  const soup = (
+    buildRail({ ...empty, bridges: [bridge] }, ctx).children[0] as Mesh
+  ).geometry.toNonIndexed();
+  const pos = soup.getAttribute("position");
+  const nrm = soup.getAttribute("normal");
+  const frame = soup.getAttribute("aDeck");
   const frameAxis = axisFrame(axis);
   let worst = 0;
   let longest = 0;

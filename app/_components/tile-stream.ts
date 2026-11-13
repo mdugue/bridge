@@ -52,7 +52,8 @@ import {
 } from "@/lib/city/stream-order";
 import type { OrderedTile } from "@/lib/city/stream-order";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import { ownsPoint } from "@/lib/city/tileset";
+import { contentExtras, ownsPoint } from "@/lib/city/tileset";
+import type { AheadRequest } from "./boot-ahead";
 import type {
   CityExtras,
   ContentExtras,
@@ -84,6 +85,7 @@ import {
   fetchFeatures,
   fetchOptionalBinary,
   fetchOptionalJson,
+  isAbortError,
 } from "./fetch-optional";
 import { furnitureSteps } from "./furniture-layer";
 import { buildLamps } from "./lamp-layer";
@@ -103,6 +105,8 @@ import { buildRiverside } from "./riverside-layer";
 import { buildSportFixtures } from "./sport-fixtures";
 import type { SportFixtureLayer } from "./sport-fixtures";
 import { cpuDroppable, createGridShare, dressTerrain } from "./terrain-layer";
+import type { FetchBounds } from "@/lib/city/fetch-order";
+import type { ReachBox } from "@/lib/city/ground-reach";
 import type { GridShare, GroundUniforms, TerrainLayer } from "./terrain-layer";
 import { dressFences } from "./fence-layer";
 import { dressKerbs } from "./kerb-layer";
@@ -300,6 +304,12 @@ export interface TileStreamContext {
   pinnedGround?: () => (x: number, y: number) => number | null;
   /** the ground's look strengths (by reference) */
   ground: GroundUniforms;
+  /** whether a ground level lying in `box` starts on its close-range
+   *  rasters' twins (ground-reach-follow.ts); without it, the full ones */
+  groundFar?: (box: ReachBox) => boolean;
+  /** a tile's place in the rasters' downloads, from its bounds: its
+   *  distance from the eye (lib/city/fetch-order.ts); unset, as asked */
+  rasterRank?: (bounds: FetchBounds) => number;
   /** the scene's season and look (scene-environment.ts): a dressing
    *  lands with them as they are now */
   environment: DressingEnvironment;
@@ -333,6 +343,9 @@ export interface TileStreamContext {
   /** a site tile's exact extent (the tileset's root extras) */
   tileBounds: (tileId: string) => TerrainBounds | undefined;
   tilesetUrl: string;
+  /** a request the boot already made for this URL, handed over once
+   *  (boot-ahead.ts) */
+  ahead?: (url: string) => AheadRequest | undefined;
   /**
    * The traffic bodies' builder, from the data layers' feature
    * (data-layers-feature.ts), which starts on the first switch-on: the
@@ -1920,6 +1933,8 @@ export class DressingPlugin {
     return (
       held +
       own +
+      // a city's table, its texture and its positions' padding
+      (dressed.city?.heldBytes ?? 0) +
       dressed.late.bytes() +
       (dressed.nicheCopyBytes ?? 0) -
       (dressed.sharedBytes ?? 0)
@@ -1941,6 +1956,16 @@ export class DressingPlugin {
     this.settles.set(scene, settle);
     try {
       await this.dressContent(scene, tile);
+    } catch (error) {
+      // A dressing that threw fails the load, and the renderer never
+      // records a failed load's scene: what was dressed so far (the
+      // buildings among `cities`, their late parts) is freed here.
+      if (this.sceneOf.get(tile) === scene) {
+        this.sceneOf.delete(tile);
+      }
+      this.leave(scene);
+      this.release(scene);
+      throw error;
     } finally {
       // The renderer records the content in the continuation of this call
       // and then says so (`landed`); a load it drops says nothing, and by
@@ -1950,7 +1975,8 @@ export class DressingPlugin {
   }
 
   private async dressContent(scene: Object3D, tile: object): Promise<void> {
-    const extras = scene.userData as ContentExtras;
+    // the glTF's own extras with the side files its tile names
+    const extras = contentExtras(scene.userData, tile);
     // The content's own mesh by its node name ("terrain", "city"); the fine
     // terrain also carries a "stairs" node.
     const mesh = meshNamed(scene, extras.kind) ?? firstMesh(scene);
@@ -2058,14 +2084,30 @@ export class DressingPlugin {
     // What street photos say about the facades lands after the buildings
     // show; until then (and without it) they are drawn as before.
     if (extras.facades) {
-      void fetchOptionalJson<FacadeReadings>(this.url(extras.facades)).then(
-        (readings) => {
-          if (readings && this.dressed.get(scene) === entry) {
-            city.facadeReadings(readings);
-          }
-          return null;
-        }
+      void this.readFacades(scene, entry, city, extras.facades);
+    }
+  }
+
+  /** The facade readings of a city tile, fetched until the stream goes
+   *  (an abort then is no error to report). */
+  private async readFacades(
+    scene: Object3D,
+    entry: Dressed,
+    city: CityLayer,
+    file: string
+  ): Promise<void> {
+    try {
+      const readings = await fetchOptionalJson<FacadeReadings>(
+        this.url(file),
+        this.lifetime.signal
       );
+      if (readings && this.dressed.get(scene) === entry) {
+        city.facadeReadings(readings);
+      }
+    } catch (error) {
+      if (!isAbortError(error)) {
+        throw error;
+      }
     }
   }
 
@@ -2157,7 +2199,10 @@ export class DressingPlugin {
   ): void {
     const bounds = this.ctx.tileBounds(extras.tileId);
     // not weighed: a building tile weighs no raster
-    entry.svf = this.rasters.holder(scene, { weighed: false });
+    entry.svf = this.rasters.holder(scene, {
+      rank: bounds && this.ctx.rasterRank?.(bounds),
+      weighed: false,
+    });
     void entry.svf.acquire("svf", extras).then((texture) => {
       const { city } = entry;
       if (texture && bounds && city && this.dressed.get(scene) === entry) {
@@ -2195,7 +2240,9 @@ export class DressingPlugin {
     this.loadAborts.set(scene, own);
     const either = eitherSignal(own.signal, this.lifetime.signal);
     let terrain: TerrainLayer;
-    const rasters = this.rasters.holder(scene);
+    const rasters = this.rasters.holder(scene, {
+      rank: this.ctx.rasterRank?.(extras.bounds),
+    });
     try {
       terrain = await dressTerrain(mesh, extras, toData, {
         fogColor: this.ctx.fogColor,
@@ -2203,6 +2250,7 @@ export class DressingPlugin {
         offset: this.ctx.offset,
         rasters,
         grids: this.grids,
+        far: this.ctx.groundFar,
         signal: either.signal,
       });
     } catch (error) {
@@ -2702,15 +2750,42 @@ export function dropLoaderResult(tile: unknown): void {
 }
 
 /**
- * How many tile contents a phone downloads (per origin) and parses at once.
- * The tile renderer's own queues (25 downloads, 5 parses) asked for the
+ * How many tile contents a phone parses at once (its downloads:
+ * `STREAM_DOWNLOADS`). The tile renderer's own queues (25 downloads, 5
+ * parses) asked for the
  * boot's eleven contents in one millisecond, and a parse holds its decoded
  * glTF, its rasters and its compile until it is through: several hundred
  * MB on the page's process before anything reached the GPU, and Safari
  * ended the page at the first frame. Two parses keep a neighbour coming
  * while the spawn tile compiles.
  */
-export const PHONE_STREAM = { parses: 2, downloadsPerOrigin: 4 } as const;
+export const PHONE_STREAM = { parses: 2 } as const;
+
+/**
+ * How many tile contents download at once (per origin): a desktop's
+ * six, a phone's four — and three on every tier until the boot's first
+ * frame. The renderer's own 25 asked for every content in view in one go
+ * (fifteen files, 24 MB at Dresden's start), and over one connection they
+ * share the line evenly with the rasters: on a 10 Mbit line the spawn
+ * tile's coarse ground, 2 MB of rasters asked for at second 8, had them at
+ * second 29. A few at a time, in our order (the boot's tile first, the
+ * coarse ground before the buildings, nearer before farther), the line
+ * goes to what the first frame waits for; a fast line is kept busy by six.
+ */
+export const STREAM_DOWNLOADS = { boot: 3, desktop: 6, mobile: 4 } as const;
+
+/** Sets how many contents `tiles` downloads at once: the boot's few, or
+ *  the tier's from its first frame on (create-app.ts). */
+export function setStreamDownloads(
+  tiles: TilesRenderer,
+  tier: DeviceTier,
+  booting: boolean
+): void {
+  // reason: the queue is ours (`orderStreaming`), a DownloadPriorityQueue
+  tiles.downloadQueue.maxJobsPerOrigin = booting
+    ? STREAM_DOWNLOADS.boot
+    : STREAM_DOWNLOADS[tier];
+}
 
 /**
  * Gives the renderer queues of its own, in our order (lib/city/stream-order.ts:
@@ -2734,12 +2809,9 @@ export function orderStreaming(
   parse.priorityCallback = order;
   tiles.parseQueue = parse;
   const download = new DownloadPriorityQueue();
-  download.maxJobsPerOrigin =
-    tier === "mobile"
-      ? PHONE_STREAM.downloadsPerOrigin
-      : tiles.downloadQueue.maxJobsPerOrigin;
   download.priorityCallback = order;
   tiles.downloadQueue = download;
+  setStreamDownloads(tiles, tier, bootTile() !== null);
   // a full cache admits loads in the order it keeps tiles: ground first
   // there too (the cache is the renderer's module-wide one, used by no
   // other renderer here; wrapped once)
@@ -2773,7 +2845,7 @@ export function createTileStream(
   const tiles = new TilesRenderer(ctx.tilesetUrl);
   orderStreaming(tiles, ctx.tier, ctx.bootTile);
   setRasterTier(ctx.tier);
-  tiles.registerPlugin(new ContentFetchPlugin());
+  tiles.registerPlugin(new ContentFetchPlugin(ctx.ahead));
   // The decoder's own workers: without them a tile's meshopt buffers (75 MB
   // decoded for a dense building tile) decode on the main thread, inside
   // the parse that lands it. Idempotent: a remount keeps the same workers.

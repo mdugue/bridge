@@ -16,8 +16,6 @@
 /** UTM zone by EPSG code (ETRS89 / UTM zone N, northern hemisphere). */
 const UTM_ZONES: Partial<Record<number, number>> = { 25_832: 32, 25_833: 33 };
 
-export const SUPPORTED_EPSG_CODES = Object.keys(UTM_ZONES).map(Number);
-
 const TRAILING_NUMBER = /(?<code>\d+)\s*$/u;
 
 const DEG = Math.PI / 180;

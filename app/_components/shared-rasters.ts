@@ -7,8 +7,9 @@
  * reader left before it landed is aborted (its `signal`).
  */
 export interface SharedRasters<T> {
-  /** the raster (null when absent or undecodable); one reference more */
-  acquire: (key: string) => Promise<T | null>;
+  /** the raster (null when absent or undecodable); one reference more.
+   *  `rank`: the first asker's place in the downloads' line. */
+  acquire: (key: string, rank?: number) => Promise<T | null>;
   /** keys currently held (tests, diagnostics) */
   held: () => number;
   /** one reference less; the last one frees it (once it has loaded) */
@@ -20,7 +21,7 @@ export interface SharedRasters<T> {
 }
 
 export function createSharedRasters<T>(
-  load: (key: string, signal: AbortSignal) => Promise<T | null>,
+  load: (key: string, signal: AbortSignal, rank?: number) => Promise<T | null>,
   free: (value: T) => void
 ): SharedRasters<T> {
   const entries = new Map<
@@ -41,7 +42,7 @@ export function createSharedRasters<T>(
     });
   };
   return {
-    acquire: async (key) => {
+    acquire: async (key, rank) => {
       let entry = entries.get(key);
       if (!entry) {
         const controller = new AbortController();
@@ -49,7 +50,7 @@ export function createSharedRasters<T>(
           controller,
           landed: false,
           refs: 0,
-          promise: load(key, controller.signal)
+          promise: load(key, controller.signal, rank)
             .catch(() => null)
             .then((value) => {
               fresh.landed = true;

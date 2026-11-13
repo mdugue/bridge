@@ -21,6 +21,14 @@ were made — add an ADR when you change one.
 
 ## Scene architecture
 
+What has a life of its own leaves `bootApp` as an **owner** (a factory
+over a few objects and callbacks: `scene-capture.ts`, `frame-meter.ts`,
+`tile-memory.ts`, `crosshair-focus.ts`, `load-veil-follow.ts`), not as a
+new block of closure state. A frame's work goes into one of the named
+steps of `frame-steps.ts`, whose order is tested. A new worker is a
+`createWorkerClient` (`worker-client.ts`: the handshake, the line, the
+fallback, one restart), its script posting `{ ready: true }` last.
+
 `app/_components/create-app.ts` is the spine: it builds the renderer, scene, a
 `PerspectiveCamera`, a `world` group (Z-up data frame, rotated −90° about X to
 Y-up), reads the tileset's extras (CRS, recenter offset, tile bounds), starts
@@ -29,7 +37,7 @@ streaming the site and the animation loop, and returns a `CityWalkHandle`
 any of its terrain levels are on screen — the first frame. The fixed
 lamp-light pool and the fog floor are created before the first frame and
 retargeted/lowered as tiles land. The data layers are not wired into
-`bootApp` by hand: they start on their first switch-on (`lazyFeature`,
+`bootApp` by hand: they start on their first switch-on (`startOnce`,
 `data-layers-feature.ts`) and hear the spine through its hooks
 (`feature-seam.ts`: frame, stream change, the look store, the scene's
 clock — a watched value a late starter reads first); a tile's traffic
@@ -201,7 +209,11 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   far horizon → `receivedShadowNode`; `lib/city/skyview.ts`, the raster
   shared with the buildings through `tile-rasters.ts`, which hands every
   content root its rasters by kind: the kinds table holds a raster's look,
-  tier twin and gate).
+  tier twin, far twin and gate). A fine level reads the close-range
+  kinds' 1024² twins beyond the detail's reach and swaps sets through
+  the material's slots (`lib/city/ground-reach.ts`,
+  `ground-reach-follow.ts`, terrain-layer.ts `GroundDetail`): a new
+  close-range raster names its `far` twin or stays full at any distance.
 - Buildings: `lib/city/building-tint.ts` (tint, storey height, roofs, at
   bake time), `lib/city/small-buildings.ts` (the scan's sheds as boxes, and
   the canopy points they veto at build time), `scripts/measured-roofs.ts`
@@ -969,11 +981,15 @@ is shaded on the CPU. At the **full** profile this scene costs ~**14 s to boot**
 and ~**4 s per frame** at 1280×720 (measured on four cores). Anything that waits
 on rendered frames — the control walk uses `waitForFrames` — walks straight into
 the per-test timeout if it spends frames carelessly. Playwright runs a single worker on CI for the same reason: parallel
-viewer pages halve each other's frame rate. CI splits the suite over **three
+viewer pages halve each other's frame rate. CI splits the suite over **four
 runners** instead (the `e2e` matrix in `.github/workflows/ci.yml`), by tag: the
 whole site with the shell and `/wissen`; the desktop HUD group
 (`@desktop-hud`) with the phone (`@phone`); the desktop rendering group
-(`@desktop-render`). Each desktop group boots its own page. The required
+(`@desktop-render`: snapshots, inquiry, Modell, designs, demolish); the look
+group (`@desktop-look`: styles, motion quality, the view link). Each desktop
+group boots its own page. Time on CI is SwiftShader's frames, not the driver:
+a lighter headless browser (Lightpanda has no WebGL) or another test runner
+gains nothing, fewer frames per runner do. The required
 status check "E2E (Playwright)" is the small job that reports them all. A new
 spec lands in the whole-site shard unless it carries one of those tags —
 keep the shards within about 1.5 minutes of each other (the workflow's

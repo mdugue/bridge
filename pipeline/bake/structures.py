@@ -836,7 +836,10 @@ def find(tile: Tile, s: Surfaces) -> list[dict]:
 
 def run(tile: Tile) -> None:
     out = tile.out("dlm", f"structures_{tile.id}.geojson")
-    if not tile.products.dom or not tile.raw_raster("dom1").exists():
+    absent = not tile.raw_raster("dom1").exists()
+    if tile.products.dom and absent and tile.raw_absent(out, "no DOM1 here"):
+        return
+    if not tile.products.dom or absent:
         print(f"{tile.id}: no surface model — no structures beyond LoD2")
         write_geojson(out, [], tile.epsg, OSM_ATTRIBUTION)
         return

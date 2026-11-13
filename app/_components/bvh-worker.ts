@@ -18,7 +18,10 @@ const scope = self as unknown as {
     type: "message",
     listener: (event: MessageEvent<BvhJob>) => void
   ) => void;
-  postMessage: (message: BvhReply, transfer: Transferable[]) => void;
+  postMessage: (
+    message: BvhReply | { ready: true },
+    transfer: Transferable[]
+  ) => void;
 };
 
 function geometryOf(job: BvhJob): BufferGeometry {
@@ -48,14 +51,13 @@ scope.addEventListener("message", ({ data: job }) => {
     const bvh = new MeshBVH(geometryOf(job));
     const { roots } = MeshBVH.serialize(bvh, { cloneBuffers: false });
     scope.postMessage(
-      { id: job.id, roots, index: job.index, position: job.position.array },
+      { roots, index: job.index, position: job.position.array },
       [...roots, job.index.buffer, job.position.array.buffer]
     );
   } catch (error) {
     // the arrays go back whatever happened: the tile still needs them
     scope.postMessage(
       {
-        id: job.id,
         error: error instanceof Error ? error.message : String(error),
         index: job.index,
         position: job.position.array,
@@ -66,4 +68,4 @@ scope.addEventListener("message", ({ data: job }) => {
 });
 
 // the script runs: from here the page may hand over a tile's arrays
-scope.postMessage({ ready: true, id: -1 } as BvhReply, []);
+scope.postMessage({ ready: true }, []);

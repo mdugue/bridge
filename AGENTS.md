@@ -29,6 +29,7 @@ bun run verify          # lint + typecheck + unit tests — the pre-push gate
 bun run fix             # format + safe autofixes; run before verify
 bun lint                # oxlint (type-aware) + oxfmt --check
 bun typecheck           # bun check; bun run typecheck:tsc is the reference
+                        # (verify runs both)
 bun run test            # units in lib/, app/_components/, scripts/
                         # (a bare `bun test` also loads e2e/)
 bun run test:e2e        # playwright against a production build

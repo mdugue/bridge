@@ -105,7 +105,7 @@ history. Decisions that came out of plans are written up as
 | 071 | A phone renders a lean scene, a desktop a lighter one | **PARTIAL** (2026-10-10) — phone GTAO at 8 samples (not 0), a phone rich-crown budget of 800 (not *Multi-Tuft* off), no autofocus ray without a lens blur; step 4.2 (no desktop DoF) REJECTED by the maintainer; steps 3 (no shadow-camera tiles on a phone), 4.1 (desktop DPR ≤ 1.5), 5 (a phone streams to 2.2 km) and 7 built in a second pass; step 6 measured headless only — frame rates, an iPhone's memory and real-GPU plates open | [071-tier-budgets-lean-phone-lighter-desktop.md](./071-tier-budgets-lean-phone-lighter-desktop.md) |
 | 072 | A cold build bakes a site's tiles on every core | **DONE** (2026-10-31) — the warmers bake every cold site, tile by tile (`PREPARE_WARMERS=0` turns them off): once a whole cold site no longer fitted twice on Vercel's 4-core, 8.6 GB builder, one process per site baked one site at a time; two tile warmers at once took a cold build of all seven sites from 11:07 to 5:19 min on a box held to that builder, manifests identical. 2026-10-10 they had shown no gain there (322 s; main 232–235 s, two sites side by side) and were opt-in for Dresden | [completed.md](./completed.md#072--a-cold-build-bakes-a-sites-tiles-on-every-core--done-2026-10-31) |
 | 073 | The look is fixed; the sidebar keeps only the controls people use | **DONE** (2026-10-10) — the default table: *Nebel* the one slider left, the multi-tuft switch kept, the other 25 fixed at their defaults as named constants in their owners (four keep an internal uniform a style or Modell writes); old snapshots load, their keys retired for good (`RETIRED_SNAPSHOT_KEYS`); ADR 0018 amended; ~3 kB gzip; the two edited e2e specs pass; not done: GPU plates (none in the container), the rest of the e2e (CI) | [completed.md](./completed.md#073--the-look-table-frozen--done-2026-10-10) |
-| 074 | Architecture: bake the static dressing into the fine level, the optional features (Modell, picture styles, data layers) behind one lazy seam, the spine with a test surface, one store for the HUD | **PARTIAL** (2026-10-10) — part D built: the HUD's scene-status store (`lib/city/slice-store.ts`, `app/_components/scene-status.ts`), each widget reading its own slice, `create-app.ts` unchanged; over a lite boot, 30 frames standing and 30 in Modell `CityWalk` committed 4 times instead of 75 and `SceneSidebar` 4 instead of 75; part B: the seam built (`feature-seam.ts`: the spine's hooks, `lazyFeature`; the data layers start on their first switch-on, the traffic slot waits for its builder), the `import()` measured and **stopped** — the data layers as a chunk of their own made the first-load JS 22.7 KB gz larger for 10.1 KB moved (three.js lost its scope hoisting with the scene), so their code ships with the scene, and the styles and Modell were not started (the Findings); parts A and C open (each opens with a spike) | [074-architecture-deepening.md](./074-architecture-deepening.md) |
+| 074 | Architecture: bake the static dressing into the fine level, the optional features (Modell, picture styles, data layers) behind one lazy seam, the spine with a test surface, one store for the HUD | **PARTIAL** (2026-10-10) — part D built: the HUD's scene-status store (`lib/city/slice-store.ts`, `app/_components/scene-status.ts`), each widget reading its own slice, `create-app.ts` unchanged; over a lite boot, 30 frames standing and 30 in Modell `CityWalk` committed 4 times instead of 75 and `SceneSidebar` 4 instead of 75; part B: the seam built (`feature-seam.ts`: the spine's hooks, `lazyFeature`, since 2026-11-11 `startOnce`; the data layers start on their first switch-on, the traffic slot waits for its builder), the `import()` measured and **stopped** — the data layers as a chunk of their own made the first-load JS 22.7 KB gz larger for 10.1 KB moved (three.js lost its scope hoisting with the scene), so their code ships with the scene, and the styles and Modell were not started (the Findings); parts A and C open (each opens with a spike) | [074-architecture-deepening.md](./074-architecture-deepening.md) |
 | 075 | Window axes measured in open street photos (Panoramax, Mapillary) as fine vertical lines — the one case the window-grid veto allows | **DONE (2026-11-01)**: the photos' rhythm draws windows on every house (ADR 0010, PR #143); the axes stand where the drives, registered onto each other, saw them (`window_axes.py`) | [completed.md](./completed.md#075--window-axes-from-street-photos--done-2026-11-01) |
 | 076 | Streaming without holes: the ground before the buildings, a ground plate under every tile without terrain, LoD1 as the buildings' far level, the coarse crowns from the start — no cost in phone memory or bytes before the first picture | **BUILT** (2026-11-04, checked against the code in PR #265) — all four steps built (`stream-order.ts`; `aefc090b`; `a08c6813`; `4eafaf42`); open: phone memory and frame time measured on a device, then condense | [076-streaming-without-holes.md](./076-streaming-without-holes.md) |
 | 077 | One rasters module: a tile's rasters loaded, shared and weighed behind one interface, their files named by the artifact table | **BUILT** (2026-11-05) — steps 0–6, step 4 option (a) only. Step 1 (2026-11-04): `lib/city/tile.ts` has a `terrain` column and a `cultivatedLow` row, `terrainRasterExtras` writes the raster extras in `TERRAIN_RASTER_KEYS`' order; a cold bake byte-identical to the base (`diff -r` empty; 667 artifacts, 375 s on 4 cores). Step 2: `raster-upload.ts` `loadDataRaster`, one decode-with-look path. Step 3: `app/_components/tile-rasters.ts` (`createTileRasters`, `RASTER_KINDS`, `rasterFiles`), 11 tests; the shares, `holdRasters` and the loaders gone from `tile-stream.ts`, `terrain-layer.ts`, `sky-light.ts`. Step 4 (a): `loadNdviSampler` fetches through `fetchRasterBytes` and decodes in `inRasterTurn`. Measured on a Mac's real GPU (headed Chromium, WebGPU, production builds; two runs a profile, three of the base's lite; the probe waits past the plan's 120 frames for the stream to idle and `held` to rest 8 s, on either side): after each of steps 2–4 the requests and their counts and the sorted graph keys equal the base's per tier and scene (lite desktop 19 requests, phone 16; full 83, 46; graphs 2, 2, 8, 5). `tileCache.bytes` and `gpuBytes` equal it: phone lite 204 777 917 and 177 324 236, phone full 403 439 483 and 370 529 357, desktop lite 247 053 645 and 219 599 964, desktop full 808 662 700 / 808 712 092 (the base shows both) and 806 015 495. `held` moves within the base's own noise: `textures` ±1 (a 1-byte target; phone lite 60–61 on base and after step 4, phone full 81 on base and 82 after steps 3–4, `texturesSize` +1 B); step 2's runs reached phone lite `texturesSize` 71 615 280 and desktop lite `geometries` 452, against 71 409 344 and 445 settled (an unsettled base run had shown 71 615 281; step 3 and 4 are back at the base's values, in code that step 2's loaders did not change: read as noise, not proven). Plates (`qa/views`: street-crossings, sports-ground, colony, elbwiesen, meadow-eye, across-400, oblique-400), before against after each step, pixel-diffed and read: the ground, the sports lines, the colony beds, the shoreline, the crown tints and the far shadows the same; what moves is crown sway, water and sub-pixel edges. `bun run verify` 3 934 pass; e2e 35 of 35 on the last commit (`--workers=2`, headless). Deviations: `createTileRasters` is made in the plugin's constructor, not as a field (`this.ctx` is unset when fields initialise); `calculateBytesUsed` counts a level's share only once its terrain is dressed, so a tile still in `processTileModel` weighs 0 as before; `onShareChange` skips a root that left (`released`), since rasters now weigh from their landing, a level still dressing is a holder, and reweighing a tile inside its eviction adds its bytes back for good; `acquire` answers null after the hold's release or the rasters' `clear`; the terrain test keeps its name's meaning over a real holder, and `tile-stream.test.ts`'s clear test watches `rasters.clear` instead of `held()`; a test of the sampler's turn added in `vegetation-layer.test.ts`; one comment in `lib/city/tileset.ts` still says `terrain-layer.ts readsSportGrounds` (now `tile-rasters.ts`): an edit there re-bakes every site's terrain, left for its next change. **Open:** a phone's memory on a device (the phone profile here is Chromium's emulation); the `pr-snapshots` section when this goes up as a PR. | [077-one-rasters-module.md](./077-one-rasters-module.md) |
@@ -397,10 +397,9 @@ S/M/L.
     no importer and are still here: shadcn 4.23 has no `remove` command, and
     `components/ui/` is not edited by hand — the maintainer's call.
     `SUPPORTED_EPSG_CODES` (`crs.ts`, used nowhere) and the comment in
-    `lib/city/decks.ts` that still names `rail-layer.ts` wait for the next
-    real change to those files: both are in bake keys (`crs.ts`: frame,
-    city; `decks.ts`: most of them), so an edit re-bakes every site for no
-    byte of difference.
+    `lib/city/decks.ts` that still named `rail-layer.ts` went with the
+    2026-11-11 audit's first PR, whose platform cache re-keyed every
+    site's bakes anyway.
 28. ~~**The monuments' linked Wikidata items the fetch misses (S).**~~
     Closed 2026-11-05 by a measurement, nothing built: of the 156 items
     OSM's monuments link to and that still have no material (every
@@ -409,6 +408,291 @@ S/M/L.
     question answers. A `VALUES ?i` query and a re-fetch and re-bake of
     all seven sites would add no material. Ask again if Wikidata's
     coverage grows.
+
+### 2026-11-11 audit (the whole code, against `f762ce78`)
+
+Asked by the maintainer: *a comprehensive review — correctness, what can
+be simpler, how the app, the bakes and the start get faster, what makes
+the footprint smaller; effort is no criterion.* Eight parallel read-only
+auditors (spine, frame, memory, layers, the TypeScript build, the Python
+pipeline, the web shell, the repository), every finding re-read or
+re-measured by the lead. The report with its evidence (German):
+<https://claude.ai/artifact/SdfpkgbXtF1L6MBBVJQchV>. Baseline (four
+cores): `prepare-sites` cold 360 s, warm 10 s; `next build` 49 s; the
+units 42 s (4 522 tests); `/dresden`'s first load 1.0 MB gz of JS;
+`public/data` 561 MB, `data/` 936 MB, the git pack 1.10 GiB after 16
+days.
+
+The maintainer chose all of it, as eight stacked PRs in this order. The
+ids are the report's.
+
+1. **Bugs and small wins — built (2026-11-11).** K1 a `.shp` record
+   length that does not advance looped for ever, and a `.dbf` header
+   could count more records than the file holds (`shapefile.ts`; a
+   design's every picked file is weighed, not the first). K2 the
+   teardown is total (`cleanups.ts`: every cleanup runs, the renderer is
+   released whatever threw; a boot that failed is `disposed`; queued
+   captures reject). K3 a step whose raw input is merely not on the
+   machine leaves its committed file (`Tile.raw_absent`: dormers,
+   structures, the Mapillary lamps). K4 the timetable's days count from
+   the feed's own date, not the clock. K6 a tile whose dressing threw is
+   freed; the facade readings stop with the stream; `withinWait` clears
+   its timer. L5 the street lamps' loop does not run on pixels no lamp
+   of the set can reach. L7 the lamps are ranked ten times a second, not
+   every frame. L8 the painted ground is read once a pixel, not three
+   times. B3 the platforms' cut is cached (`BAKE_ENTRIES.platforms`): a
+   warm `prepare-sites` 6.7 s → 2.3 s. B8 a site's tiles are placed by
+   their names, a deck's surface model opens its neighbours only. T1
+   `verify` runs the reference `tsc`. T2 the boot's marks before the
+   first frame (`boot:page-to-viewer`, `boot:renderer-init`,
+   `boot:tileset`, `boot:setup`, `boot:spawn-wait`). T3 the bake says
+   each tile's and each step's seconds. T4 a docs-only PR runs one e2e
+   shard; the unit and pipeline jobs have ten minutes. V9 three dead
+   exports gone (`KNOWLEDGE_TOOLS`, `bedAt`, `SUPPORTED_EPSG_CODES`).
+   **Left for their PRs:** `SKY_REFLECTION_BYTES` (dead; PR #286 edits
+   the file), V8 (the lazy seam's importer, with the spine in 7),
+   `networkx` as a named dependency (with 5: today a changed `uv.lock`
+   re-keys every Python step).
+2. **The buildings' vertex stream, byte-identical (V2, B6) — built
+   (2026-11-11).** `bake-city-mesh.ts` (3 833 lines) is nine modules on
+   one typed stream (`scripts/vertex-stream.ts`: `appended`,
+   `streamWriter`; the attribute list stands in one place, no copy goes
+   through plain arrays). A cold bake of all seven sites publishes 0 new
+   files. The measurement corrected the report: the stream's copies were
+   not the peak. A tile's memory peaks in the walls' cut for the
+   passages, the rounded normals and the glb's writer, so those took the
+   work — the mesh is released once the glb is written (the far glb
+   needs its table alone), the writer turns positions and normals in
+   place, the normals keep one bucket table, the passages copy only
+   triangles in a passage's box, two more collections. München's
+   heaviest tile baked alone: 2.58 → 1.88 GiB; Dresden's (33414_5654):
+   1.64–1.88 → 1.33–1.49 GiB. Four tiles side by side still reach
+   1.9 GiB (garbage the collector has not yet taken when the cores are
+   busy), so `TILE_PEAK` stays; measure again after 3, which takes most
+   of the triangles away. **Not done:** each stage its own cache entry
+   (stream, glb, far glb) — the stream would have to be written to the
+   cache, 400 MB a dense tile; the table read back from the glb (it
+   saves a parse only when the far glb alone is stale).
+3. **Bands, kerbs and what the cache weighs (F1, F3, F9, T8) — built
+   (2026-11-11); re-bakes every site's buildings and fine terrain.** F1:
+   a band is cut where its wall bends, not every metre
+   (`lib/city/doors.ts` `thinned`: a knot stays where the line between
+   its neighbours would sink the band more than 1 cm into the wall as
+   read or stand it more than 3 cm off). Dresden's fifteen tiles: 22.4 M
+   → 7.1 M triangles, 20.1 M → 10.4 M vertices, 59 → 41 MB of download;
+   the dense tile 33412_5656 1.84 M → 0.57 M, its bands 1.63 M → 0.36 M
+   (still 63 %: ten to twelve triangles a piece of the rounded profile).
+   The maintainer decides whether the rounds become one facet and
+   whether the far level carries bands at all (asked 2026-11-11). The
+   far level hardly moves (4.08 M → 3.68 M triangles, 37 → 35 MB): its
+   simplifier had already taken the knots, and it is now nearly as heavy
+   as the near one — F4's part for it stands. A tile's bake peaks at
+   1.26 GiB (1.9), so `TILE_PEAK` is 2.0 GB and Vercel's builder bakes
+   three tiles at once. F3: the fine terrain's kerbs, stairs and walls
+   are indexed (`tile-glb.ts` `indexed`, exact: the same picture):
+   Dresden's kerbs 9.2 M → 4.6 M vertices, the fine level's glb 66 →
+   48 MB decoded, 33 → 31 MB of download. F9: a city tile weighs its
+   table, its texture and its positions' padding in the cache
+   (`CityLayer.heldBytes`). T8: the numbers this moved (rendering.md's
+   table, `tileset.ts`, the workflow's sizes). **Left, each a PR of its
+   own to judge on a phone:** F4 (the object id in the position's
+   padding and a lighter far-level vertex: a vertex format the WebGPU
+   path alone can prove, and after F1 worth a third of what the report
+   counted), F10 (one table file for both levels: a second request a
+   tile before it can be dressed, for 0.4 MB a tile both levels of which
+   load).
+4. **Rails (F2) — the viewer's part built (2026-11-11); no picture
+   change, no baked byte changes.** The line and bridge meshes were a
+   triangle soup of floats. `mesh-kit.ts` now finishes every mesh welded
+   and indexed (`lib/city/weld.ts`, exact: corners that agree in every
+   attribute bit for bit are one vertex; 16-bit indices where they
+   reach), with normals as signed bytes (a unit axis exact, any other
+   within half a degree; the tiles' own normals are bytes too). The
+   sleepers' ribbons take the same finish (`geometrySteps`), and the fine
+   terrain's `indexed` (PR 3) is the same weld. Measured on the DGM, built
+   as the viewer builds them: the yard tile 33408_5656 2.24 M → 0.74 M
+   vertices, 56.4 → 20.4 MB (its ballast 1.22 M → 0.28 M vertices, its
+   rails 714 k → 323 k, its sleepers 117 k → 39 k); 33410_5656 rails 23.5
+   → 8.1 MB, tram 13.7 → 7.0 MB; 33412_5656 tram 7.1 → 3.5 MB. The
+   report's 31.9 MB for the yard tile was low: the ballast alone was
+   29 MB. A cold bake of all seven sites publishes 0 new files.
+   **Left:** (a) the index is now a third of a rail's bytes (32-bit: a
+   yard's steel is one mesh of 323 k vertices); (b) thinning straight
+   runs (a rail is sampled every 4 m, a tram every 2 m) would take most
+   of what is left, but a line is pressed under a planner's design per
+   vertex (`lineUnderDesign`), so longer pieces would rise through a
+   design's plate at its edge — it needs a per-fragment cut for lines
+   first; (c) the meshes keep their CPU copy (as much again on the page's
+   process: only the bridges are asked by ray) — `dropCpuCopies` covers
+   the tile's content, not its dressing; (d) the builders still collect
+   into plain arrays (some 34 MB of transient heap for the yard) and run
+   on the main thread, 3 s for the yard tile on a desktop core, most of
+   it the ballast's drape. Baking the lines into the fine ground (PR
+   #156, plan 074 A) ends (c) and (d); the maintainer decides whether to
+   take that spike up again (asked 2026-11-11): it lies a month behind
+   main and across PR #187.
+5. **Cache keys (B1, B2, B5, B7, V5) — built in part (2026-11-11);
+   renames every site's glbs once.** **B2 built:** the side files a
+   content is dressed with are named on its tile in the tileset
+   (`lib/city/tileset.ts` `TerrainFiles`, `CityFiles`, `contentExtras`),
+   not in the glTF's extras, and in no key: a new sky-view raster no
+   longer re-bakes the tile's buildings (20–45 s a tile), a new lamp or
+   tree file no longer renames the fine terrain (which visitors then
+   loaded again unchanged). Dresden's tileset grows from 21.9 to 57.6 kB
+   (3.3 → 9.0 kB gz at the start). **B5 built in part:** the local cache
+   keeps a name's three newest entries (`bake-cache.ts` `generations`; one
+   on Vercel and in CI), so a checkout across a bake module and back bakes
+   neither way. Not built: read access to Vercel's shared cache from CI
+   and a desk (a token for the store outside Vercel is the maintainer's
+   to give). **B7 built in part:** a Python step's key carries what
+   `uv.lock` resolved for the packages a bake runs with
+   (`step_cache.locked_runtime`: 40 of 46, not ruff or pytest and what
+   only they need) and leaves `step_cache.py` itself out (`VERSION`
+   stands for it); `networkx`, which `transit.py` imports, is a named
+   dependency. This re-keys every step once, where a cache exists (the
+   ruff bump in PR #278 would have under the old key; under this one it
+   no longer does). Not built: the spec's part of the key (the tile list
+   stays: steps reach their neighbours through it, and a new neighbour
+   must run them again), the year in a dated step's key. **B1 not built,
+   by measurement:** the key as the hash of each entry's tree-shaken
+   bundle (`Bun.build`, 47 ms for all 36 entries) was replayed over the
+   last 200 commits on main: the buildings' key changed in 29 of them as
+   text and in 26 as bundle, the terrain's in 7 and 2, the ground's in 1
+   and 1; over the 55 merges, 18 and 15, 12 and 9, 6 and 5. Nearly every
+   commit that touches the buildings' graph changes code they run; three
+   bakes in two hundred commits do not pay for a key that every Bun
+   release would change. Narrowing the table to the step modules alone
+   changes nothing more. **V5 not built:** `islands` and `lamp-heights`
+   rewriting an earlier step's file can only be taken apart with the raw
+   data at hand (every site's Python bake runs again), which a cloud
+   session does not hold.
+6. **The start (L1, L2, B4, F6, F12) — built (2026-11-11).** **L1, L2:**
+   the route preloads the manifest and the tileset
+   (`app/[site]/page.tsx`), and the boot asks for the tileset and the
+   start tile's far buildings and coarse terrain as soon as the tileset's
+   name is known (`boot-ahead.ts`), beside the scene's chunk and the
+   renderer's start; the stream takes them from there and no longer
+   fetches the tileset twice. Headless (SwiftShader, CPU ×4, 9 Mbit/s,
+   150 ms; three runs each): manifest asked at 0.2 s (was 1.2), tileset
+   at 0.2 s (2.9–3.1), first tile content at 2.0–2.2 s (9.3–10.2), the
+   far buildings landed at 7.3–7.7 s (24.2–25.0), the boot's wait for
+   its tile over at 59–61 s (69–74; that machine parses and compiles for
+   most of it). Not built: the viewer's chunks still start after
+   hydration (≈ 1.1 s here; starting them when the module first runs
+   moved nothing, and preloading them from the HTML needs chunk names
+   only Next's private build manifest has), and the timings on an iPhone
+   (`?trace=1`) are the maintainer's to read. **F6:** the minimap's
+   footprints are a packed file (`lib/city/footprint-pack.ts`,
+   `footprints_<tile>.fpr.gz`): Dresden 11.0 MB of JSON (3.0 MB gzipped)
+   → 1.9 MB gzipped, no parse, and 460 000 points held as 3.7 MB of
+   integers where they were two-element arrays (≈ 50 MB of heap); the
+   minimap draws from the pack, a design's cover reads one object at a
+   time. **F12:** the tooltips' provider is the viewer's
+   (`city-walk.tsx`), not the root layout's: `/impressum` loads 190 kB
+   of scripts where it loaded 220 kB. **B4:** `PREPARE_SITES=meissen bun
+   dev` prepares that site alone and leaves the others served as built
+   last (`scripts/site-choice.ts`): 0.5 s where every site took 10 s
+   warm. Not built: a stat fingerprint per site, and starting `next dev`
+   before the bakes end.
+7. **`create-app.ts` in owners, one worker client (V1, V3, V8) — a first
+   cut built (2026-11-11).** **V3:** the ground's, the niches' and the
+   BVH's clients stand on one `createWorkerClient` (`worker-client.ts`,
+   on `createTaskGate(1)`) with one rule: a handshake before anything is
+   handed over (the niches' client copied its first job instead, the
+   ground's sent at once), the fallback one job a later task (the
+   ground's ran all its queue in one), one restart after a death at work
+   (none had one: a dead worker moved its work onto the page for good),
+   an aborted job leaving the line at once. The three clients 811 → 501
+   lines, the rule 247, eight tests of it on a fake worker; a worker
+   that says nothing for 15 s is ended and started once more (a job
+   waited on it for ever). **V8:**
+   `lazyFeature` is `startOnce`; the `import()` measured again: 1 096.5 kB
+   of viewer JS against 1 096.0 static, and the chunk fetched during the
+   boot all the same — no gain, so the data layers stay in the scene's
+   chunk. **K2** was whole after PR 1; a picture asked for after the
+   render stopped now fails at once (it waited for ever).
+   **V1, first cut:** the frame is `frameOf` over nine named steps
+   (`frame-steps.ts`, the order and its reasons in one list, held by a
+   test), and five owners left `bootApp`: `scene-capture.ts`,
+   `frame-meter.ts`, `tile-memory.ts` (the governor's late-bound
+   `reserveCache` and `forcedStep` gone), `crosshair-focus.ts`,
+   `load-veil-follow.ts`. `create-app.ts` 4 796 → 4 437 lines. **Left of
+   V1** (each its own PR, each to be walked on a real GPU): the scene
+   core, the light (`setSun`, the shadow tiles), the stream's follow-up
+   (`onChange`, which still calls its subsystems by name — the
+   `sceneChanged` event), the start sequence, the inquiry, the view
+   (pose, Modell), the design, the handle. The report's risk stands:
+   those share the 60 `let`s that only events remove.
+8. **The desktop's post (F8, K5, F11, L6)** — **F8, K5, F11 done**
+   (2026-11-11). The desktop's SMAA is `smaa.ts`: the edges in RG8, the
+   weights in RGBA8, the blend in the pass that reads it — 6 bytes a
+   pixel where three's node held 24 (107 → 27 MiB at 2880 × 1620, one
+   full-screen pass less). **K5:** the edges are found on square-rooted
+   colours. **F11:** the two tables are worked out
+   (`lib/city/smaa-tables.ts`, held to three's pictures by a test); the
+   viewer's JS is 1 096.0 → 1 061.3 kB (−34.7). Checked in the container on
+   SwiftShader only (the low sun and the night street of `qa/views/`,
+   beside three's at 400 %: the same edges); the look on a real GPU and
+   on WebGPU is the maintainer's to judge. **Left out:** the lens blur's
+   copy of the frame (36 MiB) — under SMAA it is also the motion blur's
+   target, and dropping it means a target allocated when a motion
+   starts, to be measured on a real GPU in a PR of its own; **L6** (the
+   AO's 5 × 5 smoothing made separable) changes the picture and its gain
+   is GPU time no container measures.
+
+9. **Follow-ups the maintainer asked for (2026-11-11 evening)**, each a
+   draft stacked on the last: **(a) the minimap's picture** — the build
+   draws one picture of the site (`minimap.webp`, 640 px wide: land
+   cover, bridge decks, buildings as ink) and the minimap shows it as an
+   image: Dresden's minimap fetches 87 kB in one request where it
+   fetched 2.0 MB of footprints, fifteen class rasters and fifteen
+   bridge files, and holds no canvas of them; a tile's footprints come
+   only for a demolish or a design's cover (`footprintsIn`,
+   `footprintsSettled`). A first cut (a 192² grey figure per tile, drawn
+   on a canvas) showed seams at the tile edges and pale buildings. Left:
+   the 512² class raster is still published and named on each tile.
+   **(b) the bands' rounds
+   one facet each** — the plinth's shoulder and the Traufgesims's round
+   one face, the Gurtgesims's half-round nose two, their normals bending
+   from face to face (`plinths.ts` `bend`): a band 10–12 → 6–8 triangles
+   a piece, caps 5 → 3. Dresden 7.05 M → 5.30 M triangles, 41.3 → 37.2 MB;
+   the far level 3.68 M → 3.46 M, 35.0 → 33.4 MB; **(c) the far level
+   without doors and bands** (`FAR_CITY_DROPPED` in
+   `scripts/prepare/city.ts`, `simplifyGlb`'s `drop`: their triangles go
+   before the simplifier, their rows stay): 3.46 M → 2.17 M triangles,
+   33.4 → 25.3 MB, the densest tile 0.40 M → 0.23 M; **(d) the
+   close-range rasters near the camera only** (2026-11-12, after a CPU
+   profile of the boot: pipelines, texture uploads and GPU waits are 95 %
+   of the main thread, every dressing builder together 3 %, so (f) and
+   (g) below would move little) — a fine level beyond the ground
+   detail's reach reads the paving, edges, sports grounds and markings
+   from 1024² twins, 14 MiB instead of 56, and swaps to the full ones
+   through the material's slots as the view comes near
+   (`lib/city/ground-reach.ts`, `ground-reach-follow.ts`,
+   terrain-layer.ts `GroundDetail`). Dresden's start on foot (1280 × 800,
+   five fine levels, two of them near): the textures three holds
+   683 → 516 MB, the download 56.0 → 48.3 MB. The minimap's 512² class
+   raster went with it. Not built: (e) the weld for trees and furniture
+   (they are instanced on shared indexed geometries; only the playground
+   slabs are a soup); (f) the dressing in a worker (it needs every loaded
+   tile's heights in the worker: a copy grows a phone's memory, sharing
+   needs COOP/COEP); (g) the rails baked into the ground (spike #156 is
+   the template; the builders are 7 s of a 334 s boot under
+   SwiftShader). Open on the GPU side, waiting for a trace from a real
+   GPU: uploads spread over frames, the murals read back without
+   `getImageData`, the sports raster as a block atlas (its grounds cover
+   1 % of the texels, 3–9 % of 64 px blocks).
+
+Not planned, for the maintainer: F14 (the re-baked rasters of 16 days
+are 633 MB of superseded blobs: squash-merge data PRs, or rewrite the
+history once), F15 (Dresden's DGMs are still LZW: 204 MB against about
+85), L3, L4, V4, V6, V7, V10, B9–B11, T5–T10 (in the report).
+
+**Checked and sound (not to be audited again):** the object flag bits
+and the window style word (below 2^24, two bits free); the half-open
+tile ownership; `disposeTile`; the view lens and the reversed depth; no
+network in a bake (ADR 0012); the ask token's HMAC; the lazy chunks of
+the chat, IFC, Rhino and sql.js.
 
 ### 2026-10-10 audit (performance and stability, against `85a41b7`)
 
@@ -553,8 +837,8 @@ parsed once, typed-array plinths, cache keys on the bakes' own packages.
   19.8 m and 110 m), the walker as far from every edge as before (91 m,
   was 90.2), 17 redraws over a straight 500 m instead of 26, texels 10 %
   coarser; the air and Modell unchanged.
-- **The minimap's 512² class raster** has one reader left that paints
-  256² a tile (a re-bake and a look).
+- ~~**The minimap's 512² class raster**~~ — gone (2026-11-12): the
+  minimap shows the build's picture of the site.
 - **A tile's fine level re-bakes when any tile's terrain inputs change**
   (plan 072's maintenance note, M): its key covers every tile's DGM,
   walls, stairs, terraces and kerbs (ADR 0030), though its walls, kerbs,
@@ -1316,3 +1600,9 @@ prompt-injection content only (none found).
   the HUD's settings. Plans 068–074 written; 068, most of 070 and parts of
   069, 071 and 073 built on the same PR; see the "2026-10-10 audit"
   section.
+- **2026-11-11 run** (against `f762ce78`): the whole code, on the
+  maintainer's ask for correctness, simplicity, speed (app, bake, start)
+  and footprint with effort no criterion: eight parallel read-only
+  auditors, every finding re-read or re-measured, a measured baseline,
+  the report as a document. The maintainer chose all of it as eight
+  stacked PRs; see the "2026-11-11 audit" section for each one's state.

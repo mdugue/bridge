@@ -42,6 +42,8 @@ import {
   followEnvironment,
   handOverWaitMs,
   PHONE_STREAM,
+  STREAM_DOWNLOADS,
+  setStreamDownloads,
   orderStreaming,
   takesOver,
   trafficSlot,
@@ -234,6 +236,9 @@ test("the stream's dispose releases every dressed tile, quietly", async () => {
       acquire: async () => await Promise.resolve(null),
       settle: () => {
         // an unweighed hold settles nothing
+      },
+      drop: () => {
+        // (nothing held)
       },
       release: () => {
         freed.push("sky view");
@@ -746,21 +751,23 @@ test("a load the renderer keeps is not freed", async () => {
   expect(freed.value).toBe(false);
 });
 
-test("a phone streams fewer contents at once, on queues of their own in our order", () => {
+test("a phone parses fewer contents at once, on queues of their own in our order", () => {
   const phone = new TilesRenderer("https://example.com/tileset.json");
   const desktop = new TilesRenderer("https://example.com/tileset.json");
   orderStreaming(phone, "mobile", () => null);
-  orderStreaming(desktop, "desktop", () => null);
+  orderStreaming(desktop, "desktop", () => "a");
   expect(phone.parseQueue.maxJobs).toBe(PHONE_STREAM.parses);
-  expect(phone.downloadQueue.maxJobsPerOrigin).toBe(
-    PHONE_STREAM.downloadsPerOrigin
-  );
-  // a desktop keeps the renderer's limits, on queues of its own
+  expect(phone.downloadQueue.maxJobsPerOrigin).toBe(STREAM_DOWNLOADS.mobile);
+  // a desktop keeps the renderer's parses, on queues of its own
   expect(desktop.parseQueue).not.toBe(DEFAULT_PARSE_QUEUE);
   expect(desktop.parseQueue.maxJobs).toBe(DEFAULT_PARSE_QUEUE.maxJobs);
   expect(desktop.downloadQueue).not.toBe(DEFAULT_DOWNLOAD_QUEUE);
-  expect(desktop.downloadQueue.maxJobsPerOrigin).toBe(
-    DEFAULT_DOWNLOAD_QUEUE.maxJobsPerOrigin
+  // until the boot's first frame the line is the spawn tile's
+  expect(desktop.downloadQueue.maxJobsPerOrigin).toBe(STREAM_DOWNLOADS.boot);
+  setStreamDownloads(desktop, "desktop", false);
+  expect(desktop.downloadQueue.maxJobsPerOrigin).toBe(STREAM_DOWNLOADS.desktop);
+  expect(DEFAULT_DOWNLOAD_QUEUE.maxJobsPerOrigin).toBeGreaterThan(
+    STREAM_DOWNLOADS.desktop
   );
   // not the renderer's error order: a tile's coarse ground before its
   // buildings

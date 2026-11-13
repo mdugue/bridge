@@ -125,3 +125,25 @@ export function bootingPose(
     },
   };
 }
+
+/**
+ * The contents a tile's stream asks for first, as the tileset names them
+ * (relative to it): the tile is the `index`th child of the root (the
+ * tileset writes them in the order of its extras' tiles), and what it
+ * shows first are its children's own contents — the far buildings and the
+ * coarse terrain (lib/city/tileset.ts `tileNode`); their children refine
+ * them later. Empty for a tileset of another shape.
+ */
+export function firstContents(json: unknown, index: number): string[] {
+  const tile = (
+    json as {
+      root?: { children?: { children?: { content?: { uri?: unknown } }[] }[] };
+    } | null
+  )?.root?.children?.[index];
+  if (!Array.isArray(tile?.children)) {
+    return [];
+  }
+  return tile.children.flatMap(({ content }) =>
+    typeof content?.uri === "string" ? [content.uri] : []
+  );
+}

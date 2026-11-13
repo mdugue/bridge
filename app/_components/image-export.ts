@@ -26,8 +26,9 @@ import { RENDER_STYLE_BY_ID, styleInstant } from "@/lib/city/render-style";
 import type { RenderStyle } from "@/lib/city/render-style";
 import { siteAttribution } from "@/lib/city/site";
 import type { Site } from "@/lib/city/site";
-import type { CapturedImage, CityWalkHandle } from "./create-app";
+import type { CityWalkHandle } from "./create-app";
 import type { ModelHud } from "./model-rig";
+import type { CapturedImage } from "./scene-capture";
 
 /** What the legend says besides the picture. */
 export interface ExportContext {

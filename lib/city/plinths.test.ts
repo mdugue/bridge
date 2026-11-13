@@ -49,8 +49,8 @@ const triangles = (tris: number[]) => {
 test("a plinth stands proud on the street side, rolling over into its top", () => {
   const mesh = plinthMesh(plinth, { cx: 0, cy: 0 });
   const tris = triangles(mesh.positions);
-  // front, three shoulder facets, top, two ends of five triangles each
-  expect(tris).toHaveLength(2 * 5 + 2 * 5);
+  // front, shoulder, top, two ends of three triangles each
+  expect(tris).toHaveLength(2 * 3 + 2 * 3);
   const [front] = tris;
   expect(front.n[0]).toBeCloseTo(1, 6);
   expectEndsOutward(tris);
@@ -59,9 +59,16 @@ test("a plinth stands proud on the street side, rolling over into its top", () =
   const zs = tris.flatMap((t) => t.z);
   expect(Math.min(...zs)).toBeCloseTo(10 - PLINTH_SINK, 6);
   expect(Math.max(...zs)).toBeCloseTo(10.7, 6);
-  // the shoulder shades smooth: its normals turn from out to up, no NaN
-  const shoulder = mesh.normals.slice(2 * 9, 5 * 9);
+  // the shoulder is one facet whose normals turn from out to up: the
+  // front's own at its foot, the top's at its head
+  const shoulder = mesh.normals.slice(2 * 9, 4 * 9);
   expect(shoulder.every(Number.isFinite)).toBe(true);
+  const ups = [];
+  for (let i = 2; i < shoulder.length; i += 3) {
+    ups.push(shoulder[i]);
+  }
+  expect(Math.min(...ups)).toBeCloseTo(0, 6);
+  expect(Math.max(...ups)).toBeCloseTo(1, 6);
   // the ends are flat
   expect(mesh.normals.slice(-9).every(Number.isNaN)).toBe(true);
 });
@@ -103,7 +110,7 @@ test("two pieces round a corner are mitred and share one top", () => {
   const mesh = plinthMesh(corner, { cx: 0, cy: 0 });
   const tris = triangles(mesh.positions);
   // no cap at the corner: one at each far end only
-  expect(tris).toHaveLength(2 * (2 * 5) + 2 * 5);
+  expect(tris).toHaveLength(2 * (2 * 3) + 2 * 3);
   // the front's corner stands on the bisector, proud of both walls
   const near = (x: number, y: number) =>
     tris.some((t, i) =>
@@ -135,15 +142,16 @@ test("pieces in line are no corner: each keeps its height and its caps", () => {
   };
   expect(plinthPieces(step).map((q) => q.top)).toEqual([10.7, 11]);
   expect(triangles(plinthMesh(step, { cx: 0, cy: 0 }).positions)).toHaveLength(
-    2 * (2 * 5 + 2 * 5)
+    2 * (2 * 3 + 2 * 3)
   );
 });
 
 test("the Gurtgesims is level, flat underneath and round at the nose", () => {
   const mesh = corniceMesh(plinth, { cx: 0, cy: 0 }, 14);
   const tris = triangles(mesh.positions);
-  // underside, four nose facets, wash and two ends of five triangles each
-  expect(tris).toHaveLength(2 * 6 + 2 * 5);
+  // underside, the nose's two facets, wash and two ends of three
+  // triangles each
+  expect(tris).toHaveLength(2 * 4 + 2 * 3);
   const [under] = tris;
   expect(under.n[2]).toBeCloseTo(-1, 6);
   expectEndsOutward(tris);
@@ -156,7 +164,7 @@ test("the Gurtgesims is level, flat underneath and round at the nose", () => {
 
 test("the Gurtgesims round a corner is mitred too", () => {
   const tris = triangles(corniceMesh(corner, { cx: 0, cy: 0 }, 14).positions);
-  expect(tris).toHaveLength(2 * (2 * 6) + 2 * 5);
+  expect(tris).toHaveLength(2 * (2 * 4) + 2 * 3);
 });
 
 const xs = (m: { positions: number[] }) =>
@@ -320,7 +328,7 @@ test("a band follows a wall that bends along its stretch, without caps", () => {
   expect(front(5)).toBeCloseTo(100 + 0.2 + CORNICE.proud, 6);
   expect(front(0)).toBeCloseTo(100 + 0.1 + CORNICE.proud, 6);
   // two ends capped, none at the knot
-  expect(tris.filter((t) => Math.abs(t.n[1]) > 0.99)).toHaveLength(2 * 5);
+  expect(tris.filter((t) => Math.abs(t.n[1]) > 0.99)).toHaveLength(2 * 3);
 });
 
 test("a stretch breaks along a segment on its line, not one aside", () => {
