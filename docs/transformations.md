@@ -1096,11 +1096,28 @@ visual-variable codebook is in
   plane rises along its direction alone, so eaves and ridge are level:
   fitted through the median of each metre across it (the first and last
   left out), then on its cells within 0.5 m (dormers and chimneys trimmed
-  away); two neighbouring flanks facing within 15° of opposite share one
-  axis (a level ridge). A level patch between them (a crown, a mansard's
+  away); a flank turned within 15° of square to one of the building's
+  walls rises square to it (since 2026-11-13, `_along_walls`: the eave
+  runs along its wall, where the scan alone turns a flank by a few degrees
+  with its eave's blur and what stands on it — the Schauspielhaus's
+  flanks fell to 45°, 63°, 68° and 77° from walls at 60.5°) — only where
+  the walls leave one such way (a footprint of many directions does not
+  say which wall is the flank's) and its plane then lies on at most 3 %
+  less of its cells, and the flanks so turned are tried first, the scan's
+  own ways where they are no roof's; two neighbouring flanks facing within
+  15° of opposite share one axis (a level ridge). A level patch between them (a crown, a mansard's
   top) is a level plane; a cell near a flank (4 cells) whose plane holds
   it — the scan on it or up to 3 m over it, a dormer — is the flank's;
-  what is left takes planes of its own (`plane_facets`), every other cell
+  a block of more than 30 m² its plane does not explain (off it, or over
+  it wider than a dormer) is no part of the flank but a roof of its own
+  on it or cut into it (since 2026-11-13, `_own_blocks`: the
+  Schauspielhaus's plant deck cut into the auditorium's roof, the roof
+  beyond it, its corner pavilion);
+  what is left takes planes of its own (`plane_facets`) — a level where
+  that holds as much of the patch as its plane, within 3 % (`_level`:
+  what stands on a deck tilts a plane fitted to it; the Schauspielhaus's
+  decks were slabs 9–14° askew; where the face so drawn is no roof's,
+  the patches keep their planes) —, every other cell
   the nearby plane closest to the scan. Two neighbouring planes that each
   rise toward the other (a ridge, a hip; a level crown counts as either
   side) meet on the lower of the two, two that each fall toward the
@@ -1110,9 +1127,13 @@ visual-variable codebook is in
   der Frauenkirche 5's east wing) — within 6 cells of it, so where the
   planes cross further off (a flank joined over a bend) no island of the
   other plane stands far from the border; other borders, a row of houses
-  stepping, stay where the scan put them. The flanks are the face when, judged a cell in from its edge
-  (the eave's blur), 85 % of its cells (a landmark's 95 %, unless only
-  the flank rule found the face: it has no other form) lie within
+  stepping, stay where the scan put them. The flanks are the face when, judged two cells in from its edge
+  (the eave's blur: a 1 m scan rounds a steep flank's eave into the
+  wall over two cells; one where two would leave less than half the
+  face), 85 % of its cells — a landmark's too: its blurred scan is the
+  alternative only where flanks fail (since 2026-11-11; at a 95 % bar the
+  Schauspielhaus's 23° roof over the auditorium, 84 % on its flanks,
+  was drawn as its scan) — lie within
   0.5 m of their plane or under a blob of ≤ 30 m² up to 3 m over it, 60 %
   on it; no flank sags (a parabola through its metre strips' lower
   quartiles — a row of dormers lifts a strip's median, not its lower
@@ -1142,8 +1163,21 @@ visual-variable codebook is in
   together, their takes before their gives, a cell two take going to
   the higher plane (as a valley is drawn): a level they would leave
   smaller than a part or narrower than 7 m (`NARROW_M`, a strip between
-  two wings standing as a box) keeps its cells. An der
-  Frauenkirche 5's ring is now 16 flanks meeting at hips; the block at
+  two wings standing as a box) keeps its cells. **A wall's blur under a
+  flank** (`_split_collars`, since 2026-11-11): a level narrower than
+  7 m below a face drawn as flanks (its median over 1 m under the planes
+  there) that the scan lies flat on (within 0.5 m) over less than half
+  its cells is no roof but the scan grading a wall over a few cells — a
+  stage house's 8 m wall banded into a collar round its hipped roof, the
+  Schauspielhaus's at 145 m: it is split at half height, each cell to the
+  face's plane or to the part beyond (a lower face's plane only within
+  1 m of the scan) whichever its scan lies nearer, so the wall stands
+  where the scan crosses its middle; those cells are not judged when the
+  model's miss is measured (`Model.judged`: no sharp roof lies on a
+  blur, and the split had sent a small gable at 2 % over its bar back to
+  the flat model). 31 buildings on Dresden's, Leipzig's, Hamburg's and
+  Grimma's tiles lost such a collar or ledge, 0.4 % fewer outline points.
+  An der Frauenkirche 5's ring is now 16 flanks meeting at hips; the block at
   Schloßstraße and Sporergasse 23 flanks, the scan within 0.5 m of the
   drawn roof on 70 % of its cells (35 % with the planes first). A face most of whose cells only the
   flank rule found is drawn as flanks or not at all: the planes or a
@@ -1204,8 +1238,24 @@ visual-variable codebook is in
   under 4 m² in plan, dropped →
   `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
-  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 738
-  parts, 335 of them faces** (2026-11-10; 2 814 and 367 before the flanks;
+  provider's credit). A face drawn as flanks or planes also carries them
+  as `facets` (since 2026-11-13, `roof_facets.py`): each plane's polygon
+  in plan and its plane. The labels lose their strips a cell wide, their
+  raster borders are straightened (`coverage_simplify`, 1.25 m), then
+  every point of a border between two planes that meet at a crease — the
+  cells either side on their own side of the planes' crossing, 80 % of
+  them — moves onto the line the two cross along, a corner several
+  creases share to their common point (≤ 3 cells); the polygons are cut
+  to the part's outline on a 1 cm grid and noded, each run between two
+  corners one edge (a step's stair within 0.75 m of straight), so two
+  facets share a border point for point; facets that miss the outline by
+  > 0.1 % leave the face to its grid. A ridge, a hip, a valley is one
+  straight edge where the grid cut it off between two cell centres. **1 080 objects on Dresden's fifteen tiles, 2 727
+  parts, 343 of them faces, 319 of those with facets** (2026-11-13; 2 731
+  and 335 before flanks rose square to their walls and blocks on them
+  took planes of their own; 2 741 and 334 before a wall's
+  blur was split, 2 738 and 335 before a landmark's flanks took every
+  building's bar; 2 814 and 367 before the flanks;
   1 081, 2 755 and 222 before the plausibility rule; 886 objects, 2 227 parts before
   the band below 40 %; 2 956 parts before the strips merged; the
   Altstadt most); the step runs on every site — Hamburg 587 objects (365
@@ -1213,7 +1263,14 @@ visual-variable codebook is in
   Grimma 17 (13), München 121 (120).
   `bakeCityMesh` (`withMeasuredRoofs`, `scripts/measured-roofs.ts`) drops
   the object's LoD2 triangles and stands each part from the object's
-  lowest LoD2 vertex — a flat part as a prism, a face as an error-bounded
+  lowest LoD2 vertex — a flat part as a prism, a face with `facets` as
+  those (`facetPrism`: each polygon flat on its plane and shading with
+  the plane's normal, the heights of facets meeting at a corner within
+  0.5 m one height — a crease, or two planes the scan cannot tell from
+  two that meet (the bake's `FLANK_TOL_M`), where a step would be a
+  sliver of wall a hand high across the roof; two meeting at a crease
+  there, within 5 cm, are never parted —, a wall where a facet's
+  edge has no neighbour or a lower one), any other face as an error-bounded
   TIN of its grid (Delatin, 0.25 m) whose inner vertices are triangulated
   with the outline's points where the height along it bends (Delaunay,
   the outline's edges enforced by splitting), its walls on those same
@@ -1222,13 +1279,23 @@ visual-variable codebook is in
   and minimap stay; eave and storey rows follow the new shape, and the
   card says *geformt wie gemessen* where a face is part of it
   (`MEASURED_SHAPE`). The rebuilt objects' triangles: 215 k before and
-  after on the site (a face's TIN costs what its terraces did). The sky-view and horizon bake
+  after on the site (a face's TIN costs what its terraces did); the
+  facets take 9 % off the measured parts' own (Dresden 123.7 k → 111.4 k,
+  Leipzig 80.4 k → 74.6 k, Hamburg 130.8 k → 121.1 k, München 8.2 k →
+  7.4 k, Meißen 3.2 k → 2.7 k, Grimma 2.4 k → 1.7 k, Unna 8.0 k → 7.3 k:
+  a plane is a polygon's few triangles, where its TIN ran along every
+  crease in steps). The sky-view and horizon bake
   (`skyview.py`) burns the rebuilt parts — flat tops, faces on their grid —
   in place of their objects' LoD2 surfaces, so the far shadows match the
-  mesh (`roofs` runs before `skyview`). Limits: a face is the scan's,
+  mesh (`roofs` runs before `skyview`). Limits: a face without facets (a
+  vault, a landmark's scan) is the scan's,
   smoothed: a sharp ridge reads rounded over a metre or two, a dormer or a
-  chimney is smoothed away; a face's TIN keeps its 0.25 m lumps, which the
-  smoothed shading hides more than it removes. Judged in headless
+  chimney is smoothed away; such a face's TIN keeps its 0.25 m lumps, which the
+  smoothed shading hides more than it removes. A hip ends where its two
+  planes meet the outline, which may lie a few decimetres beside the
+  outline's corner (the flanks' eaves are fitted each on its own); the
+  step bakes that read a face (`skyview`, `dormers`, `roof_colour`) read
+  its grid, which the facets leave as it was. Judged in headless
   SwiftShader renders only (before/after), not on a real GPU.
 - **Ground-clamp** `= computed` — the loaded terrains' grids (fine level first) sampled to
   seat trees, lamps, monuments, rails, walls and the player on terrain.
@@ -1785,7 +1852,8 @@ visual-variable codebook is in
   its cells and its outline, so a strip narrower than a cell has one); until then such a roof's dormers and chimneys stood
   at the LoD2 faces it replaces, metres off the drawn roof — some
   chimneys' measured tops under their own feet (Dresden's rebuilt roofs
-  hold 359 dormers now, 50 before; the block at Schloßstraße and
+  hold 371 dormers now, 50 before (359 before a landmark's flanks took
+  every building's bar: the Kreuzschule's 12, 2 before); the block at Schloßstraße and
   Sporergasse 26, 4 before). The burned 1 m roof
   reads a cell's height, up to half a metre off a 45° face under a
   centre: over all seven cities 7 % of the dormers stood more than 0.3 m

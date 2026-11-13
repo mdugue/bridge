@@ -98,7 +98,7 @@ from rasterio.transform import from_origin
 from rasterio.windows import from_bounds
 from scipy import ndimage as ndi
 
-from . import roof_planes
+from . import roof_facets, roof_planes
 from .common import Tile, feature, geometry_json, overlaps, write_geojson
 from .roof_planes import fill_nearest
 from .skyview import burn_triangles
@@ -171,6 +171,7 @@ EXTEND_CELLS = 4  # how far past its cells a face's surface runs on its plane
 EAVE_WALL_M = 1.0  # a level this far under a flank's eave meets it at a wall along the eave
 EAVE_REACH = 3  # ... the cells either side within this of the face (the scan's blur) moved
 EAVE_DOWNHILL_COS = 0.5  # ... only where the plane falls toward them (60°): not a gable's end
+COLLAR_FLAT_SHARE = 0.5  # a narrow level under a flank the scan lies flat on less: a wall's blur
 FORM_SPAN_M = 3.0  # a LoD2 roof rising less than this has no form to keep
 FORM_R = 0.85  # the scan follows a LoD2 roof's form this closely (Pearson r)
 FORM_MISS_SHARE = 0.2  # ... and misses it on at most this share, once level
@@ -536,6 +537,16 @@ class Model:
     level: np.ndarray  # per region (index = label - 1), its median height
     faces: np.ndarray  # per label, whether the region is drawn as its surface
     surface: np.ndarray  # per cell, the measured surface the faces show
+    blur: np.ndarray | None = None  # per cell, a wall's blur the model splits at half height
+    # per face drawn as flanks or planes: its window, each cell's plane
+    # there and the planes (z = a + b·col + c·row on the window's cells)
+    planes: dict | None = None
+
+    def judged(self, cells: np.ndarray) -> np.ndarray:
+        """`cells` the model is judged on: its own, less a wall's blur it
+        draws as a sharp wall (no sharp roof lies on that blur)."""
+        out = cells & (self.lab > 0)
+        return out if self.blur is None else out & ~self.blur
 
     def heights(self) -> np.ndarray:
         """The model's roof per cell (NaN outside)."""
@@ -561,19 +572,19 @@ def _regions(h, own, face, small_cells, with_faces, narrow):
     return merge_regions(lab, h, small_cells, faces, thin=with_faces, narrow=with_faces and narrow)
 
 
-def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None):
+def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None, ways=None):
     """The surface the faces are drawn with — each as flanks, planes or one
     curve (`roof_planes.plausible_fit`), fitted on its own face cells
     (what it took in follows it) —, the faces that are none of them (each
-    with whether it was judged as flanks alone), and
-    per face drawn as flanks its window, fit and eaves (`_straight_eaves`).
+    with whether it was judged as flanks alone), and per face drawn its
+    window and fit (`roof_planes.Fit`).
     A face most of whose cells only the flank rule found (`flank_only`) is
     drawn as flanks or not at all. `fits`: the fits of earlier rounds, by
     the face's cells (a face no round changed is not fitted again)."""
     fits = {} if fits is None else fits
     surface = h.copy()
     implausible = []
-    gables = {}
+    drawn: dict[int, tuple[tuple[slice, slice], roof_planes.Fit]] = {}
     for rid in np.flatnonzero(faces):
         mine = lab == rid
         if not mine.any():
@@ -585,20 +596,19 @@ def _plausible_faces(h, lab, faces, face, landmark, flank_only, fits=None):
         key = (win[0].start, win[1].start, cells.shape, cells.tobytes(), flanks, landmark)
         if key not in fits:
             fits[key] = roof_planes.plausible_fit(
-                h[win], cells, SLOPE, RES, EXTEND_CELLS, landmark, flanks
+                h[win], cells, SLOPE, RES, EXTEND_CELLS, landmark, flanks, ways
             )
         fit = fits[key]
         if fit is None:
             implausible.append((int(rid), flanks))
             continue
         sub = surface[win]
-        sub[mine[win]] = fit[0][mine[win]]
-        if fit[1] is not None:
-            gables[int(rid)] = (win, *fit)
-    return surface, implausible, gables
+        sub[mine[win]] = fit.surface[mine[win]]
+        drawn[int(rid)] = (win, fit)
+    return surface, implausible, drawn
 
 
-def _straight_eaves(h, lab, faces, surface, gables, small_cells: int) -> None:
+def _straight_eaves(h, lab, faces, surface, drawn, small_cells: int) -> np.ndarray:
     """A face drawn as flanks ends where its flanks reach their eaves: the
     cells of a level well below an eave (EAVE_WALL_M, a courtyard's roof)
     that the flank's plane still stands over join the face, within
@@ -609,9 +619,16 @@ def _straight_eaves(h, lab, faces, surface, gables, small_cells: int) -> None:
     below the eave the scan shows (a terrace, a mansard's foot) stays the
     face's; so does a level all the gables together would leave smaller
     than `small_cells` or narrower than NARROW_M (`_kept_whole`). The
-    gables are judged together, on the levels as merged; in place."""
+    gables are judged together, on the levels as merged; in place. Returns
+    the cells of a wall's blur split at half height (`_split_collars`).
+    `drawn`: per face drawn, its window and fit (`_plausible_faces`)."""
+    gables = {
+        rid: (win, fit.surface, fit.eave)
+        for rid, (win, fit) in drawn.items()
+        if fit.eave is not None
+    }
     if not gables:
-        return
+        return np.zeros(lab.shape, bool)
     level = np.concatenate([[np.nan], _region_medians(lab, h, int(lab.max()))])
     plans = []
     for rid, (win, fit, eave) in gables.items():
@@ -655,6 +672,72 @@ def _straight_eaves(h, lab, faces, surface, gables, small_cells: int) -> None:
         for t in np.unique(to[give]):
             mine = give & (to == t)
             sub[ndi.binary_propagation(sub == t, mask=mine | (sub == t)) & mine] = t
+    return _split_collars(h, lab, faces, surface, gables, drawn)
+
+
+def _split_collars(h, lab, faces, surface, gables, drawn) -> np.ndarray:
+    """A narrow level under a face drawn as flanks the scan does not lie
+    flat on (COLLAR_FLAT_SHARE) is the blur of the wall below the face's
+    eave — a 1 m scan grades a stage house's 8 m wall over three cells,
+    banded into a collar round its roof: split at half height, each cell
+    going to the face's plane or to the part beyond, whichever its scan
+    lies nearer, so the wall stands where the scan crosses its middle. A
+    collar lies round the face: a level reaching past the face's window
+    is none. In place; returns the cells split."""
+    blur = np.zeros(lab.shape, bool)
+    n = int(lab.max())
+    narrow = np.concatenate([[False], _narrow(lab, n)])
+    med = np.concatenate([[np.nan], _region_medians(lab, h, n)])
+
+    def height(r: int, cells: np.ndarray) -> np.ndarray:
+        # a face drawn: its surface carried past its edge (flanks', planes'
+        # or a curve's) within its window, else the part's median
+        z = np.full(int(cells.sum()), med[r])
+        if r in drawn:
+            win, fit = drawn[r]
+            full = np.full(lab.shape, np.nan)
+            full[win] = fit.surface
+            z = np.where(np.isfinite(full[cells]), full[cells], z)
+        return z
+
+    for rid, (win, fit, _) in gables.items():
+        sub = lab[win]
+        mine = sub == rid
+        near = ndi.binary_dilation(mine, iterations=1) & ~mine & (sub > 0)
+        collar = np.zeros(sub.shape, bool)
+        for r in np.unique(sub[near]):
+            cells = sub == r
+            if int(cells.sum()) < int((lab == r).sum()):
+                continue
+            flat = float((np.abs(h[win][cells] - med[r]) <= roof_planes.FLANK_TOL_M).mean())
+            under = float(np.median(fit[cells])) - med[r] > EAVE_WALL_M
+            if narrow[r] and not faces[r] and flat < COLLAR_FLAT_SHARE and under:
+                collar |= cells
+        other = (sub > 0) & ~mine & ~collar
+        if not collar.any() or not other.any():
+            continue
+        blur[win] |= collar
+        beyond = fill_nearest(np.where(other, sub, 0), other)
+        hh, top = h[win], surface[win]
+        for t in np.unique(beyond[collar]):
+            cells = collar & (beyond == t)
+            up = np.zeros(sub.shape, bool)
+            spread = np.zeros(lab.shape, bool)
+            spread[win] = cells
+            low = height(int(t), spread)
+            # nearer the face's plane, or off a lower face's plane (whose
+            # plane, carried this far past its edge, may stand anywhere)
+            off = np.abs(hh[cells] - low)
+            up[cells] = (np.abs(hh[cells] - fit[cells]) <= off) | (
+                bool(faces[t]) & (off > EAVE_WALL_M)
+            )
+            sub[up] = rid
+            top[up] = fit[up]
+            down = cells & ~up
+            sub[down] = t
+            if faces[t]:
+                top[down] = low[~up[cells]]
+    return blur
 
 
 def _pockets(rest: np.ndarray, closed: np.ndarray, small_cells: int) -> np.ndarray:
@@ -729,8 +812,8 @@ def measured_model(
         face, flank_only = (c.copy() for c in scan.cells())
     for rounds in range(PLAUSIBLE_ROUNDS + 1):
         lab, faces = _regions(h, own, face, small_cells, with_faces, narrow)
-        surface, implausible, gables = _plausible_faces(
-            h, lab, faces, face, landmark, flank_only, scan.fits
+        surface, implausible, drawn = _plausible_faces(
+            h, lab, faces, face, landmark, flank_only, scan.fits, scan.ways
         )
         if not implausible:
             break
@@ -745,10 +828,15 @@ def measured_model(
         alone = np.isin(lab, [rid for rid, flanks in implausible if flanks])
         face &= ~(dropped & ~alone) & ~(alone & flank_only)
         flank_only &= face
-    # `gables` holds only faces drawn as flanks (an implausible one is none)
-    _straight_eaves(h, lab, faces, surface, gables, small_cells)
+    # `drawn` holds only faces drawn (an implausible one is none)
+    blur = _straight_eaves(h, lab, faces, surface, drawn, small_cells)
     level = _region_medians(lab, h, int(lab.max()))
-    return Model(lab, level, faces, surface)
+    planes = {
+        rid: (win, fit.near, fit.planes)
+        for rid, (win, fit) in drawn.items()
+        if fit.planes is not None
+    }
+    return Model(lab, level, faces, surface, blur, planes)
 
 
 @dataclass
@@ -762,6 +850,8 @@ class Scan:
     # the faces' fits by window and cells (`_plausible_faces`): a face no
     # round and no second model changed is not fitted again
     fits: dict = field(default_factory=dict)
+    # the ways a flank rises square to the building's walls (`wall_ways`)
+    ways: np.ndarray | None = None
 
     def cells(self) -> tuple[np.ndarray, np.ndarray]:
         """The face cells and those only the flank rule found (`_face_cells`)."""
@@ -809,7 +899,7 @@ def surface_grid(model: Model, rid: int, grid: Grid, poly: shapely.Geometry, z: 
     r1 = min(int(np.ceil((grid.ymax - y0) / RES)) + 2, grid.rows)
     mine = model.lab[r0:r1, c0:c1] == rid
     sub = extend_face(model.surface[r0:r1, c0:c1], mine)
-    return {
+    out = {
         "x": round(grid.xmin + c0 * RES, 2),
         "y": round(grid.ymax - r0 * RES, 2),
         "res": RES,
@@ -817,6 +907,48 @@ def surface_grid(model: Model, rid: int, grid: Grid, poly: shapely.Geometry, z: 
         "rows": int(sub.shape[0]),
         "dz": np.round((sub - z) * 100).astype(int).ravel().tolist(),
     }
+    facets = _facets(model, rid, grid, poly, (out["x"], out["y"], z))
+    if facets:
+        out["facets"] = facets
+    return out
+
+
+def _facets(model: Model, rid: int, grid: Grid, poly, frame) -> list[dict] | None:
+    """A face drawn as flanks or planes, as its planes' polygons (`roof_facets`):
+    each one's rings and its plane [a, b, c], the height a + b·(x − x0) +
+    c·(y − y0) from `frame` (x0, y0, z0: the surface grid's corner and the
+    part's `z`). None for any other face, or one whose cells are not all
+    on their plane."""
+    if not model.planes or rid not in model.planes:
+        return None
+    win, near, planes = model.planes[rid]
+    rows, cols = np.nonzero(model.lab[win] == rid)
+    coef = np.zeros((max(planes) + 1, 3))
+    for k, p in planes.items():
+        coef[k] = p
+    on = coef[near[rows, cols]]
+    drawn = model.surface[win][rows, cols]
+    if not len(rows) or np.abs(on[:, 0] + on[:, 1] * cols + on[:, 2] * rows - drawn).max() > 1e-3:
+        return None
+    wx, wy = grid.xmin + win[1].start * RES, grid.ymax - win[0].start * RES
+    cut = roof_facets.face_facets(near, planes, (wx, wy), poly, RES)
+    if cut is None:
+        return None
+    x0, y0, z0 = frame
+    out = []
+    for (a, b, c), cell in cut:
+        rings = [cell.exterior, *cell.interiors]
+        out.append(
+            {
+                "plane": [
+                    round(float(a + b * (x0 - wx) + c * (y0 - wy) - z0), 3),
+                    round(float(b), 5),
+                    round(float(c), 5),
+                ],
+                "rings": [[[round(x, 2), round(y, 2)] for x, y in r.coords] for r in rings],
+            }
+        )
+    return out
 
 
 @dataclass
@@ -1256,6 +1388,7 @@ def region_polygons(
     outline=None,
     miss: Callable[[list], float] | None = None,
     bar: float = KEEP_SHARE,
+    walls: Walls | None = None,
 ) -> list[tuple[shapely.Geometry, float, int]]:
     """The regions in plan: polygonised, simplified as one coverage, its
     edges along the walls of `outline` (the building's own, uncut by
@@ -1263,7 +1396,8 @@ def region_polygons(
     clipped to the footprint; each with its height and label. Laid along
     the walls, the regions hand cells to one another: where the parts so
     drawn miss DOM1 (`miss`, `drawn_miss`) on more than `bar` and more
-    than as the scan put them, they are drawn as the scan put them."""
+    than as the scan put them, they are drawn as the scan put them.
+    `walls`: those of `outline`, where they are known."""
     # every footprint point under a region: the labels grown outward a cell
     grown = fill_nearest(lab, lab > 0)
     near = ndi.binary_dilation(lab > 0, iterations=2)
@@ -1279,7 +1413,8 @@ def region_polygons(
     )
     cover = [_polygonal(shapely.intersection(p, footprint)) for p in cover]
     order = sorted(range(len(cover)), key=lambda i: -heights[ids[i] - 1])
-    walls = building_walls(footprint if outline is None else outline)
+    if walls is None:
+        walls = building_walls(footprint if outline is None else outline)
     laid = clean_cover(regular_cover(cover, order, footprint, walls))
     # what the regularising lost, it may not: the parts as clipped then
     if not _holds(laid, cover):
@@ -1308,7 +1443,8 @@ def drawn_miss(
     model: Model, grid: Grid, dom: np.ndarray, judged: np.ndarray
 ) -> Callable[[list], float]:
     """The share of the `judged` cells under parts drawn of `model`
-    (`region_polygons`) where they miss DOM1 by more than MISS_M: each
+    (`region_polygons`), a wall's blur aside (`Model.judged`), where they
+    miss DOM1 by more than MISS_M: each
     part at its level, a face on its surface carried past its cells
     (`extend_face`, as `surface_grid` writes it)."""
 
@@ -1329,7 +1465,8 @@ def drawn_miss(
             box = roof_planes.grown_box(at | mine, EXTEND_CELLS + 2)
             sub = extend_face(model.surface[box], mine[box])
             h[box][at[box]] = sub[at[box]]
-        return miss_share(h, dom, judged & (lab > 0))
+        sharp = judged if model.blur is None else judged & ~model.blur
+        return miss_share(h, dom, sharp & (lab > 0))
 
     return share
 
@@ -1432,7 +1569,9 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
         return None
     # one scan for every judgement and model of these cells (the models'
     # `known` cells are the judged ones)
-    scan = Scan(scan_surface(dom, judged), own)
+    walls = building_walls(footprint)
+    ways = roof_planes.wall_ways(walls.dirs)
+    scan = Scan(scan_surface(dom, judged), own, ways=ways)
     if miss_lod2 <= MISS_SHARE and (
         level_share(roof, dom, scan.h, judged) < LEVEL_SHARE
         or pitch_holds(roof, scan.h, own, judged)
@@ -1456,7 +1595,7 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
     # hall's monitor roofs, 5 m strips 3 m over the rest, merged into blocks
     # that miss as much as the LoD2 did), they stay
     def misses(m: Model) -> bool:
-        return miss_share(m.heights(), dom, judged & (m.lab > 0)) > bar
+        return miss_share(m.heights(), dom, m.judged(judged)) > bar
 
     if misses(model):
         model = measured_model(
@@ -1487,6 +1626,7 @@ def rebuild(area: Area, obj: LodObject) -> Rebuilt | None:
         outline,
         miss=drawn_miss(model, grid, dom, judged),
         bar=bar,
+        walls=walls,
     )
     parts = []
     for poly, z, rid in drawn:
@@ -1525,8 +1665,9 @@ def run(tile: Tile) -> None:
     ]
     # the provider's LoD2 and DOM1, under its credit line
     write_geojson(out, feats, tile.epsg, f"{tile.credit} (LoD2, DOM1)")
-    faces = sum(1 for r in found for p in r.parts if p.surface)
+    faces = [p.surface for r in found for p in r.parts if p.surface]
     print(
         f"{tile.id}: {len(found)} of {len(objects)} roofs rebuilt from DOM1 "
-        f"({len(feats)} parts, {faces} of them measured faces)"
+        f"({len(feats)} parts, {len(faces)} of them measured faces, "
+        f"{sum('facets' in s for s in faces)} drawn as their planes' facets)"
     )

@@ -224,7 +224,8 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   replaced by what `pipeline/bake/roofs.py` measures: flat levels, and
   faces where it slopes — the flanks of a pitched roof section by
   section, planes, an extruded profile, or on a landmark the scan's
-  surface (`roof_planes.py`) — each an error-bounded TIN cut
+  surface (`roof_planes.py`) — planes as their own polygons, creases
+  straight (`roof_facets.py`), any other face an error-bounded TIN cut
   to its outline, the outlines turned onto the footprint's walls
   (`regular_cover`); ADR 0036).
 - Beyond LoD2 (plan 050, ADR 0036): geometry is added only where DOM1
