@@ -693,9 +693,9 @@ desktop use Chrome with WebGPU.
   `alloc-failed` note leaves its tile bare and the page running; shadows
   that pause after it come back with the next tile that compiles.
 - [ ] **The one-byte shadow colour target.** Shadows render on WebGPU
-  (Chrome desktop, the iPhone) and on `?gpu=webgl2`, with no validation
-  error for the `r8unorm` colour attachment beside the depth; `getGpuDebug`
-  counts 20 MiB for a 2048² map.
+  (Chrome desktop, the iPhone), with no validation error for the `r8unorm`
+  colour attachment beside the depth; `getGpuDebug` counts 20 MiB for a
+  2048² map.
 - [ ] **FXAA on the phone.** Pastel and Comic on the iPhone, against the
   desktop's SMAA at the same snapshot: paving, road markings, the ink
   lines and roof edges — softer is expected, crawling or haloed edges

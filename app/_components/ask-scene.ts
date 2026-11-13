@@ -209,6 +209,10 @@ export function useAskScene(
         // a scene remounted while this waited (a GPU loss) is not asked
         // through the old one's handle
         const gone = () => handleRef.current !== h;
+        // the mirror is a frame stale: a glide `show` just told the scene
+        // reads as moving only once the scene has answered it (ADR 0061);
+        // a scene torn down meanwhile is caught by `gone` below
+        await h.sync().catch(() => null);
         // where a glide lands, not on its way
         const there = await standing(h, gone, signal);
         if (gone()) {
