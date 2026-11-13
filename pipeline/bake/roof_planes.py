@@ -49,6 +49,7 @@ only `flank_cells` found is drawn as flanks or not at all.
 from __future__ import annotations
 
 from collections import deque
+from typing import NamedTuple
 
 import numpy as np
 from scipy import ndimage as ndi
@@ -71,6 +72,18 @@ REFIT_GROWTH = 1.5  # a growing facet refits its plane each time it grows this m
 SETTLE_PASSES = 4
 SETTLE_GAIN_M = 0.05  # a border cell changes facet when the other plane is this much closer
 FACET_W_M = 4.0  # a facet must hold a disk this wide
+
+
+class Fit(NamedTuple):
+    """A face as drawn (`plausible_fit`): its surface over the whole
+    window; drawn as flanks, each cell's eave (NaN off the flanks); drawn
+    as flanks or planes, each cell's plane and the planes (z = a + b·col +
+    c·row)."""
+
+    surface: np.ndarray
+    eave: np.ndarray | None = None
+    near: np.ndarray | None = None
+    planes: dict[int, np.ndarray] | None = None
 
 
 def _plane(rows: np.ndarray, cols: np.ndarray, z: np.ndarray) -> np.ndarray:
@@ -693,7 +706,9 @@ def _share_axes(dirs: dict[int, float], borders: dict[tuple[int, int], int]) -> 
     """Two neighbouring flanks turned within OPPOSITE_DEG of opposite take
     one axis, the longest shared borders first; a flank already paired
     hands its axis on (a south flank across from two houses' north flanks),
-    so every pair it is in keeps a level ridge."""
+    so every pair it is in keeps a level ridge. A flank square to its wall
+    whose partner the wall's way does not hold (`_along_walls`) shares
+    their mean: the scan turns that roof, and a level ridge wins."""
     paired: set[int] = set()
     for (a, b), _ in sorted(borders.items(), key=lambda kv: (-kv[1], kv[0])):
         turn = abs(np.angle(np.exp(1j * (dirs[a] - dirs[b]))))
@@ -717,7 +732,7 @@ def wall_ways(dirs: np.ndarray) -> np.ndarray:
     return np.concatenate([-dirs + np.pi / 2, -dirs - np.pi / 2])
 
 
-def _along_walls(h, lab, dirs: dict[int, float], ways: np.ndarray | None, res: float) -> None:
+def _along_walls(h, lab, dirs: dict[int, float], ways: np.ndarray | None, res: float) -> set[int]:
     """Each flank turned within WALL_DEG of square to one of the building's
     walls rises square to it: an eave runs along its wall, and a ridge and
     the hips follow — the scan's slope alone turns a flank by its blur at
@@ -725,9 +740,10 @@ def _along_walls(h, lab, dirs: dict[int, float], ways: np.ndarray | None, res: f
     way (a footprint of many directions does not say which wall is the
     flank's) and its plane holds the flank as well that way (WALL_FIT of
     its cells less on it at most): a turret's face, a wing built off the walls'
-    grid keep the way the scan shows."""
+    grid keep the way the scan shows. Returns the flanks so turned."""
+    turned: set[int] = set()
     if ways is None or not len(ways):
-        return
+        return turned
     for k, phi in dirs.items():
         off = np.angle(np.exp(1j * (ways - phi)))
         near = np.abs(off) <= np.deg2rad(WALL_DEG)
@@ -741,6 +757,8 @@ def _along_walls(h, lab, dirs: dict[int, float], ways: np.ndarray | None, res: f
         ]
         if on[0] >= on[1] - WALL_FIT:
             dirs[k] = way
+            turned.add(k)
+    return turned
 
 
 def _assign(hs, lab, planes, mine, reach: int, held_on=None) -> np.ndarray:
@@ -973,6 +991,7 @@ def flank_facets(
     res: float = 1.0,
     ways: np.ndarray | None = None,
     decks: bool = True,
+    seen: dict[str, bool] | None = None,
 ):
     """The face as flanks: labels over `mine`, each label's plane, and
     whether any flank sags. A flank is a patch facing one way on the scan
@@ -987,7 +1006,11 @@ def flank_facets(
     `decks`, a level where that holds it: `_level`), and every
     other cell the plane near it that stands closest to the scan, the
     borders settled where two planes cross. Also the share of the flanks'
-    cells on flanks that rise from an eave (`_eave`)."""
+    cells on flanks that rise from an eave (`_eave`). `seen`, when given,
+    learns whether a flank was turned to a wall (`turned`) and a patch laid
+    level (`levelled`): where neither, the other ways of `gable_fit` draw
+    the same."""
+    seen = {} if seen is None else seen
     hs, slope, aspect, cls, n = _flank_classes(h, mine, slope_min * res)
     lab = np.zeros(h.shape, np.int64)
     dirs: dict[int, float] = {}
@@ -1007,7 +1030,8 @@ def flank_facets(
     lab, dirs = _join_flanks(h, lab, dirs, mine, aspect, slope, res)
     eaved = sum(int((lab == k).sum()) * _eave(lab == k, hs, inward, phi) for k, phi in dirs.items())
     eaves = eaved / float((lab > 0).sum())
-    _along_walls(h, lab, dirs, ways, res)
+    held = _along_walls(h, lab, dirs, ways, res)
+    seen["turned"] = bool(held)
     # gables: two flanks side by side facing nearly opposite ways take one axis
     _share_axes(dirs, label_borders(np.where(mine, fill_nearest(lab, lab > 0), 0)))
     planes: dict[int, np.ndarray] = {}
@@ -1037,6 +1061,7 @@ def flank_facets(
         label = max(planes) + 1
         lab[rest_lab == k2] = label
         planes[label] = _level(h, rest_lab == k2, coef) if decks else coef
+        seen["levelled"] = seen.get("levelled", False) or planes[label] is not coef
     full = _assign(hs, lab, planes, mine, ASSIGN_REACH)
     full = settle_borders(np.where(mine, hs, 0.0), full, planes)
     return full, planes, set(dirs), sags, eaves
@@ -1049,7 +1074,8 @@ def _gable_fit(
     res: float = 1.0,
     ways: np.ndarray | None = None,
     decks: bool = True,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[int, np.ndarray]] | None:
+    seen: dict[str, bool] | None = None,
+) -> Fit | None:
     """The face as its flanks (`flank_facets`) over the whole grid, each
     cell on the plane of the flank nearest it — the surface, each flank's
     eave, each cell's plane and the planes —; or None where they do not
@@ -1059,7 +1085,7 @@ def _gable_fit(
     a flank sagging like a vault's half, flanks holding less than
     FLANK_SHARE of it, flanks turned every way (not `orderly`), or flanks
     that mostly do not rise from an eave (`_eave`): a blanket's patches."""
-    lab, planes, flanks, sags, eaves = flank_facets(h, mine, slope, res, ways, decks)
+    lab, planes, flanks, sags, eaves = flank_facets(h, mine, slope, res, ways, decks, seen)
     if not flanks or sags or eaves < EAVE_SHARE:
         return None
     # the flanks hold much of it and face the ways one roof's flanks do
@@ -1096,7 +1122,7 @@ def _gable_fit(
         sel = mine & (near == k) & (np.abs(h - out) <= FLANK_TOL_M)
         if sel.sum():
             eave[near == k] = np.percentile(out[sel], EAVE_PCT)
-    return out, eave, near, planes
+    return Fit(out, eave, near, planes)
 
 
 def gable_fit(
@@ -1105,19 +1131,21 @@ def gable_fit(
     slope: float,
     res: float = 1.0,
     ways: np.ndarray | None = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[int, np.ndarray]] | None:
+) -> Fit | None:
     """The face as its flanks (`_gable_fit`), each rising square to the
     building's wall where `ways` leave one near its own (`_along_walls`),
     the patches between them level where a level holds them (`_level`);
     where the flanks so drawn are no roof's (a level that takes a flank's
     cells along its border, a footprint whose walls run off the roof's
     axes), the patches on their own planes, then the flanks as the scan
-    alone turns them."""
+    alone turns them — each only where it can draw otherwise (`seen`)."""
     for turned in (ways, None) if ways is not None and len(ways) else (None,):
-        for decks in (True, False):
-            fit = _gable_fit(h, mine, slope, res, turned, decks)
-            if fit is not None:
-                return fit
+        seen: dict[str, bool] = {}
+        fit = _gable_fit(h, mine, slope, res, turned, True, seen)
+        if fit is None and seen.get("levelled"):
+            fit = _gable_fit(h, mine, slope, res, turned, False)
+        if fit is not None or not seen.get("turned"):
+            return fit
     return None
 
 
@@ -1130,7 +1158,7 @@ def plausible_fit(
     landmark: bool = False,
     flanks_only: bool = False,
     ways: np.ndarray | None = None,
-) -> tuple | None:
+) -> Fit | None:
     """The face `mine` of the scan `h` over the whole grid as flanks or
     planes (each cell on the plane of the flank or facet nearest it), as one
     extruded profile, or, on a `landmark`, as measured; else None (see the
@@ -1161,11 +1189,11 @@ def plausible_fit(
         for k, coef in planes.items():
             m = near == k
             out[m] = _on(coef, rows[m], cols[m])
-        return out, None, near, planes
+        return Fit(out, None, near, planes)
     curve = curved_surface(h, mine, res)
     if curve is None and landmark:
         curve = measured_surface(h, mine, reach)
-    return None if curve is None else (curve, None)
+    return None if curve is None else Fit(curve)
 
 
 def _disk(width_m: float, res: float) -> np.ndarray:

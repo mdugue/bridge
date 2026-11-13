@@ -12,6 +12,7 @@ from scipy import ndimage as ndi
 from shapely import affinity
 
 from bake.common import Tile
+from bake.roof_planes import Fit
 from bake.roofs import (
     LEVEL_MISS_SHARE,
     LEVEL_SHARE,
@@ -24,6 +25,7 @@ from bake.roofs import (
     _majority,
     _narrow,
     _polygonal,
+    _split_collars,
     _straightened,
     building_walls,
     clean_cover,
@@ -671,3 +673,28 @@ def test_a_stage_houses_hip_is_written_as_its_four_planes_facets():
         height = z + a + b * (p.x - surface["x"]) + c * (p.y - surface["y"])
         row, col = int(Y0 + 60 - p.y), int(p.x - X0)
         assert abs(height - dom[row, col]) < 0.6
+
+
+def test_a_collar_beside_a_lower_sloped_face_goes_down_onto_that_faces_plane():
+    # a flank falling east to a wall's blur three cells wide, then a lower
+    # face drawn as a plane rising east (its median far above its edge):
+    # the blur's foot lies on that plane carried past its edge, not at the
+    # face's median
+    rows, cols = 20, 30
+    c = np.indices((rows, cols))[1] + 0.5
+    lab = np.zeros((rows, cols), np.int64)
+    lab[:, :10], lab[:, 10:13], lab[:, 13:] = 1, 2, 3
+    flank = 20 - 0.5 * c
+    low = 8 + 0.4 * (c - 13.5)
+    h = np.where(lab == 1, flank, low)
+    h[:, 10], h[:, 11], h[:, 12] = 14.0, 11.0, 8.0
+    faces = np.array([False, True, False, True])
+    surface = h.copy()
+    win = (slice(0, rows), slice(0, cols))
+    eave = np.where(lab == 1, 15.0, np.nan)
+    gables = {1: (win, flank, eave)}
+    drawn = {1: (win, Fit(flank, eave)), 3: (win, Fit(low))}
+    blur = _split_collars(h, lab, faces, surface, gables, drawn)
+    assert blur[:, 10:13].all() and not blur[:, :10].any() and not blur[:, 13:].any()
+    assert (lab[:, 10] == 1).all() and (lab[:, 12] == 3).all()
+    assert np.allclose(surface[:, 12], low[:, 12])

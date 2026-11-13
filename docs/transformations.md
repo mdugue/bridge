@@ -1250,8 +1250,8 @@ visual-variable codebook is in
   corners one edge (a step's stair within 0.75 m of straight), so two
   facets share a border point for point; facets that miss the outline by
   > 0.1 % leave the face to its grid. A ridge, a hip, a valley is one
-  straight edge where the grid cut it off between two cell centres. **1 080 objects on Dresden's fifteen tiles, 2 728
-  parts, 344 of them faces, 319 of those with facets** (2026-11-13; 2 731
+  straight edge where the grid cut it off between two cell centres. **1 080 objects on Dresden's fifteen tiles, 2 727
+  parts, 343 of them faces, 319 of those with facets** (2026-11-13; 2 731
   and 335 before flanks rose square to their walls and blocks on them
   took planes of their own; 2 741 and 334 before a wall's
   blur was split, 2 738 and 335 before a landmark's flanks took every
@@ -1268,7 +1268,8 @@ visual-variable codebook is in
   the plane's normal, the heights of facets meeting at a corner within
   0.5 m one height — a crease, or two planes the scan cannot tell from
   two that meet (the bake's `FLANK_TOL_M`), where a step would be a
-  sliver of wall a hand high across the roof —, a wall where a facet's
+  sliver of wall a hand high across the roof; two meeting at a crease
+  there, within 5 cm, are never parted —, a wall where a facet's
   edge has no neighbour or a lower one), any other face as an error-bounded
   TIN of its grid (Delatin, 0.25 m) whose inner vertices are triangulated
   with the outline's points where the height along it bends (Delaunay,

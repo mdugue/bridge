@@ -560,6 +560,10 @@ function facePrism(
  *  a hand high across the roof. Further apart, a step. */
 const FACET_STEP_M = 0.5;
 
+/** Two facets' heights at a corner within this (m) of each other meet at
+ *  a crease there: never parted by the weld above. */
+const FACET_CREASE_M = 0.05;
+
 /** A corner's key on the bake's centimetre grid. */
 function cornerKey(p: Point2): string {
   return `${Math.round(p[0] * 100)},${Math.round(p[1] * 100)}`;
@@ -593,7 +597,8 @@ function surfaceFacets(s: MeasuredSurface, top: number): Facet[] {
 
 /** Per corner, each facet's height there: its plane's, or the mean of
  *  those of the facets meeting there within FACET_STEP_M of the lowest of
- *  them, so a crease has no crack; never under `base`. */
+ *  them, so a crease has no crack; the facets meeting at a crease there
+ *  (FACET_CREASE_M, chained) weld as one; never under `base`. */
 function facetHeights(facets: readonly Facet[], base: number) {
   const at = new Map<string, { facet: number; z: number }[]>();
   for (const [facet, f] of facets.entries()) {
@@ -607,21 +612,44 @@ function facetHeights(facets: readonly Facet[], base: number) {
     }
   }
   for (const list of at.values()) {
-    list.sort((x, y) => x.z - y.z);
-    for (let i = 0; i < list.length;) {
-      let j = i + 1;
-      while (j < list.length && list[j].z - list[i].z <= FACET_STEP_M) {
-        j += 1;
+    for (const weld of welds(list)) {
+      const mean = weld.reduce((sum, e) => sum + e.z, 0) / weld.length;
+      for (const e of weld) {
+        e.z = mean;
       }
-      const mean = list.slice(i, j).reduce((sum, e) => sum + e.z, 0) / (j - i);
-      for (let k = i; k < j; k += 1) {
-        list[k].z = mean;
-      }
-      i = j;
     }
   }
   return (facet: number, p: Point2): number =>
     at.get(cornerKey(p))?.find((e) => e.facet === facet)?.z ?? base;
+}
+
+/** A corner's facet heights in the groups that take one height: the
+ *  creases first (FACET_CREASE_M, chained), then those within
+ *  FACET_STEP_M of the lowest crease of a group. */
+function welds<T extends { z: number }>(list: T[]): T[][] {
+  const sorted = [...list].sort((x, y) => x.z - y.z);
+  const creases: T[][] = [];
+  for (const e of sorted) {
+    const last = creases.at(-1);
+    const prev = last?.at(-1);
+    if (last && prev && e.z - prev.z <= FACET_CREASE_M) {
+      last.push(e);
+    } else {
+      creases.push([e]);
+    }
+  }
+  const out: T[][] = [];
+  let floor = Number.NEGATIVE_INFINITY;
+  for (const crease of creases) {
+    const last = out.at(-1);
+    if (last && crease[0].z - floor <= FACET_STEP_M) {
+      last.push(...crease);
+    } else {
+      out.push([...crease]);
+      floor = crease[0].z;
+    }
+  }
+  return out;
 }
 
 /** One vertex a prism pushes. */
