@@ -934,7 +934,7 @@ const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
           initialDate: timeNow(),
           signal: aborter.signal,
           trail,
-          reloadable: recoveries.recoverable(budget.safety),
+          reloadable: () => recoveries.recoverable(budget.safety),
           // Everything the scene only reports goes to the store, for the
           // widgets that show it (scene-status.ts) — while this boot is
           // the page's.

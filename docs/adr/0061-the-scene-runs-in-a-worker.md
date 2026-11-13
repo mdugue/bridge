@@ -35,7 +35,9 @@ three's renderers run there since r180.
   (`reloadable`); the scene releases its device, then reports
   `onReload`.
 - Behind a covering sheet the scene draws only what is asked of it: a
-  call wakes it for half a second at 12 fps; nothing else draws.
+  call wakes it for half a second at 12 fps, and a scene that moves (a
+  glide a call started, a stream landing) keeps that rate; a still one
+  draws nothing else.
 
 ## Consequences
 

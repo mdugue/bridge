@@ -101,6 +101,9 @@ export type ToScene =
   | { t: "page"; state: PageState; event?: PageEventMessage }
   | { t: "look"; values: LookValues }
   | { t: "probe"; probe: PocProbe }
+  /** the stops the page recovers from now (the boot's list, aged: a stop
+   *  past its window becomes recoverable again) */
+  | { t: "reloadable"; reloadable: GpuLoss[] }
   /** the page's letters for a scene's request */
   | { t: "letters"; id: number; raster: PlateRaster | null };
 

@@ -33,9 +33,10 @@ describe("frame pace", () => {
     expect(pace.takePaced()).toBe(false);
   });
 
-  test("a covered scene draws nothing it was not asked for", () => {
+  test("a covered, still scene draws nothing it was not asked for", () => {
     const pace = createFramePace();
     pace.setCovered(true);
+    pace.setStill(true);
     expect(drawn(pace, 0)).toBe(0);
     expect(pace.takePaced()).toBe(true);
     expect(pace.takePaced()).toBe(false);
@@ -44,6 +45,7 @@ describe("frame pace", () => {
   test("asked, a covered scene draws at its rate for a while, then stops", () => {
     const pace = createFramePace();
     pace.setCovered(true);
+    pace.setStill(true);
     pace.request();
     const tail = Math.floor(COVERED_TAIL_MS / FRAME);
     const n = drawn(pace, 0, tail);
@@ -56,11 +58,24 @@ describe("frame pace", () => {
     expect(drawn(pace, tail * FRAME + FRAME, 60)).toBe(0);
   });
 
+  test("a covered scene that moves draws at the covered rate", () => {
+    const pace = createFramePace();
+    pace.setCovered(true);
+    // a glide a call started: its pose steps only in drawn frames
+    const n = drawn(pace, 0, 60);
+    expect(n).toBeGreaterThanOrEqual(COVERED_FPS - 1);
+    expect(n).toBeLessThanOrEqual(COVERED_FPS + 1);
+    pace.setStill(true);
+    expect(drawn(pace, 1000 + FRAME, 60)).toBe(0);
+  });
+
   test("uncovering draws at once, an ask or not", () => {
     const pace = createFramePace();
     pace.setCovered(true);
+    pace.setStill(true);
     expect(pace.draws(0)).toBe(false);
     pace.setCovered(false);
+    pace.setStill(false);
     expect(pace.draws(FRAME)).toBe(true);
   });
 

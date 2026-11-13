@@ -214,8 +214,9 @@ export interface StartSceneOptions extends SceneReports {
   look: LookState;
   pace: ScenePace;
   trail?: CrashTrail;
-  /** the stops the page recovers from by a reload (gpu-recovery.ts) */
-  reloadable: GpuLoss[];
+  /** the stops the page recovers from by a reload now (gpu-recovery.ts
+   *  `recoverable`): asked at the boot, and again as the records age */
+  reloadable: () => GpuLoss[];
   /** aborts the boot (a StrictMode remount, a place picked meanwhile) */
   signal: AbortSignal;
 }
@@ -525,7 +526,7 @@ export async function startScene(
     initialView: opts.initialView,
     initialDate: opts.initialDate,
     look: opts.look.get(),
-    reloadable: opts.reloadable,
+    reloadable: opts.reloadable(),
     page: pageState(),
     trail: opts.trail !== undefined,
     probe: pocProbeNow(),
@@ -587,6 +588,9 @@ async function bootOver(
     ),
     opts.look.subscribe((values) => client.post({ t: "look", values }))
   );
+  // and the look as it stands now: one set while the worker said hello
+  // had no one to hear it
+  client.post({ t: "look", values: opts.look.get() });
   if (channel.thread === "worker") {
     stops.push(
       watchPage((state, event) => client.post({ t: "page", state, event }))
@@ -613,21 +617,13 @@ async function bootOver(
           reject(errorFrom(message.error));
         }
       };
-      const onWorkerError = (event: ErrorEvent) => {
-        done();
-        reject(new Error(event.message || "the scene worker failed"));
-      };
+      // (an uncaught error in the worker is reported, not fatal: the boot
+      // fails by its own "failed")
       const done = () => {
         opts.signal.removeEventListener("abort", onAbort);
         channel.port.removeEventListener("message", onMessage);
-        if (channel.port instanceof Worker) {
-          channel.port.removeEventListener("error", onWorkerError);
-        }
       };
       channel.port.addEventListener("message", onMessage);
-      if (channel.port instanceof Worker) {
-        channel.port.addEventListener("error", onWorkerError);
-      }
     });
   } catch (error) {
     end();
@@ -645,6 +641,10 @@ async function bootOver(
     setListening: (listening: boolean) =>
       client.tell("setListening", [listening]),
   };
+  // the sheet and the listening as they stand now: a change during the
+  // boot reached no scene
+  scenePace.setCovered(opts.pace.covered);
+  scenePace.setListening(opts.pace.listening);
   stops.push(opts.pace.follow(scenePace));
   // the HUD's panels, while a nameplate shows (it keeps clear of them)
   let lastCovers = "";
@@ -660,6 +660,18 @@ async function bootOver(
     }
   }, COVERS_MS);
   stops.push(() => clearInterval(covers));
+  // the stops recoverable now: the records age, and the scene decides at
+  // the stop, where it cannot ask (a message, not a call: it wakes nothing)
+  let lastReloadable = JSON.stringify(opts.reloadable());
+  const reloadable = setInterval(() => {
+    const now = opts.reloadable();
+    const said = JSON.stringify(now);
+    if (said !== lastReloadable) {
+      lastReloadable = said;
+      client.post({ t: "reloadable", reloadable: now });
+    }
+  }, RELOADABLE_MS);
+  stops.push(() => clearInterval(reloadable));
   connectPocScene({
     counts: () => client.mirror()?.poc ?? null,
     probe: (probe) => client.post({ t: "probe", probe }),
@@ -673,6 +685,9 @@ async function bootOver(
     input.lockPointer
   );
 }
+
+/** How often the page asks again which stops it recovers from (ms). */
+const RELOADABLE_MS = 30_000;
 
 /** How long the page waits at most for a disposed worker's answer before
  *  it ends it (ms): its GPU device goes with it either way. */

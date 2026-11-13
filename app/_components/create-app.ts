@@ -129,6 +129,7 @@ import {
 import type { OutlineSelection } from "./selection-outline";
 import { trafficMesh } from "./traffic-flow";
 import { createCityCollider } from "./collision";
+import { compilesQueued } from "./compile-lanes";
 import { createDemolitions } from "./demolitions";
 import { createDesignLayer } from "./design-layer";
 import type { DesignLayer, DesignStatus } from "./design-layer";
@@ -683,11 +684,11 @@ export interface SceneApp {
   resize: (size: CanvasSize) => void;
   /** The HUD's panels over the canvas: the nameplate keeps clear of them. */
   setCovers: (boxes: readonly CoverBox[]) => void;
-  /** The HUD covers the scene (a phone's sidebar sheet): it draws only
-   *  what is asked of it (lib/city/frame-pace.ts). */
-  /** a still or covered scene draws its next frames: what the page asks
-   *  of it shows (scene-server.ts wakes it for every call) */
+  /** A still or covered scene draws its next frames: what the page asks
+   *  of it shows (scene-server.ts wakes it for every call). */
   wake: () => void;
+  /** The HUD covers the scene (a phone's sidebar sheet): it draws only
+   *  what is asked of it, and while it moves (lib/city/frame-pace.ts). */
   setCovered: (covered: boolean) => void;
   /** The visitor only listens (the Hörmodus): the scene barely draws. */
   setListening: (listening: boolean) => void;
@@ -764,6 +765,10 @@ export interface SceneApp {
      * post passes' first frames, anything a compile missed).
      */
     framedBuilds: { other: number; shadow: number };
+    /** compiles queued or in flight (compile-lanes.ts `compilesQueued`):
+     *  a tile shows after its compile wait even if its compile has not
+     *  had its turn yet, and what it hides until dark builds then */
+    compilesQueued: number;
     /** estimated GPU bytes of geometry + textures + shadow map */
     gpuBytes: number;
     /**
@@ -1384,20 +1389,6 @@ function unionBounds(extras: TilesetExtras): TerrainBounds {
     ];
   }
   return acc;
-}
-
-/** Each of `actions`, waking the scene first. */
-function wakingAll<T extends object>(actions: T, wake: () => void): T {
-  return Object.fromEntries(
-    Object.entries(actions).map(([name, act]) => [
-      name,
-      (...args: unknown[]) => {
-        wake();
-        // reason: every member of an actions object is a function
-        return (act as (...a: unknown[]) => unknown)(...args);
-      },
-    ])
-  ) as T;
 }
 
 /** The stream's change handler until the scene has one: nothing is built. */
@@ -4299,9 +4290,9 @@ async function bootApp(
       wakeStill();
     },
     // input wakes a still scene for the very next frame (the pose steps
-    // only in drawn frames)
-    touch: wakingAll(touch, wakeStill),
-    keys: wakingAll(keys, wakeStill),
+    // only in drawn frames): scene-server wakes it before every call
+    touch,
+    keys,
     releaseGpu: async () => await releaseGpu(renderer),
     flyTo: (position, lookAt) => {
       wakeStill();
@@ -4381,6 +4372,7 @@ async function bootApp(
       passes: renderer.info.render.frameCalls,
       triangles: renderer.info.render.triangles,
       framedBuilds: { ...framedBuilds.counts },
+      compilesQueued: compilesQueued(renderer),
       // counted now: a debug read, on demand
       gpuBytes: gpuBytesWith(estimateGeometryBytes(scene)),
       memory: { ...renderer.info.memory },

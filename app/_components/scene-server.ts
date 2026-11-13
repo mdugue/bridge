@@ -103,6 +103,7 @@ export function serveScene(
   const send = (message: ToPage, transfer: Transferable[] = []) =>
     port.postMessage(message, transfer);
   const look = createLookState(init.look);
+  let { reloadable } = init;
   const aborter = new AbortController();
   setPocProbe(init.probe);
   feedPageView(init.page);
@@ -139,10 +140,11 @@ export function serveScene(
     REPORTS.map((name) => [
       name,
       (...a: unknown[]) => {
-        send({ t: "report", name, a });
+        // the footprints first: the page's stats handler reads them
         if (name === "onStats") {
           sendFootprints();
         }
+        send({ t: "report", name, a });
       },
     ])
   ) as Required<Pick<CityWalkOptions, ReportName>>;
@@ -247,6 +249,10 @@ export function serveScene(
         setPocProbe(message.probe);
         break;
       }
+      case "reloadable": {
+        ({ reloadable } = message);
+        break;
+      }
       case "letters": {
         lettersWaiting.get(message.id)?.(message.raster);
         lettersWaiting.delete(message.id);
@@ -304,7 +310,7 @@ export function serveScene(
         initialView: init.initialView,
         initialDate: init.initialDate,
         look,
-        reloadable: (how) => init.reloadable.includes(how),
+        reloadable: (how) => reloadable.includes(how),
         trail,
         letters,
         signal: aborter.signal,

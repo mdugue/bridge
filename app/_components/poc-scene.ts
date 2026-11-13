@@ -43,7 +43,10 @@ const counts: PocCounts = { frames: 0, shadowRenders: 0 };
 export function setPocProbe(next: PocProbe): void {
   if (pocEnabled) {
     Object.assign(probe, next);
-    counts.step = probe.step;
+    // only a step asked now: the scene counts it down as it draws
+    if ("step" in next) {
+      counts.step = next.step;
+    }
   }
 }
 

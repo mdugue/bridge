@@ -9,8 +9,10 @@
  * GPU work it still shares. While covered the loop therefore draws only
  * what is asked of it: a call from the HUD (a sun, a style, a slider)
  * wakes it for COVERED_TAIL_MS at COVERED_FPS — enough for the change and
- * the shadow map's redraw to show through the backdrop — and nothing
- * draws otherwise, a scroll included: it asks the scene nothing.
+ * the shadow map's redraw to show through the backdrop — and keeps that
+ * rate while the scene moves (a glide a call started, a stream landing:
+ * the pose steps only in drawn frames). A still scene draws nothing
+ * otherwise, a scroll included: it asks the scene nothing.
  *
  * A scene that stands still — the camera has not moved for STILL_AFTER_MS,
  * nothing streams in, no data layer runs, no input came — draws at
@@ -114,7 +116,11 @@ export function createFramePace(): FramePace {
         asked = false;
         askedUntil = now + COVERED_TAIL_MS;
       }
-      const coveredDraws = !covered || (now < askedUntil && since >= interval);
+      // covered: at its rate while asked, or while the scene moves (a
+      // glide a call started, a stream landing): the pose steps only in
+      // drawn frames
+      const coveredDraws =
+        !covered || ((now < askedUntil || !still) && since >= interval);
       // moving and listened to: at its rate, or now if skipping this frame
       // would leave the next one past the loop's time step
       const listenedDraws = still

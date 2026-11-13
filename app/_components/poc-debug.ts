@@ -104,7 +104,8 @@ const probed = (key: "frameMs" | "hold" | "veil") => ({
   set: (value: unknown) => {
     // reason: each key takes its own member's type from the specs
     (probe as Record<string, unknown>)[key] = value;
-    scene?.probe({ ...probe });
+    // the key alone: a whole copy would ask its stale step again
+    scene?.probe({ [key]: value });
   },
 });
 
@@ -127,7 +128,7 @@ function pocInfo(): PocDebugInfo {
       get: () => scene?.counts()?.step ?? probe.step,
       set: (value: number | undefined) => {
         probe.step = value;
-        scene?.probe({ ...probe });
+        scene?.probe({ step: value });
       },
     },
   });
@@ -151,5 +152,7 @@ export function connectPocScene(next: PocScene | null): void {
   }
   pocInfo();
   scene = next;
-  next?.probe({ ...probe });
+  // the boot carried them, a step among them: these are the ones set
+  // since, and a step set before would be asked twice
+  next?.probe({ hold: probe.hold, frameMs: probe.frameMs, veil: probe.veil });
 }
