@@ -445,7 +445,11 @@ one job.
 repository that touches what can move a pixel: it builds the head and,
 in a worktree, the base (each `PREPARE_SITES=dresden`, the base from the
 head's bake cache), renders both with the head's harness and compares.
-In the container: JOB_SECONDS. A `## Snapshots` section in the
+In the container the whole command took 14 min 43 s — two builds (about
+100 s each, the bake cache warm) and two renders of 5½ min — and found 0
+of 8 views differing between a commit and itself built twice. A hosted
+runner has been half as fast as that for the e2e shards (`ci.yml`), so
+the job's budget is 45 min; its first runs give the real figure. A `## Snapshots` section in the
 description (read when the job runs, so a re-run sees an edit) makes it
 report; without one a differing view fails it. Base, head and difference
 image of each differing view are the `plates-report` artifact; the table

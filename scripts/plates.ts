@@ -461,7 +461,8 @@ function parseArgs(argv: string[]): Args {
 /**
  * The base commit's plates: from `plates/<tier>/<sha>/` when this machine
  * rendered them before with the same adapter and views, else built in a
- * worktree (`plates/src/<sha>`, with the head's bake cache) and rendered.
+ * worktree (`plates/src/<sha>`, with the head's bake cache, removed once
+ * rendered) and rendered.
  */
 async function basePlates(
   tier: Tier,
@@ -497,6 +498,8 @@ async function basePlates(
   log(`base ${sha.slice(0, 8)}: building`);
   await build(src);
   await served(src, async (port) => await render(tier, port, out, views));
+  // its plates are kept; the checkout (a gigabyte of data) is not
+  sh("git", ["worktree", "remove", "--force", src]);
   return out;
 }
 
