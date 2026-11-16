@@ -1510,6 +1510,28 @@ whose brackets do not close as read is an error, not a figure:
 | `bakeSeamModules` | the modules under `pipeline/bake/` whose code handles a tile's edge — plan 092's five ways by their calls, and any other read with a `margin` | 58 of 84 |
 | `upstreamWorkarounds` | the entries of `docs/rendering.md`, "Workarounds for upstream bugs", and the comments that say *upstream workaround* | 10 entries, 8 sites |
 
+### What the bakes hand over
+
+The ledger's `bakeStore` section (plan 092; the counting in
+`lib/city/ledger-bake-store.ts`, the reading in
+`scripts/ledger-bake-store.ts`) is read from the tree alone — the bake
+modules and the baked files git tracks under `data/<site>/dlm/` and
+`dop/`, so a site that is fetched but not committed and a file an
+interrupted bake left behind are none —, needs no build and no bake, and
+falls as plan 092's phases land:
+
+| Figure | Counts | The tree, 2026-11-16 |
+|---|---|---|
+| `fileKinds` | the distinct `<kind>.<format>` among the files named for a tile, in all and by format — the union over the committed sites (Leipzig, München and Unna have 50 of them, Hamburg 49); `formats` is how many formats | 51 in 3: 28 GeoJSON, 13 JSON, 10 PNG |
+| `mixedKeyOrder` | the feature kinds whose rows, over all sites, have no single key order (two keys turned round between rows, or more in a circle): a reader that returns rows in a schema's order does not return these as written. `furniture` is mixed within single files; `traffic` has one order in each site, Dresden's another than the others' | `furniture`, `traffic` |
+| `stepCacheCodeLines` | `pipeline/bake/step_cache.py`'s lines of code (no comment, no blank line): the ledger of rewrites lives there | 503 |
+| `neighboursModules` | the bake modules that call `Tile.neighbours()` | 14 |
+
+The bake modules that call `owns` are `counters.bakeSeamModules.ways.owns`
+(17), counted there. Which step writes into another step's file is in a
+bake's manifests only, so it is no figure here: plan 092's *Findings* hold
+it.
+
 ### The rasters, every site
 
 The ledger's `rasters` section (plan 091 phase 0; the arithmetic in
@@ -1601,6 +1623,48 @@ compared.
   Recorded with the machine and the day, never compared: on SwiftShader
   a timing depends on the runner drawn. `browser.readWith` names the
   browser and adapter beside the figures, uncompared too.
+- **The builds against WebGPU's limits** (`browser.pipelines`, plan
+  094): on the phone page, once its cache has settled with no compile
+  queued (on the desktop page the wait for that cost a minute), every
+  build the lite spawn draws with, from `handle.getPipelineBudget()` (the e2e
+  "limits" test's probe), named `key [draw: layout] shadowed camera`,
+  each with the vertex buffers, attributes and inter-stage variables it
+  takes of WebGPU's 8, 16 and 16 and the variables it has spare
+  (`lib/city/ledger-census.ts` `pipelineFigures`). Gated exactly: a row
+  that moves is a layer coming nearer a limit, and the diff says which.
+
+### The census of builds
+
+`bun run ledger -- --census` (plan 094, phase 2; implies `--browser`)
+also flies every built site, one test of `e2e/ledger.spec.ts` each
+(`LEDGER_CENSUS`), and writes the `census` section — recorded, never
+compared (it is in `UNCOMPARED` whole): what lands when is the machine's
+frame rate's. Each site in the whole-site profile
+(`?scene=lite&block=1`, 400×300) reads its counters at `ready`, switches
+on every data layer it has — Dresden's bicycle counts answered by the
+spec (`e2e/scene-fixtures.ts`), a design block loaded there — and reads
+them again once the spawn has settled (`dressed`); the flight's window
+is `dressed` → end. It then flies `censusFlight`: an overview from
+2.5 km over the site's middle (the far building level), and low oblique
+stops over up to four tiles, the spawn and those farthest from the ones
+seen. A stop waits for the view to rest, the stream to be quiet and no
+compile queued in two reads two seconds apart (at most four minutes;
+`settled` says whether it got there) and reads `getPipelineBudget` —
+every build the scene holds, so the whole site's builds are held to the
+limits too (`probeBuilt`: programs the read itself made; `left`, `unread`:
+what it could not read). Dresden is then entered in Modell (`M`) from
+its spawn and read once more. Per site: every build met by name with
+what it takes of the limits (`builds.rows`; two rows of one name keep
+the tighter), the distinct builds (key × draw × layout × shadow receipt
+× camera), the distinct keys and each key family with more than one key
+(`keyFamily`: what comes before the first value — the sets made from
+data), `framedBuilds` and `programs` at `ready`, `dressed` and the
+flight's end, the compile timings over the window (`tile:compile` is
+what a landing tile waited for, capped at 3 s; `compile:turn-wait` is a
+compile's place in a burst's queue, not a landing's wait), the tightest
+builds by each limit, and the errors met. SwiftShader's WGSL and limits
+only. Tens of minutes on SwiftShader, so never on CI; run it on
+linux-x64 after building every site.
 
 Baseline, 2026-11-16 (linux-x64 cloud container, Bun 1.4.4, Chromium 153
 on SwiftShader): the first load fetches 42 scripts, 1 103 124 bytes gzip

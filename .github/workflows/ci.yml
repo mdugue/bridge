@@ -342,8 +342,10 @@ jobs:
       # a failed e2e too, so that neither hides the other. Where the e2e half
       # runs (Playwright is installed), `--browser` adds what a browser reads
       # from the same build (e2e/ledger.spec.ts, ~1.5 min, never retried): the
-      # first load's JavaScript and a phone's tile cache, gated exactly; the
-      # timings, recorded only.
+      # first load's JavaScript, a phone's tile cache and the lite spawn's
+      # builds against WebGPU's limits (browser.pipelines, plan 094), gated
+      # exactly; the timings, recorded only. The census (`--census`, every
+      # site flown) is never run here: its committed figures stand.
       - name: Ledger
         if: ${{ !cancelled() && matrix.shard.buildCheck && steps.build.outcome == 'success' }}
         shell: bash

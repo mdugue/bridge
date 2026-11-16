@@ -17,8 +17,10 @@
 import { gzipSync } from "node:zlib";
 import type { BrowserFigures, Timings } from "./ledger-browser";
 import type { Counters } from "./ledger-counters";
+import type { BakeStoreLedger } from "./ledger-bake-store";
 import { DRESSING_UNCOMPARED } from "./ledger-dressing";
 import type { DressingLedger } from "./ledger-dressing";
+import type { CensusLedger } from "./ledger-census";
 import type { RasterLedger } from "./ledger-rasters";
 import { TERRAIN_RASTER_KEYS } from "./tileset";
 
@@ -691,10 +693,17 @@ export type BuildingFigures = ByLevel<MeshFigures>;
  * `datedLedger` and `ledgerDiff` take whatever they are handed.
  */
 export interface Ledger {
+  /** what the bakes hand over and how they cross a tile's edge (plan 092,
+   *  ledger-bake-store.ts) */
+  bakeStore: BakeStoreLedger;
   /** what a browser reads (lib/city/ledger-browser.ts): absent until
    *  `--browser` has run */
   browser?: BrowserFigures;
   buildings: BuildingFigures;
+  /** plan 094's census of builds over a flight of each built site
+   *  (lib/city/ledger-census.ts): recorded, never compared; absent until
+   *  `--census` has run */
+  census?: CensusLedger;
   /** the bytes and requests of each set */
   bytes: Record<LedgerSet, SetLedger>;
   counters: Counters;
@@ -723,6 +732,7 @@ export const UNCOMPARED: readonly string[] = [
   DRESSING_UNCOMPARED,
   "timings",
   "browser.readWith",
+  "census",
 ];
 
 /** Leaf paths with their values (`bytes.fine.spawn.bytes`). */

@@ -11,6 +11,9 @@
  *   bun scripts/ledger.ts --check   # name each figure that differs, exit 1
  *   … --browser                     # with what a browser reads
  *                                   # (scripts/ledger-browser.ts)
+ *   … --census                      # and plan 094's census: every built
+ *                                   # site flown (implies --browser; tens
+ *                                   # of minutes, never on CI)
  *
  * Any other argument is refused (exit 2) and nothing is written: a
  * mistyped `--check` must not pass as a write. It reads
@@ -64,6 +67,7 @@ import type { DataManifest } from "../lib/city/tile";
 import type { ContentExtras } from "../lib/city/tileset";
 import { TILESET_FILE, TILESET_SPAWN_FILE } from "../lib/city/tileset";
 import { REFERENCE_SITE } from "../sites";
+import { measureBakeStore } from "./ledger-bake-store";
 import { browserSections, timingReport } from "./ledger-browser";
 import { measureDressing } from "./ledger-dressing";
 import { rasterLedger, readySites } from "./ledger-rasters";
@@ -231,7 +235,7 @@ function refuseUnserved(published: PublishedFiles): void {
 export function measure(
   site: string,
   root = ROOT
-): Omit<Ledger, "dated" | "dressing" | "rasters"> {
+): Omit<Ledger, "bakeStore" | "dated" | "dressing" | "rasters"> {
   const published = publishedFiles(site, root);
   const wireOf = new Map<string, number>();
   const wire = (served: string) => {
@@ -297,7 +301,7 @@ function formatAsCommitted(file: string): void {
 
 /** The arguments the script takes. A new one (a section's switch) joins
  *  here; anything else is refused. */
-export const FLAGS = ["--check", "--browser"] as const;
+export const FLAGS = ["--check", "--browser", "--census"] as const;
 
 export interface RunOptions {
   /** where the report goes */
@@ -310,23 +314,28 @@ export interface RunOptions {
 
 /** The browser's sections (lib/city/ledger-browser.ts): read now with
  *  `--browser`, else the committed ones, which `--check` then does not
- *  compare. */
+ *  compare; the census (recorded only) read with `--census` over every
+ *  built site, else the committed one. */
 async function browserPart(
-  read: boolean,
+  read: { browser: boolean; census: boolean },
   site: string,
   root: string,
   committed: Partial<Ledger> | null
-): Promise<Pick<Ledger, "browser" | "timings">> {
-  if (read) {
-    return await browserSections(
+): Promise<Pick<Ledger, "browser" | "census" | "timings">> {
+  const kept = committed?.census ? { census: committed.census } : {};
+  if (read.browser || read.census) {
+    const fresh = await browserSections(
       publishedFiles(site, root).files,
       platform(),
-      root
+      root,
+      read.census ? readySites(root) : []
     );
+    return { ...kept, ...fresh };
   }
   return {
     ...(committed?.browser ? { browser: committed.browser } : {}),
     ...(committed?.timings ? { timings: committed.timings } : {}),
+    ...kept,
   };
 }
 
@@ -361,9 +370,11 @@ export async function run(
     : null;
   // one key a section: the reference site's, then every site's rasters,
   // then the dressing (its recorded part only on a write: the check
-  // never compares it), then what a browser read (`--browser`)
+  // never compares it), then the bakes' hand-over (plan 092), then what a
+  // browser read (`--browser`)
   const check = argv.includes("--check");
-  const browser = argv.includes("--browser");
+  const census = argv.includes("--census");
+  const browser = argv.includes("--browser") || census;
   const fresh = {
     ...measure(site, root),
     rasters: await measureRasters(root),
@@ -373,8 +384,9 @@ export async function run(
       publishedFiles,
       check ? undefined : { committed, today }
     ),
+    bakeStore: measureBakeStore(root),
     ...(await browserPart(
-      browser,
+      { browser, census },
       site,
       root,
       committed as Partial<Ledger> | null

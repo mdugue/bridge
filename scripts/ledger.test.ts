@@ -36,6 +36,7 @@ import {
   run,
   viewerReads,
 } from "./ledger";
+import { measureBakeStore } from "./ledger-bake-store";
 import { measureDressing } from "./ledger-dressing";
 
 /* -------------------------------------------- the viewer's rule, and ours */
@@ -544,6 +545,7 @@ test("a write, then a check that holds; a second write is the same file", async 
       committed: null,
       today: "2026-11-16",
     }),
+    bakeStore: measureBakeStore(root),
     dated: "2026-11-16",
   });
   expect(Object.keys(ledger).slice(0, 5)).toEqual([
@@ -574,7 +576,9 @@ test("a write, then a check that holds; a second write is the same file", async 
   const again = await runOn(root, [], "2027-01-01");
   expect(again.report).toBe("qa/ledger.json (2026-11-16)\n");
   expect(ledgerOf(root)).toBe(written);
-});
+  // four runs of the script and the formatter's process: under coverage
+  // on a CI runner that took 5.02 s against the default 5
+}, 60_000);
 
 test("a ledger written without a day given is dated today", async () => {
   const { root } = fixture();
@@ -602,7 +606,7 @@ test("an argument the script does not know is refused, nothing written", async (
     expect(report).toContain("unknown argument");
     expect(existsSync(nodePath.join(root, LEDGER_PATH))).toBe(false);
   }
-  expect([...FLAGS]).toEqual(["--check", "--browser"]);
+  expect([...FLAGS]).toEqual(["--check", "--browser", "--census"]);
   // the script itself, as CI starts it: the code is the process's
   const script = Bun.spawnSync(["bun", "scripts/ledger.ts", "--chek"], {
     cwd: nodePath.join(import.meta.dir, ".."),
