@@ -355,6 +355,7 @@ test("a phone's tile cache, and its timings", async ({ browser }) => {
   // wait for that cost the read a minute)
   const budget = await budgetOf(page);
   expect(budget.unread).toBe(0);
+  expect(budget.left).toBe(0);
   reading.pipelines = budget.rows;
   reading.phone = {
     tier: gpu?.tier ?? "",
@@ -518,6 +519,7 @@ async function readStop(
       ...rest,
       rows: budget.rows.length,
       left: budget.left,
+      unread: budget.unread,
       probeBuilt: budget.probeBuilt,
     },
   };
@@ -598,11 +600,16 @@ for (const site of CENSUS_SITES) {
       window.__poc?.handle?.getCameraState()
     );
     const extras = await dressForCensus(page, site);
+    // the layers' and the design's own builds land here, before the
+    // flight's window opens
+    await frames(page, FRAMES_AFTER_MOVE);
+    await settled(page, STOP_CAP_MS);
+    const dressed = await momentOf(page);
     const census = await siteOf(page, site);
     const plan = censusFlight(census);
     const builds: CensusBuild[] = [];
     const stops: CensusStop[] = [];
-    let end = ready0;
+    let end = dressed;
     for (const pose of plan) {
       const read = await stopAt(page, pose);
       builds.push(...read.builds);
@@ -614,6 +621,7 @@ for (const site of CENSUS_SITES) {
       tiles: census.tiles.length,
       extras,
       ready: ready0,
+      dressed,
       end,
       stops,
       builds,

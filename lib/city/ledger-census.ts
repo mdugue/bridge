@@ -83,6 +83,9 @@ export interface CensusStop {
   rows: number;
   /** the stream and the compiles fell quiet before the stop's cap */
   settled: boolean;
+  /** representatives still in the scene the read had no text for (a
+   *  material array, a cut held): not held to the limits */
+  unread: number;
   /** how long the stop took to settle (ms) */
   waitedMs: number;
 }
@@ -91,6 +94,10 @@ export interface CensusStop {
 export interface CensusFlightReading {
   /** every distinct build met at any stop */
   builds: CensusBuild[];
+  /** once the data layers were on and the design loaded, settled at the
+   *  spawn: where the flight's own window starts (absent for Modell, whose
+   *  window starts at `ready`, the moment before `M`) */
+  dressed?: CensusMoment;
   end: CensusMoment;
   /** console and page errors met, each once */
   errors: string[];
@@ -228,11 +235,38 @@ export function keyFamily(key: string): string {
   return /^(?<family>.+?)-\d/u.exec(stem)?.groups?.family ?? stem;
 }
 
-/** The distinct builds of `rows`, one per name, sorted. */
+/** Whether `a` asks more of the limits than `b`: fewer spare variables,
+ *  then more buffers, attributes, variables written, breaches. */
+function tighter(a: CensusBuild, b: CensusBuild): boolean {
+  const order: [number, number][] = [
+    [b.spare, a.spare],
+    [a.vertexBuffers, b.vertexBuffers],
+    [a.attributes, b.attributes],
+    [a.interStage, b.interStage],
+    [a.breaches.length, b.breaches.length],
+    [a.unmatched, b.unmatched],
+  ];
+  for (const [x, y] of order) {
+    if (x !== y) {
+      return x > y;
+    }
+  }
+  return false;
+}
+
+/**
+ * The distinct builds of `rows`, one per name, sorted. Two rows of one
+ * name (two per-tile materials that share a name and a layout) keep the
+ * one that asks most of the limits, whatever order they came in.
+ */
 export function distinctBuilds(rows: readonly CensusBuild[]): CensusBuild[] {
   const byName = new Map<string, CensusBuild>();
   for (const row of rows) {
-    byName.set(buildName(row), row);
+    const name = buildName(row);
+    const kept = byName.get(name);
+    if (!kept || tighter(row, kept)) {
+      byName.set(name, row);
+    }
   }
   return [...byName.entries()]
     .toSorted(([a], [b]) => a.localeCompare(b))
@@ -250,6 +284,14 @@ export interface PipelineFigure {
 export const PIPELINES_NOTE =
   "Every build the lite scene draws with at the spawn on the phone page (/dresden?scene=lite, isMobile; read once its tile cache has settled with no compile queued): its WGSL read through renderer.debug.getShaderAsync and counted by lib/city/wgsl-budget.ts (pipeline-budget.ts), named key [draw: layout] shadowed camera. vertexBuffers, attributes and interStage are what the build takes of WebGPU's 8, 16 and 16; spare is what a new varying still fits into. A row that moves is a layer coming nearer a limit (plan 094).";
 
+/** What a build takes of the limits. */
+const figureOf = (b: CensusBuild): PipelineFigure => ({
+  vertexBuffers: b.vertexBuffers,
+  attributes: b.attributes,
+  interStage: b.interStage,
+  spare: b.spare,
+});
+
 /** The lite spawn's builds as the ledger gates them. */
 export function pipelineFigures(rows: readonly CensusBuild[]): {
   builds: Record<string, PipelineFigure>;
@@ -258,15 +300,7 @@ export function pipelineFigures(rows: readonly CensusBuild[]): {
   return {
     note: PIPELINES_NOTE,
     builds: Object.fromEntries(
-      distinctBuilds(rows).map((b) => [
-        buildName(b),
-        {
-          vertexBuffers: b.vertexBuffers,
-          attributes: b.attributes,
-          interStage: b.interStage,
-          spare: b.spare,
-        },
-      ])
+      distinctBuilds(rows).map((b) => [buildName(b), figureOf(b)])
     ),
   };
 }
@@ -308,6 +342,8 @@ export function compileWaits(
 /** One flight's figures in the ledger. */
 export interface CensusFigures {
   builds: {
+    /** every build met, by name, with what it takes of the limits */
+    rows: Record<string, PipelineFigure>;
     /** distinct builds: key × draw × layout × shadow receipt × camera */
     distinct: number;
     /** distinct material and graph keys */
@@ -315,12 +351,14 @@ export interface CensusFigures {
     /** each family with more than one key: how many it took */
     families: Record<string, number>;
   };
-  /** a landing's compiles over the flight (`compileWaits`) */
+  /** the compiles over the flight (`compileWaits`), from `dressed` (else
+   *  `ready`) to its end */
   compileWaits: Record<string, TimingFigure & { meanMs: number }>;
   errors: string[];
   extras: string[];
   /** in-frame node builds (`getRenderInfo().framedBuilds`) */
   framedBuilds: {
+    dressed?: { other: number; shadow: number };
     end: { other: number; shadow: number };
     ready: { other: number; shadow: number };
   };
@@ -335,12 +373,18 @@ export interface CensusFigures {
     >;
     unmatched: string[];
   };
-  programs: { end: number; ready: number };
+  programs: { dressed?: number; end: number; ready: number };
   stops: CensusStop[];
   tiles: number;
 }
 
 const LIMIT = { attributes: 16, interStage: 16, vertexBuffers: 8 } as const;
+
+/** A moment's in-frame builds. */
+const framed = (m: CensusMoment) => ({
+  other: m.framedOther,
+  shadow: m.framedShadow,
+});
 
 function tightest(
   builds: readonly CensusBuild[],
@@ -355,6 +399,7 @@ function tightest(
 
 /** A flight's figures from what the spec read. */
 export function flightFigures(flight: CensusFlightReading): CensusFigures {
+  const { dressed } = flight;
   const builds = distinctBuilds(flight.builds);
   const keys = [...new Set(builds.map((b) => b.key))];
   const families = new Map<string, number>();
@@ -367,6 +412,7 @@ export function flightFigures(flight: CensusFlightReading): CensusFigures {
     extras: flight.extras,
     stops: flight.stops,
     builds: {
+      rows: Object.fromEntries(builds.map((b) => [buildName(b), figureOf(b)])),
       distinct: builds.length,
       keys: keys.length,
       families: Object.fromEntries(
@@ -376,14 +422,19 @@ export function flightFigures(flight: CensusFlightReading): CensusFigures {
       ),
     },
     framedBuilds: {
-      ready: {
-        other: flight.ready.framedOther,
-        shadow: flight.ready.framedShadow,
-      },
-      end: { other: flight.end.framedOther, shadow: flight.end.framedShadow },
+      ready: framed(flight.ready),
+      ...(dressed ? { dressed: framed(dressed) } : {}),
+      end: framed(flight.end),
     },
-    programs: { ready: flight.ready.programs, end: flight.end.programs },
-    compileWaits: compileWaits(flight.ready.timings, flight.end.timings),
+    programs: {
+      ready: flight.ready.programs,
+      ...(dressed ? { dressed: dressed.programs } : {}),
+      end: flight.end.programs,
+    },
+    compileWaits: compileWaits(
+      (dressed ?? flight.ready).timings,
+      flight.end.timings
+    ),
     limits: {
       breaches: builds
         .filter((b) => b.breaches.length > 0)
@@ -406,7 +457,7 @@ export function flightFigures(flight: CensusFlightReading): CensusFigures {
 }
 
 export const CENSUS_NOTE =
-  "Recorded, never compared (plan 094 phase 2): what lands when depends on the machine's frame rate. Each built site in the whole-site profile (?scene=lite&block=1, 400×300) with its data layers on (Dresden's bike counts answered by the spec, a design block loaded there): ready, then an overview from 2.5 km and low oblique stops over up to four tiles spread over the site, each held until the stream and the compiles fall quiet (or its cap). At each stop getPipelineBudget reads every build the scene holds, which holds them to WebGPU's limits too (interStage excludes the clay, held by the limits test). framedBuilds are in-frame node builds, programs three's info.memory.programs, compileWaits the compile timings' measures over the flight. modell: Dresden once more, entered with M after its flight.";
+  "Recorded, never compared (plan 094 phase 2): what lands when depends on the machine's frame rate. Each built site in the whole-site profile (?scene=lite&block=1, 400×300) with its data layers on (Dresden's bike counts answered by the spec, a design block loaded there): ready, then an overview from 2.5 km and low oblique stops over up to four tiles spread over the site, each held until the stream and the compiles fall quiet (or its cap). ready is read at ready, dressed once the layers and the design are on and the spawn has settled again; the flight's window is dressed → end. At each stop getPipelineBudget reads every build the scene holds, which holds them to WebGPU's limits too (builds.rows, each build by name; unread per stop: what had no text; tightest.interStage excludes the clay, held by the limits test). SwiftShader's WGSL and limits only, no real GPU. framedBuilds are in-frame node builds, programs three's info.memory.programs, compileWaits the compile timings' measures over the window — compile:turn-wait is a compile's place in the queue (the probe's own reads take turns too), a landing tile's wait is tile:compile, capped at 3 s. modell: Dresden once more, entered with M after its flight, its window from the moment before M.";
 
 /** The ledger's `census` section. */
 export interface CensusLedger {

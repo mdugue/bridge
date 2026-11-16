@@ -65,6 +65,16 @@ test("a build is named by key, draw, layout, shadow receipt and camera; one per 
     build({ key: "b", camera: "parallel" }),
   ];
   expect(distinctBuilds(rows).map((b) => b.key)).toEqual(["a", "b", "b"]);
+  // two rows of one name: the one that asks most of the limits, in either
+  // order
+  const loose = build({ key: "MeshBasicNodeMaterial", spare: 12 });
+  const tight = build({ key: "MeshBasicNodeMaterial", spare: 9 });
+  expect(distinctBuilds([loose, tight])).toEqual([tight]);
+  expect(distinctBuilds([tight, loose])).toEqual([tight]);
+  const wide = build({ key: "MeshBasicNodeMaterial", vertexBuffers: 3 });
+  expect(
+    distinctBuilds([wide, build({ key: "MeshBasicNodeMaterial" })])
+  ).toEqual([wide]);
 });
 
 test("a budget row keeps what the census counts", () => {
@@ -176,7 +186,14 @@ test("a flight's figures: families made from data, the tightest builds, the coun
     tiles: 2,
     extras: ["trafficLayer"],
     ready: moment(3, 100),
-    end: moment(5, 140),
+    dressed: {
+      ...moment(4, 120),
+      timings: { "tile:compile": { count: 1, totalMs: 10, maxMs: 10 } },
+    },
+    end: {
+      ...moment(5, 140),
+      timings: { "tile:compile": { count: 3, totalMs: 50, maxMs: 30 } },
+    },
     errors: [],
     stops: [
       {
@@ -186,6 +203,7 @@ test("a flight's figures: families made from data, the tightest builds, the coun
         rows: 4,
         left: 0,
         probeBuilt: 0,
+        unread: 0,
       },
     ],
     builds: [
@@ -196,18 +214,30 @@ test("a flight's figures: families made from data, the tightest builds, the coun
       build({ key: "bad", breaches: ["vertexBuffers"], vertexBuffers: 9 }),
     ],
   };
-  const ledger = censusLedger({ flights: [flight] }, "m", "2026-11-16");
+  const ledger = censusLedger(
+    { flights: [{ ...flight, site: "y" }, flight] },
+    "m",
+    "2026-11-16"
+  );
+  // the sites in their order, whatever order they were flown in
+  expect(Object.keys(ledger.sites)).toEqual(["x", "y"]);
   const figures = ledger.sites.x;
-  expect(figures?.builds).toEqual({
-    distinct: 5,
-    keys: 5,
-    families: { "bridge-stone": 2 },
-  });
+  expect(figures?.builds.distinct).toBe(5);
+  expect(figures?.builds.keys).toBe(5);
+  expect(figures?.builds.families).toEqual({ "bridge-stone": 2 });
+  expect(
+    figures?.builds.rows["traffic [Mesh: normal,position] shadowed perspective"]
+  ).toEqual({ vertexBuffers: 8, attributes: 9, interStage: 6, spare: 10 });
   expect(figures?.framedBuilds).toEqual({
     ready: { other: 3, shadow: 1 },
+    dressed: { other: 4, shadow: 1 },
     end: { other: 5, shadow: 1 },
   });
-  expect(figures?.programs).toEqual({ ready: 100, end: 140 });
+  expect(figures?.programs).toEqual({ ready: 100, dressed: 120, end: 140 });
+  // the window is dressed → end: the dressing's own compile is not in it
+  expect(figures?.compileWaits).toEqual({
+    "tile:compile": { count: 2, totalMs: 40, meanMs: 20, maxMs: 30 },
+  });
   expect(figures?.limits.breaches).toEqual([
     "bad [Mesh: normal,position] shadowed perspective: vertexBuffers",
   ]);
@@ -217,6 +247,11 @@ test("a flight's figures: families made from data, the tightest builds, the coun
   expect(figures?.limits.tightest.vertexBuffers).toEqual({
     left: -1,
     builds: ["bad [Mesh: normal,position] shadowed perspective"],
+  });
+  // of sixteen attributes the traffic row takes nine
+  expect(figures?.limits.tightest.attributes).toEqual({
+    left: 7,
+    builds: ["traffic [Mesh: normal,position] shadowed perspective"],
   });
   expect(ledger.modell).toBeUndefined();
 });
