@@ -10,8 +10,9 @@ export interface KeyboardActions {
   cycleStyle: () => void;
   /** R — demolish the building under the pointer (the centre without one) */
   demolish: () => void;
-  /** I — asks what stands under the pointer, or at the centre ("Befragen", ADR 0042) */
-  inquire: () => void;
+  /** I — asks what stands under the pointer, or at the centre ("Befragen",
+   *  ADR 0042); Shift+I adds it to what is picked (`add`) */
+  inquire: (add?: boolean) => void;
   press: (code: string) => void;
   release: (code: string) => void;
   /** every held key is dropped: the window lost focus or was hidden */
@@ -104,7 +105,9 @@ export function attachKeyboardControls(
       return;
     }
     const shot = ONE_SHOTS.get(e.code);
-    if (shot) {
+    if (shot === "inquire") {
+      actions.inquire(e.shiftKey);
+    } else if (shot) {
       actions[shot]();
     }
     const view = viewpointIndexOf(e.code);

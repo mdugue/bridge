@@ -106,7 +106,8 @@ export function attachSceneInput(
       demolish: () => keys.demolish(aim()),
       // I asks under the pointer, or at the centre in pointer lock, where
       // there is no pointer to click with.
-      inquire: () => keys.inquire(aim()),
+      // Shift+I adds it to what is picked
+      inquire: (add) => keys.inquire(aim(), add),
       cycleStyle: () => look.set({ style: nextRenderStyle(look.get().style) }),
     }
   );

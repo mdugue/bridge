@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test";
 import type { UIMessage } from "@tanstack/ai-react";
 import { ASK_LIMITS } from "@/lib/city/ask-city";
-import { answerChips, reachQuestion, reachSteps } from "./ask-chips";
+import {
+  answerChips,
+  reachQuestion,
+  reachSteps,
+  shownPlaces,
+} from "./ask-chips";
 
 const call = (name: string, input: unknown) => ({
   type: "tool-call" as const,
@@ -64,4 +69,13 @@ test("the reach steps halve and double within the tool's limits", () => {
   expect(reachSteps(120)).toEqual({ narrower: 60, wider: 240 });
   expect(reachSteps(ASK_LIMITS.radius).wider).toBeNull();
   expect(reachSteps(15).narrower).toBeNull();
+});
+
+/** A place named by its x. */
+const place = (x: number) => ({ name: `P${x}`, x, y: 0 });
+
+test("the places shown are those on the city, eight at most", () => {
+  const all = [place(-1), ...Array.from({ length: 10 }, (_, i) => place(i))];
+  const shown = shownPlaces(all, { within: (x) => x >= 0 });
+  expect(shown.map((p) => p.x)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
 });

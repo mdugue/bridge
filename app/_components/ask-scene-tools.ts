@@ -21,6 +21,7 @@ import type { AskTarget, Framed } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { ViewpointGeometry } from "@/lib/city/site";
+import type { StarterContext } from "@/lib/city/ask-starters";
 
 /** What the card may do to the scene: the scene tools' other half. */
 export interface AskScene {
@@ -40,6 +41,9 @@ export interface AskScene {
   show: (view: ViewpointGeometry, ground?: number) => boolean;
   /** whether a point (site CRS) lies on one of the site's tiles */
   within: (x: number, y: number) => boolean;
+  /** selects what stands at each place (site CRS), as Shift+click does:
+   *  the places an answer shows */
+  select: (places: readonly { r?: number; x: number; y: number }[]) => void;
   /** the view of `places` as the scene frames it (lib/city/ask-view.ts:
    *  its canvas, the sun, the loaded buildings' sight lines), from where
    *  the camera stands; null while there is no scene */
@@ -47,6 +51,8 @@ export interface AskScene {
     places: readonly AskTarget[],
     from: { x: number; y: number } | null
   ) => Promise<Framed | null>;
+  /** what the first questions read of the moment (plan 085) */
+  moment: () => StarterContext;
   /** the player's pose, mode, time, style and layers, for the model */
   where: () => Record<string, unknown>;
   /** asks what stands at the centre of the view (and opens its card);
@@ -106,7 +112,9 @@ export const AERIAL_REACH = 900;
  * Flies to `places` — every one in one view, or the first alone (`alle`
  * false, or spread too far for one) — and says what it showed. On foot
  * the walker stands before the first. A place off the city's tiles is
- * left out; none on them is refused.
+ * left out; none on them is refused. What it shows is selected: every
+ * place with `alle` (spread too far, their cards are a click apart in
+ * the selection), the first alone without.
  */
 export async function showPlaces(
   scene: AskScene,
@@ -120,12 +128,13 @@ export async function showPlaces(
     return { ok: false, ausserhalb: true, hinweis: OUTSIDE };
   }
   const from = scene.from();
+  const all = ask.alle !== false && places.length > 1;
+  scene.select(all ? places : [first]);
   if (ask.aus_der_luft === false) {
     return scene.show(streetView(first, from ?? first))
       ? { ok: true, gezeigt: [first.name] }
       : LOADING;
   }
-  const all = ask.alle !== false && places.length > 1;
   const framed = all ? await scene.frameView(places, from) : null;
   if (framed && framed.distance <= AERIAL_REACH) {
     return scene.show(framed.view, framed.ground)

@@ -73,7 +73,8 @@ export type AskSessionEvent =
   | { type: "hearingPressed" }
   /** the key form opened (the conversation runs on, hidden) or closed */
   | { type: "paused"; on: boolean }
-  /** the conversation unmounted: another key, or the key forgotten */
+  /** the conversation unmounted: another key, the key forgotten, or a
+   *  new conversation (*Neues Gespräch*) */
   | { type: "conversationEnded" }
   | { type: "keyForgotten" }
   /** the card closed */
