@@ -1172,41 +1172,78 @@ series' ledger (plan 087). `bun run ledger` writes it from the reference
 site's published files — `public/data/dresden/`, so after a build or
 `bun scripts/prepare-sites.ts dresden` — and `bun run ledger -- --check`
 names each figure that differs and exits 1; CI's build-check shard runs the
-check after its build. Every figure is a function of the tree: a pull
-request that moves one commits the new file, and its diff is what the
-reviewer reads. The shapes and the arithmetic are `lib/city/ledger.ts`; the
+check after its build. Any other argument is refused (exit 2) and nothing
+is written. Every figure is a function of the tree: a pull request that
+moves one commits the new file, and its diff is what the reviewer reads —
+a figure that shrank as much as one that grew. The shapes and the
+arithmetic are `lib/city/ledger.ts` and `lib/city/ledger-counters.ts`; the
 script finds the files through one function, `publishedFiles`.
 
+**Every published file is counted, in exactly one class** (`published`).
+The script lists the site's directory, not the manifest alone:
+
+- **tiles** — every file a tile of the tileset names (the set *all*
+  below, over the site);
+- **boot** — `manifest.json` and the tileset JSON, which every visit of a
+  city fetches before its first frame;
+- **site** — the site-wide files a visit fetches when it asks for them:
+  the lite profile's tileset, the plate, the provenance, the landmark
+  facts, the trams' timetable, the murals and their drawings, the walks
+  and their photos, the minimap, the start page's site map;
+- **server** — what no visitor fetches: the inquiry's knowledge
+  (`stadtwissen*.json`) and the start page's `site-stats.json`, in bytes
+  on disk.
+
+The site-wide rows are one table, `SITE_FILES`; `published.kinds` has each
+row's bytes. A published file that no tile and no row names is an
+**error**: whoever publishes a new file adds its row and says who fetches
+it. So bytes cannot leave the gate by moving — a side file inlined into
+the tileset shows as the boot growing by what the file held.
+
 The rule for a file's bytes on the wire: `.png`, `.webp` and `.gz` at face
-value, every other file (JSON, GeoJSON) gzipped at level 6, as a static
-host sends it (Bun's zlib, so the figure moves with Bun's version only). A
-request is a file. Per tile, the ledger reads the tileset's names in five
-sets:
+value; `.json` and `.geojson` gzipped at level 6; any other extension is an
+error, never a guess. The text figures are the pinned Bun's zlib's, not
+what a host sends (zlib 1.3 gives 0.6–2.2 % other bytes at the same level,
+and the host sends brotli): a stand-in kept constant, so the figure moves
+with the files and with Bun's version only. A request is a file. Per tile,
+the ledger reads the tileset's names in six sets:
 
 - **far** — what a tile in view costs from afar: the far buildings with
   their side files (the facade reading, the sky view), the coarse terrain,
   the rasters it reads and its coarse side files (bridges, traffic,
   crowns);
-- **fine** — the fine terrain, the rasters it reads near the camera and
-  its dressing files;
+- **fine** — the fine level beyond the ground detail's reach
+  (`lib/city/ground-reach.ts`): the fine terrain, its dressing files, the
+  sports table and the NDVI, and its rasters — the close-range ones
+  (paving, edges, sports grounds, markings, colonies) as their 1024²
+  twins;
+- **approached** — the same level once the camera came within reach: the
+  set *fine* and the full rasters fetched on top of the twins
+  (`terrain-layer.ts` `loadReachSet`). A level that lands within reach —
+  the tile a visit starts on — never fetches the twins, so it costs less
+  than this figure; a visit that flies in pays it;
 - **near** — the buildings as baked (their side files came with the far
   ones);
 - **ask** — the inquiry card's files (ADR 0042);
 - **all** — every file the tile names: both levels' twins, the minimap's
   footprints and bridges, the card's.
 
-Which rasters a level reads is the viewer's own rule (`rasterFiles`,
-`app/_components/tile-rasters.ts`), so the ledger states no second one:
-near the camera the full rasters, never the far twins; on a phone the
-class raster's and the markings' and colonies' twins, and no sports
+Which rasters a level reads is the viewer's own rule: `rasterFiles`
+(`app/_components/tile-rasters.ts`) over the kinds a level acquires, with
+the far twin for `REACH_KINDS` beyond the reach. The ledger states no
+second rule, and `scripts/ledger.test.ts` holds it against the viewer's
+code: the kinds `loadTerrainRasters` and `loadReachSet` acquire, and the
+side files `buildDressing` fetches. On a phone the class raster's, the
+markings' and the colonies' twins are read at either reach, and no sports
 raster. A set where a phone reads other files has a `phone` row beside the
 desktop's. Each set is recorded as the spawn tile, the median tile (the
-lower of an even count), the largest tile and the site (each file once).
+lower of an even count), the largest tile and the site (each file once);
+tiles of the same weight are told apart by their id.
 
 Every figure is gated, the buildings' among them: `buildings` holds each
 tile's vertices, triangles and decoded bytes, near and far, and the sets
-count the buildings' glTF and the tileset JSONs (which name them by
-content hash) at their full bytes. That holds because a bake's bytes do
+count the buildings' glTF and the boot's JSONs (which name every file by
+its content hash) at their full bytes. That holds because a bake's bytes do
 not depend on the machine ("Cache and publish"): CI's check passing on a
 runner that did not bake the committed file is the standing proof.
 
@@ -1216,20 +1253,38 @@ files in brackets):
 | Set | Spawn tile | Median tile | Largest tile | Site |
 |---|---|---|---|---|
 | far | 4.69 (10) | 4.59 | 5.83 | 67.0 (150) |
-| fine | 6.94 (29) | 7.14 | 9.01 | 105.0 (433) |
-| fine, phone | 6.64 (28) | 6.74 | 8.72 | 100.4 (418) |
+| fine | 5.45 (29) | 5.62 | 7.46 | 84.0 (433) |
+| fine, phone | 5.31 (28) | 5.43 | 7.30 | 81.8 (418) |
+| approached | 7.92 (34) | 8.10 | 9.99 | 118.4 (506) |
+| approached, phone | 7.52 (30) | 7.59 | 9.63 | 112.3 (448) |
 | near | 3.04 (1) | 2.45 | 4.25 | 37.1 (15) |
 | ask | 0.04 (1) | 0.02 | 0.04 | 0.35 (15) |
 | all | 13.8 (43) | 13.8 | 17.5 | 193.6 (641) |
 
-Everything the manifest names is 197.8 MB in 698 files (the rest beyond
-the tiles: the tileset, the minimap and site map, the walks' photos, the
-murals, the plate, the timetable). The last count by hand, 2026-09-25
+The published directory holds 700 files: the tiles' 641 (193.6 MB), the
+boot's two (18.6 kB: the manifest 9.2, the tileset 9.4), 40 site-wide
+(3.54 MB, of which the walks' photos 2.35 and the murals' drawings 0.80)
+and the server's 17 (3.86 MB on disk). The last count by hand, 2026-09-25
 with the same rule over every file named after a tile (the set *all*
 today), gave a tile 4.0–9.7 MB and the site ≈ 98.9 MB. A visit fetches
-less than a set's site figure: streaming loads a tile's content only when it is in view, and a far tile stops at its far
-set. Sources on disk that are never served: the DGM GeoTIFF
-(12.9–15.6 MB a tile) and the CityJSON (2.7–13.6 MB a tile).
+less than a set's site figure: streaming loads a tile's content only when
+it is in view, and a far tile stops at its far set. Sources on disk that
+are never served: the DGM GeoTIFF (12.9–15.6 MB a tile) and the CityJSON
+(2.7–13.6 MB a tile).
+
+**The complexity counters** (`counters`; each rule and what it cannot see
+is at its function in `lib/city/ledger-counters.ts`) count code, never
+where a file lies or how its text is wrapped — a move, a comment, a blank
+line or a wrapper function moves none:
+
+| Counter | Counts | Dresden's tree, 2026-11-16 |
+|---|---|---|
+| `dressingKinds`, `coarseDressingKinds`, `askKinds` | the artifact table's kinds | 17, 3, 1 |
+| `publishedExtensions` | the distinct extensions among the published files | 9 |
+| `layerModules` | the modules named `*-layer.ts` anywhere under `app/`, `lib/` or `packages/`, and their lines of code (no comment, no blank line) | 27 with 14 420 |
+| `longestFunction` | the longest top-level function, arrow constant or class of the sources, in lines of code: the boot, wherever its code goes | `bootApp`, 2 352 |
+| `bakeSeamModules` | the modules under `pipeline/bake/` whose code handles a tile's edge — plan 092's five ways by their calls, and any other read with a `margin` | 57 of 83 |
+| `upstreamWorkarounds` | the entries of `docs/rendering.md`, "Workarounds for upstream bugs", and the comments that say *upstream workaround* | 10 entries, 9 sites |
 
 ## Provenance
 
