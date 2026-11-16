@@ -17,6 +17,7 @@ import {
 } from "../app/_components/tile-rasters";
 import type { RasterKind } from "../app/_components/tile-rasters";
 import type { Ledger } from "../lib/city/ledger";
+import { VARIANT_KINDS } from "../lib/city/ledger-rasters";
 import { COARSE_DRESSING_KINDS, DRESSING_KINDS } from "../lib/city/tile";
 import { buildTileset } from "../lib/city/tileset";
 import type {
@@ -29,6 +30,7 @@ import {
   LEDGER_FILE,
   LEDGER_PATH,
   measure,
+  measureRasters,
   publishedFiles,
   run,
   viewerReads,
@@ -209,6 +211,18 @@ test("the fine set's side files are those tile-stream.ts fetches", () => {
   ).toEqual([...COARSE_DRESSING_KINDS].toSorted());
 });
 
+test("the raster table's program key follows terrain-layer.ts splatVariant", () => {
+  const text = source("app/_components/terrain-layer.ts");
+  const body = text.slice(
+    text.indexOf("const splatVariant"),
+    text.indexOf("...splatSize(splat)")
+  );
+  const kinds = [...body.matchAll(/splat\.(?<kind>\w+) \?/gu)].map((m) =>
+    (m.groups?.kind ?? "").replace(/Texture$/u, "")
+  );
+  expect(kinds).toEqual([...VARIANT_KINDS]);
+});
+
 test("the ledger is committed", () => {
   expect(existsSync(LEDGER_FILE)).toBe(true);
   expect(LEDGER_FILE.endsWith(LEDGER_PATH)).toBe(true);
@@ -370,11 +384,13 @@ function fixture(): { data: string; root: string } {
 }
 
 /** Runs the script on a fixture, collecting its report. */
-const runOn = (root: string, argv: string[], today = "2026-11-16") => {
+const runOn = async (root: string, argv: string[], today = "2026-11-16") => {
   let report = "";
-  const code = run(argv, {
+  const code = await run(argv, {
     root,
     site: SITE,
+    // (the raster table reads real rasters: none of this fixture's)
+    sites: [],
     today,
     out: (text) => {
       report += text;
@@ -500,32 +516,62 @@ test("the figures of a fixture site, each from the files it names", () => {
   expect(existsSync(nodePath.join(data, "manifest.json"))).toBe(true);
 });
 
-test("a write, then a check that holds; a second write is the same file", () => {
+test("a write, then a check that holds; a second write is the same file", async () => {
   const { root } = fixture();
-  expect(runOn(root, ["--check"]).code).toBe(1);
+  const none = await runOn(root, ["--check"]);
+  expect(none.code).toBe(1);
   expect(existsSync(nodePath.join(root, LEDGER_PATH))).toBe(false);
-  const wrote = runOn(root, []);
+  const wrote = await runOn(root, []);
   expect(wrote).toEqual({ code: 0, report: "qa/ledger.json (2026-11-16)\n" });
   const written = ledgerOf(root);
   const ledger = JSON.parse(written) as Ledger;
   expect(ledger.dated).toBe("2026-11-16");
-  expect(ledger).toEqual({ ...measure(SITE, root), dated: "2026-11-16" });
-  expect(written).toBe(`${JSON.stringify(ledger, null, 2)}\n`);
-  expect(runOn(root, ["--check"], "2027-01-01")).toEqual({
+  expect(ledger).toEqual({
+    ...measure(SITE, root),
+    rasters: await measureRasters(root, []),
+    dated: "2026-11-16",
+  });
+  expect(Object.keys(ledger).slice(0, 5)).toEqual([
+    "version",
+    "site",
+    "dated",
+    "wire",
+    "tiles",
+  ]);
+  expect(written.endsWith("}\n")).toBe(true);
+  expect(await runOn(root, ["--check"], "2027-01-01")).toEqual({
     code: 0,
     report: "qa/ledger.json holds\n",
   });
   // another day, the same figures: the same bytes
-  expect(runOn(root, [], "2027-01-01").report).toBe(
-    "qa/ledger.json (2026-11-16)\n"
-  );
+  const again = await runOn(root, [], "2027-01-01");
+  expect(again.report).toBe("qa/ledger.json (2026-11-16)\n");
   expect(ledgerOf(root)).toBe(written);
 });
 
-test("an argument the script does not know is refused, nothing written", () => {
+test("a ledger written without a day given is dated today", async () => {
+  const { root } = fixture();
+  let report = "";
+  const code = await run([], {
+    root,
+    site: SITE,
+    sites: [],
+    out: (text) => {
+      report += text;
+    },
+  });
+  const today = new Date().toISOString().slice(0, 10);
+  expect({ code, report }).toEqual({
+    code: 0,
+    report: `qa/ledger.json (${today})\n`,
+  });
+  expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+});
+
+test("an argument the script does not know is refused, nothing written", async () => {
   const { root } = fixture();
   for (const argv of [["--chek"], ["--check", "--now"], ["check"], [""]]) {
-    const { code, report } = runOn(root, argv);
+    const { code, report } = await runOn(root, argv);
     expect(code).toBe(2);
     expect(report).toContain("unknown argument");
     expect(existsSync(nodePath.join(root, LEDGER_PATH))).toBe(false);
@@ -541,12 +587,14 @@ test("an argument the script does not know is refused, nothing written", () => {
 
 /** A fixture with its ledger written, then changed by `change`: what
  *  `--check` says, and that it wrote nothing. */
-const checkAfter = (change: (at: { data: string; root: string }) => void) => {
+const checkAfter = async (
+  change: (at: { data: string; root: string }) => void
+) => {
   const at = fixture();
-  runOn(at.root, []);
+  await runOn(at.root, []);
   const written = ledgerOf(at.root);
   change(at);
-  const checked = runOn(at.root, ["--check"], "2027-01-01");
+  const checked = await runOn(at.root, ["--check"], "2027-01-01");
   expect(ledgerOf(at.root)).toBe(written);
   return {
     ...checked,
@@ -557,9 +605,9 @@ const checkAfter = (change: (at: { data: string; root: string }) => void) => {
   };
 };
 
-test("a dressing file that grew fails the check, by its figures' names", () => {
+test("a dressing file that grew fails the check, by its figures' names", async () => {
   const was = measure(SITE, fixture().root).bytes.fine.spawn.bytes;
-  const { code, report, differs } = checkAfter(({ data }) =>
+  const { code, report, differs } = await checkAfter(({ data }) =>
     rewrite(data, "lamps_a.geojson", grown(220_000))
   );
   expect(code).toBe(1);
@@ -602,11 +650,13 @@ test("a dressing file that grew fails the check, by its figures' names", () => {
   expect(report).toContain(
     "31 figures differ: run bun scripts/ledger.ts and commit qa/ledger.json\n"
   );
-  expect(report).toContain("platform: here ");
+  expect(report).toContain(
+    `platform: here ${process.platform}-${process.arch}, Bun ${Bun.version}\n`
+  );
 });
 
-test("a file that shrank fails the check too: a saving is committed", () => {
-  const { code, differs } = checkAfter(({ data }) =>
+test("a file that shrank fails the check too: a saving is committed", async () => {
+  const { code, differs } = await checkAfter(({ data }) =>
     rewrite(data, "terrain_a_l1.glb.gz", (bytes) => bytes.slice(0, 10))
   );
   expect(code).toBe(1);
@@ -614,9 +664,9 @@ test("a file that shrank fails the check too: a saving is committed", () => {
   expect(differs).not.toContain("bytes.fine.spawn.bytes");
 });
 
-test("bytes moved into the manifest or the tileset do not leave the gate", () => {
+test("bytes moved into the manifest or the tileset do not leave the gate", async () => {
   // the manifest, fetched on every visit
-  const manifest = checkAfter(({ data }) =>
+  const manifest = await checkAfter(({ data }) =>
     rewrite(data, "manifest.json", (bytes) => {
       const json = JSON.parse(new TextDecoder().decode(bytes)) as object;
       return JSON.stringify({ ...json, more: [...noise(50_000, 5)] });
@@ -628,7 +678,7 @@ test("bytes moved into the manifest or the tileset do not leave the gate", () =>
     "published.kinds.manifest.bytes",
   ]);
   // a side file inlined into the tileset: the boot grows by what it held
-  const inlined = checkAfter(({ data }) =>
+  const inlined = await checkAfter(({ data }) =>
     rewrite(data, "tileset.json", (bytes) => {
       const json = JSON.parse(new TextDecoder().decode(bytes)) as {
         extras: object;
@@ -647,15 +697,15 @@ test("bytes moved into the manifest or the tileset do not leave the gate", () =>
   );
 });
 
-test("a site-wide file and a server's file that grew fail the check", () => {
-  const site = checkAfter(({ data }) =>
+test("a site-wide file and a server's file that grew fail the check", async () => {
+  const site = await checkAfter(({ data }) =>
     rewrite(data, "trams.json", grown(1000))
   );
   expect(site.differs).toEqual([
     "published.kinds.trams.bytes",
     "published.site.bytes",
   ]);
-  const server = checkAfter(({ data }) =>
+  const server = await checkAfter(({ data }) =>
     rewrite(data, "site-stats.json", () => '{"tiles":2}')
   );
   expect(server.differs).toEqual([
@@ -664,17 +714,17 @@ test("a site-wide file and a server's file that grew fail the check", () => {
   ]);
 });
 
-test("a file published beside the manifest is an error, not a silence", () => {
+test("a file published beside the manifest is an error, not a silence", async () => {
   const { root, data } = fixture();
-  runOn(root, []);
+  await runOn(root, []);
   writeFileSync(nodePath.join(data, "everything.bin.gz"), noise(5_000_000, 7));
-  expect(() => runOn(root, ["--check"])).toThrow(
+  await expect(runOn(root, ["--check"])).rejects.toThrow(
     /in no class.*everything\.bin\.gz/u
   );
-  expect(() => runOn(root, [])).toThrow(/in no class/u);
+  await expect(runOn(root, [])).rejects.toThrow(/in no class/u);
 });
 
-test("a file with an extension the wire rule does not know is an error", () => {
+test("a file with an extension the wire rule does not know is an error", async () => {
   const { root, data } = fixture();
   const manifestPath = nodePath.join(data, "manifest.json");
   const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
@@ -692,11 +742,11 @@ test("a file with an extension the wire rule does not know is an error", () => {
     tilesetPath,
     readFileSync(tilesetPath, "utf-8").replaceAll("city_a.glb.gz", raw)
   );
-  expect(() => runOn(root, [])).toThrow();
+  await expect(runOn(root, [])).rejects.toThrow();
 });
 
-test("the buildings' bytes and geometry are gated", () => {
-  const { code, differs } = checkAfter(({ data }) =>
+test("the buildings' bytes and geometry are gated", async () => {
+  const { code, differs } = await checkAfter(({ data }) =>
     rewrite(data, "city_a.glb.gz", () => glbGz(123_456))
   );
   expect(code).toBe(1);
@@ -705,15 +755,15 @@ test("the buildings' bytes and geometry are gated", () => {
   expect(differs).toContain("buildings.near.a.vertices");
   expect(differs).toContain("buildings.near.a.accessorBytes");
   expect(differs).not.toContain("buildings.far.a.triangles");
-  const far = checkAfter(({ data }) =>
+  const far = await checkAfter(({ data }) =>
     rewrite(data, "city_b_far.glb.gz", () => glbGz(54_321))
   );
   expect(far.differs).toContain("buildings.far.b.triangles");
   expect(far.differs).toContain("bytes.far.largest.bytes");
 });
 
-test("a phone's twin moves a phone's rows alone", () => {
-  const { differs } = checkAfter(({ data }) =>
+test("a phone's twin moves a phone's rows alone", async () => {
+  const { differs } = await checkAfter(({ data }) =>
     rewrite(data, "landcover_a.r2048.png", grown(10))
   );
   expect(differs).toContain("bytes.fine.phone.spawn.bytes");
@@ -723,15 +773,15 @@ test("a phone's twin moves a phone's rows alone", () => {
     differs.filter((d) => /^bytes\.(?:fine|approached)\.(?!phone)/u.test(d))
   ).toEqual([]);
   // and the full raster a desktop's alone
-  const desktop = checkAfter(({ data }) =>
+  const desktop = await checkAfter(({ data }) =>
     rewrite(data, "landcover_a_0.png", grown(10))
   );
   expect(desktop.differs).toContain("bytes.fine.spawn.bytes");
   expect(desktop.differs.filter((d) => d.includes(".phone."))).toEqual([]);
 });
 
-test("a file fewer or more is a figure, with the bytes the same", () => {
-  const { differs } = checkAfter(({ root, data }) => {
+test("a file fewer or more is a figure, with the bytes the same", async () => {
+  const { differs } = await checkAfter(({ root, data }) => {
     const { files } = publishedFiles(SITE, root);
     const tilesetPath = nodePath.join(data, files["tileset.json"] ?? "");
     const tileset = readFileSync(tilesetPath, "utf-8");
@@ -751,15 +801,15 @@ test("a file fewer or more is a figure, with the bytes the same", () => {
   expect(differs).not.toContain("bytes.fine.spawn.files");
 });
 
-test("the counters are gated: code moves them, a comment does not", () => {
-  const code = checkAfter(({ root }) =>
+test("the counters are gated: code moves them, a comment does not", async () => {
+  const code = await checkAfter(({ root }) =>
     writeFileSync(
       nodePath.join(root, "app/_components/tree-layer.ts"),
       "// An upstream workaround\nexport const tree = 1;\nexport const more = 2;\n"
     )
   );
   expect(code.differs).toEqual(["counters.layerModules.codeLines"]);
-  const comment = checkAfter(({ root }) => {
+  const comment = await checkAfter(({ root }) => {
     writeFileSync(
       nodePath.join(root, "app/_components/tree-layer.ts"),
       "// An upstream workaround\n\n// more words\nexport const tree = 1;\n"
@@ -773,7 +823,7 @@ test("the counters are gated: code moves them, a comment does not", () => {
     rmSync(nodePath.join(root, "app/_components/create-app.ts"));
   });
   expect(comment.differs).toEqual(["counters.longestFunction.path"]);
-  const bake = checkAfter(({ root }) => {
+  const bake = await checkAfter(({ root }) => {
     mkdirSync(nodePath.join(root, "pipeline/bake/providers"));
     writeFileSync(
       nodePath.join(root, "pipeline/bake/providers/sn.py"),

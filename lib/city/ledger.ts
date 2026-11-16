@@ -16,6 +16,7 @@
  */
 import { gzipSync } from "node:zlib";
 import type { Counters } from "./ledger-counters";
+import type { RasterLedger } from "./ledger-rasters";
 import { TERRAIN_RASTER_KEYS } from "./tileset";
 
 /** The extensions a static host sends as they are: compressed already. */
@@ -142,6 +143,8 @@ export function extensionOf(name: string): string {
 export function distinctExtensions(names: Iterable<string>): string[] {
   return [...new Set([...names].map(extensionOf))].toSorted();
 }
+
+export type { SourceText } from "./ledger-counters";
 
 /* ------------------------------------------------------------------ sets */
 
@@ -603,6 +606,8 @@ export interface Ledger {
   dated: string;
   /** every published file, in exactly one class */
   published: PublishedLedger;
+  /** every built site's rasters (plan 091 phase 0, ledger-rasters.ts) */
+  rasters: RasterLedger;
   site: string;
   tiles: number;
   version: typeof LEDGER_VERSION;

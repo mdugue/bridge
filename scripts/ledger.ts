@@ -12,11 +12,13 @@
  *
  * Any other argument is refused (exit 2) and nothing is written: a
  * mistyped `--check` must not pass as a write. It reads
- * public/data/<site>/, so a build (or `bun scripts/prepare-sites.ts
- * dresden`) comes first.
+ * public/data/<site>/, so a build (or `bun scripts/prepare-sites.ts`) comes
+ * first: the reference site for the bytes and counters, and every site a
+ * build serves for the `rasters` section (plan 091 phase 0,
+ * scripts/ledger-rasters.ts). A write formats the file with oxfmt, as it is
+ * committed; `--check` compares values, not layout.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { cpus } from "node:os";
 import nodePath from "node:path";
 import { gunzipSync } from "node:zlib";
 import {
@@ -56,6 +58,7 @@ import type { DataManifest } from "../lib/city/tile";
 import type { ContentExtras } from "../lib/city/tileset";
 import { TILESET_FILE } from "../lib/city/tileset";
 import { REFERENCE_SITE } from "../sites";
+import { rasterLedger, readySites } from "./ledger-rasters";
 
 const ROOT = nodePath.join(import.meta.dir, "..");
 /** The ledger, relative to the repository's root. */
@@ -113,7 +116,6 @@ export function publishedFiles(site: string, root = ROOT): PublishedFiles {
   const inManifest = new Set(named.map((n) => n.served));
   const plain = readdirSync(dir)
     .filter((name) => !inManifest.has(name))
-    .toSorted()
     .map((name) => ({ logical: name, served: name }));
   return {
     files: manifest.files,
@@ -190,17 +192,17 @@ export function counters(root: string, published: readonly string[]): Counters {
   };
 }
 
-/** This machine, for a check that fails: the text's wire bytes are this
+/** This platform, for a check that fails: the text's wire bytes are this
  *  Bun's zlib's. */
-function machine(): string {
-  const all = cpus();
-  const model = all[0]?.model.trim() ?? "unknown CPU";
-  return `${model} ×${all.length}, ${process.platform}-${process.arch}, Bun ${Bun.version}`;
-}
+const platform = (): string =>
+  `${process.platform}-${process.arch}, Bun ${Bun.version}`;
 
 /** The ledger's figures for `site`, from its published files and the
- *  sources under `root`. A further section is a further key here. */
-export function measure(site: string, root = ROOT): Omit<Ledger, "dated"> {
+ *  sources under `root` (the rasters are every site's, `measureRasters`). */
+export function measure(
+  site: string,
+  root = ROOT
+): Omit<Ledger, "dated" | "rasters"> {
   const published = publishedFiles(site, root);
   const wireOf = new Map<string, number>();
   const wire = (served: string) => {
@@ -240,6 +242,32 @@ export function measure(site: string, root = ROOT): Omit<Ledger, "dated"> {
   };
 }
 
+/** Every built site's rasters (plan 091 phase 0): by default the sites a
+ *  build serves, each of which must be built. */
+export async function measureRasters(
+  root = ROOT,
+  sites: readonly string[] = readySites()
+): Promise<Ledger["rasters"]> {
+  return await rasterLedger(
+    sites,
+    (site) => publishedFiles(site, root),
+    sources(root, "app", (name) => /(?<!\.test)\.tsx?$/u.test(name))
+  );
+}
+
+/** Formats a written file with the repository's formatter (oxfmt, as
+ *  `bun run fix` and the lint's `--check` do), so a fresh run writes the
+ *  committed file byte for byte. */
+function formatAsCommitted(file: string): void {
+  const done = Bun.spawnSync(
+    [nodePath.join(ROOT, "node_modules/.bin/oxfmt"), file],
+    { cwd: ROOT, stdout: "ignore", stderr: "pipe" }
+  );
+  if (done.exitCode !== 0) {
+    throw new Error(`ledger: oxfmt failed: ${done.stderr.toString()}`);
+  }
+}
+
 /** The arguments the script takes. A new one (a section's switch) joins
  *  here; anything else is refused. */
 export const FLAGS = ["--check"] as const;
@@ -250,6 +278,8 @@ export interface RunOptions {
   /** the repository: its sources, `public/data/` and `qa/ledger.json` */
   root?: string;
   site?: string;
+  /** the sites whose rasters are measured (default: every built one) */
+  sites?: readonly string[];
   today?: string;
 }
 
@@ -258,7 +288,10 @@ export interface RunOptions {
  * the exit code — 0 written or holding, 1 a figure differs (or none is
  * committed), 2 an argument it does not know.
  */
-export function run(argv: readonly string[], opts: RunOptions = {}): number {
+export async function run(
+  argv: readonly string[],
+  opts: RunOptions = {}
+): Promise<number> {
   const {
     out = (text: string) => {
       process.stdout.write(text);
@@ -279,10 +312,15 @@ export function run(argv: readonly string[], opts: RunOptions = {}): number {
   const committed: unknown = existsSync(file)
     ? JSON.parse(readFileSync(file, "utf-8"))
     : null;
-  const fresh = measure(site, root);
+  // one key a section: the reference site's, then every site's rasters
+  const fresh = {
+    ...measure(site, root),
+    rasters: await measureRasters(root, opts.sites),
+  };
   if (!argv.includes("--check")) {
     const ledger = datedLedger(fresh, committed, today);
     writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`);
+    formatAsCommitted(file);
     out(`${LEDGER_PATH} (${ledger.dated})\n`);
     return 0;
   }
@@ -299,10 +337,10 @@ export function run(argv: readonly string[], opts: RunOptions = {}): number {
   );
   // the text's wire bytes are zlib's on CI's platform: a platform
   // difference shows here at a glance
-  out(`platform: here ${machine()}\n`);
+  out(`platform: here ${platform()}\n`);
   return 1;
 }
 
 if (import.meta.main) {
-  process.exitCode = run(process.argv.slice(2));
+  process.exitCode = await run(process.argv.slice(2));
 }

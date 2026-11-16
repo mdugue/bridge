@@ -245,10 +245,10 @@ and plans can rely on:
   `bakeSeamModules` the bake modules whose code handles a tile's edge,
   with each way's count; `upstreamWorkarounds` the register's entries in
   `docs/rendering.md` and the marked comments.
-- **A further section** (091's raster table, phase 2's browser figures,
-  090's dressing baseline) is a module of its own beside
+- **A further section** (as 091's raster table is; phase 2's browser
+  figures, 090's dressing baseline) is a module of its own beside
   `lib/city/ledger.ts`, one more field of `Ledger` and one more key of
-  what `measure` in `scripts/ledger.ts` returns: `datedLedger` and
+  the `fresh` object in `run` (`scripts/ledger.ts`): `datedLedger` and
   `ledgerDiff` take whatever they are handed and write a section where it
   was measured. A switch of its own joins `FLAGS`; any other argument is
   refused with exit 2, and nothing is written.

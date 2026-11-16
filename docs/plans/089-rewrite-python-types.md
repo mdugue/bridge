@@ -27,7 +27,7 @@
   runs, not hours in
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: TODO
+- **Status**: IN PROGRESS — phases 0–1 done (2026-11-16); phase 2 next, phases 3–4 wait for decision B
 
 ## Why this matters
 
@@ -343,4 +343,79 @@ and pay a re-bake for each batch. In the series:
 
 ## Findings
 
-(empty — phase 0 writes the checker's choice here, decision B after it)
+### Phase 0: the checker (2026-11-16)
+
+**Decision A: pyright 1.1.414**, pinned as `pyright[nodejs]==1.1.414` in
+the dev group. Its wheel carries pyright's JavaScript, and the `nodejs`
+extra brings Node as a wheel (`nodejs-wheel-binaries` 24.19.0, locked),
+so `uv sync --locked` is the whole set-up and a run downloads nothing:
+measured with the proxy pointed at a closed port. CI's `pipeline` job
+needs no new step. Each candidate once over `bake/`, from the bakes'
+`.venv`, on the session's container:
+
+| Checker | Findings | Time | What it needs | Verdict |
+|---|---|---|---|---|
+| pyright 1.1.414 (`[nodejs]`) | 593 errors (`errorCount`), the plan's count | 25 s | a 38 MB wheel and Node's wheel; no download at run time | **taken**: measured here, knows shapely through its bundled stubs |
+| basedpyright 1.40.2 | 1 421 errors, 17 906 warnings in its own default mode | 26 s | the same Node wheel, 77 MB | a fork of the same checker with stricter defaults; nothing it adds is wanted before the baseline is empty |
+| ty 0.0.104 | 102 | 1 s | one Rust binary | brings no stubs for shapely, so the 184 findings of the bakes' own `shapely.Geometry` annotation read as none (no finding names shapely); a 0.0 version whose counts move a release. Worth a look again at 1.0 |
+| pyrefly 1.4.1 | 435 errors (preset `default`; preset `basic` exits 0) | 2.5–5 s | one Rust binary | fast; its own rule names would make a new baseline nothing in this plan is measured against |
+
+Settings in `pyproject.toml`'s `[tool.pyright]`: `include = ["bake"]`,
+`pythonVersion = "3.12"` (the lower bound of `requires-python`; the
+count is 593 under 3.12 as under 3.13), `pythonPlatform = "Linux"` (on
+Windows the count is 597), `venv = ".venv"`, `stubPath = "typings"`.
+
+One package is shared: pyright depends on `typing-extensions`, which is
+also in the bakes' runtime closure (`locked_runtime` lists
+`typing-extensions 4.16.0`). A bump of pyright that moves it re-keys
+every bake; phase 0's check (`locked_runtime` before and after) belongs
+in every such bump.
+
+No key moved. `locked_runtime` of the new `uv.lock` equals that of the
+old (the plan's command prints `True`; `tests/test_step_cache.py`
+passes), and beyond the plan's check: `step_cache.code_hash` of each of
+the 81 bake modules computed on `HEAD` and on the branch, from the same
+`.venv`, is identical. `git diff --stat -- pipeline/bake` is empty.
+
+### Phase 1: the baseline (2026-11-16)
+
+After review, the baseline keys a finding by file, rule, the innermost
+function or class it stands in and the first line of its message,
+whitespace folded — not by file and rule alone, where a finding fixed and
+another added in the same file and rule passed as no change (102 of 167
+such buckets held more than one). The 593 findings fall into 500 keys,
+68 of them holding more than one (the same message in the same
+function). The escapes are keyed alike, and are every way to silence
+pyright: `type: ignore`, `pyright: ignore`, a `# pyright:` directive of
+any kind, `@no_type_check`, `typing.cast`. The gate also fails when
+pyright did not read all 83 modules of `bake/`, when `[tool.pyright]`
+holds anything but its six settings or a `pyrightconfig.json` appears,
+and — in CI on a pull request — when the baseline holds a key or count
+the base branch's does not, unless the description carries a line
+`Typecheck-baseline-raise: <why>` (a bump of pyright: `--update` may
+raise only when the checker's version changed).
+
+`pipeline/typecheck-baseline.json` holds **593 findings in 56 files**
+(pyright 1.1.414), by rule: `reportAttributeAccessIssue` 233,
+`reportArgumentType` 119, `reportGeneralTypeIssues` 78,
+`reportCallIssue` 52, `reportOperatorIssue` 29,
+`reportOptionalMemberAccess` 29, `reportPossiblyUnboundVariable` 15,
+`reportOptionalSubscript` 13, `reportReturnType` 9,
+`reportOptionalOperand` 7, `reportIndexIssue` 5,
+`reportAssignmentType` 4. All are errors; the default mode reports no
+warning.
+
+Escapes held beside them: `type: ignore` 5, `pyright: ignore` 0,
+`typing.cast` **0**, not the 2 of *Current state*: those two `cast(`
+are `dop_balance.cast`, a function of the bake's own and its call.
+`typecheck.py` counts calls of `typing.cast` through the syntax tree, so
+neither is one.
+
+How the rows of *Current state* map to rules: every
+`reportGeneralTypeIssues` finding (78) is "… is not iterable" — the 60
+of `ndi.label` and the 18 of `None` — and the 32 "no overloads" are
+`reportCallIssue`, beside its 20 wrong counts of arguments. Phase 2's
+Verify ("no entry for is not iterable") therefore reads as: no
+`reportGeneralTypeIssues` left where `ndi.label` was.
+
+Decision B: open (the maintainer's).

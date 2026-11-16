@@ -17,6 +17,7 @@ import {
   wireBytes,
 } from "./ledger";
 import type { Ledger, PublishedName, RasterReads } from "./ledger";
+import { SORT_OF } from "./ledger-rasters";
 import { buildTileset } from "./tileset";
 import type { BakedTile, TerrainFiles } from "./tileset";
 
@@ -698,6 +699,7 @@ const LEDGER = {
     publishedExtensions: [".png"],
     upstreamWorkarounds: { entries: 2, sites: 2 },
   },
+  rasters: { rule: "rasters", cpuDecodes: [], sites: {}, sorts: SORT_OF },
 } satisfies Ledger;
 
 type Tree = Record<string, unknown>;
@@ -837,10 +839,11 @@ test("the written ledger is the fresh figures, the heading first", () => {
     "bytes",
     "buildings",
     "counters",
+    "rasters",
   ]);
   // a further section is written where it was measured, and gated
-  const more = { ...fresh, rasters: { sites: 1 } };
-  expect(Object.keys(datedLedger(more, null, "x")).at(-1)).toBe("rasters");
-  expect(datedLedger(more, null, "x").rasters).toEqual({ sites: 1 });
-  expect(ledgerDiff(LEDGER, more)).toEqual(["rasters.sites: (none) → 1"]);
+  const more = { ...fresh, browser: { scripts: 1 } };
+  expect(Object.keys(datedLedger(more, null, "x")).at(-1)).toBe("browser");
+  expect(datedLedger(more, null, "x").browser).toEqual({ scripts: 1 });
+  expect(ledgerDiff(LEDGER, more)).toEqual(["browser.scripts: (none) → 1"]);
 });

@@ -41,7 +41,7 @@ bun run site <site>     # where a site stands (--all: every site)
 bun run fetch <site>    # downloads → data/_raw/<provider>/, sources → data/<site>/
 bun run bake <site>     # offline bakes [tile…] [--step X] [--jobs N] [--force]
 bun run osm-coverage <site>  # OSM's built things no bake decided about
-bun run test:pipeline   # pytest + ruff for pipeline/
+bun run test:pipeline   # pytest + ruff + types for pipeline/
 bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
 bun run docs:matrix     # regenerate the guide's sources-by-city pages
 bun scripts/stadtwissen.ts <site> such|nah|…  # search what the twin knows
@@ -156,8 +156,8 @@ ADR 0041).
   reaches calls `PMath` (`lib/city/portable-math.ts`), never `Math`'s
   `hypot`, trigonometric, exponential or power functions, and `**` only
   to a whole literal — those are the C library's and differ in the last
-  bit (`bake-entries.test.ts`; `docs/data-pipeline.md`, "Cache and
-  publish").
+  bit (ADR 0024; `bake-entries.test.ts`; `docs/data-pipeline.md`, "Cache
+  and publish").
 - A JSON file a bake writes and TypeScript reads has one zod schema in
   `lib/city/<name>-file.ts` (ADR 0059): readers take its types and
   `parseBakeFile`, never `readJson(…) as T`; the build fails on a

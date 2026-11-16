@@ -1,7 +1,7 @@
 # ADR 0024: The build bakes each city into a 3D Tiles tileset that streams around the camera
 
 - **Status:** accepted
-- **Date:** 2026-09, rewritten 2026-10
+- **Date:** 2026-09, rewritten 2026-11
 
 ## Context
 
@@ -23,6 +23,13 @@ they do.
   table per object — `EXT_mesh_features`, `EXT_structural_metadata`) over
   the terrain at two levels, coarse far off and fine near the camera.
   Distance, not a role, decides which tile is detailed.
+- **A bake's bytes are a function of the tree, on any machine.** A file
+  is published once under its content hash and checked against what the
+  commit bakes, so the machine that baked it is no input. A module the
+  build bakes with computes in exactly rounded operations
+  (`lib/city/portable-math.ts`) and never calls the C library's maths
+  through `Math` — its last bits differ between library versions and
+  processors, and a comparison that reads one decides differently.
 - **Content-hashed names and one manifest.** Every file is published as
   `<stem>.<hash>.<ext>` and served `immutable`; `manifest.json` (no-cache)
   names the hashed tileset, which names everything else: each glTF and,
@@ -49,6 +56,9 @@ they do.
 - Content opens in any glTF / 3D Tiles tool; the per-object table is
   inspectable metadata.
 - Anything that builds a `/data` URL goes through the manifest.
+- A bake module's maths goes through `PMath`; a test holds the modules to
+  it, and CI's ledger check compares every baked byte with a file another
+  machine wrote.
 - Anything added after the first frame redraws the shadow map and respects
   disposal, or it shows as a missing shadow or a leak; what a tile gains
   after it landed is a late part (`late-parts.ts`), which weighs, frees
@@ -65,5 +75,9 @@ they do.
   property.
 - **Terrain as a custom heightmap content type:** smaller, but a private
   format again.
+- **`Math`'s functions with the results rounded before every
+  comparison:** the comparisons are spread over forty modules and a
+  rounded value still ties; a tolerance in the byte check hides a moved
+  vertex.
 - **Query-string cache busting, or mtime copies with revalidation:**
   inconsistent caches, or a round trip per file per visit.
