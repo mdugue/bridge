@@ -1,10 +1,12 @@
 import {
+  CompressedTexture,
   DataArrayTexture,
   DataTexture,
   FloatType,
   HalfFloatType,
 } from "three/webgpu";
 import type {
+  CompressedPixelFormat,
   Material,
   Object3D,
   Texture,
@@ -74,9 +76,19 @@ type ArrayOf = new (length: number) => ArrayBufferView;
 
 type Layered = Texture & {
   image: { data?: ArrayBufferView | null; depth?: number } | null;
+  isCompressedTexture?: boolean;
   isDataArrayTexture?: boolean;
   isRenderTargetTexture?: boolean;
 };
+
+/** The smallest a block-compressed texture can be: one 4 × 4 block of 8
+ *  bytes (BC4, EAC R11: raster-upload.ts `loadBlockRaster`). */
+const BLOCK_EDGE = 4;
+const blockLevel = () => ({
+  data: new Uint8Array(8),
+  width: BLOCK_EDGE,
+  height: BLOCK_EDGE,
+});
 
 const arrayFor = (type: number): ArrayOf => {
   if (type === FloatType) {
@@ -105,11 +117,25 @@ function texelImage(like: Texture) {
  * graph keeps no tile's texture alive; the slot swaps in the drawn tile's
  * own before any binding is made.
  */
-export function stubLike(like: Texture): Texture {
+/** A 1 × 1 texture of `like`'s class — one block of its format, for a
+ *  compressed one, which has no 1 × 1 texture. */
+function stubOf(like: Texture): Texture {
   const { data, depth } = texelImage(like);
-  const stub = (like as Layered).isDataArrayTexture
+  if ((like as Layered).isCompressedTexture) {
+    return new CompressedTexture(
+      [blockLevel()],
+      BLOCK_EDGE,
+      BLOCK_EDGE,
+      like.format as CompressedPixelFormat
+    );
+  }
+  return (like as Layered).isDataArrayTexture
     ? new DataArrayTexture(data as never, 1, 1, depth)
     : new DataTexture(data as never, 1, 1);
+}
+
+export function stubLike(like: Texture): Texture {
+  const stub = stubOf(like);
   stub.format = like.format;
   stub.type = like.type;
   stub.colorSpace = like.colorSpace;
@@ -138,6 +164,12 @@ function shrinkOnDispose(tex: Texture): void {
   shrinking.add(tex);
   const onDispose = () => {
     tex.removeEventListener("dispose", onDispose);
+    if ((tex as Layered).isCompressedTexture) {
+      // one block: a compressed texture's levels are its mipmaps
+      tex.image = { width: BLOCK_EDGE, height: BLOCK_EDGE };
+      tex.mipmaps = [blockLevel()];
+      return;
+    }
     tex.image = texelImage(tex);
   };
   tex.addEventListener("dispose", onDispose);

@@ -5,17 +5,17 @@
   "wire": ".png, .webp and .gz at face value; .json and .geojson gzipped at level 6 by the pinned Bun's zlib; any other extension is an error, never a guess. The text figures are this Bun's, not what a host sends: zlib 1.3 gives 0.6–2.2 % other bytes for the same level, and Vercel sends text as brotli. They are a stand-in kept constant so that the figures compare over time, exact once plan 088 stores files in their transport encoding. The committed figures are those of linux-x64 with the pinned Bun: regenerate the ledger there or in a cloud session. `published.server` is bytes on disk: those files never travel.",
   "tiles": 15,
   "published": {
-    "files": 670,
+    "files": 700,
     "boot": {
-      "bytes": 39218,
+      "bytes": 39818,
       "files": 3
     },
     "tiles": {
-      "bytes": 192371070,
-      "files": 611
+      "bytes": 193620659,
+      "files": 641
     },
     "site": {
-      "bytes": 3514729,
+      "bytes": 3514754,
       "files": 39
     },
     "server": {
@@ -30,7 +30,7 @@
       },
       "manifest": {
         "class": "boot",
-        "bytes": 8822,
+        "bytes": 9200,
         "files": 1
       },
       "minimap": {
@@ -75,12 +75,12 @@
       },
       "tileset": {
         "class": "boot",
-        "bytes": 9132,
+        "bytes": 9354,
         "files": 1
       },
       "tileset-spawn": {
         "class": "site",
-        "bytes": 2019,
+        "bytes": 2044,
         "files": 1
       },
       "trams": {
@@ -104,105 +104,105 @@
     "far": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 4667065,
+        "bytes": 4685390,
         "files": 10
       },
       "median": {
         "tile": "33410_5654_2_sn",
-        "bytes": 4575726,
+        "bytes": 4593643,
         "files": 10
       },
       "largest": {
-        "tile": "33414_5654_2_sn",
-        "bytes": 5776356,
+        "tile": "33416_5656_2_sn",
+        "bytes": 5828229,
         "files": 10
       },
       "site": {
-        "bytes": 66394024,
+        "bytes": 67041172,
         "files": 150
       }
     },
     "fine": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 5387136,
-        "files": 27
+        "bytes": 5448502,
+        "files": 29
       },
       "median": {
         "tile": "33410_5656_2_sn",
-        "bytes": 5578463,
-        "files": 27
+        "bytes": 5620119,
+        "files": 29
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 7449313,
-        "files": 27
+        "bytes": 7456536,
+        "files": 29
       },
       "site": {
-        "bytes": 83441866,
-        "files": 403
+        "bytes": 84044307,
+        "files": 433
       },
       "phone": {
         "spawn": {
           "tile": "33412_5656_2_sn",
-          "bytes": 5246286,
-          "files": 26
+          "bytes": 5307652,
+          "files": 28
         },
         "median": {
           "tile": "33410_5656_2_sn",
-          "bytes": 5383798,
-          "files": 26
+          "bytes": 5425454,
+          "files": 28
         },
         "largest": {
           "tile": "33416_5656_2_sn",
-          "bytes": 7289706,
-          "files": 26
+          "bytes": 7296929,
+          "files": 28
         },
         "site": {
-          "bytes": 81209274,
-          "files": 388
+          "bytes": 81811715,
+          "files": 418
         }
       }
     },
     "approached": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 7853641,
-        "files": 32
+        "bytes": 7915007,
+        "files": 34
       },
       "median": {
         "tile": "33410_5658_2_sn",
-        "bytes": 8064977,
-        "files": 32
+        "bytes": 8102507,
+        "files": 34
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 9978906,
-        "files": 32
+        "bytes": 9986129,
+        "files": 34
       },
       "site": {
-        "bytes": 117802030,
-        "files": 476
+        "bytes": 118404471,
+        "files": 506
       },
       "phone": {
         "spawn": {
           "tile": "33412_5656_2_sn",
-          "bytes": 7459292,
-          "files": 28
+          "bytes": 7520658,
+          "files": 30
         },
         "median": {
           "tile": "33410_5656_2_sn",
-          "bytes": 7547481,
-          "files": 28
+          "bytes": 7589137,
+          "files": 30
         },
         "largest": {
           "tile": "33416_5656_2_sn",
-          "bytes": 9618224,
-          "files": 28
+          "bytes": 9625447,
+          "files": 30
         },
         "site": {
-          "bytes": 111679353,
-          "files": 418
+          "bytes": 112281794,
+          "files": 448
         }
       }
     },
@@ -251,22 +251,22 @@
     "all": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 13707179,
-        "files": 41
+        "bytes": 13786870,
+        "files": 43
       },
       "median": {
         "tile": "33410_5658_2_sn",
-        "bytes": 13699602,
-        "files": 41
+        "bytes": 13766237,
+        "files": 43
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 17393256,
-        "files": 41
+        "bytes": 17452843,
+        "files": 43
       },
       "site": {
-        "bytes": 192371070,
-        "files": 611
+        "bytes": 193620659,
+        "files": 641
       }
     },
     "unvisited": {
@@ -448,22 +448,23 @@
     }
   },
   "counters": {
-    "dressingKinds": 15,
+    "dressingKinds": 17,
     "coarseDressingKinds": 3,
     "askKinds": 1,
     "publishedExtensions": [
       ".bin.gz",
-      ".drs.gz",
+      ".crw.gz",
       ".fpr.gz",
       ".geojson",
       ".glb.gz",
       ".json",
       ".png",
+      ".pts.gz",
       ".webp"
     ],
     "layerModules": {
       "files": 27,
-      "codeLines": 14303
+      "codeLines": 14516
     },
     "longestFunction": {
       "lines": 2365,
@@ -500,7 +501,13 @@
       "svf": "soft",
       "horizon": "soft"
     },
-    "cpuDecodes": [],
+    "cpuDecodes": [
+      {
+        "module": "app/_components/vegetation-layer.ts",
+        "kind": "ndvi",
+        "use": "the crowns' greenness, sampled once a fine level's dressing builds (loadNdviSampler; the same file is uploaded for the ground too)"
+      }
+    ],
     "sites": {
       "dresden": {
         "tiles": 15,
@@ -4288,18 +4295,213 @@
       }
     }
   },
+  "blocks": {
+    "rule": "The sky view (svf) of every tile that has one, as the PNG the viewer reads and as the GPU blocks with their mip chain a build with SVF_BLOCKS=1 publishes beside it (lib/city/block-raster.ts), encoded here from the published PNG by the build's own encoder (scripts/block-encode.ts `publishedBlockFile`), so no flagged build is needed. Read with --blocks only (about two minutes), else the committed figures stand. wire: the PNG as published, the blocks pre-gzipped. gpu: the texture's bytes, the PNG's as the viewer lays it out (one byte a texel, a third more for the GPU's mips), the blocks' as uploaded (half a byte a texel, the chain in the file). error: |decoded block − PNG byte| in byte steps by the formats' nominal decode (scripts/block-encode.ts `decodeLevel`), not a GPU's read (SwiftShader reads up to 0.86 below it for BC4, 0.12 for EAC: scripts/eval/block-raster-probe.ts) — over level 0: the mean over the site's texels, the largest tile p99, the largest texel; mipsMax the largest texel of levels 1 on against the box-filtered chain.",
+    "sites": {
+      "dresden": {
+        "tiles": 15,
+        "png": {
+          "gpu": 20971515,
+          "wire": 8240833
+        },
+        "bc4": {
+          "gpu": 10485960,
+          "wire": 9173233,
+          "error": {
+            "mean": 0.738,
+            "p99": 4.571,
+            "max": 14.6,
+            "mipsMax": 15.714
+          }
+        },
+        "eac": {
+          "gpu": 10485960,
+          "wire": 9076308,
+          "error": {
+            "mean": 0.77,
+            "p99": 4.89,
+            "max": 16.919,
+            "mipsMax": 21.985
+          }
+        }
+      },
+      "grimma": {
+        "tiles": 2,
+        "png": {
+          "gpu": 2796202,
+          "wire": 930677
+        },
+        "bc4": {
+          "gpu": 1398128,
+          "wire": 1084443,
+          "error": {
+            "mean": 0.607,
+            "p99": 4.857,
+            "max": 12.857,
+            "mipsMax": 14.6
+          }
+        },
+        "eac": {
+          "gpu": 1398128,
+          "wire": 1068947,
+          "error": {
+            "mean": 0.642,
+            "p99": 4.931,
+            "max": 17.066,
+            "mipsMax": 16.879
+          }
+        }
+      },
+      "hamburg": {
+        "tiles": 4,
+        "png": {
+          "gpu": 5592404,
+          "wire": 1904905
+        },
+        "bc4": {
+          "gpu": 2796256,
+          "wire": 2246757,
+          "error": {
+            "mean": 0.576,
+            "p99": 4,
+            "max": 13.6,
+            "mipsMax": 16
+          }
+        },
+        "eac": {
+          "gpu": 2796256,
+          "wire": 2231647,
+          "error": {
+            "mean": 0.619,
+            "p99": 3.974,
+            "max": 14.03,
+            "mipsMax": 18.933
+          }
+        }
+      },
+      "leipzig": {
+        "tiles": 4,
+        "png": {
+          "gpu": 5592404,
+          "wire": 2346956
+        },
+        "bc4": {
+          "gpu": 2796256,
+          "wire": 2629513,
+          "error": {
+            "mean": 0.801,
+            "p99": 4.143,
+            "max": 12,
+            "mipsMax": 15
+          }
+        },
+        "eac": {
+          "gpu": 2796256,
+          "wire": 2609668,
+          "error": {
+            "mean": 0.834,
+            "p99": 4.139,
+            "max": 15.821,
+            "mipsMax": 17.909
+          }
+        }
+      },
+      "meissen": {
+        "tiles": 1,
+        "png": {
+          "gpu": 1398101,
+          "wire": 612615
+        },
+        "bc4": {
+          "gpu": 699064,
+          "wire": 655062,
+          "error": {
+            "mean": 0.905,
+            "p99": 4.714,
+            "max": 13.143,
+            "mipsMax": 14.6
+          }
+        },
+        "eac": {
+          "gpu": 699064,
+          "wire": 649825,
+          "error": {
+            "mean": 0.922,
+            "p99": 4.9,
+            "max": 15.782,
+            "mipsMax": 16.755
+          }
+        }
+      },
+      "muenchen": {
+        "tiles": 4,
+        "png": {
+          "gpu": 5592404,
+          "wire": 2344385
+        },
+        "bc4": {
+          "gpu": 2796256,
+          "wire": 2642622,
+          "error": {
+            "mean": 0.762,
+            "p99": 4,
+            "max": 11.286,
+            "mipsMax": 14
+          }
+        },
+        "eac": {
+          "gpu": 2796256,
+          "wire": 2621222,
+          "error": {
+            "mean": 0.798,
+            "p99": 4.057,
+            "max": 12.078,
+            "mipsMax": 19.013
+          }
+        }
+      },
+      "unna": {
+        "tiles": 2,
+        "png": {
+          "gpu": 2796202,
+          "wire": 1103683
+        },
+        "bc4": {
+          "gpu": 1398128,
+          "wire": 1217333,
+          "error": {
+            "mean": 0.864,
+            "p99": 4.857,
+            "max": 13.4,
+            "mipsMax": 14
+          }
+        },
+        "eac": {
+          "gpu": 1398128,
+          "wire": 1209362,
+          "error": {
+            "mean": 0.878,
+            "p99": 4.934,
+            "max": 14.806,
+            "mipsMax": 14.968
+          }
+        }
+      }
+    }
+  },
   "dressing": {
     "tiles": {
       "spawn": {
         "tile": "33412_5656_2_sn",
         "what": "spawn",
         "fine": {
-          "bytes": 187759,
-          "files": 16,
+          "bytes": 249125,
+          "files": 18,
           "kinds": {
             "bridge": 1053,
+            "canopy": 40495,
+            "canopyx": 43036,
             "cultivated": 772,
-            "dressing": 106315,
             "furniture": 25898,
             "lamps": 3733,
             "lowveg": 4252,
@@ -4312,33 +4514,31 @@
             "sportTable": 1332,
             "traffic": 8015,
             "tram": 16963,
+            "trees": 84150,
             "vegrows": 1531
           }
         },
         "coarse": {
-          "bytes": 66619,
+          "bytes": 84944,
           "files": 3,
           "kinds": {
             "bridge": 1053,
-            "dressingCoarse": 57551,
+            "crowns": 75876,
             "traffic": 8015
           }
-        },
-        "visit": {
-          "bytes": 245310,
-          "files": 17
         }
       },
       "forest": {
         "tile": "33416_5658_2_sn",
         "what": "forest",
         "fine": {
-          "bytes": 470712,
-          "files": 16,
+          "bytes": 496855,
+          "files": 18,
           "kinds": {
             "bridge": 162,
+            "canopy": 468887,
+            "canopyx": 22869,
             "cultivated": 162,
-            "dressing": 466148,
             "furniture": 345,
             "lamps": 162,
             "lowveg": 191,
@@ -4351,33 +4551,31 @@
             "sportTable": 620,
             "traffic": 614,
             "tram": 162,
+            "trees": 535,
             "vegrows": 730
           }
         },
         "coarse": {
-          "bytes": 241091,
+          "bytes": 398235,
           "files": 3,
           "kinds": {
             "bridge": 162,
-            "dressingCoarse": 240315,
+            "crowns": 397459,
             "traffic": 614
           }
-        },
-        "visit": {
-          "bytes": 711027,
-          "files": 17
         }
       },
       "yards": {
         "tile": "33410_5656_2_sn",
         "what": "yards",
         "fine": {
-          "bytes": 234338,
-          "files": 16,
+          "bytes": 275994,
+          "files": 18,
           "kinds": {
             "bridge": 5311,
+            "canopy": 56529,
+            "canopyx": 25106,
             "cultivated": 557,
-            "dressing": 89926,
             "furniture": 29202,
             "lamps": 5544,
             "lowveg": 1730,
@@ -4390,21 +4588,18 @@
             "sportTable": 1906,
             "traffic": 7761,
             "tram": 35801,
+            "trees": 49947,
             "vegrows": 1192
           }
         },
         "coarse": {
-          "bytes": 60972,
+          "bytes": 78626,
           "files": 3,
           "kinds": {
             "bridge": 5311,
-            "dressingCoarse": 47900,
+            "crowns": 65554,
             "traffic": 7761
           }
-        },
-        "visit": {
-          "bytes": 282238,
-          "files": 17
         }
       }
     },
@@ -9674,21 +9869,21 @@
     "readWith": "chromium 153.0.8010.12, google / swiftshader",
     "firstLoad": {
       "note": "Every /_next/static/*.js the page or the workers ground, niches, scene fetched themselves (each one's resource timing) at /dresden?scene=lite (a NEXT_PUBLIC_POC_DEBUG=1 production build), cut at: ready, those workers running, then 5 s without a new script; a second read 5 s later must equal it. The BVH worker's own scripts are left out: it starts only if the spawn's buildings have no BVH yet. Each raw body gzipped at level 9 by the pinned Bun, exact. workerOnly: the files those workers fetched and the page did not — not the scene's JavaScript, which the page shares.",
-      "files": 42,
-      "gzip": 1102580,
+      "files": 43,
+      "gzip": 1105320,
       "workerOnly": {
-        "files": 8,
-        "gzip": 34676
+        "files": 9,
+        "gzip": 35836
       }
     },
     "phoneLiteSpawnCache": {
       "note": "The tile cache's own accounting (calculateBytesUsed, as its budget counts it) on an emulated phone (isMobile, hasTouch; the scene's tier asserted mobile) at /dresden?scene=lite once ready and two reads 4 s apart (more than a late part's 3 s compile wait) agree with no compile queued, loaded contents only: the spawn tile alone, one of fifteen, under the lite profile. It is not the phone's memory: what a tile holds on the GPU that never reaches calculateBytesUsed moves nothing here, and three's info.memory is recorded only (timings.phoneHeld), since two reads of one build differ.",
-      "bytes": 155942579,
+      "bytes": 158979087,
       "contents": {
         "city_33412_5656_2_sn_far.glb.gz": 12632382,
         "city_33412_5656_2_sn.glb.gz": 27015566,
-        "terrain_33412_5656_2_sn_l0.glb.gz": 91794640,
-        "terrain_33412_5656_2_sn_l1.glb.gz": 24499991
+        "terrain_33412_5656_2_sn_l0.glb.gz": 94610268,
+        "terrain_33412_5656_2_sn_l1.glb.gz": 24720871
       }
     },
     "pipelines": {
@@ -9970,20 +10165,38 @@
           "interStage": 4,
           "spare": 12
         },
-        "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iKind,iPlace,iSize,normal,position] shadowed perspective": {
-          "vertexBuffers": 3,
-          "attributes": 5,
+        "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+          "vertexBuffers": 5,
+          "attributes": 8,
           "interStage": 9,
           "spare": 7
         },
-        "tree-guard|2000x2000|edges [Mesh: iKind,iPlace,iSize,normal,position] shadowed perspective": {
-          "vertexBuffers": 3,
-          "attributes": 5,
+        "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+          "vertexBuffers": 4,
+          "attributes": 7,
+          "interStage": 9,
+          "spare": 7
+        },
+        "tree-guard|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+          "vertexBuffers": 5,
+          "attributes": 7,
           "interStage": 4,
           "spare": 12
         },
-        "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iKind,iPlace,iSize,normal,position] shadowed perspective": {
-          "vertexBuffers": 3,
+        "tree-guard|2000x2000|edges [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+          "vertexBuffers": 4,
+          "attributes": 6,
+          "interStage": 4,
+          "spare": 12
+        },
+        "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+          "vertexBuffers": 5,
+          "attributes": 6,
+          "interStage": 9,
+          "spare": 7
+        },
+        "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+          "vertexBuffers": 4,
           "attributes": 5,
           "interStage": 9,
           "spare": 7
@@ -9994,15 +10207,27 @@
           "interStage": 3,
           "spare": 13
         },
-        "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iKind,iPlace,iSize,normal,position] shadowed perspective": {
-          "vertexBuffers": 3,
-          "attributes": 5,
+        "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+          "vertexBuffers": 5,
+          "attributes": 8,
           "interStage": 8,
           "spare": 8
         },
-        "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iKind,iPlace,iSize,normal,position] shadowed perspective": {
-          "vertexBuffers": 3,
-          "attributes": 5,
+        "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+          "vertexBuffers": 4,
+          "attributes": 7,
+          "interStage": 8,
+          "spare": 8
+        },
+        "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+          "vertexBuffers": 5,
+          "attributes": 8,
+          "interStage": 9,
+          "spare": 7
+        },
+        "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+          "vertexBuffers": 4,
+          "attributes": 7,
           "interStage": 9,
           "spare": 7
         },
@@ -10012,33 +10237,39 @@
           "interStage": 4,
           "spare": 12
         },
-        "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iKind,iPlace,iSize,normal,position] shadowed perspective": {
-          "vertexBuffers": 3,
-          "attributes": 5,
+        "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+          "vertexBuffers": 5,
+          "attributes": 8,
           "interStage": 6,
           "spare": 10
         },
-        "trunk|earth|2000x2000|edges [Mesh: iColor,iKind,iPlace,iSize,normal,position,uv] perspective": {
+        "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
           "vertexBuffers": 4,
-          "attributes": 5,
+          "attributes": 7,
+          "interStage": 6,
+          "spare": 10
+        },
+        "trunk|earth|2000x2000|edges [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+          "vertexBuffers": 4,
+          "attributes": 7,
           "interStage": 8,
           "spare": 8
         },
-        "trunk|earth|2000x2000|edges [Mesh: iKind,iPlace,iSize,normal,position,uv] perspective": {
-          "vertexBuffers": 3,
-          "attributes": 4,
+        "trunk|earth|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+          "vertexBuffers": 4,
+          "attributes": 7,
           "interStage": 7,
           "spare": 9
         },
-        "vegetation-crown-bare [Mesh: aBare,iColor,iKind,iPlace,iSize,normal,position,uv] shadowed perspective": {
+        "vegetation-crown-bare [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
           "vertexBuffers": 5,
-          "attributes": 6,
+          "attributes": 8,
           "interStage": 9,
           "spare": 7
         },
-        "vegetation-crown-leafy [Mesh: aBare,iColor,iKind,iPlace,iSize,normal,position,uv] shadowed perspective": {
+        "vegetation-crown-leafy [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
           "vertexBuffers": 4,
-          "attributes": 5,
+          "attributes": 7,
           "interStage": 6,
           "spare": 10
         },
@@ -10076,53 +10307,53 @@
     "desktop": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 3.1,
-        "maxMs": 3.1
+        "totalMs": 6.9,
+        "maxMs": 6.9
       },
       "boot:frame": {
-        "count": 7,
-        "totalMs": 583.5,
-        "maxMs": 404.7
+        "count": 9,
+        "totalMs": 472.3,
+        "maxMs": 391.4
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 606.5,
-        "maxMs": 606.5
+        "totalMs": 605.1,
+        "maxMs": 605.1
       },
       "boot:light-wait": {
         "count": 1,
-        "totalMs": 1223.6,
-        "maxMs": 1223.6
+        "totalMs": 1399.8,
+        "maxMs": 1399.8
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 4066.1,
-        "maxMs": 4066.1
+        "totalMs": 1481.3,
+        "maxMs": 1481.3
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 398.2,
-        "maxMs": 398.2
+        "totalMs": 342,
+        "maxMs": 342
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 83.5,
-        "maxMs": 83.5
+        "totalMs": 358.3,
+        "maxMs": 358.3
       },
       "boot:scene-compile": {
         "count": 1,
-        "totalMs": 3000.5,
-        "maxMs": 3000.5
+        "totalMs": 3000.2,
+        "maxMs": 3000.2
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 145.6,
-        "maxMs": 145.6
+        "totalMs": 102.1,
+        "maxMs": 102.1
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 7524.4,
-        "maxMs": 7524.4
+        "totalMs": 4588.1,
+        "maxMs": 4588.1
       },
       "boot:tileset": {
         "count": 1,
@@ -10131,70 +10362,70 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4366.9,
-        "maxMs": 4366.9
+        "totalMs": 4213.5,
+        "maxMs": 4213.5
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 1096.6,
-        "maxMs": 768.8
+        "totalMs": 943.3,
+        "maxMs": 696.4
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 12001.4,
-        "maxMs": 3000.6
+        "totalMs": 12000.8,
+        "maxMs": 3000.3
       }
     },
     "phone": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 74.6,
-        "maxMs": 74.6
+        "totalMs": 20.4,
+        "maxMs": 20.4
       },
       "boot:frame": {
         "count": 9,
-        "totalMs": 553.8,
-        "maxMs": 463.8
+        "totalMs": 623.7,
+        "maxMs": 343.2
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 604.2,
-        "maxMs": 604.2
+        "totalMs": 605.8,
+        "maxMs": 605.8
       },
       "boot:light-wait": {
         "count": 1,
-        "totalMs": 3000.6,
-        "maxMs": 3000.6
+        "totalMs": 3000.4,
+        "maxMs": 3000.4
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 991.9,
-        "maxMs": 991.9
+        "totalMs": 1176.2,
+        "maxMs": 1176.2
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 528.9,
-        "maxMs": 528.9
+        "totalMs": 136.4,
+        "maxMs": 136.4
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 24.8,
-        "maxMs": 24.8
+        "totalMs": 141.7,
+        "maxMs": 141.7
       },
       "boot:scene-compile": {
         "count": 1,
-        "totalMs": 2989.4,
-        "maxMs": 2989.4
+        "totalMs": 3000.4,
+        "maxMs": 3000.4
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 104.6,
-        "maxMs": 104.6
+        "totalMs": 68.7,
+        "maxMs": 68.7
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 7652.7,
-        "maxMs": 7652.7
+        "totalMs": 3380.9,
+        "maxMs": 3380.9
       },
       "boot:tileset": {
         "count": 1,
@@ -10203,47 +10434,42 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4224.9,
-        "maxMs": 4224.9
+        "totalMs": 4135.2,
+        "maxMs": 4135.2
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 955.9,
-        "maxMs": 674.5
+        "totalMs": 867.5,
+        "maxMs": 660.5
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 8825,
-        "maxMs": 3101.4
+        "totalMs": 11209.7,
+        "maxMs": 3027.7
       }
     },
     "phoneHeld": {
-      "attributes": 1037,
-      "attributesSize": 46267712,
-      "geometries": 437,
-      "indexAttributes": 128,
-      "indexAttributesSize": 33979674,
+      "attributes": 1402,
+      "attributesSize": 47624810,
+      "geometries": 548,
+      "indexAttributes": 133,
+      "indexAttributesSize": 33979704,
       "indirectStorageAttributes": 0,
       "indirectStorageAttributesSize": 0,
-      "programs": 164,
-      "programsSize": 2127711,
+      "programs": 167,
+      "programsSize": 2135843,
       "readbackBuffers": 0,
       "readbackBuffersSize": 0,
       "renderTargets": 10,
       "storageAttributes": 0,
       "storageAttributesSize": 0,
-      "textures": 64,
-      "texturesSize": 71615313,
-      "uniformBuffers": 532,
-      "uniformBuffersSize": 138864,
-      "total": 154129274
+      "textures": 63,
+      "texturesSize": 71615312,
+      "uniformBuffers": 646,
+      "uniformBuffersSize": 158416,
+      "total": 155514085
     },
     "firstLoad": [
-      {
-        "url": "/_next/static/chunks/0_kjkspq-lasv.js",
-        "gzip": 90216,
-        "worker": false
-      },
       {
         "url": "/_next/static/chunks/0_y16_q83yhki.js",
         "gzip": 15225,
@@ -10255,13 +10481,18 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/06jw2coqfr12p.js",
-        "gzip": 16148,
-        "worker": true
+        "url": "/_next/static/chunks/07thxtfm0d9r6.js",
+        "gzip": 20053,
+        "worker": false
       },
       {
         "url": "/_next/static/chunks/085vsoa7yruch.js",
         "gzip": 15204,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/0h714px1utsjh.js",
+        "gzip": 417,
         "worker": false
       },
       {
@@ -10275,19 +10506,14 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/0rotsbt3tdo8d.js",
-        "gzip": 290992,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/0wj0noag-9_fs.js",
         "gzip": 3622,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/0zbjjjh456cre.js",
-        "gzip": 396,
-        "worker": false
+        "url": "/_next/static/chunks/0z6zmjb1hrk4e.js",
+        "gzip": 771,
+        "worker": true
       },
       {
         "url": "/_next/static/chunks/0zehf7azb3u_7.js",
@@ -10295,8 +10521,23 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1m3fozsz5dal-.js",
-        "gzip": 134056,
+        "url": "/_next/static/chunks/1577em244902s.js",
+        "gzip": 90263,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/176ppimva53vx.js",
+        "gzip": 9093,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/18a6mf65_nx5n.js",
+        "gzip": 134058,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/1o23kkyw8hhly.js",
+        "gzip": 10918,
         "worker": false
       },
       {
@@ -10315,13 +10556,18 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/26_jj1pp9j5ek.js",
-        "gzip": 10253,
+        "url": "/_next/static/chunks/1tj0o_9842cwz.js",
+        "gzip": 291820,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/2amgmhwjcwza4.js",
-        "gzip": 417,
+        "url": "/_next/static/chunks/1w-2v-zkb7vku.js",
+        "gzip": 9007,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/26_jj1pp9j5ek.js",
+        "gzip": 10253,
         "worker": false
       },
       {
@@ -10340,16 +10586,6 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/2hgqpctjm6dsg.js",
-        "gzip": 771,
-        "worker": true
-      },
-      {
-        "url": "/_next/static/chunks/2i-r02s0cqk6z.js",
-        "gzip": 11658,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/2ngthuj25x5zl.js",
         "gzip": 9501,
         "worker": false
@@ -10357,16 +10593,6 @@
       {
         "url": "/_next/static/chunks/2ser170149cnh.js",
         "gzip": 14759,
-        "worker": false
-      },
-      {
-        "url": "/_next/static/chunks/2ucylbbmvzup_.js",
-        "gzip": 10230,
-        "worker": false
-      },
-      {
-        "url": "/_next/static/chunks/2wl5spzdfql4a.js",
-        "gzip": 8407,
         "worker": false
       },
       {
@@ -10380,13 +10606,8 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/3326ibn5vxnvi.js",
-        "gzip": 8817,
-        "worker": true
-      },
-      {
-        "url": "/_next/static/chunks/34_tf8y-rghwr.js",
-        "gzip": 20051,
+        "url": "/_next/static/chunks/35u_ux8x79379.js",
+        "gzip": 8411,
         "worker": false
       },
       {
@@ -10415,6 +10636,11 @@
         "worker": false
       },
       {
+        "url": "/_next/static/chunks/3n3jk_j020a7d.js",
+        "gzip": 11670,
+        "worker": false
+      },
+      {
         "url": "/_next/static/chunks/3r-ml6mc8gxvh.js",
         "gzip": 8946,
         "worker": false
@@ -10425,14 +10651,24 @@
         "worker": true
       },
       {
-        "url": "/_next/static/chunks/turbopack-01l1tx97fqoly.js",
-        "gzip": 191,
+        "url": "/_next/static/chunks/3xbwm77hp6uul.js",
+        "gzip": 8024,
         "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/4097se666s6v-.js",
+        "gzip": 393,
+        "worker": false
       },
       {
         "url": "/_next/static/chunks/turbopack-077hmtqrhcoji.js",
         "gzip": 4367,
         "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/turbopack-09s_0gl4614ew.js",
+        "gzip": 192,
+        "worker": true
       },
       {
         "url": "/_next/static/chunks/turbopack-1e5f49zawb_bt.js",

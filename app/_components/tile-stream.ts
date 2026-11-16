@@ -178,7 +178,11 @@ import { pageView } from "./page-view";
 import { railSegmentMeshes } from "./rail-segments";
 import { railSink } from "@/lib/city/rail-table";
 import type { RailSink } from "@/lib/city/rail-table";
-import { railTableRequested } from "./scene-profile";
+import {
+  blockFormatFor,
+  railTableRequested,
+  svfBlocksRequested,
+} from "./scene-profile";
 
 /**
  * The world as it streams in: OGC 3D Tiles (lib/city/tileset.ts) through
@@ -1877,6 +1881,9 @@ export class DressingPlugin {
       renderer: ctx.renderer,
       url: this.url,
       lowRasters: ctx.lowRasters,
+      blocks: blockFormatFor(svfBlocksRequested(pageView.search), (f) =>
+        ctx.renderer.hasFeature(f)
+      ),
       // (a root that left is not reweighed: the renderer may be evicting its
       // tile, and weighing it there adds its bytes back for good)
       onShareChange: (root) => {

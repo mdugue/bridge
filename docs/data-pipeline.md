@@ -824,8 +824,16 @@ tileset under `public/data/<site>/`
    (`downsampleInterleaved`: no image resize, which would step through
    the channels as if they were pixels), read by a fine level beyond the
    ground detail's reach (`lib/city/ground-reach.ts`; the markings and
-   the colonies have their phone twins for it). A twin exists only
-   beside its source. Which files a tile has, where the
+   the colonies have their phone twins for it). And, only in a build
+   with `SVF_BLOCKS=1`, the sky view's **GPU blocks** (plan 091 phase
+   2's trial, read only behind `?svf=blocks`; a default build publishes
+   none): `svf_<t>.bc4.gz` and `svf_<t>.eac.gz`, the committed
+   PNG encoded as BC4 and as EAC R11 with a box-filtered mip chain
+   (`scripts/block-encode.ts`, integer arithmetic, byte-stable; the file
+   `lib/city/block-raster.ts`; `publishSvfBlocks`, bake entry
+   `svfBlocks`), pre-gzipped, named in both levels' and the buildings'
+   extras as `svfBc4` and `svfEac`. Lossy: only a soft field goes this
+   way. A twin exists only beside its source. Which files a tile has, where the
    viewer finds each (`dressing`, `coarse`, `ask`) and which
    carry the ODbL credit (`osm`, checked by `features.test.ts`) is one
    table, `tileArtifacts` in `lib/city/tile.ts`; the extras' types derive
@@ -1576,6 +1584,43 @@ A coarse level is the 1024² class raster (1.0), its splat (5.3) and the
 three soft fields (4.7, 42.4 %), which both levels of a tile share.
 Beyond the ground detail's reach a phone's fine level reads the 1024²
 twins of the paving and markings (4 MiB each) and the edges (2 MiB).
+
+### The sky view as blocks (the trial)
+
+The ledger's `blocks` section (plan 091 phase 2; `lib/city/ledger-blocks.ts`,
+read by `scripts/ledger-blocks.ts`) holds, for every site a build serves,
+its tiles' sky views as the PNG the viewer reads and as the two block
+files a build with `SVF_BLOCKS=1` publishes beside it — encoded here from
+the published PNG by the build's own call (`publishedBlockFile`), so a
+default build serves: the wire bytes, the GPU bytes (the PNG's as laid
+out with the GPU's mips, a third more; the blocks' as uploaded, the chain
+in the file) and the error of what the shader reads from the blocks
+against the PNG's byte, in byte steps — over level 0 the mean over the
+site's texels, the largest tile p99 and the largest texel; over levels 1
+on the largest texel against the box-filtered chain — by the formats'
+nominal decode, not a GPU's read (SwiftShader reads up to 0.86 below it
+for BC4, truncating to whole bytes, and 0.12 for EAC, widening its eleven
+bits without repeating them: `scripts/eval/block-raster-probe.ts`). The
+encodes take about two minutes for the seven sites, so the section is
+read anew only with `bun run ledger -- --blocks`; without it the
+committed section stands and `--check` does not compare it, as with
+`--browser`. The rasters' table above does not count the blocks: no tier
+reads them by default.
+
+| Site (tiles) | PNG wire / GPU, MiB | BC4 wire / GPU | BC4 error mean / p99 / max | EAC wire / GPU | EAC error mean / p99 / max |
+|---|---|---|---|---|---|
+| Dresden (15) | 7.86 / 20.00 | 8.75 / 10.00 | 0.74 / 4.57 / 14.6 | 8.66 / 10.00 | 0.77 / 4.89 / 16.9 |
+| Grimma (2) | 0.89 / 2.67 | 1.03 / 1.33 | 0.61 / 4.86 / 12.9 | 1.02 / 1.33 | 0.64 / 4.93 / 17.1 |
+| Hamburg (4) | 1.82 / 5.33 | 2.14 / 2.67 | 0.58 / 4.00 / 13.6 | 2.13 / 2.67 | 0.62 / 3.97 / 14.0 |
+| Leipzig (4) | 2.24 / 5.33 | 2.51 / 2.67 | 0.80 / 4.14 / 12.0 | 2.49 / 2.67 | 0.83 / 4.14 / 15.8 |
+| Meißen (1) | 0.58 / 1.33 | 0.62 / 0.67 | 0.91 / 4.71 / 13.1 | 0.62 / 0.67 | 0.92 / 4.90 / 15.8 |
+| München (4) | 2.24 / 5.33 | 2.52 / 2.67 | 0.76 / 4.00 / 11.3 | 2.50 / 2.67 | 0.80 / 4.06 / 12.1 |
+| Unna (2) | 1.05 / 2.67 | 1.16 / 1.33 | 0.86 / 4.86 / 13.4 | 1.15 / 1.33 | 0.88 / 4.93 / 14.8 |
+
+Levels 1 on, the largest texel against the box-filtered chain: BC4
+14.0–15.7, EAC 15.0–22.0. Baseline 2026-11-16. On the wire the blocks are 7–18 % above the PNG
+(gzip; brotli would take about half that back: plan 088's transport); on
+the GPU half, 0.67 MiB a tile for 1.33.
 
 ### What a browser reads
 

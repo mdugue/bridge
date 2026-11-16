@@ -1,16 +1,19 @@
 import { afterEach, expect, test } from "bun:test";
-import { deflateSync } from "node:zlib";
+import { deflateSync, gzipSync } from "node:zlib";
 import {
   DataArrayTexture,
   LinearFilter,
   LinearMipmapLinearFilter,
   NearestFilter,
+  RED_RGTC1_Format,
 } from "three/webgpu";
-import type { Texture, WebGPURenderer } from "three/webgpu";
+import type { CompressedTexture, Texture, WebGPURenderer } from "three/webgpu";
+import { levelBytes, mipSizes, packBlockRaster } from "@/lib/city/block-raster";
 import { tileArtifacts } from "@/lib/city/tile";
 import type { ContentExtras } from "@/lib/city/tileset";
 import { trackedBytesOf } from "./three-utils";
 import {
+  blockFileOf,
   createTileRasters,
   RASTER_KINDS,
   rasterFiles,
@@ -112,6 +115,7 @@ function fakeRenderer(onUpload?: (texture: Texture) => void) {
 }
 
 function rastersWith(opts: {
+  blocks?: "bc4" | "eac";
   low?: boolean;
   onShareChange?: (root: object) => void;
   renderer?: WebGPURenderer;
@@ -119,6 +123,7 @@ function rastersWith(opts: {
   return createTileRasters({
     url: (file) => file,
     lowRasters: opts.low ?? false,
+    blocks: opts.blocks ?? null,
     onShareChange: opts.onShareChange ?? (() => {}),
     renderer: opts.renderer ?? fakeRenderer().renderer,
   });
@@ -592,4 +597,85 @@ test("a swap to the same file (a phone's twin) keeps it held and weighed once", 
   hold.release();
   await tick();
   expect(trackedBytesOf(near)).toBe(0);
+});
+
+test("the sky view's blocks: read in place of the PNG where asked and named", () => {
+  const level = extrasOf({
+    svf: "svf.png",
+    svfBc4: "svf.bc4.gz",
+    svfEac: "svf.eac.gz",
+  });
+  expect(rasterFiles(level, "svf", false)).toEqual({ raster: "svf.png" });
+  expect(rasterFiles(level, "svf", true, false, "bc4")).toEqual({
+    raster: "svf.bc4.gz",
+    fallback: "svf.png",
+  });
+  expect(rasterFiles(level, "svf", false, false, "eac")).toEqual({
+    raster: "svf.eac.gz",
+    fallback: "svf.png",
+  });
+  // a build without them: the PNG; a kind without blocks: its own file
+  const plain = extrasOf({ svf: "svf.png", ndvi: "n.png" });
+  expect(rasterFiles(plain, "svf", false, false, "bc4")).toEqual({
+    raster: "svf.png",
+  });
+  expect(rasterFiles(plain, "ndvi", false, false, "bc4")).toEqual({
+    raster: "n.png",
+  });
+});
+
+test("only a row's own file has blocks, never a twin of it", () => {
+  const row = {
+    extras: "svf",
+    phone: "markingsLow",
+    look: { channels: 1, filter: "linear" },
+    blocks: { bc4: "svfBc4", eac: "svfEac" },
+  } as const;
+  const named = { svf: "s.png", markingsLow: "low.png", svfBc4: "s.bc4.gz" };
+  expect(blockFileOf(row, named, "s.png", "bc4")).toBe("s.bc4.gz");
+  expect(blockFileOf(row, named, "low.png", "bc4")).toBeUndefined();
+  expect(blockFileOf(row, named, "s.png", null)).toBeUndefined();
+  expect(blockFileOf(row, named, "s.png", "eac")).toBeUndefined();
+});
+
+test("blocks load as a compressed texture; bad blocks fall back to the PNG", async () => {
+  const good = packBlockRaster({
+    format: "bc4",
+    width: 8,
+    height: 8,
+    levels: mipSizes(8, 8).map((size) => ({
+      ...size,
+      data: new Uint8Array(levelBytes(size.width, size.height)),
+    })),
+  });
+  const asked: string[] = [];
+  // reason: the loaders read only `ok` and the body of a Response
+  globalThis.fetch = (async (url: string) => {
+    asked.push(url);
+    if (url === "good.bc4.gz") {
+      return new Response(gzipSync(good));
+    }
+    // a PNG under a block name: malformed blocks
+    return new Response(greyPng(4, 4));
+  }) as unknown as typeof fetch;
+  const { renderer, uploads } = fakeRenderer();
+  const rasters = rastersWith({ blocks: "bc4", renderer });
+  const sky = landed(
+    await rasters
+      .holder({})
+      .acquire("svf", extrasOf({ svf: "a-4x4.png", svfBc4: "good.bc4.gz" }))
+  );
+  expect((sky as CompressedTexture).isCompressedTexture).toBe(true);
+  expect(sky.format).toBe(RED_RGTC1_Format);
+  // the blocks are on the GPU, their bytes gone, their bytes tracked
+  expect(uploads.map((u) => u.texture)).toContain(sky);
+  expect(sky.mipmaps).toEqual([]);
+  expect(trackedBytesOf(sky)).toBe(good.length - 16);
+  const plain = landed(
+    await rasters
+      .holder({})
+      .acquire("svf", extrasOf({ svf: "b-4x4.png", svfBc4: "bad.bc4.gz" }))
+  );
+  expect((plain as CompressedTexture).isCompressedTexture).toBeUndefined();
+  expect(asked).toEqual(["good.bc4.gz", "bad.bc4.gz", "b-4x4.png"]);
 });

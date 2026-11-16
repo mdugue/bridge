@@ -6,7 +6,7 @@
  * a footprint and no taller than the building (plus ROOF_REACH_M) is its
  * roof; a taller one is a tree over a shed or garage, and stays. Dropped
  * at build time
- * (scripts/prepare-data.ts `publishCanopy`, scripts/coarse-crowns.ts) like
+ * (scripts/bake-dressing.ts `standTrees`) like
  * the scan structures' sheds (small-buildings.ts), so every site gets it
  * without a re-bake. No THREE, no DOM.
  */

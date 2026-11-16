@@ -34,6 +34,8 @@
  * it instead of reading the window themselves.
  */
 
+import { BLOCK_FEATURE } from "@/lib/city/block-raster";
+import type { BlockFormat } from "@/lib/city/block-raster";
 import type { SafetyLevel } from "@/lib/city/gpu-safety";
 import { SHADOW_RINGS } from "@/lib/city/shadow-rings";
 
@@ -74,6 +76,30 @@ export function reversedDepthFromSearch(search: string): boolean {
  */
 export function railTableRequested(search: string): boolean {
   return new URLSearchParams(search).get("rails") === "table";
+}
+
+/**
+ * Whether the page asked for plan 091 phase 2's trial (`?svf=blocks`): the
+ * sky view read as GPU blocks (lib/city/block-raster.ts) where the GPU
+ * has a format a build with `SVF_BLOCKS=1` wrote (any other build has
+ * none, and the page reads the PNG). A QA knob: the default page reads the
+ * PNG. Pure.
+ */
+export function svfBlocksRequested(search: string): boolean {
+  return new URLSearchParams(search).get("svf") === "blocks";
+}
+
+/** The block format a page reads its soft rasters in: with
+ *  `svfBlocksRequested`, BC4 where the GPU has it, else EAC R11, else
+ *  none (the PNG). `has` is the renderer's `hasFeature`. Pure. */
+export function blockFormatFor(
+  requested: boolean,
+  has: (feature: string) => boolean
+): BlockFormat | null {
+  if (!requested) {
+    return null;
+  }
+  return (["bc4", "eac"] as const).find((f) => has(BLOCK_FEATURE[f])) ?? null;
 }
 
 /** Whether the page was opened with `?inspect=1`: three's Inspector

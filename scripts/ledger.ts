@@ -14,14 +14,17 @@
  *   … --census                      # and plan 094's census: every built
  *                                   # site flown (implies --browser; tens
  *                                   # of minutes, never on CI)
+ *   … --blocks                      # and plan 091's sky-view blocks,
+ *                                   # encoded anew (two minutes; else the
+ *                                   # committed section stands)
  *
  * Any other argument is refused (exit 2) and nothing is written: a
  * mistyped `--check` must not pass as a write. It reads
  * public/data/<site>/, so a build (or `bun scripts/prepare-sites.ts`) comes
  * first: the reference site for the bytes and counters, and every site a
- * build serves for the `rasters` section (plan 091 phase 0,
- * scripts/ledger-rasters.ts). A write formats the file with oxfmt, as it is
- * committed; `--check` compares values, not layout. `--browser` reads the
+ * build serves for the `rasters` and `blocks` sections (plan 091 phases 0
+ * and 2, scripts/ledger-rasters.ts and scripts/ledger-blocks.ts). A write
+ * formats the file with oxfmt, as it is committed; `--check` compares values, not layout. `--browser` reads the
  * NEXT_PUBLIC_POC_DEBUG=1 build too; without it the committed browser
  * figures stand, and `--check` says it did not compare them.
  */
@@ -69,6 +72,7 @@ import { TILESET_FILE, TILESET_SPAWN_FILE } from "../lib/city/tileset";
 import { REFERENCE_SITE } from "../sites";
 import { measureBakeStore } from "./ledger-bake-store";
 import { browserSections, timingReport } from "./ledger-browser";
+import { blockLedger } from "./ledger-blocks";
 import { measureDressing } from "./ledger-dressing";
 import { rasterLedger, readySites } from "./ledger-rasters";
 
@@ -235,7 +239,7 @@ function refuseUnserved(published: PublishedFiles): void {
 export function measure(
   site: string,
   root = ROOT
-): Omit<Ledger, "bakeStore" | "dated" | "dressing" | "rasters"> {
+): Omit<Ledger, "bakeStore" | "blocks" | "dated" | "dressing" | "rasters"> {
   const published = publishedFiles(site, root);
   const wireOf = new Map<string, number>();
   const wire = (served: string) => {
@@ -286,6 +290,25 @@ export async function measureRasters(root = ROOT): Promise<Ledger["rasters"]> {
   );
 }
 
+/** The `blocks` section: read anew with `--blocks` (the encodes take
+ *  minutes) or where none is committed, else the committed one, which
+ *  `--check` then compares with itself. */
+async function blocksPart(
+  read: boolean,
+  committed: unknown,
+  root: string
+): Promise<Ledger["blocks"]> {
+  const blocks = (committed as Partial<Ledger> | null)?.blocks;
+  return read || !blocks ? await measureBlocks(root) : blocks;
+}
+
+/** The `blocks` section: every site a build serves (plan 091 phase 2). */
+export async function measureBlocks(root = ROOT): Promise<Ledger["blocks"]> {
+  return await blockLedger(readySites(root), (site) =>
+    publishedFiles(site, root)
+  );
+}
+
 /** Formats a written file with the repository's formatter (oxfmt, as
  *  `bun run fix` and the lint's `--check` do), so a fresh run writes the
  *  committed file byte for byte. */
@@ -301,7 +324,7 @@ function formatAsCommitted(file: string): void {
 
 /** The arguments the script takes. A new one (a section's switch) joins
  *  here; anything else is refused. */
-export const FLAGS = ["--check", "--browser", "--census"] as const;
+export const FLAGS = ["--check", "--browser", "--blocks", "--census"] as const;
 
 export interface RunOptions {
   /** where the report goes */
@@ -378,6 +401,7 @@ export async function run(
   const fresh = {
     ...measure(site, root),
     rasters: await measureRasters(root),
+    blocks: await blocksPart(argv.includes("--blocks"), committed, root),
     dressing: measureDressing(
       site,
       root,
