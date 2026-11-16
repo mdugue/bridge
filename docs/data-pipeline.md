@@ -1443,6 +1443,25 @@ its content hash) at their full bytes. That holds because a bake's bytes do
 not depend on the machine ("Cache and publish"): CI's check passing on a
 runner that did not bake the committed file is the standing proof.
 
+**The dressing** has a section of its own (`dressing`, plan 090;
+`lib/city/ledger-dressing.ts`): for three watched tiles — the spawn, a
+forest (`33416_5658_2_sn`) and the Neustadt yards (`33410_5656_2_sn`) —
+each level's side files kind by kind, bytes and requests, gated like the
+sets. On 2026-11-16 a fine level's dressing was 249 kB in 18 requests on
+the spawn tile, 497 kB on the forest (its canopy alone 469 kB) and 276 kB
+on the yards: 3–7 % of the level's bytes and eighteen of its twenty-nine
+requests. Beside it `dressing.recorded`, a part `--check` never
+compares: München's heaviest tile, what a browser measured (the scene
+thread's milliseconds by builder and the bytes a dressing weighs in the
+tile cache: `DRESSING_LEDGER=1 bunx playwright test
+e2e/dressing-ledger.spec.ts`), and the figures of plan 090's two spikes
+(`bun scripts/eval/stand-record-probe.ts --out
+.cache/ledger-dressing/stand-probe.json`,
+`bun scripts/eval/stand-record-bytes.ts`,
+`bun scripts/eval/lines-three-ways.ts`). Those tools leave what they read
+in `.cache/ledger-dressing/`, and `bun run ledger` folds it in; a machine
+that measured nothing writes the section back as it was.
+
 Baseline, 2026-11-16 (Dresden, fifteen tiles; MB = 10⁶ bytes on the wire;
 files in brackets):
 
@@ -1577,9 +1596,9 @@ compared.
   browser and adapter beside the figures, uncompared too.
 
 Baseline, 2026-11-16 (linux-x64 cloud container, Bun 1.4.4, Chromium 153
-on SwiftShader): the first load fetches 42 scripts, 1 099 733 bytes gzip
+on SwiftShader): the first load fetches 42 scripts, 1 103 124 bytes gzip
 -9 (1.10 MB; plan 074 counted 904 619 on 2026-10-10, gzipped elsewhere),
-8 of them, 34 794 bytes, by the three workers alone. A phone's cache at
+8 of them, 34 829 bytes, by the three workers alone. A phone's cache at
 the spawn holds four loaded contents — the tile's two terrain levels,
 94.6 MB and 24.7 MB with what they carry, its near and far buildings,
 27.0 MB and 12.6 MB — 159.0 MB in all. Its boot on SwiftShader:

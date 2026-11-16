@@ -223,6 +223,33 @@ function canopyLeafOf(byte: number): { evergreen?: true; pine?: true } {
   return byte === CANOPY_EVERGREEN ? { evergreen: true } : {};
 }
 
+/**
+ * A crown's four bytes as its record holds them, each 0..255: the code
+ * (0 a canopy or row tree; a register tree's colour and form flags), the
+ * NDVI, the genus (a canopy tree's leaf code) and the season jitter — an
+ * int8 in the file, here offset by 128 for a record whose bytes are
+ * unsigned (lib/city/stand-record.ts).
+ */
+export function crownBytes(
+  c: CoarseCrown
+): [code: number, ndvi: number, genus: number, jitter: number] {
+  const ndvi =
+    c.ndvi === undefined || !Number.isFinite(c.ndvi)
+      ? NO_NDVI
+      : clampInt(c.ndvi * 254, 0, 254);
+  if (c.kind === "canopy") {
+    return [0, ndvi, canopyLeaf(c), 128];
+  }
+  return [
+    (1 + REGISTER_COLOURS.indexOf(c.colour)) |
+      (c.cone ? CONE_FLAG : 0) |
+      (c.pine ? PINE_FLAG : 0),
+    ndvi,
+    clampInt(c.genus, 0, 255),
+    128 + clampInt(c.jitter * 10, -127, 127),
+  ];
+}
+
 const TAU = Math.PI * 2;
 const clampInt = (v: number, lo: number, hi: number) =>
   Math.min(Math.max(Math.round(v), lo), hi);

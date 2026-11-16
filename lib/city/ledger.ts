@@ -17,6 +17,8 @@
 import { gzipSync } from "node:zlib";
 import type { BrowserFigures, Timings } from "./ledger-browser";
 import type { Counters } from "./ledger-counters";
+import { DRESSING_UNCOMPARED } from "./ledger-dressing";
+import type { DressingLedger } from "./ledger-dressing";
 import type { RasterLedger } from "./ledger-rasters";
 import { TERRAIN_RASTER_KEYS } from "./tileset";
 
@@ -696,6 +698,9 @@ export interface Ledger {
   dated: string;
   /** every published file, in exactly one class */
   published: PublishedLedger;
+  /** the watched tiles' dressing by kind, and its recorded part (plan 090
+   *  phase 0, ledger-dressing.ts) */
+  dressing: DressingLedger;
   /** every built site's rasters (plan 091 phase 0, ledger-rasters.ts) */
   rasters: RasterLedger;
   site: string;
@@ -711,6 +716,7 @@ export interface Ledger {
  *  `browser.readWith`). */
 export const UNCOMPARED: readonly string[] = [
   "dated",
+  DRESSING_UNCOMPARED,
   "timings",
   "browser.readWith",
 ];
