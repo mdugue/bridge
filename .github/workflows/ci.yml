@@ -117,8 +117,18 @@ jobs:
       - run: uv run pytest -q tests
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      # The bakes' types, against a baseline that only shrinks (plan 089).
-      - run: uv run python typecheck.py
+      # The bakes' types, against a baseline that only shrinks (plan 089); on
+      # a pull request also against the base's baseline, so that a count
+      # raised by hand fails unless the description says why
+      # (`Typecheck-baseline-raise: …`; an edited description needs a re-run).
+      - name: Types
+        run: |
+          if [ -n "$GITHUB_BASE_REF" ]; then
+            git fetch --depth=1 --no-tags origin "$GITHUB_BASE_REF"
+            uv run python typecheck.py --against FETCH_HEAD
+          else
+            uv run python typecheck.py
+          fi
 
   # Build and e2e share a job: its build step is the build check, and the
   # Playwright step serves the artifact it just produced instead of

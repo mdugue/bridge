@@ -171,12 +171,17 @@ steps end to end against a synthetic DGM and a small OSM XML file (GDAL's
 OSM driver reads `.osm` as well as `.osm.pbf`). CI's `pipeline` job runs it
 with ruff after `uv sync --locked`, and then type-checks `bake/` with
 pyright (pinned in the dev group, set in `pyproject.toml`) against
-`pipeline/typecheck-baseline.json` (plan 089): `typecheck.py` folds the
-findings to a count per file and rule and fails on any count above the
-baseline — a new finding, in a new file too, or a new `type: ignore`,
-`pyright: ignore` or `typing.cast` — and on any below it, so that a fix
+`pipeline/typecheck-baseline.json` (plan 089): `typecheck.py` keys each
+finding by file, rule, the function it stands in and its message (never
+by line) and fails on any count above the baseline — a new finding, or a
+new escape: `type: ignore`, `pyright: ignore`, a `# pyright:` directive,
+`@no_type_check`, `typing.cast` — and on any below it, so that a fix
 lowers the baseline in the same PR: `cd pipeline && uv run python
 typecheck.py --update` writes the lower counts and refuses to raise one.
+It also fails when pyright did not read every module of `bake/` or a
+setting beyond the known ones relaxes it, and in CI when the baseline
+holds what the base branch's does not, unless the PR's description says
+why in a line `Typecheck-baseline-raise: …`.
 Neither the checker nor the script re-keys a bake: both live outside
 `bake/` and the dev group is not in `locked_runtime`. Fetch and bakes
 need the network and the raw downloads and run on the maintainer's

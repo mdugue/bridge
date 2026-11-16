@@ -362,8 +362,14 @@ needs no new step. Each candidate once over `bake/`, from the bakes'
 
 Settings in `pyproject.toml`'s `[tool.pyright]`: `include = ["bake"]`,
 `pythonVersion = "3.12"` (the lower bound of `requires-python`; the
-count is 593 under 3.12 as under 3.13), `venv = ".venv"`, `stubPath =
-"typings"`.
+count is 593 under 3.12 as under 3.13), `pythonPlatform = "Linux"` (on
+Windows the count is 597), `venv = ".venv"`, `stubPath = "typings"`.
+
+One package is shared: pyright depends on `typing-extensions`, which is
+also in the bakes' runtime closure (`locked_runtime` lists
+`typing-extensions 4.16.0`). A bump of pyright that moves it re-keys
+every bake; phase 0's check (`locked_runtime` before and after) belongs
+in every such bump.
 
 No key moved. `locked_runtime` of the new `uv.lock` equals that of the
 old (the plan's command prints `True`; `tests/test_step_cache.py`
@@ -372,6 +378,22 @@ the 81 bake modules computed on `HEAD` and on the branch, from the same
 `.venv`, is identical. `git diff --stat -- pipeline/bake` is empty.
 
 ### Phase 1: the baseline (2026-11-16)
+
+After review, the baseline keys a finding by file, rule, the innermost
+function or class it stands in and the first line of its message,
+whitespace folded — not by file and rule alone, where a finding fixed and
+another added in the same file and rule passed as no change (102 of 167
+such buckets held more than one). The 593 findings fall into 500 keys,
+68 of them holding more than one (the same message in the same
+function). The escapes are keyed alike, and are every way to silence
+pyright: `type: ignore`, `pyright: ignore`, a `# pyright:` directive of
+any kind, `@no_type_check`, `typing.cast`. The gate also fails when
+pyright did not read all 83 modules of `bake/`, when `[tool.pyright]`
+holds anything but its six settings or a `pyrightconfig.json` appears,
+and — in CI on a pull request — when the baseline holds a key or count
+the base branch's does not, unless the description carries a line
+`Typecheck-baseline-raise: <why>` (a bump of pyright: `--update` may
+raise only when the checker's version changed).
 
 `pipeline/typecheck-baseline.json` holds **593 findings in 56 files**
 (pyright 1.1.414), by rule: `reportAttributeAccessIssue` 233,
