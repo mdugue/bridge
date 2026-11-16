@@ -486,7 +486,7 @@ and their node graphs construct without a GPU under `bun test`.
 Data is ETRS89/UTM, Z-up — EPSG:25833 (zone 33) for Saxony and Berlin,
 EPSG:25832 (zone 32) for Hamburg, Bavaria and NRW; the provider sets it
 (`sites/providers.ts`, `Provider.epsg`) and every path takes it from the
-site. `world` is rotated −90° about X so data-Z (elevation) → scene-Y. Conversions (`lib/city/ground-clamp.ts`):
+site. `world` is rotated −90° about X so data-Z (elevation) → scene-Y. Conversions (`lib/city/frames.ts`: `epsgToWorld`, `worldToEpsg`, `epsgToData`; `ground-clamp.ts` re-exports the first two). They return values branded with their frame (`EpsgX`/`EpsgY`, `DataX`/`DataY`, `SceneX`/`SceneZ`), which pass as `number` anywhere else; a new conversion is a function there, not `offset.cx` arithmetic at the call:
 
 ```
 world.x = epsgX − cx       world.z = −(epsgY − cy)       world.y = elevation
