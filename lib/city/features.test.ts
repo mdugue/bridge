@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { FLAG_HEIGHT_MAX } from "./furniture";
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 import type {
@@ -34,7 +35,7 @@ import type {
   KerbFeature,
 } from "./features";
 import { SITES } from "../../sites";
-import { STRUCTURE_KINDS } from "./features";
+import { FLAG_DESIGNS, STRUCTURE_KINDS } from "./features";
 import type { WindowFile } from "./windows";
 import { tileExtentOf, tileIdOf } from "./site";
 import type { Site } from "./site";
@@ -177,6 +178,7 @@ test.each(cases)(
       "postbox",
       "shelter",
       "column",
+      "flag",
       "signal",
       "pedsignal",
       "hydrant",
@@ -221,12 +223,17 @@ test.each(cases)(
         expect(kind).toBe("column");
       }
       // what has a front faces somewhere; round things do not
-      if (["column", "hydrant", "bin", "bollard"].includes(kind)) {
+      if (["column", "flag", "hydrant", "bin", "bollard"].includes(kind)) {
         expect(bearing).toBeUndefined();
       }
       if (f.properties?.h !== undefined) {
-        expect(kind).toBe("bollard");
+        expect(["bollard", "flag"]).toContain(kind);
         expect(f.properties.h).toBeGreaterThan(0);
+      }
+      // a flagpole's tagged height is one a mast has (furniture.py FLAG_H)
+      if (kind === "flag" && f.properties?.h !== undefined) {
+        expect(f.properties.h).toBeGreaterThanOrEqual(3);
+        expect(f.properties.h).toBeLessThanOrEqual(FLAG_HEIGHT_MAX);
       }
       // a mast arm hangs a signal; a colour is a bin's; the surface model
       // measures only a playground's pieces
@@ -234,10 +241,12 @@ test.each(cases)(
         expect(kind).toBe("signal");
       }
       if (f.properties?.c !== undefined) {
-        expect(kind).toBe("bin");
-        expect(["blue", "green", "orange", "red", "yellow"]).toContain(
-          f.properties.c
-        );
+        expect(["bin", "flag"]).toContain(kind);
+        expect(
+          kind === "bin"
+            ? ["blue", "green", "orange", "red", "yellow"]
+            : FLAG_DESIGNS
+        ).toContain(f.properties.c);
       }
       if (f.properties?.src === "dom") {
         expect(["climb", "swing"]).toContain(kind);
@@ -351,7 +360,8 @@ test.each(tiles)(
       if (p?.k === "chimney") {
         // its top is the surface model's own height and stays, while `z`
         // is the exact LoD2 face under it (dormers.py on_planes): no rise
-        // to check against that face.
+        // to check against that face. On a roof rebuilt from DOM1 both move
+        // onto the rebuilt part together, its measured height kept.
         // a chimney's sides: dormers.py CHIMNEY_SIDE_M … CHIMNEY_MAX_SIDE_M
         for (const side of [p.w, p.d]) {
           expect(side).toBeGreaterThanOrEqual(0.6);
@@ -481,7 +491,18 @@ test.each(tiles)(
           1
         );
         expect(Math.hypot(...w.n)).toBeCloseTo(1, 3);
-        expect(w.seqs).toBeGreaterThanOrEqual(1);
+        // a wall no panorama measured enters with its glass reading alone
+        expect(w.seqs >= 1 || w.glass !== undefined).toBe(true);
+        if (w.seqs === 0) {
+          expect([w.imgs, Object.keys(w.traits).length]).toEqual([0, 0]);
+        }
+        // a curtain wall's mullions are no window rhythm
+        expect(w.glass?.glass && w.model).toBeFalsy();
+        // each object read for glass is weighed against its outer walls,
+        // the walls read among them
+        if (w.glass) {
+          expect(doc.outer?.[w.oid] ?? 0).toBeGreaterThanOrEqual(w.L - 0.1);
+        }
         const m = w.model;
         if (!m) {
           continue;
@@ -609,6 +630,16 @@ test.each(tiles)(
           expect(x).toBeLessThanOrEqual(s.x + s.cols * s.res);
           expect(y).toBeLessThanOrEqual(s.y);
           expect(y).toBeGreaterThanOrEqual(s.y - s.rows * s.res);
+        }
+        // its planes' polygons: closed rings inside that grid too
+        for (const facet of s.facets ?? []) {
+          expect(facet.rings.every(isRing)).toBe(true);
+          for (const [x, y] of facet.rings.flat()) {
+            expect(x).toBeGreaterThanOrEqual(s.x);
+            expect(x).toBeLessThanOrEqual(s.x + s.cols * s.res);
+            expect(y).toBeLessThanOrEqual(s.y);
+            expect(y).toBeGreaterThanOrEqual(s.y - s.rows * s.res);
+          }
         }
       }
     }

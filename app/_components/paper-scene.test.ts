@@ -331,11 +331,19 @@ test("a landing tile's ribbon compiles its stand-in, and keeps it till it hangs"
   );
   const own = new MeshStandardNodeMaterial({ side: DoubleSide });
   own.positionNode = positionLocal.add(vec3(1, 0, 0));
+  // a moving sheet's rest (flag-cloth.ts): its shadow is cast and looked
+  // up there in the stand-in too
+  own.castShadowPositionNode = positionLocal;
+  own.receivedShadowPositionNode = positionLocal.add(vec3(0, 1, 0));
   landing.material = own;
   const compiled = w.paper.swapped(landing, () => landing.material);
   expect(compiled).not.toBe(own);
   expect(compiled.side).toBe(DoubleSide);
   expect(compiled.positionNode).toBe(own.positionNode);
+  expect(compiled.castShadowPositionNode).toBe(own.castShadowPositionNode);
+  expect(compiled.receivedShadowPositionNode).toBe(
+    own.receivedShadowPositionNode
+  );
   // another tile changes the scene before it hangs: the stand-in stays
   let freed = 0;
   compiled.addEventListener("dispose", () => {

@@ -14,7 +14,7 @@ import type { Snapshot } from "../lib/city/snapshot";
 import { cityMeshSourceFiles } from "../lib/city/tile";
 import type { CityJsonDocument } from "../lib/city/types";
 import { siteById } from "../sites";
-import { cityFrame } from "./bake-city-mesh";
+import { cityFrame } from "./city-lod2";
 import { QA_VIEWS, QA_VIEWS_DIR, QA_VIEWS_SITE } from "./qa-views";
 
 const files = readdirSync(QA_VIEWS_DIR).filter((f) => f.endsWith(".json"));

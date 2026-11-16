@@ -341,11 +341,17 @@ function hatchRings(e: Entity): PlanPoint[][] {
         const bulge = hasBulge ? at(42) : 0;
         vertices.push({ x, y, z, bulge });
       }
-      ring.push(...withBulges(vertices, true));
+      // appended one by one: a spread is an argument per point, past what
+      // a worker's stack takes for a long path (ADR 0061)
+      for (const point of withBulges(vertices, true)) {
+        ring.push(point);
+      }
     } else {
       const edges = at(93);
       for (let k = 0; k < edges; k += 1) {
-        ring.push(...hatchEdge(at, z));
+        for (const point of hatchEdge(at, z)) {
+          ring.push(point);
+        }
       }
     }
     if (ring.length >= 3) {
@@ -621,7 +627,9 @@ function mergeMeshes(features: readonly PlanFeature[]): PlanFeature[] {
   for (const f of features) {
     if (f.kind === "mesh") {
       const list = meshes.get(f.cls) ?? [];
-      list.push(...f.triangles);
+      for (const t of f.triangles) {
+        list.push(t);
+      }
       meshes.set(f.cls, list);
     } else {
       out.push(f);

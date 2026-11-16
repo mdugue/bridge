@@ -25,7 +25,9 @@ they do.
   Distance, not a role, decides which tile is detailed.
 - **Content-hashed names and one manifest.** Every file is published as
   `<stem>.<hash>.<ext>` and served `immutable`; `manifest.json` (no-cache)
-  names the hashed tileset, which names everything else.
+  names the hashed tileset, which names everything else: each glTF and,
+  on its tile, the side files it is dressed with — a glTF's bytes do not
+  change when a side file's name does.
 - **Everything a tile brings is built and freed with it** in the dressing
   plugin (`processTileModel` / `disposeTile`), compiled before it shows;
   what lands after the tile itself — its dressing, a city tile's murals,

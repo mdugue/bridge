@@ -37,6 +37,12 @@ yet. A rerun skips what is measured. `MAPILLARY_FACADE_SOURCE`
 may name a folder holding earlier downloads (`img/<id>.jpg`,
 `det/<id>.json`), read instead of the network and never deleted.
 
+The glass reading (ADR 0060) plans differently: every photo of any camera
+within `GLASS_NEAR_M` (`<raw>/mapillary/facades/<tile>.photos.json`), the
+best of each of `GLASS_PLAN_SEQ` sequences per wall (`plan_glass`), each read by
+facade_glass.py into `<tile>.glass.<key>.jsonl`, ended by a line that says
+it was read through (`complete`); windows.py decides from it.
+
 The bake writes `dlm/facades_<tile>.json`:
 `{"attribution": …, "buildings": {"<gml:id>": [busy, dark, shop]}}`, read
 by lib/city/facade-reading.ts. Its own file, credited to Mapillary: the
@@ -47,6 +53,8 @@ from __future__ import annotations
 import collections
 import concurrent.futures as cf
 import datetime
+import hashlib
+import http.client
 import json
 import math
 import os
@@ -81,6 +89,21 @@ MAX_SEQ = 3
 # saw the wall (window_axes.py), so as many as there are, up to this
 MAX_SEQ_TRAITS = 6
 
+# the glass reading (facade_glass.py): any camera, a little further out
+PHOTO_FIELDS = (
+    "id,computed_geometry,computed_rotation,captured_at,sequence,is_pano,"
+    "camera_type,camera_parameters,width,height"
+)
+FRAMED = ("perspective", "brown", "fisheye")  # the framed cameras read
+GLASS_NEAR_M = 60.0
+GLASS_IN_FRAME = 0.3
+GLASS_SEQ = 4  # the sequences a wall's decision keeps (windows.glass_records)
+# the sequences planned: twice as many, since what hides a view — a tree, a
+# bus, scaffolding — shows only in the reading, which keeps those that saw most
+GLASS_PLAN_SEQ = 2 * GLASS_SEQ
+THUMB_PX = 2048  # the thumbnail's long side (thumb_2048_url)
+MAX_FAILS = 3  # a photo that failed this many fetches is given up (`_done`)
+
 BUSY_CALM, BUSY_BUSY = 0.35, 0.7
 DARK_LOW, DARK_HIGH = 0.15, 0.25
 SHOP_GF_OPEN = 0.8
@@ -89,6 +112,9 @@ SIGN_WALL_M = 2.0  # the walls signs are matched to (any eave)
 
 WORKERS = max(2, (os.cpu_count() or 2) + 2)  # downloads overlap the measuring
 WORKERS_ENV = "MAPILLARY_WORKERS"  # fewer, where another fetch shares the line
+# each worker of the glass reading holds its own vision model (~0.4 GB with
+# its runtime and a 2048 px image): no more than this many
+GLASS_WORKERS = min(WORKERS, 4)
 SOURCE_ENV = "MAPILLARY_FACADE_SOURCE"
 
 
@@ -140,6 +166,19 @@ def measured_path(tile: Tile) -> Path:
 
 def _images_path(tile: Tile) -> Path:
     return cache_dir(tile) / f"{tile.id}.images.json"
+
+
+def _photos_path(tile: Tile) -> Path:
+    """Every photo near the tile, panorama or not, with its camera."""
+    return cache_dir(tile) / f"{tile.id}.photos.json"
+
+
+def glass_path(tile: Tile) -> Path:
+    """The glass readings, one JSON line a photo (facade_glass.py), named by
+    what they depend on (`facade_glass.reading_key`)."""
+    from .facade_glass import reading_key
+
+    return cache_dir(tile) / f"{tile.id}.glass.{reading_key()}.jsonl"
 
 
 def _signs_path(tile: Tile) -> Path:
@@ -235,20 +274,26 @@ def candidates(
     return {q: by_seq[q] for q in seqs}
 
 
-def panoramas(images: list[dict], epsg: int) -> tuple[list[dict], np.ndarray]:
-    """The usable panoramas (posed, since SINCE_YEAR) and their positions in
-    the tile's CRS."""
+def _posed(images: list[dict], epsg: int, usable) -> tuple[list[dict], np.ndarray]:
+    """The images placed (since SINCE_YEAR) that `usable` keeps, and their
+    positions in the tile's CRS."""
     since = datetime.datetime(SINCE_YEAR, 1, 1, tzinfo=datetime.UTC).timestamp() * 1000
     keep = [
         o
         for o in images
-        if o.get("is_pano") and o.get("computed_geometry") and o.get("captured_at", 0) >= since
+        if o.get("computed_geometry") and o.get("captured_at", 0) >= since and usable(o)
     ]
     to_tile = Transformer.from_crs(4326, epsg, always_xy=True)
     pos = np.array(
         [to_tile.transform(*o["computed_geometry"]["coordinates"][:2]) for o in keep], float
     ).reshape(-1, 2)
     return keep, pos
+
+
+def panoramas(images: list[dict], epsg: int) -> tuple[list[dict], np.ndarray]:
+    """The usable panoramas (placed, since SINCE_YEAR) and their positions
+    in the tile's CRS."""
+    return _posed(images, epsg, lambda o: bool(o.get("is_pano")))
 
 
 def plan(city: dict, images: list[dict], epsg: int, max_seq: int = MAX_SEQ) -> dict[str, dict]:
@@ -268,6 +313,146 @@ def plan(city: dict, images: list[dict], epsg: int, max_seq: int = MAX_SEQ) -> d
                     o["id"], {"seq": seq, "xy": [float(pos[i][0]), float(pos[i][1])], "walls": []}
                 )
                 job["walls"].append({k: w[k] for k in ("oid", "wi", "a", "b", "L", "n", "eave")})
+    return jobs
+
+
+def camera_of(photo: dict) -> dict:
+    """A photo's camera model (facade_measure.project)."""
+    if photo.get("is_pano"):
+        return {"type": "spherical"}
+    return {
+        "type": photo.get("camera_type") or "perspective",
+        "params": photo.get("camera_parameters"),
+    }
+
+
+def photos(images: list[dict], epsg: int) -> tuple[list[dict], np.ndarray]:
+    """The usable photos of any camera (posed, since SINCE_YEAR) and their
+    positions in the tile's CRS."""
+    return _posed(
+        images,
+        epsg,
+        lambda o: (
+            bool(o.get("computed_rotation"))
+            and (bool(o.get("is_pano")) or o.get("camera_type") in FRAMED)
+        ),
+    )
+
+
+def in_frame(wall: dict, photo: dict, xy, rot: np.ndarray) -> float:
+    """The share of a coarse grid over the wall's upper part (GROUND_M to the
+    eave, the ground taken level) that falls inside the photo's frame —
+    1 for a panorama, which sees all round. `rot` is the pose on the grid,
+    as the reading turns it (`onto_grid`); the frame is the photo's own
+    shape where Mapillary gives it, else 4:3."""
+    from .facade_measure import EYE_M, GROUND_M, project
+
+    camera = camera_of(photo)
+    if camera["type"] == "spherical":
+        return 1.0
+    (ax, ay), (bx, by) = wall["a"], wall["b"]
+    s = np.linspace(0.05, 0.95, 7)
+    z = np.linspace(GROUND_M, max(wall["eave"] - 0.3, GROUND_M + 0.1), 5)
+    S, Z = np.meshgrid(s, z)
+    P = np.stack([ax + (bx - ax) * S - xy[0], ay + (by - ay) * S - xy[1], Z - EYE_M], -1).reshape(
+        -1, 3
+    )
+    C = P @ rot.T
+    size = (photo.get("width"), photo.get("height"))
+    _, _, seen, _ = project(C, *(size if all(size) else (4, 3)), camera)
+    return float(seen.mean())
+
+
+def pixel_angle(photo: dict) -> float:
+    """The radians a pixel of the photo's thumbnail spans ahead: its long
+    side THUMB_PX, or the original's where that is smaller (Mapillary does
+    not scale a photo up)."""
+    from .facade_measure import project
+
+    side = max(photo.get("width") or 0, photo.get("height") or 0)
+    px = min(THUMB_PX, side) if side else THUMB_PX
+    return float(project(np.array([[0.0, 0.0, 1.0]]), px, px, camera_of(photo))[3])
+
+
+def _to_segment(x: float, y: float, a, b) -> float:
+    (ax, ay), (bx, by) = a, b
+    dx, dy = bx - ax, by - ay
+    t = min(1.0, max(0.0, ((x - ax) * dx + (y - ay) * dy) / max(dx * dx + dy * dy, 1e-9)))
+    return math.hypot(ax + t * dx - x, ay + t * dy - y)
+
+
+def glass_candidates(
+    wall: dict, images: list[dict], pos: np.ndarray, rots: list, angles: list, ptree, ftree
+) -> dict:
+    """The photos that see `wall` for its glass reading, by sequence: within
+    GLASS_NEAR_M (a glass front stands back from the street, behind a
+    forecourt or a plaza), at least MIN_DIST_M away, at most 60° off its
+    normal, near enough that its nearest part is resolved finer than
+    MAX_RES_M (a panorama's pixel spans 9 cm at 30 m: the reading masks
+    what is coarser), no other footprint in the line of sight, and — a
+    framed photo — at least GLASS_IN_FRAME of the wall in its frame; the
+    best seen first, one of each of the GLASS_PLAN_SEQ sequences that see
+    it best. `rots` the photos' poses on the grid, `angles` their
+    `pixel_angle`s."""
+    from .facade_measure import MAX_RES_M
+
+    (ax, ay), (bx, by) = wall["a"], wall["b"]
+    mx, my = (ax + bx) / 2, (ay + by) / 2
+    nx, ny = wall["n"]
+    best: dict[str, tuple[float, int]] = {}
+    for i in ptree.query(shapely.Point(mx, my).buffer(GLASS_NEAR_M)):
+        x, y = pos[i]
+        d = math.hypot(mx - x, my - y)
+        if d < MIN_DIST_M or d > GLASS_NEAR_M:
+            continue
+        cos = (nx * (x - mx) + ny * (y - my)) / d
+        if cos < MIN_COS:
+            continue
+        if _to_segment(x, y, wall["a"], wall["b"]) * angles[i] > MAX_RES_M:
+            continue
+        sight = shapely.LineString([(x, y), (mx + nx * 0.5, my + ny * 0.5)])
+        if any(j != wall["k"] for j in ftree.query(sight, predicate="intersects")):
+            continue
+        frame = in_frame(wall, images[i], (x, y), rots[i])
+        if frame < GLASS_IN_FRAME:
+            continue
+        score = frame * cos / max(d, MIN_DIST_M)
+        seq = images[i]["sequence"]
+        if seq not in best or score > best[seq][0]:
+            best[seq] = (score, int(i))
+    ranked = sorted(best.items(), key=lambda kv: -kv[1][0])[:GLASS_PLAN_SEQ]
+    return {seq: i for seq, (_, i) in ranked}
+
+
+def plan_glass(
+    city: dict, images: list[dict], epsg: int, gamma: float = 0.0, ws: list[dict] | None = None
+) -> dict[str, dict]:
+    """Per photo id: its sequence, position, camera and the walls it is to
+    read for glass (`glass_candidates`); `gamma` the grid convergence the
+    reading turns each pose by."""
+    from .facade_measure import rotation_matrix
+
+    ws = walls(city) if ws is None else ws
+    _, polys = footprints(city)
+    ftree = shapely.STRtree(polys)
+    keep, pos = photos(images, epsg)
+    rots = [onto_grid(rotation_matrix(o["computed_rotation"]), gamma) for o in keep]
+    angles = [pixel_angle(o) for o in keep]
+    ptree = shapely.STRtree(shapely.points(pos))
+    jobs: dict[str, dict] = {}
+    for w in ws:
+        for seq, i in glass_candidates(w, keep, pos, rots, angles, ptree, ftree).items():
+            o = keep[i]
+            job = jobs.setdefault(
+                o["id"],
+                {
+                    "seq": seq,
+                    "xy": [float(pos[i][0]), float(pos[i][1])],
+                    "camera": camera_of(o),
+                    "walls": [],
+                },
+            )
+            job["walls"].append({k: w[k] for k in ("oid", "wi", "a", "b", "L", "n", "eave")})
     return jobs
 
 
@@ -382,8 +567,8 @@ def _get(url: str, *, auth: bool = True, tries: int = 5) -> bytes:
             if e.code != 429 and e.code < 500:
                 raise
             err = e
-        except (OSError, TimeoutError) as e:
-            err = e
+        except (OSError, TimeoutError, http.client.HTTPException) as e:
+            err = e  # dropped, timed out, or cut mid-body (IncompleteRead)
         time.sleep(min(60, 2 ** (attempt + 1)))
     raise Transient(f"{type(err).__name__}: {err}")
 
@@ -416,6 +601,8 @@ def _search(path: str, query: dict, cell, to_wgs, depth: int = 0) -> list[dict]:
         if depth >= 3:
             raise
         data = None
+    if data is not None and len(data) >= LIMIT and depth >= 3:
+        print(f"WARNING {path}: a cell still holds {LIMIT} or more at 1/64 — some are left out")
     if data is not None and (len(data) < LIMIT or depth >= 3):
         return data
     x0, y0, x1, y1 = cell
@@ -434,28 +621,91 @@ def _search_tile(tile: Tile, path: str, query: dict, margin: float) -> list[dict
     return list(found.values())
 
 
-def _cached_json(path: Path, make) -> list[dict]:
+def _cached_json(path: Path, make, fields: str | None = None) -> list[dict]:
+    """`make()`'s list, cached in `path` — asked anew where the cache was
+    made for other `fields` (a field added to the request reaches it)."""
     if path.exists():
-        return json.loads(path.read_text())["data"]
+        doc = json.loads(path.read_text())
+        if fields is None or doc.get("fields") == fields:
+            return doc["data"]
     data = make()
     path.parent.mkdir(parents=True, exist_ok=True)
     retrieved = datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
     tmp = path.with_suffix(".part")
-    tmp.write_text(json.dumps({"retrieved": retrieved, "licence": ATTRIBUTION, "data": data}))
+    doc = {"retrieved": retrieved, "licence": ATTRIBUTION, "data": data}
+    tmp.write_text(json.dumps(doc | ({"fields": fields} if fields else {})))
     tmp.replace(path)
     return data
 
 
+def _graph_error(err: urllib.error.HTTPError) -> dict:
+    """The Graph API's error object in an HTTP error's body, read once (a
+    body can be read only once: it is kept on the error)."""
+    if not hasattr(err, "graph_error"):
+        try:
+            body = json.loads(err.read() or b"{}")
+        except (ValueError, OSError):
+            body = {}
+        err.graph_error = body.get("error", {}) if isinstance(body, dict) else {}
+    return err.graph_error
+
+
+def gone(err: urllib.error.HTTPError) -> bool:
+    """Whether an HTTP error says the image is no more: 404 or 410, or the
+    Graph API's 400 for an id it does not have (a GraphMethodException) —
+    never a token's or a permission's error (an OAuthException, a 403),
+    which a later fetch with a good token gets past."""
+    if err.code in (404, 410):
+        return True
+    return err.code == 400 and _graph_error(err).get("type") == "GraphMethodException"
+
+
+def _token_refused(err: urllib.error.HTTPError) -> bool:
+    """Whether an HTTP error is the token's: a 401, or the Graph API's
+    OAuthException for a bad or expired token (code 190) or an app over
+    its limits (4, 17, 32, 613) — no photo's fault."""
+    return err.code == 401 or (
+        _graph_error(err).get("type") == "OAuthException"
+        and _graph_error(err).get("code") in (4, 17, 32, 190, 613)
+    )
+
+
+def _failed(iid: str, err: Exception) -> dict:
+    """An image's failed read: `own` where the failure is the photo's (an
+    HTTP refusal of it, a malformed answer about it) — not the network's
+    after its retries (`Transient`, a dropped connection) nor the
+    token's."""
+    if isinstance(err, urllib.error.HTTPError):
+        own = not _token_refused(err)
+    else:
+        own = isinstance(err, ValueError)
+    return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200], "own": own}
+
+
 def _poses(ids: list[str]) -> dict[str, dict]:
-    """Each image's computed rotation and thumbnail URL (fetched just before
-    use: the URLs expire)."""
+    """Each image's computed rotation, thumbnail URL (fetched just before
+    use: the URLs expire) and EXIF orientation (`raw_frame`)."""
     chunks = [ids[i : i + 50] for i in range(0, len(ids), 50)]
 
     def one(chunk):
         q = urllib.parse.urlencode(
-            {"ids": ",".join(chunk), "fields": "computed_rotation,thumb_2048_url"}
+            {
+                "ids": ",".join(chunk),
+                "fields": "computed_rotation,thumb_2048_url,exif_orientation",
+            }
         )
-        return json.loads(_get(f"{GRAPH}/?{q}"))
+        try:
+            return json.loads(_get(f"{GRAPH}/?{q}"))
+        except urllib.error.HTTPError as err:
+            # one image taken down fails its whole batch: ask in halves, and
+            # leave out the one alone that is gone (no pose: skipped); any
+            # other error (a token's) raises
+            if not gone(err):
+                raise
+            if len(chunk) == 1:
+                return {}
+            half = len(chunk) // 2
+            return one(chunk[:half]) | one(chunk[half:])
 
     out: dict[str, dict] = {}
     with cf.ThreadPoolExecutor(4) as ex:
@@ -500,26 +750,65 @@ def _thumbnail(iid: str, url: str, scratch: Path, source: Path | None) -> tuple[
     return path, True
 
 
+# Mapillary's pose (OpenSfM's) is in the frame the photo was stored in; its
+# thumbnail and its segmentation are upright, the EXIF orientation applied.
+# Each orientation's turn back, as np.rot90's k; a mirrored one is not read.
+TO_STORED = {1: 0, 3: 2, 6: 1, 8: -1}
+
+
+def raw_frame(a: np.ndarray, orientation: int | None) -> np.ndarray | None:
+    """An upright raster (the thumbnail, the class map) turned back into the
+    stored frame the pose is in; None for a mirrored orientation (2, 4, 5,
+    7)."""
+    k = TO_STORED.get(orientation or 1)
+    if k is None:
+        return None
+    return np.ascontiguousarray(np.rot90(a, k)) if k else a
+
+
 def measure_image(job: dict) -> dict:
     """One image measured on its walls: {"img", "seq", "walls": [...]}, or
-    {"img", "skip"} when it cannot be (no pose), or {"img", "fail"} on a
-    network failure (not cached: the next run tries again)."""
-    from . import facade_measure, facade_traits
+    {"img", "skip"} when it cannot be (no pose, taken down), or
+    {"img", "fail"} when it could not be read now: the next run tries again.
+    A failure of this photo's — a download of it refused, its decoding,
+    the model on its crop; not the network, a token refused or a model
+    that does not load (`_failed`) — says `own`: the glass cache notes it
+    and gives the photo up after MAX_FAILS (`_done`), unless a whole run
+    shares it (`_note_fails`)."""
+    from . import facade_glass, facade_measure, facade_traits
     from .facade_measure import EYE_M, class_map, load_image, rotation_matrix
 
-    measure = facade_traits.measure if job.get("kind") == "traits" else facade_measure.measure
+    kind = job.get("kind")
+    measure = facade_traits.measure if kind == "traits" else facade_measure.measure
     iid = job["img"]
     if not job.get("rot") or not job.get("url"):
         return {"img": iid, "skip": "no pose or thumbnail"}
+    # only a framed photo is turned back: a panorama's thumbnail is
+    # equirectangular in the frame its pose is in
+    framed = kind == "glass" and job["camera"]["type"] != "spherical"
+    exif = job.get("exif") if framed else None
+    if TO_STORED.get(exif or 1) is None:
+        return {"img": iid, "skip": f"mirrored (EXIF orientation {exif})"}
+    if kind == "glass":
+        try:
+            facade_glass.model(*job["model"])
+        except Exception as err:  # noqa: BLE001 — not this photo's fault: read it again later
+            return {"img": iid, "fail": f"model: {type(err).__name__}: {err}"[:200]}
     source = Path(job["source"]) if job.get("source") else None
     try:
         dets = _detections(iid, source)
         path, ours = _thumbnail(iid, job["url"], Path(job["scratch"]), source)
+    except urllib.error.HTTPError as err:
+        if gone(err):  # taken down: no later fetch will find it
+            return {"img": iid, "skip": f"gone (HTTP {err.code})"}
+        return _failed(iid, err)
     except (OSError, ValueError) as err:
-        return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200]}
+        return _failed(iid, err)
     try:
-        img = load_image(path)
-        cls = class_map(dets)
+        img = raw_frame(load_image(path), exif)
+        cls = raw_frame(class_map(dets), exif)
+    except MemoryError as err:  # the worker's, not the file's: again later
+        return {"img": iid, "fail": f"{type(err).__name__}: {err}"[:200], "own": True}
     except Exception as err:  # noqa: BLE001 — a broken file is skipped, not fatal
         return {"img": iid, "skip": f"unreadable ({type(err).__name__})"}
     finally:
@@ -528,38 +817,166 @@ def measure_image(job: dict) -> dict:
     rot = onto_grid(rotation_matrix(job["rot"]), job.get("gamma", 0.0))
     x, y = job["xy"]
     out = []
+    model_fail = None
     for w in job["walls"]:
         (ax, ay), (bx, by) = w["a"], w["b"]
         mx, my = (ax + bx) / 2 + w["n"][0] * 1.5, (ay + by) / 2 + w["n"][1] * 1.5
+        dist = math.hypot(x - (ax + bx) / 2, y - (ay + by) / 2)
+        head = {"oid": w["oid"], "wi": w["wi"], "L": round(w["L"], 2), "dist": round(dist, 1)}
         zg = _ground(mx, my)
         if zg is None:
+            # off the terrain model: tried, so a later plan does not ask again
+            out.append(head | {"off": "ground"})
             continue
         zc = _ground(x, y)
         cam = (x, y, (zc if zc is not None else zg) + EYE_M)
         try:
-            m = measure(w | {"zg": zg}, img, cls, rot, cam)
+            if kind == "glass":
+                m = facade_glass.measure(
+                    w | {"zg": zg}, img, cls, rot, cam, job["camera"], tuple(job["model"])
+                )
+            else:
+                m = measure(w | {"zg": zg}, img, cls, rot, cam)
         except Exception as err:  # noqa: BLE001 — record it, measure the rest
+            # the model failing on this crop, or the worker out of memory
+            # over it (a very long wall): this wall is left unread, read
+            # again later, and given up after MAX_FAILS like a refused
+            # thumbnail (`_note_fails`); the photo's other walls are kept
+            if isinstance(err, facade_glass.ModelError) or (
+                kind == "glass" and isinstance(err, MemoryError)
+            ):
+                model_fail = f"model: {type(err).__name__}: {err}"[:200]
+                continue
             m = {"err": repr(err)[:100]}
-        dist = math.hypot(x - (ax + bx) / 2, y - (ay + by) / 2)
-        out.append(
-            {"oid": w["oid"], "wi": w["wi"], "L": round(w["L"], 2), "dist": round(dist, 1)} | m
-        )
-    return {"img": iid, "seq": job["seq"], "walls": out}
+        out.append(head | m)
+    if model_fail and not out:
+        return {"img": iid, "fail": model_fail, "own": True}
+    return {"img": iid, "seq": job["seq"], "walls": out} | (
+        {"also_fail": model_fail} if model_fail else {}
+    )
 
 
 # --- fetch and run ----------------------------------------------------------
 
 
-def _done(path: Path) -> set[str]:
+def _done(path: Path) -> dict[str, set[tuple[str, int, float]] | None]:
+    """Per image already in the cache the walls it was read on; None for
+    one not to be asked again: a skip, or one that failed on its own on
+    MAX_FAILS fetches since it was last read (the glass cache notes each,
+    `_note_fails`; a photo read on one wall and failing since is given up
+    for the walls planned on it later too)."""
+    return _scan(path)[0]
+
+
+def _failing(path: Path) -> set[str]:
+    """The images that failed on their own since they were last read."""
+    return {i for i, n in _scan(path)[1].items() if n}
+
+
+def _scan(path: Path) -> tuple[dict, collections.Counter]:
     if not path.exists():
-        return set()
-    done = set()
+        return {}, collections.Counter()
+    done: dict[str, set[tuple[str, int, float]] | None] = {}
+    fails: collections.Counter = collections.Counter()
     for line in path.read_text().splitlines():
         try:
-            done.add(json.loads(line)["img"])
+            r = json.loads(line)
+            iid = r["img"]
         except (ValueError, KeyError):
-            continue  # a line cut by a killed run
-    return done
+            continue  # a line cut by a killed run, the read-through line
+        if "fail" in r:
+            fails[iid] += 1
+        elif "skip" in r:
+            done[iid] = None
+        elif (have := done.setdefault(iid, set())) is not None:
+            fails[iid] = 0
+            have.update(wall_key(w) for w in r.get("walls", []))
+    for iid, n in fails.items():
+        if n >= MAX_FAILS:
+            done[iid] = None
+    return done, fails
+
+
+def _todo(jobs: dict[str, dict], done: dict, by_wall: bool) -> list[str]:
+    """The images still to read: those not in the cache and — `by_wall`,
+    the glass reading, whose plan picks a photo per wall — those a wall was
+    since planned on that they were not read on."""
+
+    def read(i: str) -> bool:
+        if i not in done:
+            return False
+        have = done[i]
+        return not by_wall or have is None or all(wall_key(w) in have for w in jobs[i]["walls"])
+
+    return sorted(i for i in jobs if not read(i))
+
+
+def wall_key(w: dict) -> tuple[str, int, float]:
+    """A wall as a cached reading names it: its object, its number and its
+    length — a new LoD2 edition numbering an object's walls anew does not
+    pass one wall's readings to another."""
+    return (w["oid"], w["wi"], round(w["L"], 2))
+
+
+def plan_key(ws: list[dict]) -> str:
+    """What the glass plan depends on beyond the photos, hashed: the walls
+    (`wall_key`) and the planner's limits. A cache read through under
+    another — a new LoD2 edition, a changed limit — is not read through."""
+    what = (
+        (GLASS_NEAR_M, GLASS_IN_FRAME, GLASS_PLAN_SEQ, MIN_DIST_M, MIN_COS, THUMB_PX),
+        (SINCE_YEAR, FRAMED),
+        sorted(wall_key(w) for w in ws),
+    )
+    return hashlib.sha256(repr(what).encode()).hexdigest()[:10]
+
+
+def plan_of(jobs: dict[str, dict]) -> dict[str, list[list]]:
+    """The glass plan as the read-through line keeps it: per photo the
+    walls (`wall_key`) it was picked for."""
+    return {i: sorted(list(wall_key(w)) for w in jobs[i]["walls"]) for i in sorted(jobs)}
+
+
+def mark_complete(path: Path, key: str, plan: dict[str, list[list]]) -> None:
+    """Ends the glass cache with the line that says every photo the plan
+    `key` picked was read (`complete`), and which it picked for which wall
+    (`plan_of`: the decision reads those alone, not what an earlier plan
+    picked) — unless it already ends so."""
+    lines = path.read_text().splitlines() if path.exists() else []
+    line = json.dumps({"complete": key, "plan": plan}, separators=(",", ":"))
+    if not lines or lines[-1] != line:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with _append(path) as f:
+            f.write(line + "\n")
+
+
+def complete(lines: list[str], key: str) -> bool:
+    """Whether a glass cache's `lines` were read through under the plan
+    `key`: its last line says so — a run killed or with failures since added
+    image lines after it, or none (`mark_complete`)."""
+    try:
+        return bool(lines) and json.loads(lines[-1]).get("complete") == key
+    except (ValueError, AttributeError):
+        return False
+
+
+def _append(path: Path):
+    """The cache opened to add lines, a line a killed run cut short ended
+    first (else the next record would join it, and both be lost)."""
+    if path.exists() and path.stat().st_size:
+        with open(path, "rb") as f:
+            f.seek(-1, os.SEEK_END)
+            cut = f.read(1) != b"\n"
+        if cut:
+            with open(path, "a") as f:
+                f.write("\n")
+    return open(path, "a")
+
+
+def _unread(job: dict, have: set[tuple[str, int, float]] | None) -> dict:
+    """The job on the walls its image was not yet read on (`_done`)."""
+    if not have:
+        return job
+    return job | {"walls": [w for w in job["walls"] if wall_key(w) not in have]}
 
 
 def _fetch_signs(tile: Tile) -> None:
@@ -581,46 +998,79 @@ def _fetch_signs(tile: Tile) -> None:
     )
 
 
+def _workers(kind: str) -> int:
+    """The fetch's worker processes: MAPILLARY_WORKERS or WORKERS, at most
+    GLASS_WORKERS for the glass reading (each holds the CLIP model)."""
+    n = int(os.environ.get(WORKERS_ENV) or WORKERS)
+    return min(n, GLASS_WORKERS) if kind == "glass" else n
+
+
 def fetch(tile: Tile, kind: str = "facades") -> None:
-    """Measure the tile's facades on its panoramas, caching per image:
-    `kind` "facades" the readings and the ground floor's profile
-    (facade_measure.py, the v2 cache), "traits" the trait profiles
-    (facade_traits.py, the v3 cache)."""
+    """Measure the tile's facades on its photos, caching per image:
+    `kind` "facades" the readings and the ground floor's profile on the
+    panoramas (facade_measure.py, the v2 cache), "traits" their trait
+    profiles (facade_traits.py, the v4 cache), "glass" the glass readings
+    on the photos of every camera (facade_glass.py, `glass_path`)."""
     if not tile.mapillary:
         return
     if not os.environ.get("MAPILLARY_TOKEN"):
         print(f"{tile.id}: no MAPILLARY_TOKEN — the facades not measured")
         return
-    _fetch_signs(tile)
-    images = _cached_json(
-        _images_path(tile),
-        lambda: _search_tile(tile, "images", {"fields": IMAGE_FIELDS, "is_pano": "true"}, NEAR_M),
-    )
-    jobs = plan(
-        json.loads(tile.cityjson.read_text()),
-        images,
-        tile.epsg,
-        MAX_SEQ_TRAITS if kind == "traits" else MAX_SEQ,
-    )
-    out = traits_path(tile) if kind == "traits" else cache_path(tile)
+    city = json.loads(tile.cityjson.read_text())
+    model: list[str] = []
     x0, y0, x1, y1 = tile.bounds
-    # the poses turned onto the grid only in the traits cache (v4): the
-    # facades cache keeps its measurements as they were taken
-    gamma = grid_convergence(tile.epsg, (x0 + x1) / 2, (y0 + y1) / 2) if kind == "traits" else 0.0
+    # the poses turned onto the grid in the traits (v4) and glass caches:
+    # the facades cache keeps its measurements as they were taken
+    gamma = (
+        grid_convergence(tile.epsg, (x0 + x1) / 2, (y0 + y1) / 2)
+        if kind in ("traits", "glass")
+        else 0.0
+    )
+    if kind == "glass":
+        every = _cached_json(
+            _photos_path(tile),
+            lambda: _search_tile(tile, "images", {"fields": PHOTO_FIELDS}, GLASS_NEAR_M),
+            PHOTO_FIELDS,
+        )
+        ws = walls(city)
+        jobs = plan_glass(city, every, tile.epsg, gamma, ws)
+        out = glass_path(tile)
+    else:
+        _fetch_signs(tile)
+        images = _cached_json(
+            _images_path(tile),
+            lambda: _search_tile(
+                tile, "images", {"fields": IMAGE_FIELDS, "is_pano": "true"}, NEAR_M
+            ),
+        )
+        jobs = plan(city, images, tile.epsg, MAX_SEQ_TRAITS if kind == "traits" else MAX_SEQ)
+        out = traits_path(tile) if kind == "traits" else cache_path(tile)
     done = _done(out)
-    todo = sorted(set(jobs) - done)
-    print(f"{tile.id}: {len(jobs)} panoramas see its walls, {len(todo)} to measure ({kind})")
+    known = _failing(out) if kind == "glass" else set()
+    todo = _todo(jobs, done, kind == "glass")
+    seen_by = "photos" if kind == "glass" else "panoramas"
+    print(f"{tile.id}: {len(jobs)} {seen_by} see its walls, {len(todo)} to measure ({kind})")
     if not todo:
+        if kind == "glass":
+            mark_complete(out, plan_key(ws), plan_of(jobs))
         return
+    if kind == "glass":
+        from . import facade_glass
+
+        # the model only where there is something to read
+        root = facade_glass.fetch_model(tile.raw)
+        model = [str(root), str(facade_glass.write_classes(root))]
     scratch = cache_dir(tile) / ".img"
     scratch.mkdir(parents=True, exist_ok=True)
     source = os.environ.get(SOURCE_ENV)
     counts = collections.Counter()
+    in_model = 0
+    owns: list[dict] = []
     t0 = last = time.time()
     with (
-        open(out, "a") as f,
+        _append(out) as f,
         cf.ProcessPoolExecutor(
-            int(os.environ.get(WORKERS_ENV) or WORKERS),
+            _workers(kind),
             initializer=_init_worker,
             initargs=(str(tile.dgm),),
         ) as ex,
@@ -629,23 +1079,31 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
             batch = todo[start : start + 400]
             poses = _poses(batch)
             work = [
-                jobs[i]
+                _unread(jobs[i], done.get(i))
                 | {"img": i, "rot": poses.get(i, {}).get("computed_rotation")}
+                | {"exif": poses.get(i, {}).get("exif_orientation")}
                 | {
                     "url": poses.get(i, {}).get("thumb_2048_url"),
                     "scratch": str(scratch),
                     "source": source,
                     "kind": kind,
                     "gamma": gamma,
+                    "model": model,
                 }
                 for i in batch
             ]
             for r in ex.map(measure_image, work, chunksize=1):
                 outcome = "fail" if "fail" in r else "skip" if "skip" in r else "measured"
                 counts[outcome] += 1
-                if outcome != "fail":
-                    f.write(json.dumps(r, separators=(",", ":")) + "\n")
-                    f.flush()
+                in_model += outcome == "fail" and r["fail"].startswith("model")
+                if outcome == "fail":
+                    if r.get("own"):
+                        owns.append(r)
+                    continue
+                if also := r.pop("also_fail", None):  # a wall the model failed on
+                    owns.append({"img": r["img"], "fail": also, "own": True})
+                f.write(json.dumps(r, separators=(",", ":")) + "\n")
+                f.flush()
             if time.time() - last > 60 or start + 400 >= len(todo):
                 last = time.time()
                 n = sum(counts.values())
@@ -656,7 +1114,32 @@ def fetch(tile: Tile, kind: str = "facades") -> None:
     for leftover in scratch.glob("*.jpg"):
         leftover.unlink()
     if counts["fail"]:
-        print(f"{tile.id}: {counts['fail']} images failed on the network — rerun the fetch")
+        model_part = f" ({in_model} of them in the model)" if in_model else ""
+        print(f"{tile.id}: {counts['fail']} images failed{model_part} — rerun the fetch")
+    if kind == "glass":
+        _note_fails(out, owns, len(todo), known)
+        if not _todo(jobs, _done(out), True):
+            mark_complete(out, plan_key(ws), plan_of(jobs))
+
+
+def _note_fails(out: Path, owns: list[dict], tried: int, known: set[str]) -> None:
+    """The glass cache notes the photos that failed on their own (`own`:
+    given up after MAX_FAILS fetches, so one photo cannot keep the cache
+    from read-through). Those failing for the first time are not noted
+    where ten or more and most of the others in the run did: that is a
+    proxy's, the CDN's or the machine's failure, not the photos', and
+    none is noted. One that failed before (`known`: a rerun asks little
+    else) is noted otherwise, so a rerun of the stubborn ones gives them
+    up; the network failing is never noted (`_failed`)."""
+    again = [r for r in owns if r["img"] in known]
+    fresh = [r for r in owns if r["img"] not in known]
+    if len(fresh) >= 10 and 2 * len(fresh) > tried - len(again):
+        fresh, again = [], []  # the run's failure, not the photos'
+    if not (again or fresh):
+        return
+    with _append(out) as f:
+        for r in again + fresh:
+            f.write(json.dumps(r, separators=(",", ":")) + "\n")
 
 
 def _records(path: Path) -> list[dict]:

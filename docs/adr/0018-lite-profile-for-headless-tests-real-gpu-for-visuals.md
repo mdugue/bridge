@@ -5,10 +5,10 @@
 
 ## Context
 
-Headless Chromium has no WebGPU adapter and shades every pixel on the CPU
-(SwiftShader through the WebGL2 backend): seconds per frame at the full
+Headless Chromium shades every pixel on the CPU (WebGPU over
+SwiftShader's Vulkan): seconds per frame at the full
 profile, and shadows and antialiasing nothing like a GPU. A green run once
-proved little — it skipped without WebGL and checked no layer. A reviewer
+proved little — it skipped without a GPU and checked no layer. A reviewer
 needs to see a visual change at a place and time, reproducibly.
 
 ## Decision
@@ -19,7 +19,7 @@ needs to see a visual change at a place and time, reproducibly.
    shadow map, a low pixel ratio, fewer AO samples — the knobs that cost
    seconds per frame — with the same loaders, layers and materials as the
    full profile. Lite is never used to look at pixels.
-3. **On CI a missing WebGL fails, never skips.** Layers are checked by a
+3. **On CI a missing WebGPU adapter fails, never skips.** Layers are checked by a
    scene census, not by pixels.
 4. **Anything visual is judged on a real GPU** with the snapshot harness
    (`bun run shots`, headed, full profile).
@@ -47,7 +47,7 @@ needs to see a visual change at a place and time, reproducibly.
 ## Alternatives
 
 - **The full profile headless:** minutes per spec.
-- **Skipping when WebGL is missing:** hides a broken browser bump.
+- **Skipping when WebGPU is missing:** hides a broken browser bump.
 - **Pixel diffs in CI:** SwiftShader output is not the product.
 - **A slider for every look term:** each cost a table row, a store value,
   a snapshot key and a guide line in two languages, and the maintainer did

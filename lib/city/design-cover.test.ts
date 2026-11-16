@@ -123,7 +123,9 @@ describe("design cover", () => {
       [],
       square(-30, -30, -20, -20),
     ];
-    expect([...coveredObjects(mask, objects)]).toEqual([0]);
+    expect([
+      ...coveredObjects(mask, objects.length, (i) => objects[i]),
+    ]).toEqual([0]);
   });
 
   test("a footprint smaller than a cell is asked at its corner", () => {
