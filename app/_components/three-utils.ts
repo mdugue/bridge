@@ -69,7 +69,10 @@ const sceneSharedAttributes = new WeakSet<object>();
  * destroyed buffer, and the frame fail. A marked attribute is taken off a
  * geometry before it is disposed (`detachShared`, which `disposeGeometry`
  * and `disposeObject3D` run first; `detachSceneShared` ahead of a dispose
- * that is not ours) and lives as long as its app's device.
+ * that is not ours) and lives as long as its app's device. An index
+ * only: a vertex attribute taken off goes all the same (three r187's
+ * `RenderObject.onGeometryDispose` frees every one the drawable used that
+ * its geometry no longer holds).
  */
 export function markSceneShared(attribute: AnyAttribute): void {
   sceneSharedAttributes.add(attribute);
@@ -417,6 +420,26 @@ export function trackTexture(texture: Texture, bytes: number): void {
  */
 export function untrackTexture(texture: Texture): void {
   trackedTextures.delete(texture);
+}
+
+/**
+ * The bytes a geometry's positions take on the GPU beyond their array: a
+ * quantised position is three 16-bit numbers, and a vertex buffer has no
+ * three-component 16-bit format, so each is uploaded as four (two bytes a
+ * vertex the tile cache's estimate of the glTF does not see). 0 for
+ * float positions.
+ */
+export function paddedPositionBytes(geometry: BufferGeometry): number {
+  const position = geometry.getAttribute("position") as
+    | AnyAttribute
+    | undefined;
+  if (position?.itemSize !== 3) {
+    return 0;
+  }
+  const { array } = position;
+  return array instanceof Int16Array || array instanceof Uint16Array
+    ? 2 * position.count
+    : 0;
 }
 
 /** A tracked texture's GPU bytes (0 when it is not tracked). */

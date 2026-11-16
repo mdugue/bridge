@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "cn";
 
 // Every page is prerendered at build time and the site has no server of its
@@ -41,9 +40,7 @@ const RootLayout = ({
     )}
     lang="de"
   >
-    <body className="flex min-h-full flex-col">
-      <TooltipProvider>{children}</TooltipProvider>
-    </body>
+    <body className="flex min-h-full flex-col">{children}</body>
   </html>
 );
 

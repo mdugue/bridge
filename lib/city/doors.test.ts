@@ -4,6 +4,9 @@ import {
   doorMesh,
   eaveAlong,
   rayHit,
+  KNOT_OFF_M,
+  KNOT_SUNK_M,
+  thinned,
   trianglesOnRays,
   wallShift,
   wallShiftAlong,
@@ -189,10 +192,64 @@ test("wallShiftKnots follows a wall that bends, where one line would cut it", ()
     bent,
     [0, 3, 6, 9]
   );
-  expect(f).toHaveLength(21);
-  expect(s[10]).toBeCloseTo(0.2, 6);
+  // read each metre, kept at the ends and the bend alone
+  expect(f).toEqual([0, 0.5, 1]);
+  expect(s[1]).toBeCloseTo(0.2, 6);
   expect(s[0]).toBeCloseTo(0.05 + 0.015 * 0.1, 6);
-  expect(s[5]).toBeCloseTo(0.125, 6);
+  expect(s[2]).toBeCloseTo(0.05 + 0.015 * 0.1, 6);
+});
+
+describe("thinned", () => {
+  const f = [0, 0.25, 0.5, 0.75, 1];
+
+  test("a flat wall keeps its ends", () => {
+    expect(thinned({ f, s: [0.1, 0.1, 0.1, 0.1, 0.1] })).toEqual({
+      f: [0, 1],
+      s: [0.1, 0.1],
+    });
+    // and a wall that runs askew to its line
+    expect(thinned({ f, s: [0, 0.05, 0.1, 0.15, 0.2] }).f).toEqual([0, 1]);
+  });
+
+  test("a bulge the band would sink into keeps its knot", () => {
+    const bulged = thinned({ f, s: [0, 0, KNOT_SUNK_M + 0.005, 0, 0] });
+    expect(bulged.f).toEqual([0, 0.5, 1]);
+    // one within what a band may sink does not
+    expect(thinned({ f, s: [0, 0, KNOT_SUNK_M - 0.002, 0, 0] }).f).toEqual([
+      0, 1,
+    ]);
+  });
+
+  test("a hollow the band would stand off keeps its knot past the tolerance", () => {
+    expect(thinned({ f, s: [0, 0, -KNOT_OFF_M + 0.005, 0, 0] }).f).toEqual([
+      0, 1,
+    ]);
+    expect(thinned({ f, s: [0, 0, -KNOT_OFF_M - 0.005, 0, 0] }).f).toContain(
+      0.5
+    );
+  });
+
+  test("no knot kept leaves the wall further than the tolerances", () => {
+    let seed = 5;
+    const rand = () => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return seed / 2_147_483_648;
+    };
+    const fs = Array.from({ length: 41 }, (_, i) => i / 40);
+    const ss = fs.map((x) => 0.1 * Math.sin(6 * x) + 0.02 * rand());
+    const k = thinned({ f: fs, s: ss });
+    expect(k.f.length).toBeLessThan(fs.length);
+    expect(k.f[0]).toBe(0);
+    expect(k.f.at(-1)).toBe(1);
+    for (let i = 0; i < fs.length; i += 1) {
+      const j = k.f.findIndex((x) => x >= fs[i]);
+      const [f0, f1] = [k.f[Math.max(j - 1, 0)], k.f[j]];
+      const [s0, s1] = [k.s[Math.max(j - 1, 0)], k.s[j]];
+      const line = f1 === f0 ? s1 : s0 + ((s1 - s0) * (fs[i] - f0)) / (f1 - f0);
+      expect(line - ss[i]).toBeLessThanOrEqual(KNOT_OFF_M + 1e-9);
+      expect(line - ss[i]).toBeGreaterThanOrEqual(-KNOT_SUNK_M - 1e-9);
+    }
+  });
 });
 
 test("trianglesOnRays keeps every triangle a ray meets within its reach, in order", () => {

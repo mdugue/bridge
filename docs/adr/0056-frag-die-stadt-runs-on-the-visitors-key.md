@@ -54,8 +54,9 @@ load into the browser.
    answer, each step a click away).
 5. **The answer shows its places.** `zeige` takes every place an answer
    is about (the rejected candidates too, the chosen one first) with the
-   Stadtwissen's height and footprint radius; the browser frames them
-   itself (`frameTargets`, `lib/city/ask-view.ts`): from the air, the
+   Stadtwissen's height and footprint radius; the scene frames them
+   itself (`frameView`, run in the scene's worker where the loaded
+   buildings are; `frameTargets`, `lib/city/ask-view.ts`): from the air, the
    nearest eye that fits them on screen, the best of twelve headings by
    size, approach, sun, spread and the loaded buildings' sight lines;
    places that need an eye more than 900 m off are shown one at a time.

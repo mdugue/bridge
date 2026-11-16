@@ -129,7 +129,13 @@ const clears = (h: F, el: F): F => smoothstep(h.sub(SOFT), h.add(SOFT), el);
  * array has no mips, and the near band's read sits in a branch (no
  * implicit derivative may be taken there).
  */
-function hzAngle(horizon: Tex, uv: V2, k: F, base: number, maxDeg: number): F {
+export function hzAngle(
+  horizon: Tex,
+  uv: V2,
+  k: F,
+  base: number,
+  maxDeg: number
+): F {
   // one read, four channels to choose from
   const v = texture(horizon, uv)
     .depth(floor(k.div(4)).add(base))

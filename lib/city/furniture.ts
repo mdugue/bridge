@@ -4,7 +4,8 @@
  * where, turned which way and how long, and which playground patches lie
  * under them. No THREE, no DOM.
  */
-import type { FurnitureFeature } from "./features";
+import { isFlagDesign } from "./features";
+import type { BinTone, FlagDesign, FurnitureFeature } from "./features";
 import type { Point2 } from "./polyline";
 
 /** The models the layer builds, one instanced draw each. */
@@ -21,6 +22,7 @@ export type FurnitureModel =
   | "clock"
   | "column"
   | "columnLit"
+  | "flag"
   | "hoop"
   | "hydrant"
   | "hydrantSign"
@@ -68,6 +70,7 @@ export const FURNITURE_MODELS: readonly FurnitureModel[] = [
   "hydrantSign",
   "clock",
   "wallClock",
+  "flag",
   "water",
   "swing",
   "slide",
@@ -82,6 +85,29 @@ export const FURNITURE_MODELS: readonly FurnitureModel[] = [
 /** A bollard's height (m) when the map says nothing: the models are built at it. */
 export const BOLLARD_HEIGHT = 0.9;
 
+/** A flagpole's height (m) when the map says nothing — a forecourt's mast:
+ *  the model is built at it. */
+export const FLAG_HEIGHT = 7;
+/** The tallest mast a tagged height may give (m; pipeline/bake/furniture.py
+ *  FLAG_H leaves out any taller one). */
+export const FLAG_HEIGHT_MAX = 30;
+/** A flag's cloth (m), 3 : 5, a forecourt flag's, whatever the mast's
+ *  height (app/_components/flag-cloth.ts draws it; a pick finds it). */
+export const FLAG_CLOTH_H = 1.2;
+export const FLAG_CLOTH_L = 2;
+/** The ball on a flagpole's top: its radius and its centre over the top
+ *  (m); a pick reaches to its top. */
+export const FLAG_BALL_R = 0.075;
+export const FLAG_BALL_Y = 0.05;
+/**
+ * The bearing (degrees clockwise from north) every flag flies towards: the
+ * scene has no weather, so one wind for the whole city — from the
+ * west-south-west, Germany's prevailing wind. Each flag strays from it by
+ * up to FLAG_STRAY_DEG, so a row of masts is not a drill.
+ */
+export const FLAG_WIND_BEARING = 70;
+export const FLAG_STRAY_DEG = 12;
+
 /** A park bench's length (m) when the map says nothing: the models are built at it. */
 export const BENCH_LENGTH = 1.8;
 /** Hoops in a bicycle stand row stand this far apart (m). */
@@ -91,6 +117,8 @@ export const HOOP_SPACING = 0.9;
 export interface FurniturePiece {
   /** the top of the bridge deck it stands on (m), not the ground */
   deck?: number;
+  /** a flag's cloth: the design the map names, else plain */
+  design?: FlagDesign | "plain";
   model: FurnitureModel;
   /** stretch along the model's local X (a bench's mapped length) */
   scaleX: number;
@@ -144,10 +172,7 @@ function hoops(x: number, y: number, deg: number, n: number): FurniturePiece[] {
 }
 
 /** A bin in its colour (`c`), else the model's grey. */
-const BIN_MODEL: Record<
-  NonNullable<NonNullable<FurnitureFeature["properties"]>["c"]>,
-  FurnitureModel
-> = {
+const BIN_MODEL: Record<BinTone, FurnitureModel> = {
   blue: "binBlue",
   green: "binGreen",
   orange: "binOrange",
@@ -157,7 +182,7 @@ const BIN_MODEL: Record<
 
 function binModel(f: FurnitureFeature): FurnitureModel {
   const c = f.properties?.c;
-  return c && Object.hasOwn(BIN_MODEL, c) ? BIN_MODEL[c] : "bin";
+  return c && Object.hasOwn(BIN_MODEL, c) ? BIN_MODEL[c as BinTone] : "bin";
 }
 
 /** The model each kind stands as (a bench by its backrest, a bin by its
@@ -174,6 +199,7 @@ const MODEL_OF: Record<string, (f: FurnitureFeature) => FurnitureModel> = {
   column: (f) => (f.properties?.lit ? "columnLit" : "column"),
   signal: (f) => (f.properties?.arm ? "signalArm" : "signal"),
   pedsignal: () => "pedSignal",
+  flag: () => "flag",
   hydrant: () => "hydrant",
   hydrantsign: () => "hydrantSign",
   clock: () => "clock",
@@ -206,11 +232,37 @@ function scalesOf(
       model === "bench" || model === "stool"
         ? (length ?? BENCH_LENGTH) / BENCH_LENGTH
         : 1,
-    scaleY:
-      (model === "bollard" || model === "post") && height
-        ? height / BOLLARD_HEIGHT
-        : 1,
+    scaleY: heightScale(model, height),
   };
+}
+
+/** A bollard's stretch to its tagged height, a flagpole's to its own. */
+function heightScale(
+  model: FurnitureModel,
+  height: number | undefined
+): number {
+  if (!height) {
+    return 1;
+  }
+  if (model === "bollard" || model === "post") {
+    return height / BOLLARD_HEIGHT;
+  }
+  return model === "flag" ? height / FLAG_HEIGHT : 1;
+}
+
+/** The yaw that flies a flag's cloth (its local +X) downwind: the city's
+ *  wind, strayed by a stable hash of where the mast stands. */
+export function flagYaw(x: number, y: number): number {
+  const stray = (scatterYaw(y, x) / Math.PI - 1) * FLAG_STRAY_DEG;
+  // local +X turned by θ about +Y points (cos θ, 0, −sin θ); the bearing b
+  // is (sin b, 0, −cos b): θ = π/2 − b
+  return Math.PI / 2 - ((FLAG_WIND_BEARING + stray) * Math.PI) / 180;
+}
+
+/** A flag's cloth: its design where the bake names one. */
+function flagDesign(f: FurnitureFeature): FlagDesign | "plain" {
+  const c = f.properties?.c;
+  return isFlagDesign(c) ? c : "plain";
 }
 
 /** Every piece the features stand as; unknown kinds and non-points are dropped. */
@@ -240,11 +292,26 @@ export function furniturePieces(
       model,
       x,
       y,
-      yaw: faced ? yawOfBearing(a) : scatterYaw(x, y),
+      yaw: pieceYaw(model, x, y, faced ? a : undefined),
+      ...(model === "flag" ? { design: flagDesign(f) } : {}),
       ...scalesOf(model, f),
     });
   }
   return pieces;
+}
+
+/** Where a piece faces: a flag downwind (`flagYaw`), the rest its mapped
+ *  bearing, else a stable scatter. */
+function pieceYaw(
+  model: FurnitureModel,
+  x: number,
+  y: number,
+  bearing: number | undefined
+): number {
+  if (model === "flag") {
+    return flagYaw(x, y);
+  }
+  return bearing === undefined ? scatterYaw(x, y) : yawOfBearing(bearing);
 }
 
 /** A playground or a sandpit drawn as an area: its outline, open. */

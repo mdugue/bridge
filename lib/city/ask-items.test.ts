@@ -23,6 +23,7 @@ import type {
   TreeFeature,
   VegRowFeature,
 } from "./features";
+import { FLAG_CLOTH_L, flagYaw } from "./furniture";
 import { epsgToWorld } from "./ground-clamp";
 import type { CardCredits } from "./card-lines";
 import { inquiryCard } from "./inquiry";
@@ -492,6 +493,53 @@ test("a tall mast is asked at its post and at the head on its arm", () => {
   expect(head && "arm" in head ? head.arm : undefined).toBe(true);
   expect(north(113, 1.8)).toBeUndefined(); // nothing under the arm
   expect(north(113, 0)?.kind).toBe("lamp"); // the post
+});
+
+test("a flagpole is asked at its mast and at its cloth, downwind of it", () => {
+  const at: [number, number] = [412_070, 5_656_020];
+  const own = moreSets(
+    {
+      canopy: [],
+      scan: [],
+      rows: [],
+      hedges: [],
+      river: [],
+      trams: [],
+      lamps: [],
+      furniture: [
+        {
+          type: "Feature",
+          geometry: { type: "Point", coordinates: at },
+          properties: { k: "flag", h: 10 },
+        } as FurnitureFeature,
+      ],
+    },
+    ctx
+  );
+  // a ray straight down at the cloth's middle, and one upwind of the mast
+  const yaw = flagYaw(at[0], at[1]);
+  const mast = epsgToWorld(at[0], at[1], offset);
+  const downAt = (along: number) =>
+    hitsInSets(
+      {
+        x: mast.x + Math.cos(yaw) * along,
+        y: 200,
+        z: mast.z - Math.sin(yaw) * along,
+      },
+      down,
+      own,
+      1000
+    )[0];
+  const cloth = downAt(FLAG_CLOTH_L / 2);
+  expect(cloth?.target.kind).toBe("furniture");
+  // the cloth's top is the mast's: 110 m ground, a 10 m mast
+  expect(200 - (cloth?.distance ?? 0)).toBeCloseTo(120);
+  expect(downAt(-FLAG_CLOTH_L / 2)).toBeUndefined();
+  // the cloth's box is a tolerance the lens passes by; the mast is not
+  expect(cloth && toleranceBox(cloth)).toBe(true);
+  const mastHit = downAt(0);
+  expect(mastHit?.target).toBe(cloth?.target);
+  expect(mastHit && toleranceBox(mastHit)).toBe(false);
 });
 
 const toleranceItem = (kind: string, solids: AskSolid[]) =>

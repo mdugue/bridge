@@ -12,12 +12,17 @@
  */
 import { titleLines } from "@/lib/city/nameplate";
 import type { NameplateText } from "@/lib/city/nameplate";
-import { NAMEPLATE_FACE_VARS, linesSize } from "@/lib/city/nameplate-type";
+import {
+  NAMEPLATE_FACE_VARS,
+  NAMEPLATE_TYPES,
+  linesSize,
+} from "@/lib/city/nameplate-type";
 import type {
   NameplateFace,
   NameplateSetting,
   NameplateType,
 } from "@/lib/city/nameplate-type";
+import type { RenderStyle } from "@/lib/city/render-style";
 import { signedDistanceField } from "@/lib/city/sdf";
 
 /** Raster sizes (px) the letters are drawn at: large enough that the
@@ -723,4 +728,27 @@ export function shadowMask(
     }
   }
   return { area: block, data, width, height };
+}
+
+/**
+ * The plate's letters for a text in a style's type, drawn on the page in
+ * its own web faces (their CSS variables are read off `from`), once the
+ * faces are loaded: the service the scene asks for them
+ * (nameplate-layer.ts `letters`), wherever the scene runs (ADR 0061).
+ */
+export async function plateLetters(
+  text: NameplateText,
+  style: RenderStyle,
+  res: PlateResolution,
+  from: Element
+): Promise<PlateRaster | null> {
+  const type = NAMEPLATE_TYPES[style];
+  // the letters as drawn (a style may set them in capitals, whose part of
+  // a face can differ)
+  const raw = [text.title, ...text.lines].join(" ");
+  const drawn = `${raw} ${raw.toLocaleUpperCase("de-DE")}`;
+  if (!facesReady(type, from, drawn)) {
+    await loadFaces(type, from, drawn);
+  }
+  return rasterPlate(text, type, from, res);
 }

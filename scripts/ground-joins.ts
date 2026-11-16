@@ -23,14 +23,12 @@ import type { BakeFile } from "../lib/city/bake-file";
 import { doorJoins } from "../lib/city/doors";
 import { DOORS_FILE } from "../lib/city/doors-file";
 import { PLINTHS_FILE } from "../lib/city/plinths-file";
-import { SHOPFRONTS_FILE } from "../lib/city/shopfronts-file";
 import { SMALL_BUILDINGS_FILE } from "../lib/city/small-buildings-file";
 import { plinthJoins } from "../lib/city/plinths";
 import type {
   DoorFeature,
   PlinthFeature,
   RailFeature,
-  ShopfrontWall,
   SmallBuildingFeature,
 } from "../lib/city/features";
 import { cutWallGates, fenceGeometry } from "../lib/city/fences";
@@ -43,7 +41,6 @@ import { axisMiddle, stairGeometry } from "../lib/city/stairs";
 import { sampleHeightfield } from "../lib/city/terrain-geometry";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import { tileExtentOf, tileIdOf } from "../lib/city/site";
-import { doorSpans, shopfrontJoins, wallBays } from "../lib/city/shopfronts";
 import { structureJoins } from "../lib/city/small-buildings";
 import { cityMeshSourceFiles, dgmSourceFiles, tileIds } from "../lib/city/tile";
 import { ownsPoint } from "../lib/city/tileset";
@@ -73,7 +70,6 @@ export const JOIN_PARTS = [
   "fences",
   "sheds",
   "doors",
-  "shopfronts",
   "plinths",
   "monorails",
 ] as const;
@@ -138,31 +134,6 @@ function doors(site: Site, tile: string): DoorFeature[] {
   );
 }
 
-/** The shopfront walls the bake draws on a tile's ground floors. */
-function shopfronts(site: Site, tile: string): ShopfrontWall[] {
-  const file = citySource(
-    SHOPFRONTS_FILE,
-    cityMeshSourceFiles(site, tile).shopfronts
-  );
-  return file ? Object.values(file.buildings).flat() : [];
-}
-
-/** A shopfront wall's joins: its risers' and piers' feet, the bays cut at
- *  the doors on its line (any building's: the bake's own test is the
- *  host's tree, which this file does not read). */
-function shopfrontWallJoins(
-  w: ShopfrontWall,
-  tileDoors: readonly DoorFeature[]
-): JoinPoint[] {
-  return shopfrontJoins(
-    w,
-    wallBays(
-      w,
-      doorSpans(w, tileDoors, () => true)
-    )
-  );
-}
-
 /** The scan's small structures the bake appends to a tile's buildings. */
 function smallBuildings(site: Site, tile: string): SmallBuildingFeature[] {
   return (
@@ -221,9 +192,6 @@ function tileJoins(
       )?.joins ?? [],
     sheds: smallBuildings(site, tile).flatMap(structureJoins),
     doors: doors(site, tile).flatMap(doorJoins),
-    shopfronts: shopfronts(site, tile).flatMap((w) =>
-      shopfrontWallJoins(w, doors(site, tile))
-    ),
     plinths: plinths(site, tile).flatMap(plinthJoins),
     monorails: monorails(site, tile).flatMap((f) => monorailJoins(f, heightAt)),
   };

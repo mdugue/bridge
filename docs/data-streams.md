@@ -68,7 +68,7 @@ The census scripts were throw-away; the counts below are their record.
 | `place=suburb/quarter/neighbourhood/square`, admin levels 9 and 11 | 23 / 5 / 22 / 32; 63 / 101 | "you are in …" as a HUD line (not on the ground) |
 | Razed/abandoned/disused railways | 782 / 371 / 283 | faint ghost tracks as a history layer |
 | `entrance=*` | 8 362 (main 4 070) | a door glow at dusk, where the shop wash has none |
-| Small `man_made`: flagpole, chimney, mast, crane, water well/tap, planter | 129, 56, 147, 15, 38 + 43, 52 | flags in the wind, cranes on the skyline, hand pumps |
+| Small `man_made`: chimney, mast, crane, water well/tap, planter (flagpoles are drawn: furniture) | 56, 147, 15, 38 + 43, 52 | cranes on the skyline, hand pumps |
 | `tactile_paving`, `kerb`, `smoothness` | 5 422 / 2 845 / 13 133 ways | ridged plates at crossings; footsteps by smoothness |
 | `tourism=viewpoint`, information boards | 29, 132 (history 62) | destinations for the scenic glides |
 | `attraction=animal`, schools, kindergartens | 58, 117, 148 | zoo calls; children's voices in school hours |

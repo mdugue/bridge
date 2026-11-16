@@ -114,14 +114,15 @@ def test_the_trams_cache_is_written_through_part_and_rebuilt_when_unreadable(tmp
 
     (tmp_path / "nv_free.zip").write_bytes(b"zip")
     built = []
+    cut = {"published": "2026-10-01"}
     monkeypatch.setattr(
-        transit, "site_trams", lambda zip_path, bounds, epsg: built.append(1) or {"lines": []}
+        transit, "site_trams", lambda zip_path, bounds, epsg: built.append(1) or cut
     )
-    assert transit.cached_site_trams(tmp_path, BOUNDS, 25833) == {"lines": []}
+    assert transit.cached_site_trams(tmp_path, BOUNDS, 25833) == cut
     caches = sorted(p.name for p in tmp_path.iterdir() if p.name.startswith("trams_"))
     assert len(caches) == 1 and not caches[0].endswith(".part")
     cache = tmp_path / caches[0]
     cache.write_text('{"lines": [')
-    assert transit.cached_site_trams(tmp_path, BOUNDS, 25833) == {"lines": []}
+    assert transit.cached_site_trams(tmp_path, BOUNDS, 25833) == cut
     assert len(built) == 2
-    assert json.loads(cache.read_text()) == {"lines": []}
+    assert json.loads(cache.read_text()) == cut

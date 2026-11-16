@@ -12,7 +12,6 @@ import {
   manifestUrl,
   OSM_KINDS,
   pickFiles,
-  SMALL_RASTER_PX,
   stairSourceFile,
   TERRAIN_RASTER_KINDS,
   terraceSourceFile,
@@ -60,7 +59,6 @@ test("only the class rasters and the vegetation rows are required", () => {
     "landcover",
     "landcoverCoarse",
     "landcoverLow",
-    "landcoverSmall",
     "vegrows",
   ]);
 });
@@ -72,15 +70,6 @@ test("the coarse terrain reads a 1024² class raster baked from the 4096² one",
     raster: COARSE_RASTER_PX,
   });
   expect(COARSE_RASTER_PX).toBe(1024);
-});
-
-test("the minimap reads a 512² class raster baked from the 4096² one", () => {
-  const { landcover, landcoverSmall } = tileArtifacts(PRIMARY_TILE);
-  expect(landcoverSmall.bakedFrom).toEqual({
-    file: landcover.file,
-    raster: SMALL_RASTER_PX,
-  });
-  expect(SMALL_RASTER_PX).toBe(512);
 });
 
 test("the dressing and OSM columns name only kinds of the table", () => {
