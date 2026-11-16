@@ -215,7 +215,7 @@ uploaded; nothing it names is fetched (ADR 0054).
 - URL knobs: `?scene=lite`, `?thread=main`, `?safety=0…3`, `?trail=1`,
   `?trace=1`, `?inspect=1`, `?depth=standard`, `?at=lat,lng`, `?snap=…`
   (a view link); plan 090's spikes: `?stands=record`, `?rails=table`;
-  plan 091's trial: `?svf=blocks`.
+  plan 091's trial: `?svf=blocks` (on a build with `SVF_BLOCKS=1`).
   URL parameters go in the query, never the fragment; one
   that carries a place is named on the privacy page.
 

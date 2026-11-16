@@ -30,7 +30,7 @@ import {
 import { decodeGreyPng } from "../../lib/city/png-raster";
 import type { CityJsonDocument } from "../../lib/city/types";
 import { BAKE_ENTRIES } from "../bake-entries";
-import { encodeBlockRaster } from "../block-encode";
+import { publishedBlockFile } from "../block-encode";
 import type { Grey } from "../block-encode";
 import { cropColonyRaster } from "../crop-raster";
 import type { ColonyCrop } from "../crop-raster";
@@ -215,7 +215,7 @@ export async function publishSvfBlocks(
     publish(
       file,
       await cached(file, key, async () =>
-        gz(encodeBlockRaster(await grey(), format))
+        publishedBlockFile(await grey(), format)
       )
     );
   return {

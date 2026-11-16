@@ -824,9 +824,10 @@ tileset under `public/data/<site>/`
    (`downsampleInterleaved`: no image resize, which would step through
    the channels as if they were pixels), read by a fine level beyond the
    ground detail's reach (`lib/city/ground-reach.ts`; the markings and
-   the colonies have their phone twins for it). And the sky view's
-   **GPU blocks** (plan 091 phase 2's trial, read only behind
-   `?svf=blocks`): `svf_<t>.bc4.gz` and `svf_<t>.eac.gz`, the committed
+   the colonies have their phone twins for it). And, only in a build
+   with `SVF_BLOCKS=1`, the sky view's **GPU blocks** (plan 091 phase
+   2's trial, read only behind `?svf=blocks`; a default build publishes
+   none): `svf_<t>.bc4.gz` and `svf_<t>.eac.gz`, the committed
    PNG encoded as BC4 and as EAC R11 with a box-filtered mip chain
    (`scripts/block-encode.ts`, integer arithmetic, byte-stable; the file
    `lib/city/block-raster.ts`; `publishSvfBlocks`, bake entry
@@ -1586,15 +1587,21 @@ twins of the paving and markings (4 MiB each) and the edges (2 MiB).
 The ledger's `blocks` section (plan 091 phase 2; `lib/city/ledger-blocks.ts`,
 read by `scripts/ledger-blocks.ts`) holds, for every site a build serves,
 its tiles' sky views as the PNG the viewer reads and as the two block
-files the build publishes beside it: the wire bytes, the GPU bytes (the
-PNG's as laid out with the GPU's mips, a third more; the blocks' as
-uploaded, the chain in the file) and the error of what the shader reads
-from the blocks against the PNG's byte, in byte steps — the mean over the
-site's texels, the largest tile p99, the largest texel — by the formats'
-own decode (a GPU reads up to 0.86 below it for BC4, 0.12 for EAC: SwiftShader
-truncates BC4's interpolation to whole bytes and widens EAC's eleven bits
-without repeating them, `scripts/eval/block-raster-probe.ts`). Every figure
-is gated. The rasters' table above does not count the blocks: no tier
+files a build with `SVF_BLOCKS=1` publishes beside it — encoded here from
+the published PNG by the build's own call (`publishedBlockFile`), so a
+default build serves: the wire bytes, the GPU bytes (the PNG's as laid
+out with the GPU's mips, a third more; the blocks' as uploaded, the chain
+in the file) and the error of what the shader reads from the blocks
+against the PNG's byte, in byte steps — over level 0 the mean over the
+site's texels, the largest tile p99 and the largest texel; over levels 1
+on the largest texel against the box-filtered chain — by the formats'
+nominal decode, not a GPU's read (SwiftShader reads up to 0.86 below it
+for BC4, truncating to whole bytes, and 0.12 for EAC, widening its eleven
+bits without repeating them: `scripts/eval/block-raster-probe.ts`). The
+encodes take about two minutes for the seven sites, so the section is
+read anew only with `bun run ledger -- --blocks`; without it the
+committed section stands and `--check` does not compare it, as with
+`--browser`. The rasters' table above does not count the blocks: no tier
 reads them by default.
 
 | Site (tiles) | PNG wire / GPU, MiB | BC4 wire / GPU | BC4 error mean / p99 / max | EAC wire / GPU | EAC error mean / p99 / max |
@@ -1607,7 +1614,8 @@ reads them by default.
 | München (4) | 2.24 / 5.33 | 2.52 / 2.67 | 0.76 / 4.00 / 11.3 | 2.50 / 2.67 | 0.80 / 4.06 / 12.1 |
 | Unna (2) | 1.05 / 2.67 | 1.16 / 1.33 | 0.86 / 4.86 / 13.4 | 1.15 / 1.33 | 0.88 / 4.93 / 14.8 |
 
-Baseline 2026-11-16. On the wire the blocks are 7–18 % above the PNG
+Levels 1 on, the largest texel against the box-filtered chain: BC4
+14.0–15.7, EAC 15.0–22.0. Baseline 2026-11-16. On the wire the blocks are 7–18 % above the PNG
 (gzip; brotli would take about half that back: plan 088's transport); on
 the GPU half, 0.67 MiB a tile for 1.33.
 

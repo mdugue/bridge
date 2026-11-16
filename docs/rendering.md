@@ -1070,8 +1070,9 @@ stays their measure; the tile cache counts true bytes.
   kept only where a tile's numbers equal the site's: −6 MiB per coarse
   tile after the first, on the GPU and the CPU), and it carries only its
   coarse crowns, traffic and bridges.
-- **The sky view as GPU blocks — a trial behind `?svf=blocks`** (plan
-  091 phase 2). The build publishes each tile's sky view beside its PNG
+- **The sky view as GPU blocks — a trial behind `SVF_BLOCKS=1` and
+  `?svf=blocks`** (plan 091 phase 2). A build with the flag publishes
+  each tile's sky view beside its PNG
   as BC4 and as EAC R11 blocks with their mip chain
   (`lib/city/block-raster.ts`, encoded by `scripts/block-encode.ts`),
   half a byte a texel: 0.67 MiB a tile instead of 1.33, shared by both
@@ -1080,8 +1081,11 @@ stays their measure; the tile cache counts true bytes.
   `-etc2`, else the PNG (`scene-profile.ts` `blockFormatFor`), and
   uploads it as a `CompressedTexture` at once on every tier
   (`raster-upload.ts` `loadBlockRaster`: no decode, no mips made on the
-  GPU); a material slot's stand-in for it is one block of its format
-  (`material-slots.ts` `stubLike`). Without the knob nothing changes.
+  GPU), falling back to the PNG where the blocks fail; a material
+  slot's stand-in for it is one block of its format
+  (`material-slots.ts` `stubLike`). three's `info.memory` counts a
+  compressed texture as one byte: the tracked bytes are its weight.
+  Without the knob, or on a build without the flag, nothing changes.
   The figures and what a real GPU must still show are in plan 091's
   *Findings* and the ledger's `blocks` section.
 - **The close-range rasters follow the view** (`lib/city/ground-reach.ts`,

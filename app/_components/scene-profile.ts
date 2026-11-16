@@ -87,7 +87,8 @@ export function railTableRequested(search: string): boolean {
 /**
  * Whether the page asked for plan 091 phase 2's trial (`?svf=blocks`): the
  * sky view read as GPU blocks (lib/city/block-raster.ts) where the GPU
- * has a format the build wrote. A QA knob: the default page reads the
+ * has a format a build with `SVF_BLOCKS=1` wrote (any other build has
+ * none, and the page reads the PNG). A QA knob: the default page reads the
  * PNG. Pure.
  */
 export function svfBlocksRequested(search: string): boolean {

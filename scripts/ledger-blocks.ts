@@ -1,13 +1,15 @@
 /**
  * Reads the ledger's `blocks` section (plan 091 phase 2) from each built
- * site's published files: every tile's sky-view PNG and the BC4 and EAC
- * R11 blocks the build publishes beside it (the extras' `svf`, `svfBc4`,
- * `svfEac`), decoded by the viewer's PNG decoder and the formats' own
- * rules (scripts/block-encode.ts), handed to lib/city/ledger-blocks.ts.
+ * site's published files: every tile's sky-view PNG (the extras' `svf`),
+ * encoded as the BC4 and EAC R11 files a build with `SVF_BLOCKS=1`
+ * publishes beside it (scripts/block-encode.ts `publishedBlockFile`, the
+ * build's own call) and decoded by the formats' own rules, handed to
+ * lib/city/ledger-blocks.ts. Two minutes for the seven sites: the ledger
+ * reads it with `--blocks` only.
  */
 import { gunzipSync } from "node:zlib";
 import { parseBlockRaster } from "../lib/city/block-raster";
-import type { BlockFormat } from "../lib/city/block-raster";
+import type { BlockFormat, BlockLevel } from "../lib/city/block-raster";
 import { wireBytes } from "../lib/city/ledger";
 import { BLOCK_RULE, siteBlocks } from "../lib/city/ledger-blocks";
 import type {
@@ -17,41 +19,59 @@ import type {
 } from "../lib/city/ledger-blocks";
 import { decodeGreyPng } from "../lib/city/png-raster";
 import { textureBytes } from "../app/_components/three-utils";
-import { RASTER_KINDS } from "../app/_components/tile-rasters";
-import { decodeLevel } from "./block-encode";
+import { decodeLevel, mipChain, publishedBlockFile } from "./block-encode";
+import type { Grey } from "./block-encode";
 import type { RasterSource } from "./ledger-rasters";
 import { tileLevels } from "./ledger-rasters";
 
-/** The extras key of each format's file (the sky view's row). */
-const KEYS = RASTER_KINDS.svf.blocks ?? { bc4: "svfBc4", eac: "svfEac" };
+/** The largest texel error of levels 1 on against the chain they were
+ *  encoded from. */
+function mipsMax(
+  levels: readonly BlockLevel[],
+  chain: readonly Grey[],
+  format: BlockFormat
+): number {
+  let max = 0;
+  for (const [k, level] of levels.entries()) {
+    if (k === 0) {
+      continue;
+    }
+    const decoded = decodeLevel(level, format);
+    const source = chain[k].data;
+    for (const [i, v] of decoded.entries()) {
+      max = Math.max(max, Math.abs(v - source[i]));
+    }
+  }
+  return max;
+}
 
-/** One tile's sky view and its blocks, or null where the tile has none. */
+/** One tile's sky view and the blocks a flagged build publishes beside
+ *  it, encoded here from the published PNG; null where the tile has none. */
 async function tileBlocks(
   source: RasterSource,
   extras: Record<string, unknown>
 ): Promise<TileBlocks | null> {
-  const name = (key: string) => {
-    const served = extras[key];
-    return typeof served === "string" && served !== "" ? served : null;
-  };
-  const svf = name("svf");
-  if (!svf) {
+  const { svf } = extras;
+  if (typeof svf !== "string" || svf === "") {
     return null;
   }
   const pngBytes = source.read(svf);
   const png = await decodeGreyPng(pngBytes);
+  const chain = mipChain(png);
   const formats = {} as TileBlocks["formats"];
   for (const format of ["bc4", "eac"] as const satisfies BlockFormat[]) {
-    const served = name(KEYS[format]);
-    if (!served) {
-      throw new Error(`ledger: ${svf} has no ${format} blocks beside it`);
+    const file = publishedBlockFile(png, format);
+    const raster = parseBlockRaster(new Uint8Array(gunzipSync(file)));
+    let gpu = 0;
+    for (const level of raster.levels) {
+      gpu += level.data.length;
     }
-    const bytes = source.read(served);
-    const raster = parseBlockRaster(new Uint8Array(gunzipSync(bytes)));
     formats[format] = {
-      wire: wireBytes(served, bytes),
-      gpu: raster.levels.reduce((n, l) => n + l.data.length, 0),
+      // (a `.gz` counts at face value, `wireBytes`' rule)
+      wire: file.length,
+      gpu,
       decoded: decodeLevel(raster.levels[0], format),
+      mipsMax: mipsMax(raster.levels, chain, format),
     };
   }
   return {

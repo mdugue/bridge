@@ -5,8 +5,8 @@ import type { TileBlocks } from "./ledger-blocks";
 const tile = (png: number[], bc4: number[], eac: number[]): TileBlocks => ({
   png: { data: new Uint8Array(png), wire: 10, gpu: 4 },
   formats: {
-    bc4: { decoded: new Float64Array(bc4), wire: 12, gpu: 2 },
-    eac: { decoded: new Float64Array(eac), wire: 11, gpu: 2 },
+    bc4: { decoded: new Float64Array(bc4), wire: 12, gpu: 2, mipsMax: 3 },
+    eac: { decoded: new Float64Array(eac), wire: 11, gpu: 2, mipsMax: 1 },
   },
 });
 
@@ -21,13 +21,18 @@ test("a site's bytes add up and its error is over every texel", () => {
     wire: 24,
     gpu: 4,
     // (1 + 2) / 8 texels; the p99 of four texels is the third largest
-    error: { mean: 0.375, p99: 0, max: 2 },
+    error: { mean: 0.375, p99: 0, max: 2, mipsMax: 3 },
   });
-  expect(site.eac.error).toEqual({ mean: 0.063, p99: 0, max: 0.5 });
+  expect(site.eac.error).toEqual({
+    mean: 0.063,
+    p99: 0,
+    max: 0.5,
+    mipsMax: 1,
+  });
 });
 
 test("a site without a sky view weighs nothing and errs nowhere", () => {
   const none = siteBlocks([]);
   expect(none.tiles).toBe(0);
-  expect(none.bc4.error).toEqual({ mean: 0, p99: 0, max: 0 });
+  expect(none.bc4.error).toEqual({ mean: 0, p99: 0, max: 0, mipsMax: 0 });
 });

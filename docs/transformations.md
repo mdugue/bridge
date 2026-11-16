@@ -5663,7 +5663,7 @@ GPU**.
 - **DOP-lean caveat (recorded):** `= computed` standard DOP has building lean (tall roofs
   displaced over facades). Mitigated in the bake by eroding the roof footprint
   inward + a robust median; revisit with true-orthophotos if available.
-- **The sky view as GPU blocks (plan 091 phase 2, behind `?svf=blocks`):**
+- **The sky view as GPU blocks (plan 091 phase 2, built with `SVF_BLOCKS=1`, read behind `?svf=blocks`):**
   `svf_<t>.png` → `svf_<t>.bc4.gz` / `.eac.gz`, BC4 and EAC R11 with a
   box-filtered mip chain, encoded at build time (`scripts/block-encode.ts`,
   `lib/city/block-raster.ts`): half the GPU bytes (0.67 MiB a tile for

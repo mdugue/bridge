@@ -14,7 +14,7 @@
 import type { BlockFormat } from "./block-raster";
 
 export const BLOCK_RULE =
-  "The sky view (svf) of every tile that has one, as the PNG and as the build's GPU blocks with their mip chain (lib/city/block-raster.ts). wire: the published files (the blocks pre-gzipped). gpu: the texture's bytes, the PNG's as the viewer lays it out (one byte a texel, a third more for the GPU's mips), the blocks' as uploaded (half a byte a texel, the chain in the file). error: |decoded block − PNG byte| over level 0's texels in byte steps, by the formats' rules (scripts/block-encode.ts `decodeLevel`; a GPU may read up to 0.86 below for BC4, 0.12 for EAC: scripts/eval/block-raster-probe.ts) — the mean over the site's texels, the largest tile p99, the largest texel.";
+  "The sky view (svf) of every tile that has one, as the PNG the viewer reads and as the GPU blocks with their mip chain a build with SVF_BLOCKS=1 publishes beside it (lib/city/block-raster.ts), encoded here from the published PNG by the build's own encoder (scripts/block-encode.ts `publishedBlockFile`), so no flagged build is needed. Read with --blocks only (about two minutes), else the committed figures stand. wire: the PNG as published, the blocks pre-gzipped. gpu: the texture's bytes, the PNG's as the viewer lays it out (one byte a texel, a third more for the GPU's mips), the blocks' as uploaded (half a byte a texel, the chain in the file). error: |decoded block − PNG byte| in byte steps by the formats' nominal decode (scripts/block-encode.ts `decodeLevel`), not a GPU's read (SwiftShader reads up to 0.86 below it for BC4, 0.12 for EAC: scripts/eval/block-raster-probe.ts) — over level 0: the mean over the site's texels, the largest tile p99, the largest texel; mipsMax the largest texel of levels 1 on against the box-filtered chain.";
 
 /** One raster's figures in one form. */
 export interface BlockFigures {
@@ -26,6 +26,9 @@ export interface BlockFigures {
 export interface BlockError {
   max: number;
   mean: number;
+  /** the largest texel of the lower levels against the box-filtered chain
+   *  the build encodes them from (`mipChain`) */
+  mipsMax: number;
   p99: number;
 }
 
@@ -46,7 +49,10 @@ export interface BlockLedger {
  *  reads back from level 0, with the files' figures. */
 export interface TileBlocks {
   png: BlockFigures & { data: Uint8Array };
-  formats: Record<BlockFormat, BlockFigures & { decoded: Float64Array }>;
+  formats: Record<
+    BlockFormat,
+    BlockFigures & { decoded: Float64Array; mipsMax: number }
+  >;
 }
 
 const round3 = (v: number): number => Math.round(v * 1000) / 1000;
@@ -90,12 +96,14 @@ export function siteBlocks(tiles: readonly TileBlocks[]): SiteBlocks {
     let sum = 0;
     let p99 = 0;
     let max = 0;
+    let mipsMax = 0;
     let figures = none;
     for (const tile of tiles) {
       const e = tileError(tile.png.data, tile.formats[f].decoded);
       sum += e.sum;
       p99 = Math.max(p99, e.p99);
       max = Math.max(max, e.max);
+      mipsMax = Math.max(mipsMax, tile.formats[f].mipsMax);
       figures = add(figures, tile.formats[f]);
     }
     return {
@@ -105,6 +113,7 @@ export function siteBlocks(tiles: readonly TileBlocks[]): SiteBlocks {
         mean: round3(texels > 0 ? sum / texels : 0),
         p99: round3(p99),
         max: round3(max),
+        mipsMax: round3(mipsMax),
       },
     };
   };

@@ -5,17 +5,17 @@
   "wire": ".png, .webp and .gz at face value; .json and .geojson gzipped at level 6 by the pinned Bun's zlib; any other extension is an error, never a guess. The text figures are this Bun's, not what a host sends: zlib 1.3 gives 0.6–2.2 % other bytes for the same level, and Vercel sends text as brotli. They are a stand-in kept constant so that the figures compare over time, exact once plan 088 stores files in their transport encoding. The committed figures are those of linux-x64 with the pinned Bun: regenerate the ledger there or in a cloud session. `published.server` is bytes on disk: those files never travel.",
   "tiles": 15,
   "published": {
-    "files": 730,
+    "files": 700,
     "boot": {
-      "bytes": 40630,
+      "bytes": 39818,
       "files": 3
     },
     "tiles": {
-      "bytes": 211870200,
-      "files": 671
+      "bytes": 193620659,
+      "files": 641
     },
     "site": {
-      "bytes": 3514790,
+      "bytes": 3514754,
       "files": 39
     },
     "server": {
@@ -30,7 +30,7 @@
       },
       "manifest": {
         "class": "boot",
-        "bytes": 9639,
+        "bytes": 9200,
         "files": 1
       },
       "minimap": {
@@ -75,12 +75,12 @@
       },
       "tileset": {
         "class": "boot",
-        "bytes": 9727,
+        "bytes": 9354,
         "files": 1
       },
       "tileset-spawn": {
         "class": "site",
-        "bytes": 2080,
+        "bytes": 2044,
         "files": 1
       },
       "trams": {
@@ -251,43 +251,43 @@
     "all": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 15066683,
-        "files": 45
+        "bytes": 13786870,
+        "files": 43
       },
       "median": {
-        "tile": "33412_5656_2_sn",
-        "bytes": 15066683,
-        "files": 45
+        "tile": "33410_5658_2_sn",
+        "bytes": 13766237,
+        "files": 43
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 18697804,
-        "files": 45
+        "bytes": 17452843,
+        "files": 43
       },
       "site": {
-        "bytes": 211870200,
-        "files": 671
+        "bytes": 193620659,
+        "files": 641
       }
     },
     "unvisited": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 1432872,
-        "files": 3
+        "bytes": 153059,
+        "files": 1
       },
       "median": {
-        "tile": "33412_5656_2_sn",
-        "bytes": 1432872,
-        "files": 3
+        "tile": "33414_5656_2_sn",
+        "bytes": 133590,
+        "files": 1
       },
       "largest": {
         "tile": "33414_5654_2_sn",
-        "bytes": 1561660,
-        "files": 3
+        "bytes": 207054,
+        "files": 1
       },
       "site": {
-        "bytes": 20211133,
-        "files": 45
+        "bytes": 1961592,
+        "files": 15
       }
     }
   },
@@ -452,10 +452,8 @@
     "coarseDressingKinds": 3,
     "askKinds": 1,
     "publishedExtensions": [
-      ".bc4.gz",
       ".bin.gz",
       ".crw.gz",
-      ".eac.gz",
       ".fpr.gz",
       ".geojson",
       ".glb.gz",
@@ -4298,7 +4296,7 @@
     }
   },
   "blocks": {
-    "rule": "The sky view (svf) of every tile that has one, as the PNG and as the build's GPU blocks with their mip chain (lib/city/block-raster.ts). wire: the published files (the blocks pre-gzipped). gpu: the texture's bytes, the PNG's as the viewer lays it out (one byte a texel, a third more for the GPU's mips), the blocks' as uploaded (half a byte a texel, the chain in the file). error: |decoded block − PNG byte| over level 0's texels in byte steps, by the formats' rules (scripts/block-encode.ts `decodeLevel`; a GPU may read up to 0.86 below for BC4, 0.12 for EAC: scripts/eval/block-raster-probe.ts) — the mean over the site's texels, the largest tile p99, the largest texel.",
+    "rule": "The sky view (svf) of every tile that has one, as the PNG the viewer reads and as the GPU blocks with their mip chain a build with SVF_BLOCKS=1 publishes beside it (lib/city/block-raster.ts), encoded here from the published PNG by the build's own encoder (scripts/block-encode.ts `publishedBlockFile`), so no flagged build is needed. Read with --blocks only (about two minutes), else the committed figures stand. wire: the PNG as published, the blocks pre-gzipped. gpu: the texture's bytes, the PNG's as the viewer lays it out (one byte a texel, a third more for the GPU's mips), the blocks' as uploaded (half a byte a texel, the chain in the file). error: |decoded block − PNG byte| in byte steps by the formats' nominal decode (scripts/block-encode.ts `decodeLevel`), not a GPU's read (SwiftShader reads up to 0.86 below it for BC4, 0.12 for EAC: scripts/eval/block-raster-probe.ts) — over level 0: the mean over the site's texels, the largest tile p99, the largest texel; mipsMax the largest texel of levels 1 on against the box-filtered chain.",
     "sites": {
       "dresden": {
         "tiles": 15,
@@ -4312,7 +4310,8 @@
           "error": {
             "mean": 0.738,
             "p99": 4.571,
-            "max": 14.6
+            "max": 14.6,
+            "mipsMax": 15.714
           }
         },
         "eac": {
@@ -4321,7 +4320,8 @@
           "error": {
             "mean": 0.77,
             "p99": 4.89,
-            "max": 16.919
+            "max": 16.919,
+            "mipsMax": 21.985
           }
         }
       },
@@ -4337,7 +4337,8 @@
           "error": {
             "mean": 0.607,
             "p99": 4.857,
-            "max": 12.857
+            "max": 12.857,
+            "mipsMax": 14.6
           }
         },
         "eac": {
@@ -4346,7 +4347,8 @@
           "error": {
             "mean": 0.642,
             "p99": 4.931,
-            "max": 17.066
+            "max": 17.066,
+            "mipsMax": 16.879
           }
         }
       },
@@ -4362,7 +4364,8 @@
           "error": {
             "mean": 0.576,
             "p99": 4,
-            "max": 13.6
+            "max": 13.6,
+            "mipsMax": 16
           }
         },
         "eac": {
@@ -4371,7 +4374,8 @@
           "error": {
             "mean": 0.619,
             "p99": 3.974,
-            "max": 14.03
+            "max": 14.03,
+            "mipsMax": 18.933
           }
         }
       },
@@ -4387,7 +4391,8 @@
           "error": {
             "mean": 0.801,
             "p99": 4.143,
-            "max": 12
+            "max": 12,
+            "mipsMax": 15
           }
         },
         "eac": {
@@ -4396,7 +4401,8 @@
           "error": {
             "mean": 0.834,
             "p99": 4.139,
-            "max": 15.821
+            "max": 15.821,
+            "mipsMax": 17.909
           }
         }
       },
@@ -4412,7 +4418,8 @@
           "error": {
             "mean": 0.905,
             "p99": 4.714,
-            "max": 13.143
+            "max": 13.143,
+            "mipsMax": 14.6
           }
         },
         "eac": {
@@ -4421,7 +4428,8 @@
           "error": {
             "mean": 0.922,
             "p99": 4.9,
-            "max": 15.782
+            "max": 15.782,
+            "mipsMax": 16.755
           }
         }
       },
@@ -4437,7 +4445,8 @@
           "error": {
             "mean": 0.762,
             "p99": 4,
-            "max": 11.286
+            "max": 11.286,
+            "mipsMax": 14
           }
         },
         "eac": {
@@ -4446,7 +4455,8 @@
           "error": {
             "mean": 0.798,
             "p99": 4.057,
-            "max": 12.078
+            "max": 12.078,
+            "mipsMax": 19.013
           }
         }
       },
@@ -4462,7 +4472,8 @@
           "error": {
             "mean": 0.864,
             "p99": 4.857,
-            "max": 13.4
+            "max": 13.4,
+            "mipsMax": 14
           }
         },
         "eac": {
@@ -4471,7 +4482,8 @@
           "error": {
             "mean": 0.878,
             "p99": 4.934,
-            "max": 14.806
+            "max": 14.806,
+            "mipsMax": 14.968
           }
         }
       }
@@ -5552,10 +5564,10 @@
     "firstLoad": {
       "note": "Every /_next/static/*.js the page or the workers ground, niches, scene fetched themselves (each one's resource timing) at /dresden?scene=lite (a NEXT_PUBLIC_POC_DEBUG=1 production build), cut at: ready, those workers running, then 5 s without a new script; a second read 5 s later must equal it. The BVH worker's own scripts are left out: it starts only if the spawn's buildings have no BVH yet. Each raw body gzipped at level 9 by the pinned Bun, exact. workerOnly: the files those workers fetched and the page did not — not the scene's JavaScript, which the page shares.",
       "files": 43,
-      "gzip": 1105251,
+      "gzip": 1105291,
       "workerOnly": {
         "files": 9,
-        "gzip": 35837
+        "gzip": 35835
       }
     },
     "phoneLiteSpawnCache": {
@@ -5576,38 +5588,38 @@
     "desktop": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 2.4,
-        "maxMs": 2.4
+        "totalMs": 4.3,
+        "maxMs": 4.3
       },
       "boot:frame": {
         "count": 9,
-        "totalMs": 529.8,
-        "maxMs": 451
+        "totalMs": 568.9,
+        "maxMs": 418
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 605.6,
-        "maxMs": 605.6
+        "totalMs": 604.6,
+        "maxMs": 604.6
       },
       "boot:light-wait": {
         "count": 1,
-        "totalMs": 1942,
-        "maxMs": 1942
+        "totalMs": 2075.1,
+        "maxMs": 2075.1
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 1535.8,
-        "maxMs": 1535.8
+        "totalMs": 1694,
+        "maxMs": 1694
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 464.7,
-        "maxMs": 464.7
+        "totalMs": 375.3,
+        "maxMs": 375.3
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 281.6,
-        "maxMs": 281.6
+        "totalMs": 403.8,
+        "maxMs": 403.8
       },
       "boot:scene-compile": {
         "count": 1,
@@ -5616,85 +5628,13 @@
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 103.6,
-        "maxMs": 103.6
+        "totalMs": 124.9,
+        "maxMs": 124.9
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 4862.8,
-        "maxMs": 4862.8
-      },
-      "boot:tileset": {
-        "count": 1,
-        "totalMs": 0,
-        "maxMs": 0
-      },
-      "boot:veil-to-loaded": {
-        "count": 1,
-        "totalMs": 4212,
-        "maxMs": 4212
-      },
-      "dressing:build": {
-        "count": 2,
-        "totalMs": 942.3,
-        "maxMs": 732.8
-      },
-      "tile:compile": {
-        "count": 4,
-        "totalMs": 12003.5,
-        "maxMs": 3002.7
-      }
-    },
-    "phone": {
-      "boot:first-shadow-frame": {
-        "count": 1,
-        "totalMs": 73.2,
-        "maxMs": 73.2
-      },
-      "boot:frame": {
-        "count": 12,
-        "totalMs": 517.7,
-        "maxMs": 413.9
-      },
-      "boot:light-to-veil": {
-        "count": 1,
-        "totalMs": 607.3,
-        "maxMs": 607.3
-      },
-      "boot:light-wait": {
-        "count": 1,
-        "totalMs": 3000.3,
-        "maxMs": 3000.3
-      },
-      "boot:page-to-viewer": {
-        "count": 1,
-        "totalMs": 1510.9,
-        "maxMs": 1510.9
-      },
-      "boot:place": {
-        "count": 1,
-        "totalMs": 421.6,
-        "maxMs": 421.6
-      },
-      "boot:renderer-init": {
-        "count": 1,
-        "totalMs": 126.1,
-        "maxMs": 126.1
-      },
-      "boot:scene-compile": {
-        "count": 1,
-        "totalMs": 2375.1,
-        "maxMs": 2375.1
-      },
-      "boot:setup": {
-        "count": 1,
-        "totalMs": 66.6,
-        "maxMs": 66.6
-      },
-      "boot:spawn-wait": {
-        "count": 1,
-        "totalMs": 4262.8,
-        "maxMs": 4262.8
+        "totalMs": 4866.9,
+        "maxMs": 4866.9
       },
       "boot:tileset": {
         "count": 1,
@@ -5703,18 +5643,90 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4270.4,
-        "maxMs": 4270.4
+        "totalMs": 4307.6,
+        "maxMs": 4307.6
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 996.2,
-        "maxMs": 706.5
+        "totalMs": 1040.5,
+        "maxMs": 809.8
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 9060.6,
-        "maxMs": 3004.5
+        "totalMs": 12001.2,
+        "maxMs": 3000.5
+      }
+    },
+    "phone": {
+      "boot:first-shadow-frame": {
+        "count": 1,
+        "totalMs": 110.5,
+        "maxMs": 110.5
+      },
+      "boot:frame": {
+        "count": 12,
+        "totalMs": 556.9,
+        "maxMs": 416.9
+      },
+      "boot:light-to-veil": {
+        "count": 1,
+        "totalMs": 605.1,
+        "maxMs": 605.1
+      },
+      "boot:light-wait": {
+        "count": 1,
+        "totalMs": 3000.4,
+        "maxMs": 3000.4
+      },
+      "boot:page-to-viewer": {
+        "count": 1,
+        "totalMs": 1567.6,
+        "maxMs": 1567.6
+      },
+      "boot:place": {
+        "count": 1,
+        "totalMs": 330.1,
+        "maxMs": 330.1
+      },
+      "boot:renderer-init": {
+        "count": 1,
+        "totalMs": 126.3,
+        "maxMs": 126.3
+      },
+      "boot:scene-compile": {
+        "count": 1,
+        "totalMs": 3000.3,
+        "maxMs": 3000.3
+      },
+      "boot:setup": {
+        "count": 1,
+        "totalMs": 93.9,
+        "maxMs": 93.9
+      },
+      "boot:spawn-wait": {
+        "count": 1,
+        "totalMs": 4082.8,
+        "maxMs": 4082.8
+      },
+      "boot:tileset": {
+        "count": 1,
+        "totalMs": 0,
+        "maxMs": 0
+      },
+      "boot:veil-to-loaded": {
+        "count": 1,
+        "totalMs": 4241.4,
+        "maxMs": 4241.4
+      },
+      "dressing:build": {
+        "count": 2,
+        "totalMs": 946.9,
+        "maxMs": 670.6
+      },
+      "tile:compile": {
+        "count": 4,
+        "totalMs": 9027.5,
+        "maxMs": 3000.4
       }
     },
     "phoneHeld": {
@@ -5745,6 +5757,11 @@
         "worker": false
       },
       {
+        "url": "/_next/static/chunks/014ld27wfzlnv.js",
+        "gzip": 417,
+        "worker": false
+      },
+      {
         "url": "/_next/static/chunks/02_nblhr_bcei.js",
         "gzip": 12125,
         "worker": false
@@ -5770,13 +5787,13 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/0wj0noag-9_fs.js",
-        "gzip": 3622,
-        "worker": false
+        "url": "/_next/static/chunks/0sd3lipngnaja.js",
+        "gzip": 771,
+        "worker": true
       },
       {
-        "url": "/_next/static/chunks/0xsfqi0mra3s-.js",
-        "gzip": 392,
+        "url": "/_next/static/chunks/0wj0noag-9_fs.js",
+        "gzip": 3622,
         "worker": false
       },
       {
@@ -5793,11 +5810,6 @@
         "url": "/_next/static/chunks/176ppimva53vx.js",
         "gzip": 9093,
         "worker": true
-      },
-      {
-        "url": "/_next/static/chunks/1epj-bw2b_031.js",
-        "gzip": 291756,
-        "worker": false
       },
       {
         "url": "/_next/static/chunks/1o23kkyw8hhly.js",
@@ -5825,18 +5837,18 @@
         "worker": true
       },
       {
+        "url": "/_next/static/chunks/1ytvmvzpxeno7.js",
+        "gzip": 395,
+        "worker": false
+      },
+      {
         "url": "/_next/static/chunks/26_jj1pp9j5ek.js",
         "gzip": 10253,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/26ttnv48r7jq2.js",
-        "gzip": 771,
-        "worker": true
-      },
-      {
-        "url": "/_next/static/chunks/2cjt5_7kziiae.js",
-        "gzip": 8404,
+        "url": "/_next/static/chunks/2cwrqivijkq_j.js",
+        "gzip": 291793,
         "worker": false
       },
       {
@@ -5870,6 +5882,11 @@
         "worker": false
       },
       {
+        "url": "/_next/static/chunks/2y-gtjpy0ao5x.js",
+        "gzip": 8409,
+        "worker": false
+      },
+      {
         "url": "/_next/static/chunks/31903l951_hv_.js",
         "gzip": 8244,
         "worker": false
@@ -5883,6 +5900,11 @@
         "url": "/_next/static/chunks/3cvxyyxz9soa1.js",
         "gzip": 2856,
         "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/3i3jx3ick_ak4.js",
+        "gzip": 134057,
+        "worker": false
       },
       {
         "url": "/_next/static/chunks/3i4zt380a34o9.js",
@@ -5910,16 +5932,6 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/3uaufx4hf_rbs.js",
-        "gzip": 134060,
-        "worker": false
-      },
-      {
-        "url": "/_next/static/chunks/3vw6q3_7nesyi.js",
-        "gzip": 417,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/3vwmuq19siej2.js",
         "gzip": 5525,
         "worker": true
@@ -5935,13 +5947,13 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/turbopack-1e5f49zawb_bt.js",
-        "gzip": 176,
+        "url": "/_next/static/chunks/turbopack-0fstx6ok5g6eq.js",
+        "gzip": 191,
         "worker": true
       },
       {
-        "url": "/_next/static/chunks/turbopack-2p_4w7xxibtrb.js",
-        "gzip": 193,
+        "url": "/_next/static/chunks/turbopack-1e5f49zawb_bt.js",
+        "gzip": 176,
         "worker": true
       },
       {

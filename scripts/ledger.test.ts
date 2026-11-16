@@ -603,7 +603,7 @@ test("an argument the script does not know is refused, nothing written", async (
     expect(report).toContain("unknown argument");
     expect(existsSync(nodePath.join(root, LEDGER_PATH))).toBe(false);
   }
-  expect([...FLAGS]).toEqual(["--check", "--browser"]);
+  expect([...FLAGS]).toEqual(["--check", "--browser", "--blocks"]);
   // the script itself, as CI starts it: the code is the process's
   const script = Bun.spawnSync(["bun", "scripts/ledger.ts", "--chek"], {
     cwd: nodePath.join(import.meta.dir, ".."),
@@ -948,4 +948,22 @@ test("a site that is not built says so", () => {
   // nor one whose manifest names no tileset
   writeFileSync(nodePath.join(data, "manifest.json"), '{"files":{}}');
   expect(() => measure(SITE, root)).toThrow(/names no tileset\.json/u);
+});
+
+test("the blocks section is read anew only with --blocks", async () => {
+  const { root } = fixture();
+  const wrote = await runOn(root, []);
+  expect(wrote.code).toBe(0);
+  const file = nodePath.join(root, LEDGER_PATH);
+  const ledger = JSON.parse(ledgerOf(root)) as Ledger;
+  // a committed figure no encode of this build gives
+  ledger.blocks.rule = "an older rule";
+  writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`);
+  // without --blocks the committed section stands and holds
+  const held = await runOn(root, ["--check"]);
+  expect(held.code).toBe(0);
+  // with it the section is read and the difference shows
+  const read = await runOn(root, ["--check", "--blocks"]);
+  expect(read.code).toBe(1);
+  expect(read.report).toContain("differs: blocks.rule");
 });

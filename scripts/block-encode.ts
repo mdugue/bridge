@@ -383,6 +383,20 @@ export function encodeBlockRaster(
   });
 }
 
+/** The file the build publishes for `raster` in `format`: the block
+ *  raster pre-gzipped as the glTF is (scripts/prepare/context.ts `gz`:
+ *  libdeflate, level 9), so the ledger can weigh what a flagged build
+ *  publishes without one (scripts/ledger-blocks.ts). */
+export function publishedBlockFile(
+  raster: Grey,
+  format: BlockFormat
+): Uint8Array {
+  return Bun.gzipSync(
+    encodeBlockRaster(raster, format) as Uint8Array<ArrayBuffer>,
+    { level: 9, library: "libdeflate" }
+  );
+}
+
 // --- decoders (the tests' and the trial's) -----------------------------------
 
 /** What the GPU reads from one level, as a fraction of 255 (a float per

@@ -280,12 +280,15 @@ export const RASTER_KINDS: Readonly<Record<RasterKind, RasterRow>> = {
 export interface RasterFiles {
   raster: string;
   table?: string;
+  /** the file read where `raster`, a block raster, fails to load or the
+   *  GPU refuses it: the row's own PNG (plan 091 phase 2's trial) */
+  fallback?: string;
 }
 
 /** The block file of `raster` in `blocks`' format, where the row has
  *  blocks, the extras name them and `raster` is the row's own file (not a
  *  twin). */
-function blockFileOf(
+export function blockFileOf(
   row: RasterRow,
   named: Partial<Record<TerrainRasterKey, string>>,
   raster: string,
@@ -334,7 +337,7 @@ export function rasterFiles(
   }
   const blockFile = blockFileOf(row, named, raster, blocks);
   if (blockFile) {
-    return { raster: blockFile };
+    return { raster: blockFile, fallback: raster };
   }
   if (!row.table) {
     return { raster };
@@ -361,20 +364,26 @@ interface KindHooks<T> {
 /** A row and nothing else: one raster, its own texture (a block raster's
  *  where `rasterFiles` picked one). */
 const plainHooks = <T extends Texture>(): KindHooks<T> => ({
-  load: async (url, kind, { rank, renderer, signal }) => {
+  load: async (key, kind, { rank, renderer, signal }) => {
     const { look } = RASTER_KINDS[kind];
-    const loaded = isBlockRasterUrl(url)
+    // a block raster's key names the PNG after it: read where the blocks
+    // are absent, malformed or refused (`rasterFiles`' `fallback`)
+    const [url = "", fallback] = key.split(PAIR_JOIN);
+    const blocks = isBlockRasterUrl(url)
       ? await loadBlockRaster(url, {
           anisotropy: look.anisotropy,
           rank,
           renderer,
           signal,
         })
-      : await loadDataRaster(url, look, {
-          rank,
-          renderer,
-          signal,
-        });
+      : null;
+    const loaded =
+      blocks ??
+      (await loadDataRaster(fallback ?? url, look, {
+        rank,
+        renderer,
+        signal,
+      }));
     // reason: the row's look decides the class (`layers`: an array texture)
     return (loaded?.texture as T | undefined) ?? null;
   },
@@ -614,8 +623,10 @@ export function createTileRasters(opts: {
           if (!files || released || cleared) {
             return null;
           }
-          const key = files.table
-            ? `${url(files.raster)}${PAIR_JOIN}${url(files.table)}`
+          // (a pair, or a block raster and the PNG it falls back to)
+          const second = files.table ?? files.fallback;
+          const key = second
+            ? `${url(files.raster)}${PAIR_JOIN}${url(second)}`
             : url(files.raster);
           const share: SharedRasters<RasterOf[K]> = shares[kind];
           // the reference is taken here, in the caller's task; an abort lets

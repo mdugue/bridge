@@ -284,6 +284,18 @@ export async function measureRasters(root = ROOT): Promise<Ledger["rasters"]> {
   );
 }
 
+/** The `blocks` section: read anew with `--blocks` (the encodes take
+ *  minutes) or where none is committed, else the committed one, which
+ *  `--check` then compares with itself. */
+async function blocksPart(
+  read: boolean,
+  committed: unknown,
+  root: string
+): Promise<Ledger["blocks"]> {
+  const blocks = (committed as Partial<Ledger> | null)?.blocks;
+  return read || !blocks ? await measureBlocks(root) : blocks;
+}
+
 /** The `blocks` section: every site a build serves (plan 091 phase 2). */
 export async function measureBlocks(root = ROOT): Promise<Ledger["blocks"]> {
   return await blockLedger(readySites(root), (site) =>
@@ -306,7 +318,7 @@ function formatAsCommitted(file: string): void {
 
 /** The arguments the script takes. A new one (a section's switch) joins
  *  here; anything else is refused. */
-export const FLAGS = ["--check", "--browser"] as const;
+export const FLAGS = ["--check", "--browser", "--blocks"] as const;
 
 export interface RunOptions {
   /** where the report goes */
@@ -377,7 +389,7 @@ export async function run(
   const fresh = {
     ...measure(site, root),
     rasters: await measureRasters(root),
-    blocks: await measureBlocks(root),
+    blocks: await blocksPart(argv.includes("--blocks"), committed, root),
     dressing: measureDressing(
       site,
       root,
