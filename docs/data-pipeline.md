@@ -182,8 +182,13 @@ It also fails when pyright did not read every module of `bake/` or a
 setting beyond the known ones relaxes it, and in CI when the baseline
 holds what the base branch's does not, unless the PR's description says
 why in a line `Typecheck-baseline-raise: …`.
-Neither the checker nor the script re-keys a bake: both live outside
-`bake/` and the dev group is not in `locked_runtime`. Fetch and bakes
+Where a library leaves the bakes' calls untyped, `pipeline/typings/`
+holds partial stub packages for pyright alone — scipy's `ndimage` and
+`fft`, rasterio's package and `windows`, pyogrio's package, laspy's point
+records — each typed from the installed library's source and checked
+against it when that library is bumped (`typings/README.md`).
+Neither the checker, the script nor the stubs re-key a bake: all live
+outside `bake/` and the dev group is not in `locked_runtime`. Fetch and bakes
 need the network and the raw downloads and run on the maintainer's
 machine.
 
@@ -1121,6 +1126,41 @@ offers to try again — it no longer falls back to
 `next.config.ts` serves `/data/*` as `public, max-age=31536000, immutable`
 and each `/data/<site>/manifest.json` and `/data/sites.json` as `no-cache`
 ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)).
+
+**Comparing two published sites.** While a change keeps the bakes'
+bytes, "the build publishes 0 new files" is its proof. Where it gives
+them up (plan 092 moves the hand-over format and cuts tiles at
+publishing), `bun scripts/compare-tilesets.ts <site-a> <site-b>` compares
+two sites by content: a `public/data/<site>` folder (its manifest and
+every file beside it; the manifest alone says which file a logical name
+is, so a stray file never stands in for one) or one manifest (what it
+names); files are matched by logical name. Everything is compared exactly, and a file that cannot
+be read as its kind is an error (exit 2) even where both sides hold the
+same bytes. A glb's storage is content — every accessor's, whoever
+reads it (a primitive, an animation, an instancing extension): its
+component type,
+normalisation, count, `min` and `max`, the node transforms — and so are
+its stored integers, morph targets and nodes outside any scene; another
+quantisation is a difference. A tolerance is the caller's, never the
+file's: `--within <m>` (and `--within-unit <d>` for normals and
+tangents) compares POSITION, NORMAL and TANGENT placed in the world,
+checks the winding, a tangent's handedness and a normal's length (all
+exact or within the same tolerances), and prints the largest deviation
+found, which the
+PR that accepts it names. The order of a JSON object's keys is free; the
+order of every array is content, a GeoJSON's features included
+(`treefacts_<tile>.json` is a column over the trees' features, a
+markings or sports raster names its table's `1 + row`); a pure
+reordering is reported as such. Rasters compare by decoded value
+(`png-raster.ts`, sharp for WebP; a PNG of another bit depth than 8 is
+refused); `.pts`, `.crw`, `.fpr` and the plate through their readers in
+`lib/city/`; a JSON string naming a served file reads as that file's
+logical name, so a tileset that names a changed file is not itself
+named. A kind without a reader compares as bytes — a new kind of
+published file gets one there (`scripts/compare-tilesets.ts`, with
+`compare-glb.ts` and `compare-json.ts`). What a change derives follows
+it: a tree moved 1 m changes the coarse crowns too when its new place
+falls into the share the coarse level draws.
 
 A `required` side file that is missing fails the build
 (`prepare-data: missing source file data/<site>/dlm/… — run bun run fetch <site> and bun run bake <site>`) rather than becoming a
