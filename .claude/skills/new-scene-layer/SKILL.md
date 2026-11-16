@@ -26,7 +26,8 @@ Deep reference: the `city-walker` skill, "Node materials" and "Tiles".
    group; heights from the site's ground (`lib/city/ground.ts`).
 3. **Material:** a node material; a `sceneMaterial` when it has no per-tile
    data. Fixed strengths are named constant nodes; anything that moves a
-   shared uniform. Mind the eight vertex buffers and sixteen varyings.
+   shared uniform. Mind the eight vertex buffers and sixteen varyings
+   (the e2e "limits" test counts them for every build in the lite scene).
 4. **Instancing:** `Instances`, never `InstancedMesh`; chunk into cells so
    off-screen chunks cull; after writing matrices set `needsUpdate` and
    `computeBoundingSphere()`.

@@ -170,6 +170,8 @@ import {
   pocVeil,
   tickPocFrame,
 } from "./poc-scene";
+import { pipelineBudget } from "./pipeline-budget";
+import type { PipelineBudget, PipelineBudgetQuery } from "./pipeline-budget";
 import { createPostStack } from "./post-stack";
 import type { FocusInfo, PostStack } from "./post-stack";
 import { createNameplate } from "./nameplate-layer";
@@ -751,6 +753,12 @@ export interface SceneApp {
    * are a leak.
    */
   getGpuDebug: () => GpuDebug;
+  /**
+   * A row for every build the scene draws with, and what each asks of
+   * WebGPU's per-pipeline limits (pipeline-budget.ts, plan 094): the e2e
+   * "limits" test's read. No rows in a production build.
+   */
+  getPipelineBudget: (query?: PipelineBudgetQuery) => Promise<PipelineBudget>;
   /** Live DoF focus state + last crosshair raycast hit (QA/diagnostics). */
   getFocusDebug: () => FocusInfo & {
     hitDist: number | null;
@@ -4428,6 +4436,8 @@ async function bootApp(
       gpuBytes: gpuBytesWith(estimateGeometryBytes(scene)),
       memory: { ...renderer.info.memory },
     }),
+    getPipelineBudget: async (query) =>
+      await pipelineBudget(renderer, postStack, scene, activeCamera(), query),
     getGpuDebug: () => {
       const cache = stream.tiles.lruCache as unknown as {
         cachedBytes: number;
