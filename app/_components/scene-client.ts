@@ -110,6 +110,7 @@ export const ASKED = [
   "disposeForReload",
   "getFocusDebug",
   "getGpuDebug",
+  "getPipelineBudget",
   "getRenderInfo",
   "getTimings",
   "inquireAt",

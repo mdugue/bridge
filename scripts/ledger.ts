@@ -12,8 +12,12 @@
  *   … --browser                     # with what a browser reads
  *                                   # (scripts/ledger-browser.ts)
  *
- * It reads public/data/<site>/, so a build (or `bun scripts/prepare-sites.ts
- * dresden`) comes first; `--browser` the NEXT_PUBLIC_POC_DEBUG=1 build too.
+ * It reads public/data/<site>/, so a build (or `bun scripts/prepare-sites.ts`)
+ * comes first: the reference site for the bytes and counters, and every site
+ * a build serves for the `rasters` section (plan 091 phase 0,
+ * scripts/ledger-rasters.ts). A write formats the file with oxfmt, as it is
+ * committed; `--check` compares values, not layout.
+ * `--browser` reads the NEXT_PUBLIC_POC_DEBUG=1 build too.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { cpus } from "node:os";
@@ -54,6 +58,7 @@ import type { ContentExtras } from "../lib/city/tileset";
 import { TILESET_FILE } from "../lib/city/tileset";
 import { REFERENCE_SITE } from "../sites";
 import { browserSections, timingReport } from "./ledger-browser";
+import { rasterLedger, readySites } from "./ledger-rasters";
 
 const ROOT = nodePath.join(import.meta.dir, "..");
 export const LEDGER_FILE = nodePath.join(ROOT, "qa/ledger.json");
@@ -166,8 +171,9 @@ function cpuCount(): { count: number; model: string } {
   return { count: all.length, model: all[0]?.model.trim() ?? "unknown CPU" };
 }
 
-/** The ledger's figures for `site`, from its published files. */
-export function measure(site: string): Omit<Ledger, "dated"> {
+/** The ledger's figures for `site`, from its published files (the
+ *  rasters are every site's, `measureRasters`). */
+export function measure(site: string): Omit<Ledger, "dated" | "rasters"> {
   const published = publishedFiles(site);
   const wireOf = new Map<string, number>();
   const wire = (served: string) => {
@@ -197,6 +203,29 @@ export function measure(site: string): Omit<Ledger, "dated"> {
   };
 }
 
+/** Every built site's rasters (plan 091 phase 0): the sites a build
+ *  serves, each of which must be built. */
+export async function measureRasters(): Promise<Ledger["rasters"]> {
+  return await rasterLedger(
+    readySites(),
+    publishedFiles,
+    sources("app", isSource)
+  );
+}
+
+/** Formats a written file with the repository's formatter (oxfmt, as
+ *  `bun run fix` and the lint's `--check` do), so a fresh run writes the
+ *  committed file byte for byte. */
+function formatAsCommitted(file: string): void {
+  const run = Bun.spawnSync(
+    [nodePath.join(ROOT, "node_modules/.bin/oxfmt"), file],
+    { cwd: ROOT, stdout: "ignore", stderr: "pipe" }
+  );
+  if (run.exitCode !== 0) {
+    throw new Error(`ledger: oxfmt failed: ${run.stderr.toString()}`);
+  }
+}
+
 /** The browser's sections: read now with `--browser`, else the committed
  *  ones, which `--check` then does not compare. */
 function browserPart(
@@ -212,12 +241,13 @@ function browserPart(
   };
 }
 
-function main(check: boolean, browser: boolean): void {
+async function main(check: boolean, browser: boolean): Promise<void> {
   const committed: unknown = existsSync(LEDGER_FILE)
     ? JSON.parse(readFileSync(LEDGER_FILE, "utf-8"))
     : null;
   const fresh = {
     ...measure(REFERENCE_SITE),
+    rasters: await measureRasters(),
     ...browserPart(browser, committed as Partial<Ledger> | null),
   };
   if (check) {
@@ -252,9 +282,13 @@ function main(check: boolean, browser: boolean): void {
   const today = new Date().toISOString().slice(0, 10);
   const ledger = datedLedger(fresh, committed, today);
   writeFileSync(LEDGER_FILE, `${JSON.stringify(ledger, null, 2)}\n`);
+  formatAsCommitted(LEDGER_FILE);
   process.stdout.write(`qa/ledger.json (${ledger.dated})\n`);
 }
 
 if (import.meta.main) {
-  main(process.argv.includes("--check"), process.argv.includes("--browser"));
+  await main(
+    process.argv.includes("--check"),
+    process.argv.includes("--browser")
+  );
 }

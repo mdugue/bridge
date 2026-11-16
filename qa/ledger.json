@@ -311,22 +311,3829 @@
       "files": 27,
       "lines": 18770
     },
-    "bootAppLines": 3095,
+    "bootAppLines": 3097,
     "bakeSeamModules": {
       "matching": 52,
       "of": 77
     },
     "upstreamWorkarounds": 8
   },
+  "rasters": {
+    "rule": "Per site, from its published files: each raster and table artifact's files, wire bytes (as `wire`) and decoded texture shapes; each kind's GPU bytes on the spawn tile and the largest over the tiles, per tier and level — the fine level near the camera (`fine`) and beyond the ground detail's reach (`fineFar`, the far twins), the coarse level — by the viewer's `rasterFiles` and `textureBytes` (the float tables are not weighed, as in the viewer); the fine level by sort at both reaches, the colour splat painted from the classes apart; the share of texels the sparse rasters carry anything in, and of their bounding box, against the full tile raster, over the tiles whose fine level holds the raster on a desktop; the distinct ground programs (`splatVariant` keys) per tier. Gated: every figure is a function of the tree.",
+    "sorts": {
+      "class": "exact",
+      "surface": "exact",
+      "sport": "exact",
+      "markings": "exact",
+      "edges": "measured",
+      "colonies": "measured",
+      "ndvi": "soft",
+      "svf": "soft",
+      "horizon": "soft"
+    },
+    "cpuDecodes": [
+      {
+        "module": "app/_components/vegetation-layer.ts",
+        "kind": "ndvi",
+        "use": "the crowns' greenness, sampled once a fine level's dressing builds (loadNdviSampler; the same file is uploaded for the ground too)"
+      }
+    ],
+    "sites": {
+      "dresden": {
+        "tiles": 15,
+        "artifacts": {
+          "cultivatedLow": {
+            "files": 13,
+            "wire": 518487,
+            "shapes": [
+              "1016×806×2",
+              "1024×921×2",
+              "1024×980×2",
+              "191×133×2",
+              "21×22×2",
+              "410×457×2",
+              "466×117×2",
+              "683×192×2",
+              "745×1024×2",
+              "849×1003×2",
+              "871×304×2",
+              "897×767×2",
+              "959×833×2"
+            ]
+          },
+          "cultivatedRaster": {
+            "files": 13,
+            "wire": 1123809,
+            "shapes": [
+              "1366×384×2",
+              "1490×2048×2",
+              "1698×2006×2",
+              "1742×608×2",
+              "1794×1534×2",
+              "1918×1666×2",
+              "2032×1612×2",
+              "2048×1842×2",
+              "2048×1960×2",
+              "382×266×2",
+              "42×44×2",
+              "820×914×2",
+              "932×234×2"
+            ]
+          },
+          "edges": {
+            "files": 15,
+            "wire": 20643621,
+            "shapes": ["2048×2048×2"]
+          },
+          "edgesFar": {
+            "files": 15,
+            "wire": 8953519,
+            "shapes": ["1024×1024×2"]
+          },
+          "horizon": {
+            "files": 15,
+            "wire": 16825429,
+            "shapes": ["256×256×4×8"]
+          },
+          "landcover": {
+            "files": 15,
+            "wire": 3389077,
+            "shapes": ["4096×4096×1"]
+          },
+          "landcoverCoarse": {
+            "files": 15,
+            "wire": 549152,
+            "shapes": ["1024×1024×1"]
+          },
+          "landcoverLow": {
+            "files": 15,
+            "wire": 1265347,
+            "shapes": ["2048×2048×1"]
+          },
+          "markings": {
+            "files": 15,
+            "wire": 2362535,
+            "shapes": ["2048×2048×4"]
+          },
+          "markingsLow": {
+            "files": 15,
+            "wire": 816164,
+            "shapes": ["1024×1024×4"]
+          },
+          "markingsTable": {
+            "files": 15,
+            "wire": 31859,
+            "shapes": []
+          },
+          "ndvi": {
+            "files": 15,
+            "wire": 7303074,
+            "shapes": ["1024×1024×1"]
+          },
+          "sport": {
+            "files": 15,
+            "wire": 403741,
+            "shapes": ["2048×2048×4"]
+          },
+          "sportFar": {
+            "files": 15,
+            "wire": 108862,
+            "shapes": ["1024×1024×4"]
+          },
+          "sportTable": {
+            "files": 15,
+            "wire": 19194,
+            "shapes": []
+          },
+          "surface": {
+            "files": 15,
+            "wire": 9826458,
+            "shapes": ["2048×2048×4"]
+          },
+          "surfaceFar": {
+            "files": 15,
+            "wire": 2960151,
+            "shapes": ["1024×1024×4"]
+          },
+          "svf": {
+            "files": 15,
+            "wire": 8240833,
+            "shapes": ["1024×1024×1"]
+          }
+        },
+        "gpu": {
+          "class": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "coarse": {
+                "spawn": 1048576,
+                "max": 1048576
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 1048576,
+                "max": 1048576
+              }
+            }
+          },
+          "surface": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "sport": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
+                "spawn": 0,
+                "max": 0
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "markings": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "edges": {
+            "desktop": {
+              "fine": {
+                "spawn": 8388608,
+                "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 8388608,
+                "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "colonies": {
+            "desktop": {
+              "fine": {
+                "spawn": 436176,
+                "max": 8028160
+              },
+              "fineFar": {
+                "spawn": 109044,
+                "max": 2007040
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 109044,
+                "max": 2007040
+              },
+              "fineFar": {
+                "spawn": 109044,
+                "max": 2007040
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "ndvi": {
+            "desktop": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            }
+          },
+          "svf": {
+            "desktop": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            }
+          },
+          "horizon": {
+            "desktop": {
+              "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 2097152,
+                "max": 2097152
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 2097152,
+                "max": 2097152
+              }
+            }
+          },
+          "splat": {
+            "desktop": {
+              "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "coarse": {
+                "spawn": 5592405,
+                "max": 5592405
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "coarse": {
+                "spawn": 5592405,
+                "max": 5592405
+              }
+            }
+          }
+        },
+        "fine": {
+          "desktop": {
+            "spawn": {
+              "exact": 67108864,
+              "measured": 8824784,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 103196623,
+              "softShare": 0.047
+            },
+            "largest": {
+              "tile": "33410_5658_2_sn",
+              "exact": 67108864,
+              "measured": 16416768,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 110788607,
+              "softShare": 0.044
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 25165824,
+              "measured": 8497652,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60926451,
+              "softShare": 0.08
+            },
+            "largest": {
+              "tile": "33410_5658_2_sn",
+              "exact": 25165824,
+              "measured": 10395648,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 62824447,
+              "softShare": 0.078
+            }
+          }
+        },
+        "fineFar": {
+          "desktop": {
+            "spawn": {
+              "exact": 29360128,
+              "measured": 2206196,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 58829299,
+              "softShare": 0.083
+            },
+            "largest": {
+              "tile": "33410_5658_2_sn",
+              "exact": 29360128,
+              "measured": 4104192,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60727295,
+              "softShare": 0.081
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 12582912,
+              "measured": 2206196,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 42052083,
+              "softShare": 0.116
+            },
+            "largest": {
+              "tile": "33410_5658_2_sn",
+              "exact": 12582912,
+              "measured": 4104192,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 43950079,
+              "softShare": 0.111
+            }
+          }
+        },
+        "cover": {
+          "surface": {
+            "tiles": 15,
+            "share": {
+              "mean": 0.3548,
+              "max": 0.499
+            },
+            "box": {
+              "mean": 1,
+              "max": 1
+            }
+          },
+          "sport": {
+            "tiles": 14,
+            "share": {
+              "mean": 0.0118,
+              "max": 0.0377
+            },
+            "box": {
+              "mean": 0.6604,
+              "max": 1
+            }
+          },
+          "markings": {
+            "tiles": 15,
+            "share": {
+              "mean": 0.1158,
+              "max": 0.1848
+            },
+            "box": {
+              "mean": 0.9305,
+              "max": 1
+            }
+          },
+          "colonies": {
+            "tiles": 13,
+            "share": {
+              "mean": 0.0483,
+              "max": 0.1728
+            },
+            "box": {
+              "mean": 0.4775,
+              "max": 0.9556
+            }
+          }
+        },
+        "variants": {
+          "desktop": 4,
+          "phone": 3,
+          "keys": {
+            "desktop": [
+              "ndvi|surface|edges|sport|markings|colonies|svf|horizon|2000|2000",
+              "ndvi|surface|edges|sport|markings||svf|horizon|2000|2000",
+              "ndvi|surface|edges||markings||svf|horizon|2000|2000",
+              "ndvi||||||svf|horizon|2000|2000"
+            ],
+            "phone": [
+              "ndvi|surface|edges||markings|colonies|svf|horizon|2000|2000",
+              "ndvi|surface|edges||markings||svf|horizon|2000|2000",
+              "ndvi||||||svf|horizon|2000|2000"
+            ]
+          }
+        }
+      },
+      "grimma": {
+        "tiles": 2,
+        "artifacts": {
+          "cultivatedLow": {
+            "files": 2,
+            "wire": 86320,
+            "shapes": ["1024×818×2", "1024×902×2"]
+          },
+          "cultivatedRaster": {
+            "files": 2,
+            "wire": 201119,
+            "shapes": ["2048×1636×2", "2048×1804×2"]
+          },
+          "edges": {
+            "files": 2,
+            "wire": 2463490,
+            "shapes": ["2048×2048×2"]
+          },
+          "edgesFar": {
+            "files": 2,
+            "wire": 1078180,
+            "shapes": ["1024×1024×2"]
+          },
+          "horizon": {
+            "files": 2,
+            "wire": 1962104,
+            "shapes": ["256×256×4×8"]
+          },
+          "landcover": {
+            "files": 2,
+            "wire": 424833,
+            "shapes": ["4096×4096×1"]
+          },
+          "landcoverCoarse": {
+            "files": 2,
+            "wire": 71748,
+            "shapes": ["1024×1024×1"]
+          },
+          "landcoverLow": {
+            "files": 2,
+            "wire": 163771,
+            "shapes": ["2048×2048×1"]
+          },
+          "markings": {
+            "files": 2,
+            "wire": 198858,
+            "shapes": ["2048×2048×4"]
+          },
+          "markingsLow": {
+            "files": 2,
+            "wire": 68470,
+            "shapes": ["1024×1024×4"]
+          },
+          "markingsTable": {
+            "files": 2,
+            "wire": 1716,
+            "shapes": []
+          },
+          "ndvi": {
+            "files": 2,
+            "wire": 1074502,
+            "shapes": ["1024×1024×1"]
+          },
+          "sport": {
+            "files": 2,
+            "wire": 38640,
+            "shapes": ["2048×2048×4"]
+          },
+          "sportFar": {
+            "files": 2,
+            "wire": 10217,
+            "shapes": ["1024×1024×4"]
+          },
+          "sportTable": {
+            "files": 2,
+            "wire": 1801,
+            "shapes": []
+          },
+          "surface": {
+            "files": 2,
+            "wire": 624224,
+            "shapes": ["2048×2048×4"]
+          },
+          "surfaceFar": {
+            "files": 2,
+            "wire": 196157,
+            "shapes": ["1024×1024×4"]
+          },
+          "svf": {
+            "files": 2,
+            "wire": 930677,
+            "shapes": ["1024×1024×1"]
+          }
+        },
+        "gpu": {
+          "class": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "coarse": {
+                "spawn": 1048576,
+                "max": 1048576
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 1048576,
+                "max": 1048576
+              }
+            }
+          },
+          "surface": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "sport": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
+                "spawn": 0,
+                "max": 0
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "markings": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "edges": {
+            "desktop": {
+              "fine": {
+                "spawn": 8388608,
+                "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 8388608,
+                "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "colonies": {
+            "desktop": {
+              "fine": {
+                "spawn": 7389184,
+                "max": 7389184
+              },
+              "fineFar": {
+                "spawn": 1847296,
+                "max": 1847296
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1847296,
+                "max": 1847296
+              },
+              "fineFar": {
+                "spawn": 1847296,
+                "max": 1847296
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "ndvi": {
+            "desktop": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            }
+          },
+          "svf": {
+            "desktop": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            }
+          },
+          "horizon": {
+            "desktop": {
+              "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 2097152,
+                "max": 2097152
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 2097152,
+                "max": 2097152
+              }
+            }
+          },
+          "splat": {
+            "desktop": {
+              "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "coarse": {
+                "spawn": 5592405,
+                "max": 5592405
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "coarse": {
+                "spawn": 5592405,
+                "max": 5592405
+              }
+            }
+          }
+        },
+        "fine": {
+          "desktop": {
+            "spawn": {
+              "exact": 67108864,
+              "measured": 15777792,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 110149631,
+              "softShare": 0.044
+            },
+            "largest": {
+              "tile": "33340_5678_2_sn",
+              "exact": 67108864,
+              "measured": 15777792,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 110149631,
+              "softShare": 0.044
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 25165824,
+              "measured": 10235904,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 62664703,
+              "softShare": 0.078
+            },
+            "largest": {
+              "tile": "33340_5678_2_sn",
+              "exact": 25165824,
+              "measured": 10235904,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 62664703,
+              "softShare": 0.078
+            }
+          }
+        },
+        "fineFar": {
+          "desktop": {
+            "spawn": {
+              "exact": 29360128,
+              "measured": 3944448,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60567551,
+              "softShare": 0.081
+            },
+            "largest": {
+              "tile": "33340_5678_2_sn",
+              "exact": 29360128,
+              "measured": 3944448,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60567551,
+              "softShare": 0.081
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 12582912,
+              "measured": 3944448,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 43790335,
+              "softShare": 0.112
+            },
+            "largest": {
+              "tile": "33340_5678_2_sn",
+              "exact": 12582912,
+              "measured": 3944448,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 43790335,
+              "softShare": 0.112
+            }
+          }
+        },
+        "cover": {
+          "surface": {
+            "tiles": 2,
+            "share": {
+              "mean": 0.467,
+              "max": 0.5444
+            },
+            "box": {
+              "mean": 1,
+              "max": 1
+            }
+          },
+          "sport": {
+            "tiles": 2,
+            "share": {
+              "mean": 0.0045,
+              "max": 0.0052
+            },
+            "box": {
+              "mean": 0.1676,
+              "max": 0.3273
+            }
+          },
+          "markings": {
+            "tiles": 2,
+            "share": {
+              "mean": 0.0802,
+              "max": 0.1257
+            },
+            "box": {
+              "mean": 1,
+              "max": 1
+            }
+          },
+          "colonies": {
+            "tiles": 2,
+            "share": {
+              "mean": 0.0564,
+              "max": 0.0736
+            },
+            "box": {
+              "mean": 0.8379,
+              "max": 0.8779
+            }
+          }
+        },
+        "variants": {
+          "desktop": 2,
+          "phone": 2,
+          "keys": {
+            "desktop": [
+              "ndvi|surface|edges|sport|markings|colonies|svf|horizon|2000|2000",
+              "ndvi||||||svf|horizon|2000|2000"
+            ],
+            "phone": [
+              "ndvi|surface|edges||markings|colonies|svf|horizon|2000|2000",
+              "ndvi||||||svf|horizon|2000|2000"
+            ]
+          }
+        }
+      },
+      "hamburg": {
+        "tiles": 4,
+        "artifacts": {
+          "edges": {
+            "files": 4,
+            "wire": 6417871,
+            "shapes": ["2048×2048×2"]
+          },
+          "edgesFar": {
+            "files": 4,
+            "wire": 2723160,
+            "shapes": ["1024×1024×2"]
+          },
+          "horizon": {
+            "files": 4,
+            "wire": 4051967,
+            "shapes": ["256×256×4×8"]
+          },
+          "landcover": {
+            "files": 4,
+            "wire": 1892424,
+            "shapes": ["4096×4096×1"]
+          },
+          "landcoverCoarse": {
+            "files": 4,
+            "wire": 295294,
+            "shapes": ["1024×1024×1"]
+          },
+          "landcoverLow": {
+            "files": 4,
+            "wire": 682210,
+            "shapes": ["2048×2048×1"]
+          },
+          "markings": {
+            "files": 4,
+            "wire": 761958,
+            "shapes": ["2048×2048×4"]
+          },
+          "markingsLow": {
+            "files": 4,
+            "wire": 278824,
+            "shapes": ["1024×1024×4"]
+          },
+          "markingsTable": {
+            "files": 4,
+            "wire": 19447,
+            "shapes": []
+          },
+          "ndvi": {
+            "files": 4,
+            "wire": 1014532,
+            "shapes": ["1024×1024×1"]
+          },
+          "sport": {
+            "files": 4,
+            "wire": 84602,
+            "shapes": ["2048×2048×4"]
+          },
+          "sportFar": {
+            "files": 4,
+            "wire": 21840,
+            "shapes": ["1024×1024×4"]
+          },
+          "sportTable": {
+            "files": 4,
+            "wire": 3825,
+            "shapes": []
+          },
+          "surface": {
+            "files": 4,
+            "wire": 2684255,
+            "shapes": ["2048×2048×4"]
+          },
+          "surfaceFar": {
+            "files": 4,
+            "wire": 828209,
+            "shapes": ["1024×1024×4"]
+          },
+          "svf": {
+            "files": 4,
+            "wire": 1904905,
+            "shapes": ["1024×1024×1"]
+          }
+        },
+        "gpu": {
+          "class": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "coarse": {
+                "spawn": 1048576,
+                "max": 1048576
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 1048576,
+                "max": 1048576
+              }
+            }
+          },
+          "surface": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "sport": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
+                "spawn": 0,
+                "max": 0
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "markings": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "edges": {
+            "desktop": {
+              "fine": {
+                "spawn": 8388608,
+                "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 8388608,
+                "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "colonies": {
+            "desktop": {
+              "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
+                "spawn": 0,
+                "max": 0
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
+                "spawn": 0,
+                "max": 0
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "ndvi": {
+            "desktop": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            }
+          },
+          "svf": {
+            "desktop": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            }
+          },
+          "horizon": {
+            "desktop": {
+              "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 2097152,
+                "max": 2097152
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 2097152,
+                "max": 2097152
+              }
+            }
+          },
+          "splat": {
+            "desktop": {
+              "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "coarse": {
+                "spawn": 5592405,
+                "max": 5592405
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "coarse": {
+                "spawn": 5592405,
+                "max": 5592405
+              }
+            }
+          }
+        },
+        "fine": {
+          "desktop": {
+            "spawn": {
+              "exact": 67108864,
+              "measured": 8388608,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 102760447,
+              "softShare": 0.048
+            },
+            "largest": {
+              "tile": "32564_5932_2_hh",
+              "exact": 67108864,
+              "measured": 8388608,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 102760447,
+              "softShare": 0.048
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 25165824,
+              "measured": 8388608,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60817407,
+              "softShare": 0.08
+            },
+            "largest": {
+              "tile": "32564_5932_2_hh",
+              "exact": 25165824,
+              "measured": 8388608,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60817407,
+              "softShare": 0.08
+            }
+          }
+        },
+        "fineFar": {
+          "desktop": {
+            "spawn": {
+              "exact": 29360128,
+              "measured": 2097152,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 58720255,
+              "softShare": 0.083
+            },
+            "largest": {
+              "tile": "32564_5932_2_hh",
+              "exact": 29360128,
+              "measured": 2097152,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 58720255,
+              "softShare": 0.083
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 12582912,
+              "measured": 2097152,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 41943039,
+              "softShare": 0.117
+            },
+            "largest": {
+              "tile": "32564_5932_2_hh",
+              "exact": 12582912,
+              "measured": 2097152,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 41943039,
+              "softShare": 0.117
+            }
+          }
+        },
+        "cover": {
+          "surface": {
+            "tiles": 4,
+            "share": {
+              "mean": 0.335,
+              "max": 0.3927
+            },
+            "box": {
+              "mean": 1,
+              "max": 1
+            }
+          },
+          "sport": {
+            "tiles": 4,
+            "share": {
+              "mean": 0.0048,
+              "max": 0.0118
+            },
+            "box": {
+              "mean": 0.3019,
+              "max": 0.4224
+            }
+          },
+          "markings": {
+            "tiles": 4,
+            "share": {
+              "mean": 0.1731,
+              "max": 0.2014
+            },
+            "box": {
+              "mean": 1,
+              "max": 1
+            }
+          },
+          "colonies": {
+            "tiles": 0,
+            "share": {
+              "mean": 0,
+              "max": 0
+            },
+            "box": {
+              "mean": 0,
+              "max": 0
+            }
+          }
+        },
+        "variants": {
+          "desktop": 2,
+          "phone": 2,
+          "keys": {
+            "desktop": [
+              "ndvi|surface|edges|sport|markings||svf|horizon|2000|2000",
+              "ndvi||||||svf|horizon|2000|2000"
+            ],
+            "phone": [
+              "ndvi|surface|edges||markings||svf|horizon|2000|2000",
+              "ndvi||||||svf|horizon|2000|2000"
+            ]
+          }
+        }
+      },
+      "leipzig": {
+        "tiles": 4,
+        "artifacts": {
+          "cultivatedLow": {
+            "files": 4,
+            "wire": 82572,
+            "shapes": ["1023×1024×2", "1024×500×2", "1024×976×2", "8×87×2"]
+          },
+          "cultivatedRaster": {
+            "files": 4,
+            "wire": 187556,
+            "shapes": ["16×174×2", "2046×2048×2", "2048×1000×2", "2048×1952×2"]
+          },
+          "edges": {
+            "files": 4,
+            "wire": 6367610,
+            "shapes": ["2048×2048×2"]
+          },
+          "edgesFar": {
+            "files": 4,
+            "wire": 2826249,
+            "shapes": ["1024×1024×2"]
+          },
+          "horizon": {
+            "files": 4,
+            "wire": 4695572,
+            "shapes": ["256×256×4×8"]
+          },
+          "landcover": {
+            "files": 4,
+            "wire": 912519,
+            "shapes": ["4096×4096×1"]
+          },
+          "landcoverCoarse": {
+            "files": 4,
+            "wire": 157002,
+            "shapes": ["1024×1024×1"]
+          },
+          "landcoverLow": {
+            "files": 4,
+            "wire": 360708,
+            "shapes": ["2048×2048×1"]
+          },
+          "markings": {
+            "files": 4,
+            "wire": 713900,
+            "shapes": ["2048×2048×4"]
+          },
+          "markingsLow": {
+            "files": 4,
+            "wire": 257623,
+            "shapes": ["1024×1024×4"]
+          },
+          "markingsTable": {
+            "files": 4,
+            "wire": 13668,
+            "shapes": []
+          },
+          "ndvi": {
+            "files": 4,
+            "wire": 1695157,
+            "shapes": ["1024×1024×1"]
+          },
+          "sport": {
+            "files": 4,
+            "wire": 107292,
+            "shapes": ["2048×2048×4"]
+          },
+          "sportFar": {
+            "files": 4,
+            "wire": 29214,
+            "shapes": ["1024×1024×4"]
+          },
+          "sportTable": {
+            "files": 4,
+            "wire": 5849,
+            "shapes": []
+          },
+          "surface": {
+            "files": 4,
+            "wire": 3025705,
+            "shapes": ["2048×2048×4"]
+          },
+          "surfaceFar": {
+            "files": 4,
+            "wire": 975324,
+            "shapes": ["1024×1024×4"]
+          },
+          "svf": {
+            "files": 4,
+            "wire": 2346956,
+            "shapes": ["1024×1024×1"]
+          }
+        },
+        "gpu": {
+          "class": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "coarse": {
+                "spawn": 1048576,
+                "max": 1048576
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 1048576,
+                "max": 1048576
+              }
+            }
+          },
+          "surface": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "sport": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
+                "spawn": 0,
+                "max": 0
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "markings": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "edges": {
+            "desktop": {
+              "fine": {
+                "spawn": 8388608,
+                "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 8388608,
+                "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "colonies": {
+            "desktop": {
+              "fine": {
+                "spawn": 5568,
+                "max": 8380416
+              },
+              "fineFar": {
+                "spawn": 1392,
+                "max": 2095104
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1392,
+                "max": 2095104
+              },
+              "fineFar": {
+                "spawn": 1392,
+                "max": 2095104
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "ndvi": {
+            "desktop": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            }
+          },
+          "svf": {
+            "desktop": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            }
+          },
+          "horizon": {
+            "desktop": {
+              "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 2097152,
+                "max": 2097152
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 2097152,
+                "max": 2097152
+              }
+            }
+          },
+          "splat": {
+            "desktop": {
+              "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "coarse": {
+                "spawn": 5592405,
+                "max": 5592405
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "coarse": {
+                "spawn": 5592405,
+                "max": 5592405
+              }
+            }
+          }
+        },
+        "fine": {
+          "desktop": {
+            "spawn": {
+              "exact": 67108864,
+              "measured": 8394176,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 102766015,
+              "softShare": 0.048
+            },
+            "largest": {
+              "tile": "33318_5690_2_sn",
+              "exact": 67108864,
+              "measured": 16769024,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 111140863,
+              "softShare": 0.044
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 25165824,
+              "measured": 8390000,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60818799,
+              "softShare": 0.08
+            },
+            "largest": {
+              "tile": "33318_5690_2_sn",
+              "exact": 25165824,
+              "measured": 10483712,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 62912511,
+              "softShare": 0.078
+            }
+          }
+        },
+        "fineFar": {
+          "desktop": {
+            "spawn": {
+              "exact": 29360128,
+              "measured": 2098544,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 58721647,
+              "softShare": 0.083
+            },
+            "largest": {
+              "tile": "33318_5690_2_sn",
+              "exact": 29360128,
+              "measured": 4192256,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60815359,
+              "softShare": 0.08
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 12582912,
+              "measured": 2098544,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 41944431,
+              "softShare": 0.117
+            },
+            "largest": {
+              "tile": "33318_5690_2_sn",
+              "exact": 12582912,
+              "measured": 4192256,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 44038143,
+              "softShare": 0.111
+            }
+          }
+        },
+        "cover": {
+          "surface": {
+            "tiles": 4,
+            "share": {
+              "mean": 0.4367,
+              "max": 0.4628
+            },
+            "box": {
+              "mean": 1,
+              "max": 1
+            }
+          },
+          "sport": {
+            "tiles": 4,
+            "share": {
+              "mean": 0.0085,
+              "max": 0.0132
+            },
+            "box": {
+              "mean": 0.7327,
+              "max": 0.8226
+            }
+          },
+          "markings": {
+            "tiles": 4,
+            "share": {
+              "mean": 0.1682,
+              "max": 0.1822
+            },
+            "box": {
+              "mean": 1,
+              "max": 1
+            }
+          },
+          "colonies": {
+            "tiles": 4,
+            "share": {
+              "mean": 0.0226,
+              "max": 0.048
+            },
+            "box": {
+              "mean": 0.6094,
+              "max": 0.998
+            }
+          }
+        },
+        "variants": {
+          "desktop": 2,
+          "phone": 2,
+          "keys": {
+            "desktop": [
+              "ndvi|surface|edges|sport|markings|colonies|svf|horizon|2000|2000",
+              "ndvi||||||svf|horizon|2000|2000"
+            ],
+            "phone": [
+              "ndvi|surface|edges||markings|colonies|svf|horizon|2000|2000",
+              "ndvi||||||svf|horizon|2000|2000"
+            ]
+          }
+        }
+      },
+      "meissen": {
+        "tiles": 1,
+        "artifacts": {
+          "cultivatedLow": {
+            "files": 1,
+            "wire": 55197,
+            "shapes": ["1007×1024×2"]
+          },
+          "cultivatedRaster": {
+            "files": 1,
+            "wire": 119376,
+            "shapes": ["2014×2048×2"]
+          },
+          "edges": {
+            "files": 1,
+            "wire": 1506367,
+            "shapes": ["2048×2048×2"]
+          },
+          "edgesFar": {
+            "files": 1,
+            "wire": 654802,
+            "shapes": ["1024×1024×2"]
+          },
+          "horizon": {
+            "files": 1,
+            "wire": 1175415,
+            "shapes": ["256×256×4×8"]
+          },
+          "landcover": {
+            "files": 1,
+            "wire": 239057,
+            "shapes": ["4096×4096×1"]
+          },
+          "landcoverCoarse": {
+            "files": 1,
+            "wire": 39392,
+            "shapes": ["1024×1024×1"]
+          },
+          "landcoverLow": {
+            "files": 1,
+            "wire": 90376,
+            "shapes": ["2048×2048×1"]
+          },
+          "markings": {
+            "files": 1,
+            "wire": 165244,
+            "shapes": ["2048×2048×4"]
+          },
+          "markingsLow": {
+            "files": 1,
+            "wire": 56345,
+            "shapes": ["1024×1024×4"]
+          },
+          "markingsTable": {
+            "files": 1,
+            "wire": 1457,
+            "shapes": []
+          },
+          "ndvi": {
+            "files": 1,
+            "wire": 491299,
+            "shapes": ["1024×1024×1"]
+          },
+          "sport": {
+            "files": 1,
+            "wire": 24631,
+            "shapes": ["2048×2048×4"]
+          },
+          "sportFar": {
+            "files": 1,
+            "wire": 6572,
+            "shapes": ["1024×1024×4"]
+          },
+          "sportTable": {
+            "files": 1,
+            "wire": 1275,
+            "shapes": []
+          },
+          "surface": {
+            "files": 1,
+            "wire": 541325,
+            "shapes": ["2048×2048×4"]
+          },
+          "surfaceFar": {
+            "files": 1,
+            "wire": 168537,
+            "shapes": ["1024×1024×4"]
+          },
+          "svf": {
+            "files": 1,
+            "wire": 612615,
+            "shapes": ["1024×1024×1"]
+          }
+        },
+        "gpu": {
+          "class": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "coarse": {
+                "spawn": 1048576,
+                "max": 1048576
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 1048576,
+                "max": 1048576
+              }
+            }
+          },
+          "surface": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "sport": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
+                "spawn": 0,
+                "max": 0
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "markings": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "edges": {
+            "desktop": {
+              "fine": {
+                "spawn": 8388608,
+                "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 8388608,
+                "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "colonies": {
+            "desktop": {
+              "fine": {
+                "spawn": 8249344,
+                "max": 8249344
+              },
+              "fineFar": {
+                "spawn": 2062336,
+                "max": 2062336
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 2062336,
+                "max": 2062336
+              },
+              "fineFar": {
+                "spawn": 2062336,
+                "max": 2062336
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "ndvi": {
+            "desktop": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            }
+          },
+          "svf": {
+            "desktop": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            }
+          },
+          "horizon": {
+            "desktop": {
+              "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 2097152,
+                "max": 2097152
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 2097152,
+                "max": 2097152
+              }
+            }
+          },
+          "splat": {
+            "desktop": {
+              "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "coarse": {
+                "spawn": 5592405,
+                "max": 5592405
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "coarse": {
+                "spawn": 5592405,
+                "max": 5592405
+              }
+            }
+          }
+        },
+        "fine": {
+          "desktop": {
+            "spawn": {
+              "exact": 67108864,
+              "measured": 16637952,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 111009791,
+              "softShare": 0.044
+            },
+            "largest": {
+              "tile": "33392_5668_2_sn",
+              "exact": 67108864,
+              "measured": 16637952,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 111009791,
+              "softShare": 0.044
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 25165824,
+              "measured": 10450944,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 62879743,
+              "softShare": 0.078
+            },
+            "largest": {
+              "tile": "33392_5668_2_sn",
+              "exact": 25165824,
+              "measured": 10450944,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 62879743,
+              "softShare": 0.078
+            }
+          }
+        },
+        "fineFar": {
+          "desktop": {
+            "spawn": {
+              "exact": 29360128,
+              "measured": 4159488,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60782591,
+              "softShare": 0.081
+            },
+            "largest": {
+              "tile": "33392_5668_2_sn",
+              "exact": 29360128,
+              "measured": 4159488,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60782591,
+              "softShare": 0.081
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 12582912,
+              "measured": 4159488,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 44005375,
+              "softShare": 0.111
+            },
+            "largest": {
+              "tile": "33392_5668_2_sn",
+              "exact": 12582912,
+              "measured": 4159488,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 44005375,
+              "softShare": 0.111
+            }
+          }
+        },
+        "cover": {
+          "surface": {
+            "tiles": 1,
+            "share": {
+              "mean": 0.3119,
+              "max": 0.3119
+            },
+            "box": {
+              "mean": 1,
+              "max": 1
+            }
+          },
+          "sport": {
+            "tiles": 1,
+            "share": {
+              "mean": 0.0066,
+              "max": 0.0066
+            },
+            "box": {
+              "mean": 0.7514,
+              "max": 0.7514
+            }
+          },
+          "markings": {
+            "tiles": 1,
+            "share": {
+              "mean": 0.1221,
+              "max": 0.1221
+            },
+            "box": {
+              "mean": 1,
+              "max": 1
+            }
+          },
+          "colonies": {
+            "tiles": 1,
+            "share": {
+              "mean": 0.0611,
+              "max": 0.0611
+            },
+            "box": {
+              "mean": 0.9819,
+              "max": 0.9819
+            }
+          }
+        },
+        "variants": {
+          "desktop": 2,
+          "phone": 2,
+          "keys": {
+            "desktop": [
+              "ndvi|surface|edges|sport|markings|colonies|svf|horizon|2000|2000",
+              "ndvi||||||svf|horizon|2000|2000"
+            ],
+            "phone": [
+              "ndvi|surface|edges||markings|colonies|svf|horizon|2000|2000",
+              "ndvi||||||svf|horizon|2000|2000"
+            ]
+          }
+        }
+      },
+      "muenchen": {
+        "tiles": 4,
+        "artifacts": {
+          "cultivatedLow": {
+            "files": 2,
+            "wire": 10182,
+            "shapes": ["23×45×2", "793×202×2"]
+          },
+          "cultivatedRaster": {
+            "files": 2,
+            "wire": 19661,
+            "shapes": ["1586×404×2", "46×90×2"]
+          },
+          "edges": {
+            "files": 4,
+            "wire": 7971093,
+            "shapes": ["2048×2048×2"]
+          },
+          "edgesFar": {
+            "files": 4,
+            "wire": 3432579,
+            "shapes": ["1024×1024×2"]
+          },
+          "horizon": {
+            "files": 4,
+            "wire": 4582428,
+            "shapes": ["256×256×4×8"]
+          },
+          "landcover": {
+            "files": 4,
+            "wire": 895492,
+            "shapes": ["4096×4096×1"]
+          },
+          "landcoverCoarse": {
+            "files": 4,
+            "wire": 153596,
+            "shapes": ["1024×1024×1"]
+          },
+          "landcoverLow": {
+            "files": 4,
+            "wire": 354406,
+            "shapes": ["2048×2048×1"]
+          },
+          "markings": {
+            "files": 4,
+            "wire": 804899,
+            "shapes": ["2048×2048×4"]
+          },
+          "markingsLow": {
+            "files": 4,
+            "wire": 271651,
+            "shapes": ["1024×1024×4"]
+          },
+          "markingsTable": {
+            "files": 4,
+            "wire": 16743,
+            "shapes": []
+          },
+          "ndvi": {
+            "files": 4,
+            "wire": 1655455,
+            "shapes": ["1024×1024×1"]
+          },
+          "sport": {
+            "files": 4,
+            "wire": 105615,
+            "shapes": ["2048×2048×4"]
+          },
+          "sportFar": {
+            "files": 4,
+            "wire": 28611,
+            "shapes": ["1024×1024×4"]
+          },
+          "sportTable": {
+            "files": 4,
+            "wire": 5207,
+            "shapes": []
+          },
+          "surface": {
+            "files": 4,
+            "wire": 3236150,
+            "shapes": ["2048×2048×4"]
+          },
+          "surfaceFar": {
+            "files": 4,
+            "wire": 984085,
+            "shapes": ["1024×1024×4"]
+          },
+          "svf": {
+            "files": 4,
+            "wire": 2344385,
+            "shapes": ["1024×1024×1"]
+          }
+        },
+        "gpu": {
+          "class": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "coarse": {
+                "spawn": 1048576,
+                "max": 1048576
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 1048576,
+                "max": 1048576
+              }
+            }
+          },
+          "surface": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "sport": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
+                "spawn": 0,
+                "max": 0
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "markings": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "edges": {
+            "desktop": {
+              "fine": {
+                "spawn": 8388608,
+                "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 8388608,
+                "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "colonies": {
+            "desktop": {
+              "fine": {
+                "spawn": 0,
+                "max": 1281488
+              },
+              "fineFar": {
+                "spawn": 0,
+                "max": 320372
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 0,
+                "max": 320372
+              },
+              "fineFar": {
+                "spawn": 0,
+                "max": 320372
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "ndvi": {
+            "desktop": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            }
+          },
+          "svf": {
+            "desktop": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            }
+          },
+          "horizon": {
+            "desktop": {
+              "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 2097152,
+                "max": 2097152
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 2097152,
+                "max": 2097152
+              }
+            }
+          },
+          "splat": {
+            "desktop": {
+              "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "coarse": {
+                "spawn": 5592405,
+                "max": 5592405
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "coarse": {
+                "spawn": 5592405,
+                "max": 5592405
+              }
+            }
+          }
+        },
+        "fine": {
+          "desktop": {
+            "spawn": {
+              "exact": 67108864,
+              "measured": 8388608,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 102760447,
+              "softShare": 0.048
+            },
+            "largest": {
+              "tile": "32690_5332_2_by",
+              "exact": 67108864,
+              "measured": 9670096,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 104041935,
+              "softShare": 0.047
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 25165824,
+              "measured": 8388608,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60817407,
+              "softShare": 0.08
+            },
+            "largest": {
+              "tile": "32690_5332_2_by",
+              "exact": 25165824,
+              "measured": 8708980,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 61137779,
+              "softShare": 0.08
+            }
+          }
+        },
+        "fineFar": {
+          "desktop": {
+            "spawn": {
+              "exact": 29360128,
+              "measured": 2097152,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 58720255,
+              "softShare": 0.083
+            },
+            "largest": {
+              "tile": "32690_5332_2_by",
+              "exact": 29360128,
+              "measured": 2417524,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 59040627,
+              "softShare": 0.083
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 12582912,
+              "measured": 2097152,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 41943039,
+              "softShare": 0.117
+            },
+            "largest": {
+              "tile": "32690_5332_2_by",
+              "exact": 12582912,
+              "measured": 2417524,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 42263411,
+              "softShare": 0.116
+            }
+          }
+        },
+        "cover": {
+          "surface": {
+            "tiles": 4,
+            "share": {
+              "mean": 0.3924,
+              "max": 0.4414
+            },
+            "box": {
+              "mean": 1,
+              "max": 1
+            }
+          },
+          "sport": {
+            "tiles": 4,
+            "share": {
+              "mean": 0.0108,
+              "max": 0.0205
+            },
+            "box": {
+              "mean": 0.8189,
+              "max": 0.9176
+            }
+          },
+          "markings": {
+            "tiles": 4,
+            "share": {
+              "mean": 0.1488,
+              "max": 0.1626
+            },
+            "box": {
+              "mean": 1,
+              "max": 1
+            }
+          },
+          "colonies": {
+            "tiles": 2,
+            "share": {
+              "mean": 0.0038,
+              "max": 0.0068
+            },
+            "box": {
+              "mean": 0.0757,
+              "max": 0.1505
+            }
+          }
+        },
+        "variants": {
+          "desktop": 3,
+          "phone": 3,
+          "keys": {
+            "desktop": [
+              "ndvi|surface|edges|sport|markings|colonies|svf|horizon|2000|2000",
+              "ndvi|surface|edges|sport|markings||svf|horizon|2000|2000",
+              "ndvi||||||svf|horizon|2000|2000"
+            ],
+            "phone": [
+              "ndvi|surface|edges||markings|colonies|svf|horizon|2000|2000",
+              "ndvi|surface|edges||markings||svf|horizon|2000|2000",
+              "ndvi||||||svf|horizon|2000|2000"
+            ]
+          }
+        }
+      },
+      "unna": {
+        "tiles": 2,
+        "artifacts": {
+          "cultivatedLow": {
+            "files": 1,
+            "wire": 3389,
+            "shapes": ["880×157×2"]
+          },
+          "cultivatedRaster": {
+            "files": 1,
+            "wire": 7238,
+            "shapes": ["1760×314×2"]
+          },
+          "edges": {
+            "files": 2,
+            "wire": 4226386,
+            "shapes": ["2048×2048×2"]
+          },
+          "edgesFar": {
+            "files": 2,
+            "wire": 1845935,
+            "shapes": ["1024×1024×2"]
+          },
+          "horizon": {
+            "files": 2,
+            "wire": 2167431,
+            "shapes": ["256×256×4×8"]
+          },
+          "landcover": {
+            "files": 2,
+            "wire": 281627,
+            "shapes": ["4096×4096×1"]
+          },
+          "landcoverCoarse": {
+            "files": 2,
+            "wire": 54652,
+            "shapes": ["1024×1024×1"]
+          },
+          "landcoverLow": {
+            "files": 2,
+            "wire": 127535,
+            "shapes": ["2048×2048×1"]
+          },
+          "markings": {
+            "files": 2,
+            "wire": 225132,
+            "shapes": ["2048×2048×4"]
+          },
+          "markingsLow": {
+            "files": 2,
+            "wire": 78878,
+            "shapes": ["1024×1024×4"]
+          },
+          "markingsTable": {
+            "files": 2,
+            "wire": 3526,
+            "shapes": []
+          },
+          "ndvi": {
+            "files": 2,
+            "wire": 1302490,
+            "shapes": ["1024×1024×1"]
+          },
+          "sport": {
+            "files": 2,
+            "wire": 41396,
+            "shapes": ["2048×2048×4"]
+          },
+          "sportFar": {
+            "files": 2,
+            "wire": 11558,
+            "shapes": ["1024×1024×4"]
+          },
+          "sportTable": {
+            "files": 2,
+            "wire": 2225,
+            "shapes": []
+          },
+          "surface": {
+            "files": 2,
+            "wire": 707846,
+            "shapes": ["2048×2048×4"]
+          },
+          "surfaceFar": {
+            "files": 2,
+            "wire": 246049,
+            "shapes": ["1024×1024×4"]
+          },
+          "svf": {
+            "files": 2,
+            "wire": 1103683,
+            "shapes": ["1024×1024×1"]
+          }
+        },
+        "gpu": {
+          "class": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "coarse": {
+                "spawn": 1048576,
+                "max": 1048576
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 1048576,
+                "max": 1048576
+              }
+            }
+          },
+          "surface": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "sport": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
+                "spawn": 0,
+                "max": 0
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "markings": {
+            "desktop": {
+              "fine": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "edges": {
+            "desktop": {
+              "fine": {
+                "spawn": 8388608,
+                "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 8388608,
+                "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "colonies": {
+            "desktop": {
+              "fine": {
+                "spawn": 1105280,
+                "max": 1105280
+              },
+              "fineFar": {
+                "spawn": 276320,
+                "max": 276320
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 276320,
+                "max": 276320
+              },
+              "fineFar": {
+                "spawn": 276320,
+                "max": 276320
+              },
+              "coarse": {
+                "spawn": 0,
+                "max": 0
+              }
+            }
+          },
+          "ndvi": {
+            "desktop": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            }
+          },
+          "svf": {
+            "desktop": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "coarse": {
+                "spawn": 1398101,
+                "max": 1398101
+              }
+            }
+          },
+          "horizon": {
+            "desktop": {
+              "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 2097152,
+                "max": 2097152
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "coarse": {
+                "spawn": 2097152,
+                "max": 2097152
+              }
+            }
+          },
+          "splat": {
+            "desktop": {
+              "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "coarse": {
+                "spawn": 5592405,
+                "max": 5592405
+              }
+            },
+            "phone": {
+              "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "coarse": {
+                "spawn": 5592405,
+                "max": 5592405
+              }
+            }
+          }
+        },
+        "fine": {
+          "desktop": {
+            "spawn": {
+              "exact": 67108864,
+              "measured": 9493888,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 103865727,
+              "softShare": 0.047
+            },
+            "largest": {
+              "tile": "32408_5710_2_nw",
+              "exact": 67108864,
+              "measured": 9493888,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 103865727,
+              "softShare": 0.047
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 25165824,
+              "measured": 8664928,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 61093727,
+              "softShare": 0.08
+            },
+            "largest": {
+              "tile": "32408_5710_2_nw",
+              "exact": 25165824,
+              "measured": 8664928,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 61093727,
+              "softShare": 0.08
+            }
+          }
+        },
+        "fineFar": {
+          "desktop": {
+            "spawn": {
+              "exact": 29360128,
+              "measured": 2373472,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 58996575,
+              "softShare": 0.083
+            },
+            "largest": {
+              "tile": "32408_5710_2_nw",
+              "exact": 29360128,
+              "measured": 2373472,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 58996575,
+              "softShare": 0.083
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 12582912,
+              "measured": 2373472,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 42219359,
+              "softShare": 0.116
+            },
+            "largest": {
+              "tile": "32408_5710_2_nw",
+              "exact": 12582912,
+              "measured": 2373472,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 42219359,
+              "softShare": 0.116
+            }
+          }
+        },
+        "cover": {
+          "surface": {
+            "tiles": 2,
+            "share": {
+              "mean": 0.4635,
+              "max": 0.5014
+            },
+            "box": {
+              "mean": 1,
+              "max": 1
+            }
+          },
+          "sport": {
+            "tiles": 2,
+            "share": {
+              "mean": 0.0073,
+              "max": 0.009
+            },
+            "box": {
+              "mean": 0.7666,
+              "max": 0.777
+            }
+          },
+          "markings": {
+            "tiles": 2,
+            "share": {
+              "mean": 0.1211,
+              "max": 0.1364
+            },
+            "box": {
+              "mean": 1,
+              "max": 1
+            }
+          },
+          "colonies": {
+            "tiles": 1,
+            "share": {
+              "mean": 0.0026,
+              "max": 0.0026
+            },
+            "box": {
+              "mean": 0.1295,
+              "max": 0.1295
+            }
+          }
+        },
+        "variants": {
+          "desktop": 3,
+          "phone": 3,
+          "keys": {
+            "desktop": [
+              "ndvi|surface|edges|sport|markings|colonies|svf|horizon|2000|2000",
+              "ndvi|surface|edges|sport|markings||svf|horizon|2000|2000",
+              "ndvi||||||svf|horizon|2000|2000"
+            ],
+            "phone": [
+              "ndvi|surface|edges||markings|colonies|svf|horizon|2000|2000",
+              "ndvi|surface|edges||markings||svf|horizon|2000|2000",
+              "ndvi||||||svf|horizon|2000|2000"
+            ]
+          }
+        }
+      }
+    }
+  },
   "browser": {
     "readWith": "chromium 153.0.8010.12, google / swiftshader",
     "firstLoad": {
       "note": "Every /_next/static/*.js the page or the workers ground, niches, scene fetched themselves (each one's resource timing) at /dresden?scene=lite (a NEXT_PUBLIC_POC_DEBUG=1 production build), cut at: ready, those workers running, then 5 s without a new script; a second read 5 s later must equal it. The BVH worker's own scripts are left out: it starts only if the spawn's buildings have no BVH yet. Each raw body gzipped at level 9 by the pinned Bun, exact. workerOnly: the files those workers fetched and the page did not — not the scene's JavaScript, which the page shares.",
       "files": 42,
-      "gzip": 1097564,
+      "gzip": 1099654,
       "workerOnly": {
         "files": 8,
-        "gzip": 34795
+        "gzip": 34794
       },
       "workers": ["ground", "niches", "scene"]
     },
@@ -348,18 +4155,18 @@
     "desktop": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 3.8,
-        "maxMs": 3.8
+        "totalMs": 5.6,
+        "maxMs": 5.6
       },
       "boot:frame": {
-        "count": 10,
-        "totalMs": 568,
-        "maxMs": 476
+        "count": 7,
+        "totalMs": 481.4,
+        "maxMs": 402.4
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 607.6,
-        "maxMs": 607.6
+        "totalMs": 606.5,
+        "maxMs": 606.5
       },
       "boot:light-wait": {
         "count": 1,
@@ -368,33 +4175,33 @@
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 1478.4,
-        "maxMs": 1478.4
+        "totalMs": 1513.1,
+        "maxMs": 1513.1
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 396.1,
-        "maxMs": 396.1
+        "totalMs": 426.1,
+        "maxMs": 426.1
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 548.4,
-        "maxMs": 548.4
+        "totalMs": 682.3,
+        "maxMs": 682.3
       },
       "boot:scene-compile": {
         "count": 1,
-        "totalMs": 3000.3,
-        "maxMs": 3000.3
+        "totalMs": 3000.2,
+        "maxMs": 3000.2
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 129.2,
-        "maxMs": 129.2
+        "totalMs": 157.4,
+        "maxMs": 157.4
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 5442.2,
-        "maxMs": 5442.2
+        "totalMs": 5541.9,
+        "maxMs": 5541.9
       },
       "boot:tileset": {
         "count": 1,
@@ -403,35 +4210,35 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4453.9,
-        "maxMs": 4453.9
+        "totalMs": 4398.8,
+        "maxMs": 4398.8
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 1172.8,
-        "maxMs": 883.9
+        "totalMs": 1118.2,
+        "maxMs": 818
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 12031.5,
-        "maxMs": 3028.4
+        "totalMs": 12004.7,
+        "maxMs": 3003.7
       }
     },
     "phone": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 125.9,
-        "maxMs": 125.9
+        "totalMs": 119.7,
+        "maxMs": 119.7
       },
       "boot:frame": {
-        "count": 9,
-        "totalMs": 580,
-        "maxMs": 369.9
+        "count": 7,
+        "totalMs": 653.4,
+        "maxMs": 426.3
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 604.6,
-        "maxMs": 604.6
+        "totalMs": 605.9,
+        "maxMs": 605.9
       },
       "boot:light-wait": {
         "count": 1,
@@ -440,33 +4247,33 @@
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 1522.1,
-        "maxMs": 1522.1
+        "totalMs": 1378,
+        "maxMs": 1378
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 432.2,
-        "maxMs": 432.2
+        "totalMs": 477.3,
+        "maxMs": 477.3
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 7.9,
-        "maxMs": 7.9
+        "totalMs": 289.7,
+        "maxMs": 289.7
       },
       "boot:scene-compile": {
         "count": 1,
-        "totalMs": 3000.4,
-        "maxMs": 3000.4
+        "totalMs": 3002.2,
+        "maxMs": 3002.2
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 91.1,
-        "maxMs": 91.1
+        "totalMs": 102.1,
+        "maxMs": 102.1
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 4480.2,
-        "maxMs": 4480.2
+        "totalMs": 4712.1,
+        "maxMs": 4712.1
       },
       "boot:tileset": {
         "count": 1,
@@ -475,40 +4282,40 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4231.3,
-        "maxMs": 4231.3
+        "totalMs": 4381.4,
+        "maxMs": 4381.4
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 949.8,
-        "maxMs": 717.3
+        "totalMs": 1109.1,
+        "maxMs": 871.6
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 10390.6,
-        "maxMs": 3059.9
+        "totalMs": 10152.5,
+        "maxMs": 3044.7
       }
     },
     "phoneHeld": {
-      "attributes": 497,
-      "attributesSize": 45466512,
-      "geometries": 203,
+      "attributes": 810,
+      "attributesSize": 46251705,
+      "geometries": 325,
       "indexAttributes": 70,
-      "indexAttributesSize": 33943158,
+      "indexAttributesSize": 33940614,
       "indirectStorageAttributes": 0,
       "indirectStorageAttributesSize": 0,
-      "programs": 129,
-      "programsSize": 1693658,
+      "programs": 127,
+      "programsSize": 1665348,
       "readbackBuffers": 0,
       "readbackBuffersSize": 0,
       "renderTargets": 8,
       "storageAttributes": 0,
       "storageAttributesSize": 0,
-      "textures": 44,
-      "texturesSize": 71405227,
-      "uniformBuffers": 267,
-      "uniformBuffersSize": 72192,
-      "total": 152580747
+      "textures": 35,
+      "texturesSize": 71405161,
+      "uniformBuffers": 391,
+      "uniformBuffersSize": 94256,
+      "total": 153357084
     },
     "firstLoad": [
       {
@@ -517,14 +4324,14 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/0_v7limult8rg.js",
-        "gzip": 418,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/0_y16_q83yhki.js",
         "gzip": 15225,
         "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/00297uzkxabbw.js",
+        "gzip": 768,
+        "worker": true
       },
       {
         "url": "/_next/static/chunks/02_nblhr_bcei.js",
@@ -539,6 +4346,11 @@
       {
         "url": "/_next/static/chunks/085vsoa7yruch.js",
         "gzip": 15204,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/0awa0_tcxqvg-.js",
+        "gzip": 8367,
         "worker": false
       },
       {
@@ -567,13 +4379,13 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1-4ro81g3v-9r.js",
-        "gzip": 393,
+        "url": "/_next/static/chunks/1i73kytez8qrb.js",
+        "gzip": 10350,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1i73kytez8qrb.js",
-        "gzip": 10350,
+        "url": "/_next/static/chunks/1jbp-kjg1zor4.js",
+        "gzip": 417,
         "worker": false
       },
       {
@@ -592,9 +4404,9 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/262lqu924qwu8.js",
-        "gzip": 767,
-        "worker": true
+        "url": "/_next/static/chunks/2cakcl8p5l0dy.js",
+        "gzip": 287934,
+        "worker": false
       },
       {
         "url": "/_next/static/chunks/2cusyk43vbf5y.js",
@@ -622,11 +4434,6 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/2nidtnfq5xaec.js",
-        "gzip": 285853,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/2ojg4-7w-pddb.js",
         "gzip": 11655,
         "worker": false
@@ -647,11 +4454,6 @@
         "worker": true
       },
       {
-        "url": "/_next/static/chunks/2yzwmxgu95u7t.js",
-        "gzip": 134020,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/31903l951_hv_.js",
         "gzip": 8244,
         "worker": false
@@ -662,9 +4464,19 @@
         "worker": false
       },
       {
+        "url": "/_next/static/chunks/3b8ocvgctaymm.js",
+        "gzip": 134030,
+        "worker": false
+      },
+      {
         "url": "/_next/static/chunks/3cvxyyxz9soa1.js",
         "gzip": 2856,
         "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/3ecqrxmy7z8k9.js",
+        "gzip": 394,
+        "worker": false
       },
       {
         "url": "/_next/static/chunks/3i4zt380a34o9.js",
@@ -687,18 +4499,8 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/3vk4g4bjci8vt.js",
-        "gzip": 8367,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/3vwmuq19siej2.js",
         "gzip": 5525,
-        "worker": true
-      },
-      {
-        "url": "/_next/static/chunks/turbopack-0__2v75ndprms.js",
-        "gzip": 193,
         "worker": true
       },
       {
@@ -714,6 +4516,11 @@
       {
         "url": "/_next/static/chunks/turbopack-34su6v6-oqro2.js",
         "gzip": 192,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/turbopack-3pmdgt257vzxp.js",
+        "gzip": 191,
         "worker": true
       },
       {
