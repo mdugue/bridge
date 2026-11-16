@@ -2,32 +2,45 @@
  * The ledger's browser figures (plan 087, phase 2) — NOT a smoke test, and
  * ignored unless `LEDGER=1` (playwright.config.ts). `bun run ledger --
  * --browser` runs it against the NEXT_PUBLIC_POC_DEBUG=1 production build
- * and writes what it read to `LEDGER_OUT`; scripts/ledger.ts turns that
- * into the ledger's figures (lib/city/ledger.ts `browserLedger`).
+ * and hands it a folder (`LEDGER_OUT`): the spec writes what it read there
+ * (`reading.json`) with each script's raw body beside it, and
+ * scripts/ledger-browser.ts weighs the bodies with the pinned Bun and turns
+ * the rest into the ledger's figures (lib/city/ledger-browser.ts).
  *
  * - the first load's JavaScript: every `/_next/static/*.js` the page and
- *   its workers fetch until `ready`, each gzipped at level 9 — plan 074's
- *   method as code — and which only a worker fetched;
- * - a phone's tile bytes: `getGpuDebug()`'s `tileCache` and `held` at
- *   `ready`, in a context with `isMobile` and `hasTouch` (ADR 0047's rule
- *   as a number);
+ *   its workers fetch until `ready`, the named workers running and the
+ *   network quiet (`FIRST_LOAD_NOTE`), and which only a worker fetched;
+ * - a phone's tile cache: `getGpuDebug().tileCache.tiles` in a context
+ *   with `isMobile` and `hasTouch`, the scene's own tier asserted mobile,
+ *   read until two reads agree;
  * - the timings: `getTimings()` at `ready`, on both.
  *
- * Both pages run `/dresden?scene=lite` on SwiftShader, as the specs do.
+ * Never retried: a first read that differs is the finding. Both pages run
+ * `/dresden?scene=lite` on SwiftShader, as the specs do.
  */
-import { writeFileSync } from "node:fs";
-import { gzipSync } from "node:zlib";
+import { mkdirSync, writeFileSync } from "node:fs";
+import nodePath from "node:path";
 import { expect, test } from "@playwright/test";
-import type { BrowserContext, Page } from "@playwright/test";
-import type { BrowserReading, TimingFigure } from "../lib/city/ledger";
+import type { BrowserContext, Page, Response, Worker } from "@playwright/test";
+import {
+  FIRST_LOAD_QUIET_MS,
+  FIRST_LOAD_WORKERS,
+} from "../lib/city/ledger-browser";
+import type {
+  BrowserReading,
+  CacheEntry,
+  TimingFigure,
+} from "../lib/city/ledger-browser";
 import { SWIFTSHADER_WEBGPU } from "./swiftshader-webgpu";
 
 const LITE = "/dresden?scene=lite";
 const READY_MS = 600_000;
+/** How long the phone's cache may take to read the same twice (ms). */
+const CACHE_SETTLE_MS = 120_000;
 const OUT = process.env.LEDGER_OUT;
 
 test.use({ launchOptions: SWIFTSHADER_WEBGPU });
-test.describe.configure({ mode: "serial", timeout: 2 * READY_MS });
+test.describe.configure({ mode: "serial", retries: 0, timeout: 2 * READY_MS });
 
 const reading: Partial<BrowserReading> = {};
 const timings: Partial<BrowserReading["timings"]> = {};
@@ -58,60 +71,122 @@ async function adapterOf(page: Page): Promise<string> {
   });
 }
 
-/** The scripts the page itself fetched (its resource timing; a worker's
- *  fetches are in the worker's own), by path. */
-async function pageScripts(page: Page): Promise<Set<string>> {
+/** In the page or a worker: the paths its resource timing names. */
+const resourcePaths = () =>
+  performance
+    .getEntriesByType("resource")
+    .map((entry) => new URL(entry.name).pathname);
+
+/** The scripts a page or worker fetched itself, by path: its own
+ *  resource timing (a worker's `importScripts` are in the worker's). */
+async function ownScripts(at: Page | Worker): Promise<Set<string>> {
   return new Set(
-    await page.evaluate(() =>
-      performance
-        .getEntriesByType("resource")
-        .map((entry) => new URL(entry.name).pathname)
-    )
+    "mainFrame" in at
+      ? await at.evaluate(resourcePaths)
+      : await at.evaluate(resourcePaths)
   );
 }
 
-/** Every script fetched in `context` until `stop()`, gzipped at level 9;
- *  `worker` when only a worker fetched it (the scene's, ADR 0061, and the
- *  ones it starts). */
+/** The named workers the page runs, by their `name` (ADR 0061's scene
+ *  among them); an unnamed one (a decoder's blob) is left out. */
+function watchWorkers(page: Page): () => Map<string, Worker> {
+  const named = new Map<string, Worker>();
+  const see = async (worker: Worker) => {
+    try {
+      const name = await worker.evaluate(
+        () => (self as { name?: string }).name ?? ""
+      );
+      if (name) {
+        named.set(name, worker);
+      }
+    } catch {
+      // a worker that ended before it answered has no name to give
+    }
+  };
+  page.on("worker", see);
+  return () => new Map(named);
+}
+
+/** A script fetched, its body kept. */
+interface Fetched {
+  body: Buffer;
+  url: string;
+}
+
+/** A script's body; one that cannot be read fails the read. */
+async function weigh(response: Response, url: string): Promise<Fetched> {
+  try {
+    return { url, body: await response.body() };
+  } catch (error) {
+    throw new Error(`ledger: no body for ${url}`, { cause: error });
+  }
+}
+
+/** Every script fetched in `context`, its body read (a body that cannot be
+ *  read fails the read); `last` is when the latest arrived. */
 function watchScripts(context: BrowserContext): {
-  stop: (page: Page) => Promise<BrowserReading["firstLoad"]>;
+  settled: () => Promise<Fetched[]>;
+  last: () => number;
 } {
-  const pending: Promise<{ url: string; gzip: number } | null>[] = [];
-  let watching = true;
+  const pending: Promise<Fetched>[] = [];
+  let last = Date.now();
   context.on("response", (response) => {
     const url = new URL(response.url());
     if (
-      !watching ||
       !url.pathname.startsWith("/_next/static/") ||
       !url.pathname.endsWith(".js")
     ) {
       return;
     }
-    pending.push(
-      response
-        .body()
-        .then((body) => ({
-          url: url.pathname,
-          gzip: gzipSync(body, { level: 9 }).length,
-        }))
-        // a redirect or a cached repeat has no body to weigh
-        .catch(() => null)
-    );
+    last = Date.now();
+    pending.push(weigh(response, url.pathname));
   });
-  return {
-    stop: async (page) => {
-      // set before the first await: nothing after `ready` is counted
-      watching = false;
-      const own = await pageScripts(page);
-      const byUrl = new Map<string, BrowserReading["firstLoad"][number]>();
-      for (const f of await Promise.all(pending)) {
-        if (f) {
-          byUrl.set(f.url, { ...f, worker: !own.has(f.url) });
-        }
-      }
-      return [...byUrl.values()].toSorted((a, b) => a.url.localeCompare(b.url));
-    },
-  };
+  return { settled: async () => await Promise.all(pending), last: () => last };
+}
+
+/** Waits until no script arrived for `FIRST_LOAD_QUIET_MS`. */
+async function quiet(page: Page, last: () => number): Promise<void> {
+  await expect
+    .poll(() => Date.now() - last() >= FIRST_LOAD_QUIET_MS, {
+      timeout: READY_MS,
+      intervals: [500],
+    })
+    .toBe(true);
+  // the page's own tasks drain too
+  await page.waitForTimeout(0);
+}
+
+/** The first load's files, one per path: those the page or one of
+ *  `FIRST_LOAD_WORKERS` fetched itself, `worker` where the page did not;
+ *  and the paths another worker alone fetched (the BVH worker's, which
+ *  starts on a pose tick only if the spawn's buildings have no BVH yet). */
+async function firstLoadSet(
+  page: Page,
+  workers: ReadonlyMap<string, Worker>,
+  fetched: readonly Fetched[]
+): Promise<{
+  files: Map<string, Fetched & { worker: boolean }>;
+  elsewhere: string[];
+}> {
+  const own = await ownScripts(page);
+  const theirs = new Set<string>();
+  for (const name of FIRST_LOAD_WORKERS) {
+    const worker = workers.get(name);
+    expect(worker, `the ${name} worker`).toBeDefined();
+    for (const path of worker ? await ownScripts(worker) : []) {
+      theirs.add(path);
+    }
+  }
+  const files = new Map<string, Fetched & { worker: boolean }>();
+  const elsewhere = new Set<string>();
+  for (const f of fetched) {
+    if (own.has(f.url) || theirs.has(f.url)) {
+      files.set(f.url, { ...f, worker: !own.has(f.url) });
+    } else {
+      elsewhere.add(f.url);
+    }
+  }
+  return { files, elsewhere: [...elsewhere].toSorted() };
 }
 
 test("the first load's JavaScript, and the desktop's timings", async ({
@@ -125,20 +200,48 @@ test("the first load's JavaScript, and the desktop's timings", async ({
   await page.addInitScript(() =>
     performance.setResourceTimingBufferSize(10_000)
   );
+  const workers = watchWorkers(page);
   const scripts = watchScripts(context);
   await page.goto(LITE);
   await ready(page);
-  const files = scripts.stop(page);
   timings.desktop = await timingsOf(page);
-  reading.firstLoad = await files;
+  // the set: ready, the named workers running, then the network quiet
+  await expect
+    .poll(() => [...workers().keys()], { timeout: READY_MS })
+    .toEqual(expect.arrayContaining([...FIRST_LOAD_WORKERS]));
+  await quiet(page, scripts.last);
+  const first = await firstLoadSet(page, workers(), await scripts.settled());
+  // ... and a second read, a quiet span later, that equals it
+  await page.waitForTimeout(FIRST_LOAD_QUIET_MS);
+  const second = await firstLoadSet(page, workers(), await scripts.settled());
+  expect([...second.files.keys()].toSorted()).toEqual(
+    [...first.files.keys()].toSorted()
+  );
+  expect([...first.files.values()].some((f) => f.worker)).toBe(true);
+  reading.workers = [...FIRST_LOAD_WORKERS];
+  reading.elsewhere = second.elsewhere;
+  reading.firstLoad = [...first.files.values()]
+    .toSorted((a, b) => a.url.localeCompare(b.url))
+    .map((f, i) => {
+      const body = `js-${i}.js`;
+      if (OUT) {
+        writeFileSync(nodePath.join(OUT, body), f.body);
+      }
+      return { url: f.url, body, worker: f.worker };
+    });
   reading.adapter = await adapterOf(page);
   reading.browser = `${browser.browserType().name()} ${browser.version()}`;
-  expect(reading.firstLoad.length).toBeGreaterThan(0);
-  expect(reading.firstLoad.some((f) => f.worker)).toBe(true);
   await context.close();
 });
 
-test("a phone's tile bytes, and its timings", async ({ browser }) => {
+/** The phone's loaded cache entries, by URI. */
+const loadedEntries = (tiles: readonly CacheEntry[]) =>
+  tiles
+    .filter((t) => t.loaded)
+    .map((t) => `${t.uri} ${t.bytes}`)
+    .toSorted();
+
+test("a phone's tile cache, and its timings", async ({ browser }) => {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
     hasTouch: true,
@@ -148,12 +251,31 @@ test("a phone's tile bytes, and its timings", async ({ browser }) => {
   await page.goto(LITE);
   await ready(page);
   timings.phone = await timingsOf(page);
-  const gpu = await page.evaluate(
-    async () => await window.__poc?.handle?.getGpuDebug()
-  );
-  expect(gpu?.tileCache.tiles.length).toBeGreaterThan(0);
+  const debug = async () =>
+    await page.evaluate(async () => await window.__poc?.handle?.getGpuDebug());
+  // the scene's own tier, not only the media query: a desktop's rasters
+  // must not be recorded as a phone's
+  let gpu = await debug();
+  expect(gpu?.tier).toBe("mobile");
+  // read until two reads, 2 s apart, agree
+  let was = "";
+  const settleBy = Date.now() + CACHE_SETTLE_MS;
+  for (;;) {
+    const now = JSON.stringify(loadedEntries(gpu?.tileCache.tiles ?? []));
+    if (now === was) {
+      break;
+    }
+    expect(
+      Date.now(),
+      "the phone's tile cache never read the same twice"
+    ).toBeLessThan(settleBy);
+    was = now;
+    await page.waitForTimeout(2000);
+    gpu = await debug();
+  }
+  expect(loadedEntries(gpu?.tileCache.tiles ?? []).length).toBeGreaterThan(0);
   reading.phone = {
-    bytes: gpu?.tileCache.bytes ?? 0,
+    tier: gpu?.tier ?? "",
     held: { ...gpu?.held },
     tiles: gpu?.tileCache.tiles ?? [],
   };
@@ -168,5 +290,9 @@ test.afterAll(() => {
   if (desktop && phone) {
     reading.timings = { desktop, phone };
   }
-  writeFileSync(OUT, `${JSON.stringify(reading, null, 2)}\n`);
+  mkdirSync(OUT, { recursive: true });
+  writeFileSync(
+    nodePath.join(OUT, "reading.json"),
+    `${JSON.stringify(reading, null, 2)}\n`
+  );
 });

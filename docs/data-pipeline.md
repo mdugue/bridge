@@ -132,6 +132,7 @@ bun run bake dresden --force        # every step again, even one whose code
                                     #   and inputs did not change (see "What
                                     #   a re-bake runs" below)
 bun run test:pipeline               # pytest + ruff check + ruff format --check
+                                    #   + the bakes' types (typecheck.py)
 ```
 
 `scripts/pipeline.ts` turns the site into one JSON spec (provider, CRS,
@@ -168,8 +169,23 @@ gridding, the OSM class mapping, the spec, the monument kinds, the DLM ↔ OSM
 fountain conflation and the relief measurement), and runs the `walls` and `stairs`
 steps end to end against a synthetic DGM and a small OSM XML file (GDAL's
 OSM driver reads `.osm` as well as `.osm.pbf`). CI's `pipeline` job runs it
-with ruff after `uv sync --locked`. Fetch and bakes need the network and
-the raw downloads and run on the maintainer's machine.
+with ruff after `uv sync --locked`, and then type-checks `bake/` with
+pyright (pinned in the dev group, set in `pyproject.toml`) against
+`pipeline/typecheck-baseline.json` (plan 089): `typecheck.py` keys each
+finding by file, rule, the function it stands in and its message (never
+by line) and fails on any count above the baseline — a new finding, or a
+new escape: `type: ignore`, `pyright: ignore`, a `# pyright:` directive,
+`@no_type_check`, `typing.cast` — and on any below it, so that a fix
+lowers the baseline in the same PR: `cd pipeline && uv run python
+typecheck.py --update` writes the lower counts and refuses to raise one.
+It also fails when pyright did not read every module of `bake/` or a
+setting beyond the known ones relaxes it, and in CI when the baseline
+holds what the base branch's does not, unless the PR's description says
+why in a line `Typecheck-baseline-raise: …`.
+Neither the checker nor the script re-keys a bake: both live outside
+`bake/` and the dev group is not in `locked_runtime`. Fetch and bakes
+need the network and the raw downloads and run on the maintainer's
+machine.
 
 ### The layouts
 
@@ -1004,6 +1020,34 @@ stale keys dropped first — never the entry itself nor another process's
 part file — so processes baking side by side never read half an entry nor
 delete each other's.
 
+**The machine is not an input.** A bake's bytes are a function of the
+tree: the same commit bakes the same files on a desk, on CI's runner and
+on the host's builder, which is what lets a file be published once under
+its content hash and checked against what git bakes (plan 088). What
+would make the machine an input is the maths: in Bun `Math.hypot`, the
+trigonometric, exponential and power functions (and `**` to anything but
+a whole literal) are the C library's, whose last bits differ between
+glibc versions and between processors it gives its FMA variants and
+those it does not — and a corner test, a weld of equal vertices or a
+smallest rectangle that reads such a value decides differently (Dresden's
+near buildings differed by one to three vertices a tile between glibc
+2.39 and 2.43, 2026-11-16). So every module `prepare-data.ts` reaches
+computes with `PMath` (`lib/city/portable-math.ts`): the same functions
+in the operations IEEE 754 rounds exactly. `scripts/bake-entries.test.ts`
+holds those modules to it — any use of `Math` but its exactly rounded
+members (`sqrt`, `abs`, `floor`, `round`, `min`, `max`, the constants …),
+any `**` but to a whole literal up to 1000 (what JavaScriptCore multiplies
+out), and the methods of three's maths that call the C library inside
+fail it — and `lib/city/portable-math.test.ts` pins the functions' bits.
+What a dependency computes where no bake module asks the test cannot see
+(today the CityJSON loader's material colours, which no baked file
+carries): that is held by the ledger's check in CI, which compares every
+baked byte with a file another machine wrote (ADR 0024). `sin`, `cos` and
+`tan` answer up to 2^50 and are NaN past it; a hash's large angle (an OSM
+id times its constant) is folded, good to about 1e−15 and the same bits
+everywhere. The gzip (libdeflate, level 9) and meshopt's codecs gave
+the same bytes on both machines.
+
 **Shared cache.** Vercel restores each branch's build cache from that
 branch's last build (production's for a new branch), so branches rebased
 onto the same main each baked the same entries cold, side by side. Behind
@@ -1185,19 +1229,15 @@ raster. A set where a phone reads other files has a `phone` row beside the
 desktop's. Each set is recorded as the spawn tile, the median tile (the
 lower of an even count), the largest tile and the site (each file once).
 
-Some figures are recorded only, never compared: the buildings' vertices,
-decoded bytes and wire bytes (`city_<tile>.glb.gz`, near and far), and the
-bytes of the tileset JSONs, which name the buildings by their content
-hash. The near buildings' weld gives 1–3 vertices more or fewer a tile on
-another machine (CI against a cloud container, 2026-11-16), so the gated
-sets count these files but leave their bytes out, `buildings` gates each
-tile's triangles (the same everywhere), and `recorded` keeps the rest with
-the machine and the day it was read on; `--check` prints it and never
-compares it. They return to the gate once the bake fix (PR #310) has
-merged.
+Every figure is gated, the buildings' among them: `buildings` holds each
+tile's vertices, triangles and decoded bytes, near and far, and the sets
+count the buildings' glTF and the tileset JSONs (which name them by
+content hash) at their full bytes. That holds because a bake's bytes do
+not depend on the machine ("Cache and publish"): CI's check passing on a
+runner that did not bake the committed file is the standing proof.
 
-Baseline, 2026-11-16 (Dresden, fifteen tiles; MB = 10⁶ bytes on the wire,
-the buildings in them, as `recorded` holds them; files in brackets):
+Baseline, 2026-11-16 (Dresden, fifteen tiles; MB = 10⁶ bytes on the wire;
+files in brackets):
 
 | Set | Spawn tile | Median tile | Largest tile | Site |
 |---|---|---|---|---|
@@ -1220,47 +1260,56 @@ set. Sources on disk that are never served: the DGM GeoTIFF
 ### What a browser reads
 
 `bun run ledger -- --browser` (plan 087, phase 2) adds what only a
-browser can say, read by `e2e/ledger.spec.ts` (ignored unless `LEDGER=1`)
-at `/dresden?scene=lite` from a `NEXT_PUBLIC_POC_DEBUG=1` production
-build on SwiftShader, at `ready` — a running `next start` is reused, else
-Playwright builds and starts one. CI's build-check shard runs it with the
-check wherever its e2e half runs.
+browser can say, read by `e2e/ledger.spec.ts` (ignored unless `LEDGER=1`,
+never retried) at `/dresden?scene=lite` from a `NEXT_PUBLIC_POC_DEBUG=1`
+production build on SwiftShader — a running `next start` is reused, else
+Playwright builds and starts one. The spec hands what it read to
+`scripts/ledger-browser.ts`, which weighs it with the pinned Bun; the
+shapes are `lib/city/ledger-browser.ts`, and each gated figure carries a
+`note` saying what it is. Both are gated exactly. CI's build-check shard
+runs the check with `--browser` wherever its e2e half runs; without the
+flag the committed figures stand and `--check` says they were not
+compared.
 
 - **The first load's JavaScript** (`browser.firstLoad`): every
-  `/_next/static/*.js` the page and its workers fetch until `ready`,
-  each gzipped at level 9 (plan 074's method, the same `scene=lite`
-  page), and the share only the workers fetched (the scene's, ADR 0061,
-  and those it starts): a file the page's own resource timing does not
-  name. Gated: the files exactly, the bytes within ±0.5 %
-  (`LEDGER_TOLERANCES`; a read within it keeps the committed figure, so
-  a second run writes the same file). The chunks' names, content hashes
-  that move with any change, are in `timings.firstLoad`, recorded only.
-- **A phone's tile bytes** (`browser.phone`): a context with `isMobile`
-  and `hasTouch`; the tile cache as its budget counts it
-  (`getGpuDebug().tileCache.tiles`, each content's bytes exactly, named
-  by the manifest's logical name). ADR 0047's "a phone's memory must not
-  grow", as a number. The buildings' glTF are counted, their bytes
-  recorded only, for the reason above. Three's `info.memory` at `ready`
-  (`timings.phoneHeld`) is recorded only: two reads of one build differ
-  by a few geometries, textures and programs that come and go.
+  `/_next/static/*.js` the page and its workers fetch until the set is
+  cut — `ready`, the named workers `scene`, `ground` and `niches`
+  running, then five seconds without a new script — and a second read
+  five seconds later must name the same files (the BVH worker is not in
+  it: it starts at the first move near buildings). Each raw body is
+  gzipped at level 9 by the pinned Bun (plan 074's method, the same
+  `scene=lite` page). `workerOnly` is the files no page fetch named (the
+  page's resource timing), whichever worker fetched them: not the scene's
+  JavaScript, which the page shares. The chunks' names, content hashes
+  that move with any change, are in `timings.firstLoad`.
+- **A phone's tile cache** (`browser.phoneLiteSpawnCache`): a context
+  with `isMobile` and `hasTouch`, the scene's own tier asserted `mobile`;
+  the cache's own accounting (`calculateBytesUsed`, as its budget counts
+  it) of its loaded contents, each by the manifest's logical name, once
+  two reads two seconds apart agree. Under the lite profile that is the
+  spawn tile alone, one of fifteen. It is not the phone's memory: what a
+  tile holds on the GPU that never reaches `calculateBytesUsed` moves
+  nothing here, and three's `info.memory` at `ready`
+  (`timings.phoneHeld`) is recorded only, since two reads of one build
+  differ by a few geometries, textures and programs that come and go.
 - **The timings** (`timings`): `getTimings()` — the scene's
-  `streamTimings.summary()` (`app/_components/stream-timing.ts`) — on the
-  desktop and on the phone: the `boot:*` marks, `dressing:build`,
-  `tile:compile`, and `longtask` where the scene counts it (`?trace=1`,
-  on a thread that reports long tasks). Recorded with the machine, the
-  adapter and the day, never compared: on SwiftShader a timing depends on
-  the runner drawn. Without `--browser` the committed browser figures and
-  timings stay as they are.
+  `streamTimings.summary()` (`app/_components/stream-timing.ts`) — at
+  `ready` on both pages: the `boot:*` marks, `dressing:build`,
+  `tile:compile`, and `longtask` where the scene counts it (`?trace=1`).
+  Recorded with the machine and the day, never compared: on SwiftShader
+  a timing depends on the runner drawn. `browser.readWith` names the
+  browser and adapter beside the figures, uncompared too.
 
-Baseline, 2026-11-16 (linux-x64 cloud container, Chromium 153 on
-SwiftShader): the first load fetches 42 scripts, 1 089 037 bytes gzip -9
-(1.09 MB; plan 074 counted 904 619 on 2026-10-10), 10 of them, 33 103
-bytes, by the workers alone. A phone at `ready` holds four contents —
-the spawn tile's two terrain levels, 94.6 MB and 24.7 MB with what they
-carry, and its near and far buildings, 27.0 MB and 12.6 MB — 159.0 MB as
-the cache counts it. Its boot on SwiftShader: `boot:spawn-wait` 3.6–4.5 s,
-`boot:veil-to-loaded` 4.2–4.3 s, `dressing:build` 0.9–1.0 s for two
-tiles, `tile:compile` 9–12 s over four compiles (each capped at 3 s).
+Baseline, 2026-11-16 (linux-x64 cloud container, Bun 1.4.4, Chromium 153
+on SwiftShader): the first load fetches 42 scripts, 1 097 564 bytes gzip
+-9 (1.10 MB; plan 074 counted 904 619 on 2026-10-10, gzipped elsewhere),
+8 of them, 34 795 bytes, by the three workers alone. A phone's cache at
+the spawn holds four loaded contents — the tile's two terrain levels,
+94.6 MB and 24.7 MB with what they carry, its near and far buildings,
+27.0 MB and 12.6 MB — 159.0 MB in all. Its boot on SwiftShader:
+`boot:spawn-wait` 3.6–4.5 s, `boot:veil-to-loaded` 4.2–4.3 s,
+`dressing:build` 0.9–1.1 s for two tiles, `tile:compile` 9–12 s over four
+compiles (each capped at 3 s).
 
 ## Provenance
 

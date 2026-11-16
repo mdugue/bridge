@@ -219,22 +219,17 @@ baseline of bytes, requests and counters, dated.
 - `qa/ledger.json` (version 1) has `bytes` (the five sets, each with
   `spawn`, `median`, `largest`, `site`, and `phone` where a phone reads
   other files — today the fine level only), `published` (the whole
-  manifest), `buildings` and `counters`, all gated, and `recorded`, which
-  `--check` prints and never compares. `ledgerDiff` skips `dated` and
-  `recorded` at the top level (`UNCOMPARED`); phase 2's `timings` joins
+  manifest), `buildings` (each tile's vertices, triangles and decoded
+  bytes, near and far) and `counters`, all gated. `ledgerDiff` skips
+  `dated` at the top level (`UNCOMPARED`); phase 2's `timings` joins
   that set.
-- **Recorded only, not gated** (the coordinator's ruling after this
-  phase's STOP): the buildings' vertices, decoded bytes and wire bytes,
-  and the bytes of the tileset JSONs that name them by content hash —
-  the near buildings' weld gives 1–3 vertices more or fewer a tile on
-  another machine (CI against a cloud container, 2026-11-16). The gated
-  sets count those files without their bytes (`MACHINE_BOUND`),
-  `buildings` gates each tile's triangles, and `recorded` keeps the rest
-  with the machine and day. They return to the gate when PR #310 (the
-  bake fix) has merged: drop `MACHINE_BOUND`, gate `glbFigures` whole.
-- `datedLedger` keeps the committed date while no gated figure moves, and
-  the committed record while its own figures hold, so a second run writes
-  the same file.
+- **The buildings are under the gate** since PR #310: this phase's STOP
+  found the near buildings' weld 1–3 vertices a tile apart between two
+  machines, and until the bake's maths was made portable
+  (`lib/city/portable-math.ts`) their vertices and bytes, and the tileset
+  JSONs' bytes, were recorded only.
+- `datedLedger` keeps the committed date while no figure moves, so a
+  second run writes the same file.
 - `publishedFiles(site)` in `scripts/ledger.ts` is the one reader of the
   published site (088 repoints it). Which rasters a level reads is the
   viewer's `rasterFiles`, handed in as `RasterReads`; a change to that
@@ -270,21 +265,29 @@ unless `SHOTS=1`), run by `bun run ledger -- --browser` against the
    `dressing:build`, `tile:compile` and `longtask`.
 
 **Built (2026-11-16).** `bun run ledger -- --browser` runs
-`e2e/ledger.spec.ts` and writes `browser` (gated) and `timings`
-(recorded, in `UNCOMPARED`) into `qa/ledger.json`; without the flag both
-stay as committed. `getTimings` needed no protocol change: a value call
-is a name in `ASKED` (`scene-client.ts`), served generically.
-`getGpuDebug().tileCache` gained `tiles` (each content's URI and exact
-bytes) beside its rounded `sizes`. The workers' scripts are told apart
-by the page's resource timing (Playwright names a frame for a worker's
-fetch too). The buildings' glTF in a phone's cache are counted, their
-bytes recorded, as in phase 1 (`MACHINE_BOUND`). `held` is recorded,
-not gated: two reads of one build differed (attributes 332 against 325,
-textures 44 against 35). `longtask` has no row:
-the scene counts long tasks only with `?trace=1`. Six reads over two
-builds of the same source gave the gated figures exactly. CI's build-check shard reads the
-browser with the check wherever its e2e half runs. Figures:
-`docs/data-pipeline.md`, "What a browser reads".
+`e2e/ledger.spec.ts` (never retried) and writes `browser` (gated
+exactly) and `timings` (recorded) into `qa/ledger.json`; without the flag
+both stay as committed and `--check` says they were not compared. The
+section is its own module, `lib/city/ledger-browser.ts` and
+`scripts/ledger-browser.ts`. `getTimings` needed no protocol change: a
+value call is a name in `ASKED` (`scene-client.ts`), served generically.
+`getGpuDebug()` gained `tier` and `tileCache.tiles` (each content's URI,
+exact bytes, and whether it loaded). After the review of 2026-11-16:
+
+- the scripts' bodies are gzipped by the pinned Bun, not in Playwright's
+  Node (26–79 bytes a file apart), so the JavaScript is gated exactly,
+  without the ±0.5 % this phase first named;
+- the first-load set is cut by what it waits for — `ready`, the named
+  workers `scene`, `ground`, `niches`, then five quiet seconds — and a
+  second read must equal it; a body that cannot be read fails the read;
+- the phone figure is `phoneLiteSpawnCache`: the cache's own accounting
+  of its loaded contents under the lite profile, read until two reads
+  agree, the scene's tier asserted `mobile`. It is not the phone's
+  memory; `held` (three's `info.memory`) is recorded, since two reads of
+  one build differed (attributes 332 against 325).
+
+`longtask` has no row: the scene counts long tasks only with `?trace=1`.
+Figures: `docs/data-pipeline.md`, "What a browser reads".
 
 Gated: 1 and 2, with a tolerance each figure names (bytes of JavaScript
 ±0.5 %, a tile's bytes exact). **Recorded only**: 3. On SwiftShader a

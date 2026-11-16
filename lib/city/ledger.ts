@@ -7,14 +7,13 @@
  * their names, bytes and texts in. `qa/ledger.json` is the result; its
  * `--check` names each figure that moved (`ledgerDiff`).
  *
- * Recorded only, never compared: the buildings' vertices, decoded bytes and
- * wire bytes, and the bytes of every file that names them by their content
- * hash (the tileset JSONs) — the near buildings' weld gives 1–3 vertices
- * more or fewer a tile on another machine (CI against a cloud container,
- * 2026-11-16) — until the bake fix of PR #310 has merged and they return to
- * the gate. Their triangle counts and every file count stay gated.
+ * Every figure is gated, the buildings' vertices and bytes among them: a
+ * bake's bytes do not depend on the machine (lib/city/portable-math.ts;
+ * until PR #310 the near buildings' weld gave 1–3 vertices more or fewer a
+ * tile on another machine, and those figures were recorded only).
  */
 import { gzipSync } from "node:zlib";
+import type { BrowserFigures, Timings } from "./ledger-browser";
 import { TERRAIN_RASTER_KEYS } from "./tileset";
 
 /** The extensions a static host sends as they are: compressed already. */
@@ -22,21 +21,7 @@ export const PACKED_EXTENSIONS = [".png", ".webp", ".gz"] as const;
 /** The gzip level a static host compresses the rest at. */
 export const WIRE_GZIP_LEVEL = 6;
 export const WIRE_RULE =
-  ".png, .webp and .gz at face value; every other file gzipped at level 6 (Bun's zlib) — a stand-in for what a host sends (Vercel sends text as brotli), kept constant so the figures compare over time, exact once plan 088 stores files in their transport encoding. The gated figures are those of CI's platform (linux-x64, the pinned Bun): regenerate the ledger there or in a cloud session. The gated byte figures leave out the buildings' glTF (city_*.glb.gz, near and far) and the tileset JSONs that name them by hash, but count them as files; `recorded` keeps the full wire bytes, never compared.";
-
-/** The published files whose bytes depend on the machine that baked the
- *  buildings: their glTF, near and far (served
- *  `city_<tile>[_far].<hash>.glb.gz`), and the tileset JSONs that name them
- *  by their content hash (`tileset[-spawn].<hash>.json`). */
-export const MACHINE_BOUND =
-  /^(?:city_[^/]*\.glb\.gz|tileset(?:-spawn)?\.[^/.]+\.json)$/u;
-
-/** A wire measure that counts the machine-bound files as no bytes. */
-export function gatedWire(
-  wire: (file: string) => number
-): (file: string) => number {
-  return (file) => (MACHINE_BOUND.test(file) ? 0 : wire(file));
-}
+  ".png, .webp and .gz at face value; every other file gzipped at level 6 (Bun's zlib) — a stand-in for what a host sends (Vercel sends text as brotli), kept constant so the figures compare over time, exact once plan 088 stores files in their transport encoding. The gated figures are those of CI's platform (linux-x64, the pinned Bun): regenerate the ledger there or in a cloud session.";
 
 /** What a glTF holds, whoever baked it: its vertices (the positions'
  *  counts), its triangles and its accessors' decoded bytes. */
@@ -505,197 +490,6 @@ export interface Counters {
   upstreamWorkarounds: number;
 }
 
-/* --------------------------------------------------------------- browser */
-
-/** One timing category as the scene's `getTimings` counts it
- *  (app/_components/stream-timing.ts `TimingStat`). */
-export interface TimingFigure {
-  count: number;
-  maxMs: number;
-  totalMs: number;
-}
-
-/** What `e2e/ledger.spec.ts` read in the browser, as it read it. */
-export interface BrowserReading {
-  /** the adapter the scene drew with (`adapter.info`) */
-  adapter: string;
-  /** the browser's name and version */
-  browser: string;
-  /** every `/_next/static/*.js` fetched until `ready`; `worker` when only
-   *  a worker fetched it (the scene's, ADR 0061, and those it starts) */
-  firstLoad: { url: string; gzip: number; worker: boolean }[];
-  /** the phone's tile cache at `ready` (`getGpuDebug().tileCache`), and
-   *  what three holds on the GPU then (`getGpuDebug().held`) */
-  phone: {
-    bytes: number;
-    held: Record<string, number>;
-    tiles: { uri: string; bytes: number }[];
-  };
-  /** `getTimings()` at `ready`, on the desktop and on the phone */
-  timings: {
-    desktop: Record<string, TimingFigure>;
-    phone: Record<string, TimingFigure>;
-  };
-}
-
-/** The first load's JavaScript: files and their gzip -9 bytes. */
-export interface JsWeight {
-  files: number;
-  gzip: number;
-}
-
-/** The phone's tile cache at `ready`, as its budget counts it. */
-export interface PhoneTiles {
-  /** the cache's bytes, the machine-bound contents' left out */
-  bytes: number;
-  /** the contents held, the machine-bound ones among them */
-  contents: number;
-  /** the machine-bound contents (the buildings, `MACHINE_BOUND`): counted,
-   *  their bytes recorded only */
-  machineBound: number;
-  /** each other content by its logical name, its bytes exactly */
-  tiles: Record<string, number>;
-}
-
-/** The ledger's gated browser figures. */
-export interface BrowserFigures {
-  /** every file, and those only the workers fetched */
-  firstLoad: JsWeight & { workers: JsWeight };
-  /** the tile cache as its budget counts it */
-  phone: PhoneTiles;
-}
-
-/** Files and their gzip bytes, summed. */
-const jsWeight = (of: readonly { gzip: number }[]): JsWeight => ({
-  files: of.length,
-  gzip: of.reduce((sum, f) => sum + f.gzip, 0),
-});
-
-/** The first load's figures: every file, and the workers' share. */
-export function firstLoadFigures(
-  files: readonly { gzip: number; worker: boolean }[]
-): BrowserFigures["firstLoad"] {
-  return {
-    ...jsWeight(files),
-    workers: jsWeight(files.filter((f) => f.worker)),
-  };
-}
-
-/** A content's served name: its URI's last segment, the query left off. */
-export const servedName = (uri: string): string =>
-  uri.slice(uri.lastIndexOf("/") + 1).split("?")[0] ?? "";
-
-/** The phone's tile figures from the cache's contents; `logical` maps a
- *  served name back to the manifest's (`DataManifest.files` inverted). A
- *  content the manifest does not name keeps its served name. */
-export function phoneTiles(
-  tiles: readonly { uri: string; bytes: number }[],
-  logical: (served: string) => string | undefined
-): PhoneTiles {
-  const out: PhoneTiles = { bytes: 0, contents: 0, machineBound: 0, tiles: {} };
-  const named = tiles
-    .map((t) => {
-      const served = servedName(t.uri);
-      return { served, name: logical(served) ?? served, bytes: t.bytes };
-    })
-    .toSorted((a, b) => a.name.localeCompare(b.name));
-  for (const t of named) {
-    out.contents += 1;
-    if (MACHINE_BOUND.test(t.served)) {
-      out.machineBound += 1;
-      continue;
-    }
-    out.bytes += t.bytes;
-    out.tiles[t.name] = (out.tiles[t.name] ?? 0) + t.bytes;
-  }
-  return out;
-}
-
-/** The timing categories the ledger records: the boot's marks, a tile's
- *  dressing and compile, and the long tasks. */
-export const RECORDED_TIMINGS =
-  /^(?:boot:.*|dressing:build|tile:compile|longtask)$/u;
-
-/** A time to 0.1 ms. */
-const tenth = (ms: number) => Math.round(ms * 10) / 10;
-
-/** The recorded categories of a `getTimings` summary, to 0.1 ms. */
-export function timingRows(
-  summary: Readonly<Record<string, TimingFigure>>
-): Record<string, TimingFigure> {
-  return Object.fromEntries(
-    Object.entries(summary)
-      .filter(([category]) => RECORDED_TIMINGS.test(category))
-      .toSorted(([a], [b]) => a.localeCompare(b))
-      .map(([category, t]) => [
-        category,
-        { count: t.count, totalMs: tenth(t.totalMs), maxMs: tenth(t.maxMs) },
-      ])
-  );
-}
-
-/** The browser's figures recorded, never compared: the timings, and the
- *  names behind the gated figures (a chunk's name is its content hash, so
- *  it moves with any change). */
-export interface Timings {
-  adapter: string;
-  browser: string;
-  desktop: Record<string, TimingFigure>;
-  /** each first-load file and its gzip -9 bytes */
-  firstLoad: { url: string; gzip: number; worker: boolean }[];
-  machine: string;
-  note: string;
-  phone: Record<string, TimingFigure>;
-  /** the phone's tile cache, all it counts (the buildings' bytes in it) */
-  phoneCacheBytes: number;
-  /** three's `info.memory` on the phone at `ready`: it differs between two
-   *  reads of one build (a few geometries, textures and programs that come
-   *  and go), so it is recorded, not gated */
-  phoneHeld: Record<string, number>;
-  /** the phone's machine-bound contents and their bytes */
-  phoneMachineBound: Record<string, number>;
-  read: string;
-}
-
-export const TIMINGS_NOTE =
-  "Recorded, never compared: timings depend on the machine drawn (SwiftShader on a CI runner varies by a factor of two), the chunk names on every change, three's info.memory on the moment it is read. Read by `bun run ledger -- --browser` at /dresden?scene=lite, a NEXT_PUBLIC_POC_DEBUG=1 production build, at `ready`.";
-
-/** The browser's reading split: the gated figures and the record. */
-export function browserLedger(
-  reading: BrowserReading,
-  logical: (served: string) => string | undefined,
-  machine: string,
-  today: string
-): { figures: BrowserFigures; timings: Timings } {
-  const phoneMachineBound = Object.fromEntries(
-    reading.phone.tiles
-      .map((t) => [servedName(t.uri), t.bytes] as const)
-      .filter(([served]) => MACHINE_BOUND.test(served))
-      .toSorted(([a], [b]) => a.localeCompare(b))
-  );
-  return {
-    figures: {
-      firstLoad: firstLoadFigures(reading.firstLoad),
-      phone: phoneTiles(reading.phone.tiles, logical),
-    },
-    timings: {
-      note: TIMINGS_NOTE,
-      machine,
-      read: today,
-      browser: reading.browser,
-      adapter: reading.adapter,
-      desktop: timingRows(reading.timings.desktop),
-      phone: timingRows(reading.timings.phone),
-      phoneCacheBytes: reading.phone.bytes,
-      phoneHeld: reading.phone.held,
-      firstLoad: reading.firstLoad.toSorted((a, b) =>
-        a.url.localeCompare(b.url)
-      ),
-      phoneMachineBound,
-    },
-  };
-}
-
 /* ---------------------------------------------------------------- ledger */
 
 export const LEDGER_VERSION = 1;
@@ -706,88 +500,45 @@ export interface ByLevel<T> {
   near: Record<string, T>;
 }
 
-/** The buildings' gated geometry: their triangles, the same on every
- *  machine (their vertices are not, `Recorded`). */
-export type BuildingFigures = ByLevel<{ triangles: number }>;
+/** The buildings' geometry: each tile's vertices, triangles and decoded
+ *  bytes. */
+export type BuildingFigures = ByLevel<MeshFigures>;
 
-/** Figures recorded with the machine and day they were read on, never
- *  compared by `--check`. */
-export interface Recorded {
-  /** the buildings' full mesh figures */
-  buildings: ByLevel<MeshFigures>;
-  /** every set's full wire bytes, the machine-bound files in them */
-  bytes: Record<LedgerSet, SetLedger>;
-  machine: string;
-  note: string;
-  published: Weight;
-  read: string;
-}
-
-export const RECORDED_NOTE =
-  "Recorded, never compared: the buildings' vertices and decoded bytes, and the full wire bytes with the buildings' glTF and the tileset JSONs in them; the near buildings' weld differs by machine until PR #310.";
-
-/** `qa/ledger.json`. Every figure but `dated` and `recorded` is a function
- *  of the tree. */
+/** `qa/ledger.json`. Every figure but `dated`, `timings` and
+ *  `browser.readWith` is a function of the tree. */
 export interface Ledger {
+  /** what a browser reads (lib/city/ledger-browser.ts): absent until
+   *  `--browser` has run */
+  browser?: BrowserFigures;
   buildings: BuildingFigures;
-  /** the bytes (the machine-bound files' left out) and requests of each set */
+  /** the bytes and requests of each set */
   bytes: Record<LedgerSet, SetLedger>;
   counters: Counters;
   /** the day the gated figures last changed (kept while they hold) */
   dated: string;
-  /** what a browser has to produce: the first load's JavaScript and a
-   *  phone's tile bytes (`bun run ledger -- --browser`); absent until read */
-  browser?: BrowserFigures;
-  /** every file the manifest names (the machine-bound files' bytes left out) */
+  /** every file the manifest names */
   published: Weight;
-  recorded: Recorded;
-  /** the browser's timings, recorded with the machine and day, never
-   *  compared; absent until read */
-  timings?: Timings;
   site: string;
   tiles: number;
+  /** the browser's timings, recorded, never compared */
+  timings?: Timings;
   version: typeof LEDGER_VERSION;
   wire: string;
 }
 
-/** The parts `--check` never compares. */
-const UNCOMPARED = new Set(["dated", "recorded", "timings"]);
-
-/** The gated figures compared within a share of their committed value,
- *  not exactly: the first load's gzip bytes, ±0.5 % (a toolchain's build
- *  moves them by a few bytes; a new import moves them by more). */
-export const LEDGER_TOLERANCES: readonly { path: RegExp; share: number }[] = [
-  { path: /^browser\.firstLoad\.(?:[^.]+\.)?gzip$/u, share: 0.005 },
-];
-
-/** Whether two leaves, as `leaves` writes them, are the same figure: equal,
- *  or numbers within the path's tolerance of the committed one. */
-function sameLeaf(path: string, was?: string, now?: string): boolean {
-  if (was === now) {
-    return true;
-  }
-  const share = LEDGER_TOLERANCES.find((t) => t.path.test(path))?.share;
-  if (share === undefined || was === undefined || now === undefined) {
-    return false;
-  }
-  const a = Number(was);
-  const b = Number(now);
-  return (
-    Number.isFinite(a) &&
-    Number.isFinite(b) &&
-    Math.abs(b - a) <= share * Math.abs(a)
-  );
-}
+/** The parts `--check` never compares, by path. */
+const UNCOMPARED = new Set(["dated", "timings", "browser.readWith"]);
 
 /** Leaf paths with their values (`bytes.fine.spawn.bytes`). */
 function leaves(value: unknown, path = ""): Map<string, string> {
   const out = new Map<string, string>();
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
     for (const [key, inner] of Object.entries(value)) {
-      if (path === "" && UNCOMPARED.has(key)) {
+      const at = path ? `${path}.${key}` : key;
+      if (UNCOMPARED.has(at)) {
         continue;
       }
-      for (const [p, v] of leaves(inner, path ? `${path}.${key}` : key)) {
+      for (const [p, v] of leaves(inner, at)) {
         out.set(p, v);
       }
     }
@@ -798,69 +549,31 @@ function leaves(value: unknown, path = ""): Map<string, string> {
 }
 
 /** Each gated figure that differs between the committed ledger and a fresh
- *  one, as `path: was → now` (`dated` and `recorded` are none). */
+ *  one, as `path: was → now` (none in `UNCOMPARED`). */
 export function ledgerDiff(was: unknown, now: unknown): string[] {
   const a = leaves(was);
   const b = leaves(now);
   const paths = [...new Set([...a.keys(), ...b.keys()])].toSorted();
   return paths.flatMap((p) =>
-    sameLeaf(p, a.get(p), b.get(p))
+    a.get(p) === b.get(p)
       ? []
       : [`${p}: ${a.get(p) ?? "(none)"} → ${b.get(p) ?? "(none)"}`]
   );
 }
 
-type Gated = Omit<Ledger, "dated" | "recorded" | "timings">;
+type Gated = Omit<Ledger, "dated">;
 
-/** A record's figures, without who read them and when. */
-const recordedFigures = (r: Partial<Recorded>) => ({
-  note: r.note,
-  published: r.published,
-  bytes: r.bytes,
-  buildings: r.buildings,
-});
-type RecordedFigures = Omit<Recorded, "machine" | "read">;
-
-/** The ledger to write: the committed one's date while no gated figure
- *  moved, else `today`; the committed record while its figures hold, else
- *  this one, read on `machine` today. */
+/** The ledger to write: the committed one's date while no figure moved,
+ *  else `today`. */
 export function datedLedger(
   fresh: Gated,
-  recorded: RecordedFigures,
   committed: unknown,
-  today: string,
-  machine: string,
-  timings?: Timings
+  today: string
 ): Ledger {
   const was = committed as Partial<Ledger> | null;
-  // the browser's figures within their tolerance: the committed ones stay,
-  // so a second read writes the same file
-  const browser =
-    was?.browser !== undefined &&
-    fresh.browser !== undefined &&
-    ledgerDiff({ browser: was.browser }, { browser: fresh.browser }).length ===
-      0
-      ? was.browser
-      : fresh.browser;
   const kept =
-    typeof was?.dated === "string" &&
-    ledgerDiff(was, { ...fresh, browser }).length === 0;
+    typeof was?.dated === "string" && ledgerDiff(was, fresh).length === 0;
   const dated = kept && was?.dated ? was.dated : today;
-  const sameRecord =
-    was?.recorded !== undefined &&
-    ledgerDiff(recordedFigures(was.recorded), recordedFigures(recorded))
-      .length === 0;
-  const record: Recorded =
-    sameRecord && was?.recorded
-      ? was.recorded
-      : {
-          note: recorded.note,
-          machine,
-          read: today,
-          published: recorded.published,
-          bytes: recorded.bytes,
-          buildings: recorded.buildings,
-        };
   // the heading first, then the figures, in one order
   return {
     version: fresh.version,
@@ -872,8 +585,7 @@ export function datedLedger(
     bytes: fresh.bytes,
     buildings: fresh.buildings,
     counters: fresh.counters,
-    ...(browser ? { browser } : {}),
-    recorded: record,
-    ...(timings ? { timings } : {}),
+    ...(fresh.browser ? { browser: fresh.browser } : {}),
+    ...(fresh.timings ? { timings: fresh.timings } : {}),
   };
 }

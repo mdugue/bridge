@@ -10,6 +10,7 @@
  * which products are open, the OSM extract — is the `Provider`, shared by
  * every site of that Land (ADR 0037).
  */
+import * as PMath from "./portable-math";
 
 export type MovementMode = "fly" | "walk";
 
@@ -69,7 +70,7 @@ export function overlook(
   if (!(pitchDeg < 0)) {
     throw new Error(`overlook ${frame.id}: pitch must look down`);
   }
-  const back = altitude / Math.tan((-pitchDeg * Math.PI) / 180);
+  const back = altitude / PMath.tan((-pitchDeg * Math.PI) / 180);
   const heading = (headingDeg * Math.PI) / 180;
   return {
     id: frame.id,
@@ -77,8 +78,8 @@ export function overlook(
     description: frame.description,
     mode: "fly",
     epsg: {
-      x: Math.round(target.x - Math.sin(heading) * back),
-      y: Math.round(target.y - Math.cos(heading) * back),
+      x: Math.round(target.x - PMath.sin(heading) * back),
+      y: Math.round(target.y - PMath.cos(heading) * back),
     },
     aboveGround: altitude,
     headingDeg,

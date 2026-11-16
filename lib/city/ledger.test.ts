@@ -1,34 +1,23 @@
 import { expect, test } from "bun:test";
 import { gzipSync } from "node:zlib";
 import {
-  browserLedger,
   bytesLedger,
   datedLedger,
   distinctExtensions,
   extensionOf,
-  firstLoadFigures,
   functionLines,
-  gatedWire,
   glbFigures,
   layerModules,
   ledgerDiff,
   ledgerTiles,
   lineCount,
-  phoneTiles,
   seamModules,
   setFigures,
   tileSet,
-  timingRows,
   upstreamWorkarounds,
   wireBytes,
 } from "./ledger";
-import type {
-  BrowserFigures,
-  BrowserReading,
-  Ledger,
-  RasterReads,
-  Recorded,
-} from "./ledger";
+import type { Ledger, RasterReads } from "./ledger";
 import { buildTileset } from "./tileset";
 import type { BakedTile, TerrainFiles } from "./tileset";
 
@@ -229,17 +218,6 @@ test("the comments that name a workaround for upstream", () => {
   ).toBe(2);
 });
 
-test("the machine-bound files are no bytes in the gate, but files", () => {
-  const wire = gatedWire(() => 7);
-  expect(wire("city_33412_5656_2_sn.fa5c0c5f.glb.gz")).toBe(0);
-  expect(wire("city_33412_5656_2_sn_far.c85037b5.glb.gz")).toBe(0);
-  // the tileset JSONs name the buildings by their content hash
-  expect(wire("tileset.804b2f60.json")).toBe(0);
-  expect(wire("tileset-spawn.6a2504c0.json")).toBe(0);
-  expect(wire("terrain_33412_5656_2_sn_l0.12c82968.glb.gz")).toBe(7);
-  expect(wire("facades_33412_5656_2_sn.4c9c5f53.json")).toBe(7);
-});
-
 /** A binary glTF with `json` as its only chunk. */
 const glb = (gltf: object): Uint8Array => {
   const text = new TextEncoder().encode(JSON.stringify(gltf));
@@ -286,17 +264,7 @@ test("a glTF's vertices, triangles and accessor bytes from its JSON", () => {
   expect(() => glbFigures(new Uint8Array(24))).toThrow();
 });
 
-const RECORDED: Recorded = {
-  note: "recorded",
-  machine: "a machine",
-  read: "2026-11-16",
-  published: { bytes: 20, files: 2 },
-  bytes: {} as Ledger["bytes"],
-  buildings: {
-    near: { a: { vertices: 3, triangles: 1, accessorBytes: 36 } },
-    far: { a: { vertices: 3, triangles: 1, accessorBytes: 36 } },
-  },
-};
+const MESH = { vertices: 3, triangles: 1, accessorBytes: 36 };
 
 const LEDGER = {
   version: 1,
@@ -306,7 +274,7 @@ const LEDGER = {
   tiles: 2,
   published: { bytes: 10, files: 2 },
   bytes: {} as Ledger["bytes"],
-  buildings: { near: { a: { triangles: 1 } }, far: { a: { triangles: 1 } } },
+  buildings: { near: { a: MESH }, far: { a: MESH } },
   counters: {
     askKinds: 1,
     bakeSeamModules: { matching: 2, of: 3 },
@@ -317,235 +285,79 @@ const LEDGER = {
     publishedExtensions: [".png"],
     upstreamWorkarounds: 2,
   },
-  recorded: RECORDED,
 } satisfies Ledger;
 
-test("the check names each figure that moved, never the date or the record", () => {
-  expect(
-    ledgerDiff(LEDGER, {
-      ...LEDGER,
-      dated: "2027-01-01",
-      recorded: {
-        ...RECORDED,
-        buildings: {
-          ...RECORDED.buildings,
-          near: { a: { vertices: 4, triangles: 1, accessorBytes: 48 } },
-        },
-      },
-    })
-  ).toEqual([]);
+test("the check names each figure that moved, never the date", () => {
+  expect(ledgerDiff(LEDGER, { ...LEDGER, dated: "2027-01-01" })).toEqual([]);
   const moved = {
     ...LEDGER,
     published: { bytes: 12, files: 2 },
     buildings: {
       ...LEDGER.buildings,
-      near: { a: { triangles: 2 } },
+      // one vertex more at a weld: what another machine's bake gave
+      near: { a: { ...MESH, vertices: 4, accessorBytes: 48 } },
     },
     counters: { ...LEDGER.counters, publishedExtensions: [".png", ".json"] },
   };
   expect(ledgerDiff(LEDGER, moved)).toEqual([
-    "buildings.near.a.triangles: 1 → 2",
+    "buildings.near.a.accessorBytes: 36 → 48",
+    "buildings.near.a.vertices: 3 → 4",
     'counters.publishedExtensions: [".png"] → [".png",".json"]',
     "published.bytes: 10 → 12",
   ]);
   expect(ledgerDiff({}, LEDGER)).toContain("tiles: (none) → 2");
 });
 
-test("the date holds while the gated figures do; the record while its own do", () => {
-  const { dated: _, recorded: __, ...fresh } = LEDGER;
-  const { machine: ___, read: ____, ...figures } = RECORDED;
+test("the date holds while the figures do", () => {
+  const { dated: _, ...fresh } = LEDGER;
   const today = "2027-01-01";
-  const same = datedLedger(fresh, figures, LEDGER, today, "another");
-  expect(same.dated).toBe("2026-11-16");
-  expect(same.recorded).toEqual(RECORDED);
-  const moved = datedLedger(
-    { ...fresh, tiles: 3 },
-    figures,
-    LEDGER,
-    today,
-    "b"
-  );
-  expect(moved.dated).toBe(today);
-  // another machine's bytes: a new record, the gated date kept
-  const other = datedLedger(
-    fresh,
-    { ...figures, published: { bytes: 21, files: 2 } },
-    LEDGER,
-    today,
-    "another"
-  );
-  expect(other.dated).toBe("2026-11-16");
-  expect(other.recorded).toMatchObject({ machine: "another", read: today });
-  expect(datedLedger(fresh, figures, null, today, "b").dated).toBe(today);
+  expect(datedLedger(fresh, LEDGER, today).dated).toBe("2026-11-16");
+  expect(datedLedger({ ...fresh, tiles: 3 }, LEDGER, today).dated).toBe(today);
+  // a committed ledger of the time the buildings were recorded only
+  expect(
+    datedLedger(fresh, { ...LEDGER, recorded: { machine: "a" } }, today).dated
+  ).toBe(today);
+  expect(datedLedger(fresh, null, today).dated).toBe(today);
 });
 
-/* ---------------------------------------------------------------- browser */
-
-test("the first load: every file, and the workers' share", () => {
-  expect(
-    firstLoadFigures([
-      { gzip: 100, worker: false },
-      { gzip: 50, worker: true },
-      { gzip: 25, worker: true },
-    ])
-  ).toEqual({ files: 3, gzip: 175, workers: { files: 2, gzip: 75 } });
-});
-
-test("a phone's tiles by logical name; the buildings counted, not weighed", () => {
-  const logical = new Map([
-    ["terrain_t_l1.abc.glb.gz", "terrain_t_l1.glb.gz"],
-    ["city_t.def.glb.gz", "city_t.glb.gz"],
-  ]);
-  expect(
-    phoneTiles(
-      [
-        { uri: "./terrain_t_l1.abc.glb.gz", bytes: 300 },
-        { uri: "city_t.def.glb.gz", bytes: 9000 },
-        { uri: "https://x/data/tileset-spawn.0a1b.json?v=1", bytes: 7 },
-        { uri: "odd.bin", bytes: 5 },
-      ],
-      (served) => logical.get(served)
-    )
-  ).toEqual({
-    bytes: 305,
-    contents: 4,
-    machineBound: 2,
-    tiles: { "odd.bin": 5, "terrain_t_l1.glb.gz": 300 },
-  });
-});
-
-test("the timings keep the boot, a tile's dressing and compile, the long tasks", () => {
-  expect(
-    Object.keys(
-      timingRows({
-        "boot:tileset": { count: 1, totalMs: 12.345, maxMs: 12.345 },
-        "tile:bvh": { count: 3, totalMs: 9, maxMs: 4 },
-        "tile:compile": { count: 2, totalMs: 40, maxMs: 30 },
-        "dressing:build": { count: 2, totalMs: 40, maxMs: 30 },
-        "dressing:queue-wait": { count: 2, totalMs: 40, maxMs: 30 },
-        longtask: { count: 0, totalMs: 0, maxMs: 0 },
-      })
-    )
-  ).toEqual(["boot:tileset", "dressing:build", "longtask", "tile:compile"]);
-  expect(
-    timingRows({ "boot:frame": { count: 1, totalMs: 1.26, maxMs: 1.24 } })
-  ).toEqual({ "boot:frame": { count: 1, totalMs: 1.3, maxMs: 1.2 } });
-});
-
-const READING: BrowserReading = {
-  adapter: "Google / swiftshader",
-  browser: "chromium 140",
-  firstLoad: [
-    { url: "/_next/static/chunks/b.js", gzip: 1000, worker: true },
-    { url: "/_next/static/chunks/a.js", gzip: 2000, worker: false },
-  ],
-  phone: {
-    bytes: 1300,
-    held: { geometries: 2, textures: 1 },
-    tiles: [
-      { uri: "terrain_t_l1.abc.glb.gz", bytes: 300 },
-      { uri: "city_t.def.glb.gz", bytes: 1000 },
-    ],
+/** A browser section, as lib/city/ledger-browser.ts writes it. */
+const BROWSER: NonNullable<Ledger["browser"]> = {
+  readWith: "chromium 153, google / swiftshader",
+  firstLoad: {
+    note: "n",
+    files: 2,
+    gzip: 100_000,
+    workerOnly: { files: 1, gzip: 40_000 },
+    workers: ["ground", "niches", "scene"],
   },
-  timings: {
-    desktop: { "boot:loaded": { count: 1, totalMs: 900, maxMs: 900 } },
-    phone: { "boot:loaded": { count: 1, totalMs: 1200, maxMs: 1200 } },
-  },
+  phoneLiteSpawnCache: { note: "n", bytes: 300, contents: { t: 300 } },
 };
 
-test("the browser's reading: figures gated, the rest recorded", () => {
-  const { figures, timings } = browserLedger(
-    READING,
-    () => {},
-    "here",
-    "2027-01-01"
-  );
-  expect(figures.firstLoad.gzip).toBe(3000);
-  expect(figures.phone).toMatchObject({ bytes: 300, machineBound: 1 });
-  expect(figures.phone).not.toHaveProperty("held");
-  expect(timings).toMatchObject({
-    machine: "here",
-    read: "2027-01-01",
-    phoneMachineBound: { "city_t.def.glb.gz": 1000 },
-    phoneHeld: { geometries: 2, textures: 1 },
-  });
-  expect(timings.firstLoad.map((f) => f.url)).toEqual([
-    "/_next/static/chunks/a.js",
-    "/_next/static/chunks/b.js",
-  ]);
-});
-
-const BROWSER: BrowserFigures = {
-  firstLoad: { files: 2, gzip: 100_000, workers: { files: 1, gzip: 40_000 } },
-  phone: {
-    bytes: 300,
-    contents: 2,
-    machineBound: 1,
-    tiles: { t: 300 },
-  },
-};
-
-test("the first load's bytes hold within 0.5 %, its files and a tile's bytes exactly", () => {
+test("the browser's figures are compared exactly; its browser and the timings never", () => {
   const was = { ...LEDGER, browser: BROWSER };
-  const within = {
+  const other = {
     ...was,
     browser: {
       ...BROWSER,
-      firstLoad: { ...BROWSER.firstLoad, gzip: 100_500 },
+      readWith: "chromium 156, google / swiftshader",
+      firstLoad: { ...BROWSER.firstLoad, gzip: 100_001 },
     },
+    timings: { machine: "elsewhere" },
   };
-  expect(ledgerDiff(was, within)).toEqual([]);
-  const over = {
-    ...was,
-    browser: {
-      firstLoad: {
-        files: 3,
-        gzip: 100_501,
-        workers: { files: 1, gzip: 39_799 },
-      },
-      phone: { ...BROWSER.phone, tiles: { t: 301 } },
-    },
-  };
-  expect(ledgerDiff(was, over)).toEqual([
-    "browser.firstLoad.files: 2 → 3",
-    "browser.firstLoad.gzip: 100000 → 100501",
-    "browser.firstLoad.workers.gzip: 40000 → 39799",
-    "browser.phone.tiles.t: 300 → 301",
+  expect(ledgerDiff(was, other)).toEqual([
+    "browser.firstLoad.gzip: 100000 → 100001",
   ]);
-  // the timings are never compared
-  expect(
-    ledgerDiff(was, {
-      ...was,
-      timings: { ...browserLedger(READING, () => {}, "a", "b").timings },
-    })
-  ).toEqual([]);
 });
 
-test("a read within the tolerance keeps the committed browser figures", () => {
-  const { dated: _, recorded: __, ...fresh } = LEDGER;
-  const { machine: ___, read: ____, ...figures } = RECORDED;
-  const was = { ...LEDGER, browser: BROWSER };
-  const near = {
-    ...BROWSER,
-    firstLoad: { ...BROWSER.firstLoad, gzip: 100_200 },
-  };
+test("the browser's sections are written where they were measured", () => {
+  const { dated: _, ...fresh } = LEDGER;
+  const today = "2027-01-01";
   const kept = datedLedger(
-    { ...fresh, browser: near },
-    figures,
-    was,
-    "2027-01-01",
-    "here"
+    { ...fresh, browser: BROWSER },
+    { ...LEDGER, browser: BROWSER },
+    today
   );
   expect(kept.browser).toEqual(BROWSER);
   expect(kept.dated).toBe("2026-11-16");
-  const far = { ...BROWSER, phone: { ...BROWSER.phone, bytes: 301 } };
-  const moved = datedLedger(
-    { ...fresh, browser: far },
-    figures,
-    was,
-    "2027-01-01",
-    "here"
-  );
-  expect(moved.browser).toEqual(far);
-  expect(moved.dated).toBe("2027-01-01");
+  expect(datedLedger(fresh, LEDGER, today)).not.toHaveProperty("browser");
 });

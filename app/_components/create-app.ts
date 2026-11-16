@@ -190,7 +190,7 @@ import {
   reversedDepthFromSearch,
   tileCacheBytesFor,
 } from "./scene-profile";
-import type { SceneBudget } from "./scene-profile";
+import type { DeviceTier, SceneBudget } from "./scene-profile";
 import { createSunRig } from "./sun-rig";
 import { createSceneEnvironment, sceneNight } from "./scene-environment";
 import { sunStateAt } from "@/lib/city/sun";
@@ -339,6 +339,8 @@ export interface GpuDebug {
   cpuMB: Readonly<Record<keyof CpuBytes, number>>;
   /** pipeline anchors holding scene-wide pipelines (pipeline-anchors.ts) */
   anchors: number;
+  /** the device tier the scene runs at (scene-profile.ts) */
+  tier: DeviceTier;
   /** the tile cache: bytes it counts against its budget, tiles in it, in use */
   tileCache: {
     bytes: number;
@@ -348,9 +350,10 @@ export interface GpuDebug {
     loaded: number;
     /** each tile's MB as the cache counts it, "u" when in use */
     sizes: string[];
-    /** each tile's content, as the tileset names it, and its bytes exactly
-     *  (the ledger's phone figures, plan 087) */
-    tiles: { uri: string; bytes: number }[];
+    /** each tile's content, as the tileset names it, its bytes exactly,
+     *  and whether it has loaded (a requested one is listed at 0 bytes) —
+     *  the ledger's phone figures, plan 087 */
+    tiles: { uri: string; bytes: number; loaded: boolean }[];
   };
 }
 
@@ -361,7 +364,7 @@ const bytesSum = (m: Map<object, number>) =>
 /** Counts the distinct buffers under a scene (shared ones once). */
 function sceneBuffers(
   scene: Object3D
-): Omit<GpuDebug, "held" | "tileCache" | "anchors" | "cpuMB"> {
+): Omit<GpuDebug, "held" | "tileCache" | "anchors" | "cpuMB" | "tier"> {
   const indices = new Map<object, number>();
   const buffers = new Map<object, number>();
   let drawables = 0;
@@ -4455,6 +4458,7 @@ async function bootApp(
           ])
         ) as Record<keyof CpuBytes, number>,
         anchors: postStack.anchorCount(),
+        tier: budget.tier,
         tileCache: {
           bytes: cache.cachedBytes,
           maxBytes: cache.maxBytesSize,
@@ -4468,6 +4472,7 @@ async function bootApp(
           tiles: [...cache.itemSet.keys()].map((item) => ({
             uri: item.content?.uri ?? "",
             bytes: cache.bytesMap.get(item) ?? 0,
+            loaded: cache.loadedSet.has(item),
           })),
         },
       };
