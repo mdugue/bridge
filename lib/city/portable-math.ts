@@ -70,16 +70,25 @@ const PIO2_1 = 1.57079632673412561417;
 const PIO2_2 = 6.0771005063039659766e-11;
 const PIO2_2T = 2.02226624879595063154e-21;
 const TWO_PI = 6.283185307179586;
+/** 2π less that double. */
+const TWO_PI_LO = 2.4492935982947064e-16;
 /** Up to here n · PIO2_1 is exact. */
 const REDUCE_MAX = 500_000;
 
 /** x = n · π/2 + r + tail, |r| ≤ π/4: `quadrant` holds n modulo 4. */
 const reduced = { quadrant: 0, r: 0, tail: 0 };
 
+/** A large angle less its whole turns: the remainder by 2π as a double
+ *  (exact), then what that double lacks of 2π for every turn taken. Good
+ *  to the last places up to about 1e15 — a hash's seed times a constant. */
+function folded(x: number): number {
+  const r = x % TWO_PI;
+  const turns = Math.round((x - r) / TWO_PI);
+  return r - turns * TWO_PI_LO;
+}
+
 function reduce(value: number): void {
-  // (past the exact range the angle is folded by 2π as a double first:
-  // the same everywhere, accurate to about |x| · 1e−16)
-  const x = Math.abs(value) > REDUCE_MAX ? value % TWO_PI : value;
+  const x = Math.abs(value) > REDUCE_MAX ? folded(value) : value;
   const n = Math.floor(x * INV_PIO2 + 0.5);
   const t = x - n * PIO2_1;
   let w = n * PIO2_2;

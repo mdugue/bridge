@@ -161,6 +161,21 @@ test("each function is within a few units in the last place of Math's", () => {
   expect(power).toBeLessThanOrEqual(64);
 });
 
+test("a hash's large angle keeps its sine", () => {
+  // fract(sin(seed · 12.9898) · 43758.5453): the seed may be an id
+  let worst = 0;
+  sweep(20_000, (u, v) => {
+    const x = u * 10 ** Math.floor(6 + Math.abs(v) * 7);
+    worst = Math.max(
+      worst,
+      Math.abs(PMath.sin(x) - Math.sin(x)),
+      Math.abs(PMath.cos(x) - Math.cos(x))
+    );
+  });
+  expect(worst).toBeLessThan(1e-14);
+  expect(bits(PMath.sin(123_456_789 * 12.9898))).toBe("bfe69dacfbc006c4");
+});
+
 test("the exact cases are exact", () => {
   expect(PMath.sin(0)).toBe(0);
   expect(Object.is(PMath.sin(-0), -0)).toBe(true);
