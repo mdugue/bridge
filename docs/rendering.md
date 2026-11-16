@@ -1921,7 +1921,10 @@ the stream, not the passes.
 
 Each entry is a bug in a dependency, the code that works around it and
 what to undo once a release fixes it. The comments at those sites say
-*upstream workaround* (`grep -rni "upstream workaround" app lib`). On a
+*upstream workaround* (`grep -rni "upstream workaround" app lib`), and
+the ledger counts both, the entries here (each opens its paragraph in
+bold) and the comments (`qa/ledger.json`, `counters.upstreamWorkarounds`):
+an entry added or dropped is a figure a pull request commits. On a
 bump of the dependency, check each entry against its release notes, and
 drop the entry with its workaround.
 

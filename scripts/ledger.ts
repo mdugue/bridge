@@ -1,49 +1,55 @@
 /**
  * Writes or checks `qa/ledger.json`, the rewrite series' ledger (plan 087):
  * the reference site's bytes and requests per tile and level, read from its
- * published tileset and manifest, and the complexity counters. The shapes
- * and the arithmetic are lib/city/ledger.ts; this reads the files. Every
- * figure is a function of the tree, so a second run writes the same file;
- * a pull request that moves one commits the new file, and its diff is what
- * the reviewer reads.
+ * published tileset and manifest, every published file in a class, and the
+ * complexity counters. The shapes and the arithmetic are lib/city/ledger.ts
+ * and ledger-counters.ts; this reads the files. Every figure is a function
+ * of the tree, so a second run writes the same file; a pull request that
+ * moves one commits the new file, and its diff is what the reviewer reads.
  *
  *   bun scripts/ledger.ts           # write qa/ledger.json
  *   bun scripts/ledger.ts --check   # name each figure that differs, exit 1
  *
- * It reads public/data/<site>/, so a build (or `bun scripts/prepare-sites.ts`)
- * comes first: the reference site for the bytes and counters, and every site
- * a build serves for the `rasters` section (plan 091 phase 0,
+ * Any other argument is refused (exit 2) and nothing is written: a
+ * mistyped `--check` must not pass as a write. It reads
+ * public/data/<site>/, so a build (or `bun scripts/prepare-sites.ts`) comes
+ * first: the reference site for the bytes and counters, and every site a
+ * build serves for the `rasters` section (plan 091 phase 0,
  * scripts/ledger-rasters.ts). A write formats the file with oxfmt, as it is
  * committed; `--check` compares values, not layout.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { cpus } from "node:os";
 import nodePath from "node:path";
 import { gunzipSync } from "node:zlib";
-import { RASTER_KINDS, rasterFiles } from "../app/_components/tile-rasters";
+import {
+  RASTER_KINDS,
+  REACH_KINDS,
+  rasterFiles,
+} from "../app/_components/tile-rasters";
 import type { RasterKind } from "../app/_components/tile-rasters";
 import {
   bytesLedger,
   datedLedger,
   distinctExtensions,
-  functionLines,
   glbFigures,
   LEDGER_VERSION,
   ledgerDiff,
   ledgerTiles,
-  layerModules,
-  seamModules,
-  upstreamWorkarounds,
+  publishedLedger,
+  tileSet,
+  unservedNames,
   WIRE_RULE,
-  weigh,
   wireBytes,
 } from "../lib/city/ledger";
-import type {
-  Counters,
-  Ledger,
-  RasterReads,
-  SourceText,
-} from "../lib/city/ledger";
+import type { Ledger, PublishedName, RasterReads } from "../lib/city/ledger";
+import {
+  layerModules,
+  longestFunction,
+  seamModules,
+  upstreamWorkarounds,
+} from "../lib/city/ledger-counters";
+import type { Counters } from "../lib/city/ledger-counters";
+import type { SourceText } from "../lib/city/source-lexer";
 import {
   ASK_KINDS,
   COARSE_DRESSING_KINDS,
@@ -52,17 +58,29 @@ import {
 } from "../lib/city/tile";
 import type { DataManifest } from "../lib/city/tile";
 import type { ContentExtras } from "../lib/city/tileset";
-import { TILESET_FILE } from "../lib/city/tileset";
+import { TILESET_FILE, TILESET_SPAWN_FILE } from "../lib/city/tileset";
 import { REFERENCE_SITE } from "../sites";
 import { rasterLedger, readySites } from "./ledger-rasters";
 
 const ROOT = nodePath.join(import.meta.dir, "..");
-export const LEDGER_FILE = nodePath.join(ROOT, "qa/ledger.json");
+/** The ledger, relative to the repository's root. */
+export const LEDGER_PATH = "qa/ledger.json";
+export const LEDGER_FILE = nodePath.join(ROOT, LEDGER_PATH);
+/** Where the workarounds for a dependency's bugs are registered. */
+export const WORKAROUND_REGISTER = "docs/rendering.md";
+/** Where the viewer's and the build's TypeScript lies; a root that does
+ *  not exist (yet: plan 095's packages) is none. */
+export const SOURCE_ROOTS = ["app", "lib", "packages"] as const;
+/** Where the bakes lie. */
+export const BAKE_ROOT = "pipeline/bake";
 
 /** A site's published files as the browser gets them. */
 export interface PublishedFiles {
-  /** every published name, logical → as served */
+  /** every name the manifest maps, logical → as served */
   files: Record<string, string>;
+  /** every file of the published directory: the manifest's, and those
+   *  published under their own name (the manifest itself among them) */
+  names: PublishedName[];
   /** a served file's bytes */
   read: (served: string) => Uint8Array;
   /** the tileset JSON */
@@ -73,13 +91,15 @@ export interface PublishedFiles {
  * The ONE place the ledger finds a site's published files: today the
  * build's `public/data/<site>/` and its manifest. Plan 088 points this at
  * the published tileset the lock file names, and nothing else changes.
+ * It lists the directory itself, not the manifest alone: a file published
+ * beside the manifest is a published file.
  */
-export function publishedFiles(site: string): PublishedFiles {
-  const dir = nodePath.join(ROOT, "public/data", site);
+export function publishedFiles(site: string, root = ROOT): PublishedFiles {
+  const dir = nodePath.join(root, "public/data", site);
   const manifestPath = nodePath.join(dir, MANIFEST_FILE);
   if (!existsSync(manifestPath)) {
     throw new Error(
-      `ledger: no ${nodePath.relative(ROOT, manifestPath)} — build first (bun scripts/prepare-sites.ts ${site})`
+      `ledger: no ${nodePath.relative(root, manifestPath)} — build first (bun scripts/prepare-sites.ts ${site})`
     );
   }
   const manifest = JSON.parse(
@@ -91,86 +111,122 @@ export function publishedFiles(site: string): PublishedFiles {
   if (tilesetName === undefined) {
     throw new Error(`ledger: the manifest names no ${TILESET_FILE}`);
   }
+  const named = Object.entries(manifest.files).map(([logical, served]) => ({
+    logical,
+    served,
+  }));
+  const inManifest = new Set(named.map((n) => n.served));
+  const plain = readdirSync(dir)
+    .filter((name) => !inManifest.has(name))
+    .map((name) => ({ logical: name, served: name }));
   return {
     files: manifest.files,
+    names: [...named, ...plain],
     read,
     tileset: JSON.parse(new TextDecoder().decode(read(tilesetName))),
   };
 }
 
 const RASTER_KIND_NAMES = Object.keys(RASTER_KINDS) as RasterKind[];
+const FOLLOWS_REACH: ReadonlySet<RasterKind> = new Set(REACH_KINDS);
 
-/** The viewer's own rule for which rasters a level reads near the camera. */
-export const viewerReads: RasterReads = (extras, level, phone) =>
+/**
+ * The viewer's own rule for which rasters a level reads: every kind a
+ * level acquires (terrain-layer.ts `loadTerrainRasters`), through
+ * `rasterFiles`; beyond the ground detail's reach the far twin of the
+ * kinds that follow the reach (`REACH_KINDS`, what `loadReachSet` swaps).
+ * scripts/ledger.test.ts holds this against terrain-layer.ts's own calls.
+ */
+export const viewerReads: RasterReads = (extras, level, phone, reach) =>
   RASTER_KIND_NAMES.flatMap((kind) => {
     const files = rasterFiles(
       // reason: a terrain level's extras, read for their file names only
       { ...extras, level } as unknown as ContentExtras,
       kind,
-      phone
+      phone,
+      reach === "beyond" && FOLLOWS_REACH.has(kind)
     );
     return files ? [files.raster, ...(files.table ? [files.table] : [])] : [];
   });
 
-/** The sources under `dir` (repo-relative) whose name passes `keep`. */
-function sources(dir: string, keep: (name: string) => boolean): SourceText[] {
-  return readdirSync(nodePath.join(ROOT, dir), {
+/** The sources under `dir` (relative to `root`) whose name passes `keep`,
+ *  at any depth; none where `dir` is not there. */
+function sources(
+  root: string,
+  dir: string,
+  keep: (name: string) => boolean
+): SourceText[] {
+  if (!existsSync(nodePath.join(root, dir))) {
+    return [];
+  }
+  return readdirSync(nodePath.join(root, dir), {
     recursive: true,
     encoding: "utf-8",
   })
-    .filter(keep)
-    .toSorted()
+    .map((name) => name.replaceAll("\\", "/"))
+    .filter((name) => !name.split("/").includes("node_modules") && keep(name))
     .map((name) => ({
       path: `${dir}/${name}`,
-      text: readFileSync(nodePath.join(ROOT, dir, name), "utf-8"),
+      text: readFileSync(nodePath.join(root, dir, name), "utf-8"),
     }));
 }
 
-/** A TypeScript source, tests left out. */
-const isSource = (name: string) =>
-  /\.tsx?$/u.test(name) && !/\.test\.tsx?$/u.test(name);
-
-function counters(published: Record<string, string>): Counters {
+/** The complexity counters of the tree at `root` (ledger-counters.ts says
+ *  what each counts). */
+export function counters(root: string, published: readonly string[]): Counters {
+  const typescript = SOURCE_ROOTS.flatMap((dir) =>
+    sources(root, dir, (name) => /\.tsx?$/u.test(name))
+  );
   return {
     dressingKinds: DRESSING_KINDS.length,
     coarseDressingKinds: COARSE_DRESSING_KINDS.length,
     askKinds: ASK_KINDS.length,
-    publishedExtensions: distinctExtensions(Object.keys(published)),
-    layerModules: layerModules(
-      sources("app/_components", (n) => n.endsWith("-layer.ts"))
-    ),
-    bootAppLines: functionLines(
-      readFileSync(
-        nodePath.join(ROOT, "app/_components/create-app.ts"),
-        "utf-8"
-      ),
-      "bootApp"
-    ),
+    publishedExtensions: distinctExtensions(published),
+    layerModules: layerModules(typescript),
+    longestFunction: longestFunction(typescript),
     bakeSeamModules: seamModules(
-      sources("pipeline/bake", (n) => n.endsWith(".py") && !n.includes("/"))
+      sources(root, BAKE_ROOT, (name) => name.endsWith(".py"))
     ),
-    upstreamWorkarounds: upstreamWorkarounds([
-      ...sources("app", isSource),
-      ...sources("lib", isSource),
-    ]),
+    upstreamWorkarounds: upstreamWorkarounds(
+      typescript,
+      readFileSync(nodePath.join(root, WORKAROUND_REGISTER), "utf-8")
+    ),
   };
 }
 
-/** This machine, for a check that fails: the JSON's wire bytes are zlib's. */
-function machine(): string {
-  const cpu = cpuCount();
-  return `${cpu.model} ×${cpu.count}, ${process.platform}-${process.arch}, Bun ${Bun.version}`;
+/** This platform, for a check that fails: the text's wire bytes are this
+ *  Bun's zlib's. */
+const platform = (): string =>
+  `${process.platform}-${process.arch}, Bun ${Bun.version}`;
+
+/** Throws where a tileset of the site — the full one or the lite
+ *  profile's — names a file that is not served from its directory. */
+function refuseUnserved(published: PublishedFiles): void {
+  const served = new Set(published.names.map((n) => n.served));
+  for (const logical of [TILESET_FILE, TILESET_SPAWN_FILE]) {
+    const name = published.files[logical];
+    if (name === undefined) {
+      continue;
+    }
+    const unserved = unservedNames(
+      JSON.parse(new TextDecoder().decode(published.read(name))),
+      served
+    );
+    if (unserved.length > 0) {
+      throw new Error(
+        `ledger: ${logical} names ${unserved.length} files that the site does not serve: ${unserved.join(", ")}`
+      );
+    }
+  }
 }
 
-function cpuCount(): { count: number; model: string } {
-  const all = cpus();
-  return { count: all.length, model: all[0]?.model.trim() ?? "unknown CPU" };
-}
-
-/** The ledger's figures for `site`, from its published files (the
- *  rasters are every site's, `measureRasters`). */
-export function measure(site: string): Omit<Ledger, "dated" | "rasters"> {
-  const published = publishedFiles(site);
+/** The ledger's figures for `site`, from its published files and the
+ *  sources under `root` (the rasters are every site's, `measureRasters`). */
+export function measure(
+  site: string,
+  root = ROOT
+): Omit<Ledger, "dated" | "rasters"> {
+  const published = publishedFiles(site, root);
   const wireOf = new Map<string, number>();
   const wire = (served: string) => {
     let bytes = wireOf.get(served);
@@ -181,7 +237,10 @@ export function measure(site: string): Omit<Ledger, "dated" | "rasters"> {
     return bytes;
   };
   const tiles = ledgerTiles(published.tileset);
-  const servedNames = Object.values(published.files).toSorted();
+  refuseUnserved(published);
+  const tileFiles = new Set(
+    tiles.flatMap((tile) => tileSet(tile, "all", viewerReads, false))
+  );
   const mesh = (served: string) =>
     glbFigures(new Uint8Array(gunzipSync(published.read(served))));
   return {
@@ -189,23 +248,31 @@ export function measure(site: string): Omit<Ledger, "dated" | "rasters"> {
     site,
     wire: WIRE_RULE,
     tiles: tiles.length,
-    published: weigh(servedNames, wire),
+    published: publishedLedger(
+      published.names,
+      tileFiles,
+      wire,
+      (served) => published.read(served).length
+    ),
     bytes: bytesLedger(tiles, viewerReads, wire),
     buildings: {
       near: Object.fromEntries(tiles.map((t) => [t.id, mesh(t.city)])),
       far: Object.fromEntries(tiles.map((t) => [t.id, mesh(t.cityFar)])),
     },
-    counters: counters(published.files),
+    counters: counters(
+      root,
+      published.names.map((n) => n.logical)
+    ),
   };
 }
 
 /** Every built site's rasters (plan 091 phase 0): the sites a build
- *  serves, each of which must be built. */
-export async function measureRasters(): Promise<Ledger["rasters"]> {
+ *  serves from `root`'s data, each of which must be built. */
+export async function measureRasters(root = ROOT): Promise<Ledger["rasters"]> {
   return await rasterLedger(
-    readySites(),
-    publishedFiles,
-    sources("app", isSource)
+    readySites(root),
+    (site) => publishedFiles(site, root),
+    sources(root, "app", (name) => /(?<!\.test)\.tsx?$/u.test(name))
   );
 }
 
@@ -213,48 +280,104 @@ export async function measureRasters(): Promise<Ledger["rasters"]> {
  *  `bun run fix` and the lint's `--check` do), so a fresh run writes the
  *  committed file byte for byte. */
 function formatAsCommitted(file: string): void {
-  const run = Bun.spawnSync(
+  const done = Bun.spawnSync(
     [nodePath.join(ROOT, "node_modules/.bin/oxfmt"), file],
     { cwd: ROOT, stdout: "ignore", stderr: "pipe" }
   );
-  if (run.exitCode !== 0) {
-    throw new Error(`ledger: oxfmt failed: ${run.stderr.toString()}`);
+  if (done.exitCode !== 0) {
+    throw new Error(`ledger: oxfmt failed: ${done.stderr.toString()}`);
   }
 }
 
-async function main(check: boolean): Promise<void> {
-  const committed: unknown = existsSync(LEDGER_FILE)
-    ? JSON.parse(readFileSync(LEDGER_FILE, "utf-8"))
-    : null;
-  const fresh = {
-    ...measure(REFERENCE_SITE),
-    rasters: await measureRasters(),
-  };
-  if (check) {
-    const moved = ledgerDiff(committed ?? {}, fresh);
-    for (const line of moved) {
-      process.stdout.write(`differs: ${line}\n`);
-    }
-    process.stdout.write(
-      moved.length === 0
-        ? "qa/ledger.json holds\n"
-        : `${moved.length} figures differ: run bun scripts/ledger.ts and commit qa/ledger.json\n`
+/** The arguments the script takes. A new one (a section's switch) joins
+ *  here; anything else is refused. */
+export const FLAGS = ["--check"] as const;
+
+export interface RunOptions {
+  /** where the report goes */
+  out?: (text: string) => void;
+  /** the repository: its sources, `public/data/` and `qa/ledger.json` */
+  root?: string;
+  site?: string;
+  today?: string;
+}
+
+/**
+ * The script: writes the ledger, or with `--check` compares it. Returns
+ * the exit code — 0 written or holding, 1 a figure differs (or none is
+ * committed), 2 an argument it does not know.
+ */
+export async function run(
+  argv: readonly string[],
+  opts: RunOptions = {}
+): Promise<number> {
+  const {
+    out = (text: string) => {
+      process.stdout.write(text);
+    },
+    root = ROOT,
+    site = REFERENCE_SITE,
+    today = new Date().toISOString().slice(0, 10),
+  } = opts;
+  const known: readonly string[] = FLAGS;
+  const unknown = argv.filter((arg) => !known.includes(arg));
+  if (unknown.length > 0) {
+    out(
+      `ledger: unknown argument ${unknown.join(" ")} (known: ${FLAGS.join(", ")}); nothing written\n`
     );
-    if (moved.length > 0) {
-      // the JSON's wire bytes are zlib's on CI's platform: a platform
-      // difference shows here at a glance
-      process.stdout.write(`platform: here ${machine()}\n`);
-      process.exitCode = 1;
-    }
-    return;
+    return 2;
   }
-  const today = new Date().toISOString().slice(0, 10);
-  const ledger = datedLedger(fresh, committed, today);
-  writeFileSync(LEDGER_FILE, `${JSON.stringify(ledger, null, 2)}\n`);
-  formatAsCommitted(LEDGER_FILE);
-  process.stdout.write(`qa/ledger.json (${ledger.dated})\n`);
+  const file = nodePath.join(root, LEDGER_PATH);
+  const committed: unknown = existsSync(file)
+    ? JSON.parse(readFileSync(file, "utf-8"))
+    : null;
+  // one key a section: the reference site's, then every site's rasters
+  const fresh = {
+    ...measure(site, root),
+    rasters: await measureRasters(root),
+  };
+  if (!argv.includes("--check")) {
+    const ledger = datedLedger(fresh, committed, today);
+    writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`);
+    formatAsCommitted(file);
+    out(`${LEDGER_PATH} (${ledger.dated})\n`);
+    return 0;
+  }
+  const moved = ledgerDiff(committed ?? {}, fresh);
+  for (const line of moved) {
+    out(`differs: ${line}\n`);
+  }
+  if (moved.length === 0) {
+    out(`${LEDGER_PATH} holds\n`);
+    return 0;
+  }
+  out(
+    `${moved.length} figures differ: run bun scripts/ledger.ts and commit ${LEDGER_PATH}\n`
+  );
+  // the text's wire bytes are zlib's on CI's platform: a platform
+  // difference shows here at a glance
+  out(`platform: here ${platform()}\n`);
+  return 1;
+}
+
+/**
+ * The script as the shell starts it: `run`, with what it throws — a site
+ * not built, a published file in no class, an extension the wire rule does
+ * not know — printed as its message. Exit 1: the ledger does not hold.
+ */
+export async function main(
+  argv: readonly string[],
+  opts: RunOptions = {}
+): Promise<number> {
+  try {
+    return await run(argv, opts);
+  } catch (error) {
+    const out = opts.out ?? ((text: string) => process.stdout.write(text));
+    out(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
+  }
 }
 
 if (import.meta.main) {
-  await main(process.argv.includes("--check"));
+  process.exitCode = await main(process.argv.slice(2));
 }
