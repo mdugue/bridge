@@ -67,6 +67,21 @@ export function reversedDepthFromSearch(search: string): boolean {
   return new URLSearchParams(search).get("depth") !== "standard";
 }
 
+/**
+ * Whether the page asked for plan 090's spikes (`?stands=record`: a coarse
+ * level's crowns drawn from stand records, lib/city/stand-record.ts;
+ * `?rails=table`: the rails drawn from a segment table,
+ * lib/city/rail-table.ts). QA knobs: the default path is what a visitor
+ * gets. Pure.
+ */
+export function standRecordRequested(search: string): boolean {
+  return new URLSearchParams(search).get("stands") === "record";
+}
+
+export function railTableRequested(search: string): boolean {
+  return new URLSearchParams(search).get("rails") === "table";
+}
+
 /** Whether the page was opened with `?inspect=1`: three's Inspector
  *  (inspector.ts), which also keeps the scene on the page. Pure. */
 export function inspectRequested(search: string): boolean {

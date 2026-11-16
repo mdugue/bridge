@@ -464,10 +464,10 @@
     ],
     "layerModules": {
       "files": 27,
-      "codeLines": 14420
+      "codeLines": 14516
     },
     "longestFunction": {
-      "lines": 2354,
+      "lines": 2358,
       "name": "bootApp",
       "path": "app/_components/create-app.ts"
     },
@@ -4290,6 +4290,1053 @@
               "ndvi|surface|edges||markings||svf|horizon|2000|2000",
               "ndvi||||||svf|horizon|2000|2000"
             ]
+          }
+        }
+      }
+    }
+  },
+  "dressing": {
+    "tiles": {
+      "spawn": {
+        "tile": "33412_5656_2_sn",
+        "what": "spawn",
+        "fine": {
+          "bytes": 249125,
+          "files": 18,
+          "kinds": {
+            "bridge": 1053,
+            "canopy": 40495,
+            "canopyx": 43036,
+            "cultivated": 772,
+            "furniture": 25898,
+            "lamps": 3733,
+            "lowveg": 4252,
+            "mly": 9314,
+            "monuments": 5973,
+            "platform": 796,
+            "rail": 188,
+            "railarea": 193,
+            "riverside": 1431,
+            "sportTable": 1332,
+            "traffic": 8015,
+            "tram": 16963,
+            "trees": 84150,
+            "vegrows": 1531
+          }
+        },
+        "coarse": {
+          "bytes": 84944,
+          "files": 3,
+          "kinds": {
+            "bridge": 1053,
+            "crowns": 75876,
+            "traffic": 8015
+          }
+        }
+      },
+      "forest": {
+        "tile": "33416_5658_2_sn",
+        "what": "forest",
+        "fine": {
+          "bytes": 496855,
+          "files": 18,
+          "kinds": {
+            "bridge": 162,
+            "canopy": 468887,
+            "canopyx": 22869,
+            "cultivated": 162,
+            "furniture": 345,
+            "lamps": 162,
+            "lowveg": 191,
+            "mly": 153,
+            "monuments": 561,
+            "platform": 159,
+            "rail": 188,
+            "railarea": 193,
+            "riverside": 162,
+            "sportTable": 620,
+            "traffic": 614,
+            "tram": 162,
+            "trees": 535,
+            "vegrows": 730
+          }
+        },
+        "coarse": {
+          "bytes": 398235,
+          "files": 3,
+          "kinds": {
+            "bridge": 162,
+            "crowns": 397459,
+            "traffic": 614
+          }
+        }
+      },
+      "yards": {
+        "tile": "33410_5656_2_sn",
+        "what": "yards",
+        "fine": {
+          "bytes": 275994,
+          "files": 18,
+          "kinds": {
+            "bridge": 5311,
+            "canopy": 56529,
+            "canopyx": 25106,
+            "cultivated": 557,
+            "furniture": 29202,
+            "lamps": 5544,
+            "lowveg": 1730,
+            "mly": 10937,
+            "monuments": 14864,
+            "platform": 5515,
+            "rail": 12840,
+            "railarea": 9839,
+            "riverside": 1413,
+            "sportTable": 1906,
+            "traffic": 7761,
+            "tram": 35801,
+            "trees": 49947,
+            "vegrows": 1192
+          }
+        },
+        "coarse": {
+          "bytes": 78626,
+          "files": 3,
+          "kinds": {
+            "bridge": 5311,
+            "crowns": 65554,
+            "traffic": 7761
+          }
+        }
+      }
+    },
+    "recorded": {
+      "note": "Recorded, never compared (plan 090, phase 0): a browser's timings and cache bytes on a software renderer say which builder is heavy, not what a phone pays; the spikes' figures are those of the day and machine named in each.",
+      "muenchen": {
+        "read": "2026-11-16",
+        "tiles": {
+          "heaviest": {
+            "tile": "32690_5334_2_by",
+            "what": "heaviest",
+            "fine": {
+              "bytes": 183505,
+              "files": 17,
+              "kinds": {
+                "bridge": 162,
+                "canopy": 22034,
+                "canopyx": 43276,
+                "cultivated": 162,
+                "furniture": 39243,
+                "lamps": 4441,
+                "lowveg": 3489,
+                "mly": 153,
+                "monuments": 12323,
+                "platform": 8278,
+                "rail": 3116,
+                "railarea": 2869,
+                "riverside": 162,
+                "sportTable": 915,
+                "tram": 27448,
+                "trees": 15312,
+                "vegrows": 122
+              }
+            },
+            "coarse": {
+              "bytes": 51303,
+              "files": 2,
+              "kinds": {
+                "bridge": 162,
+                "crowns": 51141
+              }
+            }
+          }
+        }
+      },
+      "browser": {
+        "baseline": {
+          "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, linux-x64, headless Chromium, WebGPU on SwiftShader",
+          "read": "2026-11-16",
+          "dresden/33412_5656_2_sn/desktop": {
+            "what": "spawn",
+            "builderMs": {
+              "asks": 78.1,
+              "furniture": 60.9,
+              "hedges": 8.2,
+              "lamps": 17.7,
+              "monuments": 30.8,
+              "rail": 95.2,
+              "riverside": 3.8,
+              "sport": 12.4,
+              "tram": 107.7,
+              "trees": 230.9
+            },
+            "builderMsTotal": 645.7,
+            "cacheBytes": {
+              "vegetation": 5536488,
+              "lowVegetation": 130360,
+              "lamps": 322776,
+              "monuments": 603792,
+              "furniture": 1807284,
+              "rail": 938677,
+              "tram": 3222246,
+              "riverside": 72580,
+              "sport": 184680
+            },
+            "cacheBytesTotal": 12818883,
+            "marks": {
+              "dressing:asks": {
+                "count": 6,
+                "maxMs": 2237.7,
+                "totalMs": 2647.7
+              },
+              "dressing:build": {
+                "count": 9,
+                "maxMs": 2191.9,
+                "totalMs": 5271.4
+              },
+              "dressing:compile": {
+                "count": 9,
+                "maxMs": 3645.6,
+                "totalMs": 27702.1
+              },
+              "dressing:queue-wait": {
+                "count": 9,
+                "maxMs": 16730,
+                "totalMs": 102359.8
+              }
+            }
+          },
+          "dresden/33412_5656_2_sn/phone": {
+            "what": "spawn",
+            "builderMs": {
+              "asks": 69.8,
+              "furniture": 116,
+              "hedges": 17.7,
+              "lamps": 25.9,
+              "monuments": 41.4,
+              "rail": 150.5,
+              "riverside": 5.3,
+              "sport": 12.1,
+              "tram": 166.9,
+              "trees": 307.5
+            },
+            "builderMsTotal": 913.1,
+            "cacheBytes": {
+              "vegetation": 5536488,
+              "lowVegetation": 130360,
+              "lamps": 322776,
+              "monuments": 603792,
+              "furniture": 1807284,
+              "rail": 938677,
+              "tram": 3222246,
+              "riverside": 72580,
+              "sport": 184680
+            },
+            "cacheBytesTotal": 12818883,
+            "marks": {
+              "dressing:asks": {
+                "count": 4,
+                "maxMs": 121.2,
+                "totalMs": 297.9
+              },
+              "dressing:build": {
+                "count": 6,
+                "maxMs": 2351.6,
+                "totalMs": 5846.3
+              },
+              "dressing:compile": {
+                "count": 6,
+                "maxMs": 3714.4,
+                "totalMs": 18715.9
+              },
+              "dressing:queue-wait": {
+                "count": 6,
+                "maxMs": 18475.2,
+                "totalMs": 73552.9
+              }
+            }
+          },
+          "dresden/33416_5658_2_sn/desktop": {
+            "what": "forest",
+            "builderMs": {
+              "asks": 206.8,
+              "furniture": 2.7,
+              "lamps": 0.1,
+              "monuments": 0.9,
+              "rail": 0.1,
+              "sport": 0,
+              "trees": 541.3
+            },
+            "builderMsTotal": 751.9,
+            "cacheBytes": {
+              "vegetation": 12130254,
+              "lamps": 0,
+              "monuments": 10288,
+              "furniture": 156208,
+              "rail": 0
+            },
+            "cacheBytesTotal": 12296750,
+            "marks": {
+              "dressing:asks": {
+                "count": 8,
+                "maxMs": 767.6,
+                "totalMs": 1831.8
+              },
+              "dressing:build": {
+                "count": 14,
+                "maxMs": 2078.7,
+                "totalMs": 6510.1
+              },
+              "dressing:compile": {
+                "count": 14,
+                "maxMs": 3282.3,
+                "totalMs": 42396.9
+              },
+              "dressing:queue-wait": {
+                "count": 14,
+                "maxMs": 18339.3,
+                "totalMs": 131317.5
+              }
+            }
+          },
+          "dresden/33416_5658_2_sn/phone": {
+            "what": "forest",
+            "builderMs": {
+              "asks": 223.1,
+              "furniture": 3.9,
+              "lamps": 0.1,
+              "monuments": 0.9,
+              "rail": 0.1,
+              "sport": 0,
+              "trees": 521.4
+            },
+            "builderMsTotal": 749.5,
+            "cacheBytes": {
+              "vegetation": 12130254,
+              "lamps": 0,
+              "monuments": 10288,
+              "furniture": 156208,
+              "rail": 0
+            },
+            "cacheBytesTotal": 12296750,
+            "marks": {
+              "dressing:asks": {
+                "count": 6,
+                "maxMs": 239.8,
+                "totalMs": 832.2
+              },
+              "dressing:build": {
+                "count": 12,
+                "maxMs": 771.2,
+                "totalMs": 4233.1
+              },
+              "dressing:compile": {
+                "count": 12,
+                "maxMs": 3307.8,
+                "totalMs": 36405.2
+              },
+              "dressing:queue-wait": {
+                "count": 12,
+                "maxMs": 10277.7,
+                "totalMs": 34755.4
+              }
+            }
+          },
+          "dresden/33410_5656_2_sn/desktop": {
+            "what": "yards",
+            "builderMs": {
+              "asks": 66.2,
+              "furniture": 54.6,
+              "hedges": 1.6,
+              "lamps": 21.5,
+              "monuments": 47.5,
+              "rail": 839.6,
+              "riverside": 3.6,
+              "sport": 6.1,
+              "tram": 185,
+              "trees": 122.6
+            },
+            "builderMsTotal": 1348.3,
+            "cacheBytes": {
+              "vegetation": 4933762,
+              "lowVegetation": 32440,
+              "lamps": 406292,
+              "monuments": 988504,
+              "furniture": 1829904,
+              "rail": 7244163,
+              "tram": 6308165,
+              "riverside": 71622,
+              "sport": 190512
+            },
+            "cacheBytesTotal": 22005364,
+            "marks": {
+              "dressing:asks": {
+                "count": 6,
+                "maxMs": 1983.2,
+                "totalMs": 2344.8
+              },
+              "dressing:build": {
+                "count": 8,
+                "maxMs": 5121.8,
+                "totalMs": 12660.2
+              },
+              "dressing:compile": {
+                "count": 8,
+                "maxMs": 5804.5,
+                "totalMs": 32630.1
+              },
+              "dressing:queue-wait": {
+                "count": 8,
+                "maxMs": 20187.5,
+                "totalMs": 113650
+              }
+            }
+          },
+          "dresden/33410_5656_2_sn/phone": {
+            "what": "yards",
+            "builderMs": {
+              "asks": 74.9,
+              "furniture": 59.2,
+              "hedges": 1.8,
+              "lamps": 19.8,
+              "monuments": 39,
+              "rail": 812.7,
+              "riverside": 4.1,
+              "sport": 5.3,
+              "tram": 199.4,
+              "trees": 142.9
+            },
+            "builderMsTotal": 1359.1,
+            "cacheBytes": {
+              "vegetation": 4933762,
+              "lowVegetation": 32440,
+              "lamps": 406292,
+              "monuments": 988504,
+              "furniture": 1829904,
+              "rail": 7192947,
+              "tram": 6306765,
+              "riverside": 74374,
+              "sport": 190512
+            },
+            "cacheBytesTotal": 21955500,
+            "marks": {
+              "dressing:asks": {
+                "count": 4,
+                "maxMs": 230.4,
+                "totalMs": 416.8
+              },
+              "dressing:build": {
+                "count": 9,
+                "maxMs": 3568.1,
+                "totalMs": 10620.2
+              },
+              "dressing:compile": {
+                "count": 9,
+                "maxMs": 6029.8,
+                "totalMs": 30046.5
+              },
+              "dressing:queue-wait": {
+                "count": 9,
+                "maxMs": 14146.5,
+                "totalMs": 60128.7
+              }
+            }
+          },
+          "muenchen/32690_5334_2_by/desktop": {
+            "what": "heaviest",
+            "builderMs": {
+              "asks": 86.9,
+              "furniture": 72,
+              "hedges": 5.3,
+              "lamps": 11.8,
+              "monuments": 96.7,
+              "rail": 314.9,
+              "sport": 4.3,
+              "tram": 147.6,
+              "trees": 149
+            },
+            "builderMsTotal": 888.5,
+            "cacheBytes": {
+              "vegetation": 3238558,
+              "lowVegetation": 60280,
+              "lamps": 139172,
+              "monuments": 4608520,
+              "furniture": 1872552,
+              "rail": 2061972,
+              "tram": 4646288,
+              "sport": 45792
+            },
+            "cacheBytesTotal": 16673134,
+            "marks": {
+              "dressing:asks": {
+                "count": 4,
+                "maxMs": 116.5,
+                "totalMs": 406.8
+              },
+              "dressing:build": {
+                "count": 4,
+                "maxMs": 892.4,
+                "totalMs": 1640.2
+              },
+              "dressing:compile": {
+                "count": 4,
+                "maxMs": 3756.5,
+                "totalMs": 13196.6
+              },
+              "dressing:queue-wait": {
+                "count": 4,
+                "maxMs": 11755.1,
+                "totalMs": 43339.2
+              }
+            }
+          },
+          "muenchen/32690_5334_2_by/phone": {
+            "what": "heaviest",
+            "builderMs": {
+              "asks": 62.5,
+              "furniture": 90.3,
+              "hedges": 7.1,
+              "lamps": 13.1,
+              "monuments": 83,
+              "rail": 343.4,
+              "sport": 4.9,
+              "tram": 163.6,
+              "trees": 175.3
+            },
+            "builderMsTotal": 943.2,
+            "cacheBytes": {
+              "vegetation": 3238558,
+              "lowVegetation": 60280,
+              "lamps": 139172,
+              "monuments": 4608520,
+              "furniture": 1872552,
+              "rail": 2061972,
+              "tram": 4646288,
+              "sport": 45792
+            },
+            "cacheBytesTotal": 16673134,
+            "marks": {
+              "dressing:asks": {
+                "count": 2,
+                "maxMs": 76.3,
+                "totalMs": 138.8
+              },
+              "dressing:build": {
+                "count": 2,
+                "maxMs": 1001.7,
+                "totalMs": 1058.9
+              },
+              "dressing:compile": {
+                "count": 2,
+                "maxMs": 3000.3,
+                "totalMs": 6000.5
+              },
+              "dressing:queue-wait": {
+                "count": 2,
+                "maxMs": 9805.8,
+                "totalMs": 16816.1
+              }
+            }
+          }
+        },
+        "spikes": {
+          "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, linux-x64, headless Chromium, WebGPU on SwiftShader",
+          "read": "2026-11-16",
+          "dresden/33410_5656_2_sn/desktop": {
+            "what": "yards",
+            "builderMs": {
+              "asks": 75.8,
+              "furniture": 53.7,
+              "hedges": 1.7,
+              "lamps": 16.9,
+              "monuments": 38.5,
+              "rail": 807.2,
+              "rail-table": 22.6,
+              "riverside": 3.3,
+              "sport": 8.7,
+              "tram": 46.7,
+              "trees": 132.1
+            },
+            "builderMsTotal": 1207.2,
+            "cacheBytes": {
+              "vegetation": 4933762,
+              "lowVegetation": 32440,
+              "lamps": 406292,
+              "monuments": 988504,
+              "furniture": 1829904,
+              "rail": 5593855,
+              "tram": 1543118,
+              "riverside": 71622,
+              "sport": 190512
+            },
+            "cacheBytesTotal": 15590009,
+            "marks": {
+              "dressing:asks": {
+                "count": 6,
+                "maxMs": 104.4,
+                "totalMs": 566.5
+              },
+              "dressing:build": {
+                "count": 8,
+                "maxMs": 4007.6,
+                "totalMs": 9608.2
+              },
+              "dressing:compile": {
+                "count": 8,
+                "maxMs": 7424.5,
+                "totalMs": 34150.1
+              },
+              "dressing:queue-wait": {
+                "count": 8,
+                "maxMs": 20787.6,
+                "totalMs": 109888.9
+              }
+            }
+          }
+        }
+      },
+      "stands": {
+        "read": "2026-11-16",
+        "bytes": [
+          {
+            "site": "dresden",
+            "tile": "33412_5656_2_sn",
+            "what": "spawn",
+            "crowns": 5020,
+            "standing": 5020,
+            "today": {
+              "recordBytes": 20,
+              "wire": 75876,
+              "raw": 100408,
+              "gpuPlacementBytes": 321280
+            },
+            "record": {
+              "recordBytes": 20,
+              "wire": 75260,
+              "raw": 100420,
+              "gpuPlacementBytes": 100400,
+              "stepM": {
+                "plan": 0.03125,
+                "height": 0.00390625
+              },
+              "fieldsOutOfRange": 0,
+              "worstPlaceM": 0.0178,
+              "worstScaleShare": 0.0011,
+              "scalesOutOfRange": 0
+            }
+          },
+          {
+            "site": "dresden",
+            "tile": "33416_5658_2_sn",
+            "what": "forest",
+            "crowns": 27736,
+            "standing": 27736,
+            "today": {
+              "recordBytes": 20,
+              "wire": 397459,
+              "raw": 554728,
+              "gpuPlacementBytes": 1775104
+            },
+            "record": {
+              "recordBytes": 20,
+              "wire": 424001,
+              "raw": 554740,
+              "gpuPlacementBytes": 554720,
+              "stepM": {
+                "plan": 0.03125,
+                "height": 0.00390625
+              },
+              "fieldsOutOfRange": 0,
+              "worstPlaceM": 0.0179,
+              "worstScaleShare": 0.0012,
+              "scalesOutOfRange": 0
+            }
+          },
+          {
+            "site": "dresden",
+            "tile": "33410_5656_2_sn",
+            "what": "yards",
+            "crowns": 4467,
+            "standing": 4467,
+            "today": {
+              "recordBytes": 20,
+              "wire": 65554,
+              "raw": 89348,
+              "gpuPlacementBytes": 285888
+            },
+            "record": {
+              "recordBytes": 20,
+              "wire": 66666,
+              "raw": 89360,
+              "gpuPlacementBytes": 89340,
+              "stepM": {
+                "plan": 0.03125,
+                "height": 0.00390625
+              },
+              "fieldsOutOfRange": 0,
+              "worstPlaceM": 0.0178,
+              "worstScaleShare": 0.0013,
+              "scalesOutOfRange": 0
+            }
+          },
+          {
+            "site": "muenchen",
+            "tile": "32690_5334_2_by",
+            "what": "heaviest",
+            "crowns": 3301,
+            "standing": 3301,
+            "today": {
+              "recordBytes": 20,
+              "wire": 51141,
+              "raw": 66028,
+              "gpuPlacementBytes": 211264
+            },
+            "record": {
+              "recordBytes": 20,
+              "wire": 50655,
+              "raw": 66040,
+              "gpuPlacementBytes": 66020,
+              "stepM": {
+                "plan": 0.03125,
+                "height": 0.00390625
+              },
+              "fieldsOutOfRange": 0,
+              "worstPlaceM": 0.0178,
+              "worstScaleShare": 0.0016,
+              "scalesOutOfRange": 0
+            }
+          }
+        ],
+        "probe": {
+          "three": "187",
+          "stands": {
+            "standBytes": {
+              "byte1Of200": 229,
+              "byte3Of255": 255
+            },
+            "litMatrices": 10546,
+            "litRecords": 10538,
+            "differing": 118,
+            "buildsForASecondMatrixSet": 0,
+            "buildsForASecondRecordSet": 0,
+            "matrices": {
+              "attributes": [
+                "position: vec3<f32>",
+                "normal: vec3<f32>",
+                "iMat0: vec4<f32>",
+                "iMat1: vec4<f32>",
+                "iMat2: vec4<f32>",
+                "iMat3: vec4<f32>"
+              ],
+              "vertexBuffers": 3,
+              "varyings": 1
+            },
+            "records": {
+              "attributes": [
+                "position: vec3<f32>",
+                "normal: vec3<f32>",
+                "iPlace: vec4<u32>",
+                "iSize: vec4<u32>"
+              ],
+              "vertexBuffers": 3,
+              "varyings": 1
+            }
+          },
+          "coarseCrowns": {
+            "crowns": 5020,
+            "sets": 103,
+            "litMatrices": 8424,
+            "litRecords": 8409,
+            "differing": 285,
+            "buildsForTheOtherRecordSets": 3,
+            "placementBytesMatrices": 321280,
+            "placementBytesRecords": 100400,
+            "matrices": {
+              "attributes": [
+                "position: vec3<f32>",
+                "normal: vec3<f32>",
+                "iMat0: vec4<f32>",
+                "iMat1: vec4<f32>",
+                "iMat2: vec4<f32>",
+                "iMat3: vec4<f32>",
+                "iColor: vec3<f32>"
+              ],
+              "vertexBuffers": 4,
+              "varyings": 3
+            },
+            "records": {
+              "attributes": [
+                "position: vec3<f32>",
+                "normal: vec3<f32>",
+                "iPlace: vec4<u32>",
+                "iSize: vec4<u32>",
+                "iColor: vec3<f32>"
+              ],
+              "vertexBuffers": 4,
+              "varyings": 3
+            },
+            "errors": []
+          },
+          "types": [
+            {
+              "label": "interleaved Uint16Array, not normalized, itemSize 4",
+              "wgsl": "vec4<u32>",
+              "red": 188,
+              "arrayAfterUpload": "Uint16Array",
+              "errors": [],
+              "threw": ""
+            },
+            {
+              "label": "interleaved Uint16Array, normalized, itemSize 4",
+              "wgsl": "vec4<f32>",
+              "red": 188,
+              "arrayAfterUpload": "Uint16Array",
+              "errors": [],
+              "threw": ""
+            },
+            {
+              "label": "interleaved Uint16Array, not normalized, itemSize 2 at word 8",
+              "wgsl": "vec2<u32>",
+              "red": 188,
+              "arrayAfterUpload": "Uint16Array",
+              "errors": [],
+              "threw": ""
+            },
+            {
+              "label": "interleaved Uint8Array, normalized, itemSize 4 at byte 16 of 20",
+              "wgsl": "vec4<f32>",
+              "red": 188,
+              "arrayAfterUpload": "Uint8Array",
+              "errors": [],
+              "threw": ""
+            },
+            {
+              "label": "interleaved Uint8Array, not normalized, itemSize 4 at byte 16 of 20",
+              "wgsl": "vec4<u32>",
+              "red": 188,
+              "arrayAfterUpload": "Uint8Array",
+              "errors": [],
+              "threw": ""
+            },
+            {
+              "label": "InstancedBufferAttribute Uint16Array, not normalized, itemSize 4",
+              "wgsl": "vec4<u32>",
+              "red": 188,
+              "arrayAfterUpload": "Uint32Array",
+              "errors": [],
+              "threw": ""
+            },
+            {
+              "label": "InstancedBufferAttribute Uint16Array, normalized, itemSize 4",
+              "wgsl": "vec4<f32>",
+              "red": 188,
+              "arrayAfterUpload": "Uint16Array",
+              "errors": [],
+              "threw": ""
+            },
+            {
+              "label": "InstancedBufferAttribute Uint16Array, normalized, itemSize 3",
+              "wgsl": "vec3<f32>",
+              "red": 188,
+              "arrayAfterUpload": "Uint16Array",
+              "errors": [],
+              "threw": ""
+            },
+            {
+              "label": "InstancedBufferAttribute Uint8Array, normalized, itemSize 4",
+              "wgsl": "vec4<f32>",
+              "red": 188,
+              "arrayAfterUpload": "Uint8Array",
+              "errors": [],
+              "threw": ""
+            },
+            {
+              "label": "InstancedBufferAttribute Uint8Array, not normalized, itemSize 4",
+              "wgsl": "vec4<u32>",
+              "red": 188,
+              "arrayAfterUpload": "Uint32Array",
+              "errors": [],
+              "threw": ""
+            },
+            {
+              "label": "InstancedBufferAttribute Uint16Array, normalized, itemSize 1",
+              "wgsl": "f32",
+              "red": 0,
+              "arrayAfterUpload": "Uint16Array",
+              "errors": [
+                "THREE.WebGPUAttributeUtils: Vertex format not supported yet.",
+                "THREE.WebGPUAttributeUtils: Vertex format not supported yet.",
+                "THREE.WebGPURenderer: Async render pipeline creation failed (renderPipeline_MeshBasicNodeMaterial_30): Failed to execute 'createRenderPipelineAsync' on 'GPUDevice': Failed to read the 'vertex' property from 'GPURenderPipelineDescriptor': Failed to read the 'buffers' property from 'GPUVertexState': F",
+                "THREE.WebGPUAttributeUtils: Vertex format not supported yet."
+              ],
+              "threw": ""
+            },
+            {
+              "label": "two interleaved buffers over one ArrayBuffer (a Uint16Array and a Uint8Array view)",
+              "wgsl": "vec4<f32>",
+              "red": 188,
+              "arrayAfterUpload": "Uint8Array",
+              "errors": [],
+              "threw": ""
+            }
+          ],
+          "oneArrayBufferTwoViews": {
+            "attributesBefore": 83,
+            "attributesAfter": 85
+          },
+          "rails": {
+            "chunks": 2,
+            "litTriangles": 2948,
+            "litSegments": 2938,
+            "differing": 190,
+            "builds": 2,
+            "segments": {
+              "attributes": [
+                "position: vec3<f32>",
+                "normal: vec3<f32>",
+                "sA: vec4<u32>",
+                "sB: vec4<u32>",
+                "sMore: vec2<u32>"
+              ],
+              "vertexBuffers": 3,
+              "varyings": 1
+            }
+          },
+          "errors": [
+            "THREE.WebGPUAttributeUtils: Vertex format not supported yet.",
+            "THREE.WebGPUAttributeUtils: Vertex format not supported yet.",
+            "THREE.WebGPURenderer: Async render pipeline creation failed (renderPipeline_MeshBasicNodeMaterial_30): Failed to execute 'createRenderPipelineAsync' on 'GPUDevice': Failed to read the 'vertex' property from 'GPURenderPipelineDescriptor': Failed to read the 'buffers' property from 'GPUVertexState': F",
+            "THREE.WebGPUAttributeUtils: Vertex format not supported yet."
+          ]
+        }
+      },
+      "lines": {
+        "site": "dresden",
+        "tile": "33410_5656_2_sn",
+        "read": "2026-11-16",
+        "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, linux-x64, Bun 1.4.4 (timings under Bun, not in a browser)",
+        "runs": 337,
+        "segments": 19721,
+        "segmentsSimplified": 7676,
+        "simplifyTolerance": {
+          "across": 0.01,
+          "height": 0.005
+        },
+        "trackMetres": 47718,
+        "today": {
+          "wire": {
+            "railFile": 12723,
+            "tramFile": 35218,
+            "tramTracksOnly": 21980
+          },
+          "sceneThreadMs": {
+            "railBuilder": 1034.2,
+            "tramBuilder": 254.4,
+            "railBuilderWithoutRails": 894.2,
+            "tramBuilderWithoutRails": 50.6,
+            "rails": 343.8
+          },
+          "gpuBytes": 7079056,
+          "vertices": 267985,
+          "streetRailOverRoad": {
+            "vertices": 147633,
+            "p05": 0.009,
+            "p50": 0.028,
+            "p95": 0.044,
+            "buried": 0.0014,
+            "deepest": -0.045
+          }
+        },
+        "baked": {
+          "everySample": {
+            "wire": {
+              "glb": 364361
+            },
+            "sceneThreadMs": {
+              "parse": 8.3
+            },
+            "gpuBytes": 6091524,
+            "vertices": 275019,
+            "positions": "Int16Array, normalized, 3 an item",
+            "positionStepM": 0.03054,
+            "streetRailOverRoad": {
+              "vertices": 49602,
+              "p05": 0.005,
+              "p50": 0.028,
+              "p95": 0.052,
+              "buried": 0.0017,
+              "deepest": -0.053
+            }
+          },
+          "simplified": {
+            "wire": {
+              "glb": 288067
+            },
+            "sceneThreadMs": {
+              "parse": 3.8
+            },
+            "gpuBytes": 2411652,
+            "vertices": 125251,
+            "positions": "Int16Array, normalized, 3 an item",
+            "positionStepM": 0.03054,
+            "streetRailOverRoad": {
+              "vertices": 18898,
+              "p05": 0.005,
+              "p50": 0.028,
+              "p95": 0.053,
+              "buried": 0.0015,
+              "deepest": -0.049
+            }
+          }
+        },
+        "table": {
+          "recordBytes": 20,
+          "stepM": {
+            "plan": 0.0078125,
+            "height": 0.00390625
+          },
+          "everySample": {
+            "wire": {
+              "table": 164222,
+              "raw": 396836,
+              "asPointList": 114654
+            },
+            "sceneThreadMs": {
+              "sets": 4.2
+            },
+            "gpuBytes": 395788,
+            "segments": 19721,
+            "chunks": 86,
+            "clamped": 0,
+            "streetRailOverRoad": {
+              "vertices": 99126,
+              "p05": 0.009,
+              "p50": 0.028,
+              "p95": 0.044,
+              "buried": 0.0014,
+              "deepest": -0.047
+            }
+          },
+          "simplified": {
+            "wire": {
+              "table": 72543,
+              "raw": 155936,
+              "asPointList": 55112
+            },
+            "sceneThreadMs": {
+              "sets": 2.6
+            },
+            "gpuBytes": 154888,
+            "segments": 7676,
+            "chunks": 86,
+            "clamped": 0,
+            "streetRailOverRoad": {
+              "vertices": 67770,
+              "p05": 0.009,
+              "p50": 0.028,
+              "p95": 0.044,
+              "buried": 0.0014,
+              "deepest": -0.058
+            }
           }
         }
       }

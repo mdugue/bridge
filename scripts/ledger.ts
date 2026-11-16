@@ -61,6 +61,7 @@ import type { ContentExtras } from "../lib/city/tileset";
 import { TILESET_FILE, TILESET_SPAWN_FILE } from "../lib/city/tileset";
 import { REFERENCE_SITE } from "../sites";
 import { measureBakeStore } from "./ledger-bake-store";
+import { measureDressing } from "./ledger-dressing";
 import { rasterLedger, readySites } from "./ledger-rasters";
 
 const ROOT = nodePath.join(import.meta.dir, "..");
@@ -226,7 +227,7 @@ function refuseUnserved(published: PublishedFiles): void {
 export function measure(
   site: string,
   root = ROOT
-): Omit<Ledger, "bakeStore" | "dated" | "rasters"> {
+): Omit<Ledger, "bakeStore" | "dated" | "dressing" | "rasters"> {
   const published = publishedFiles(site, root);
   const wireOf = new Map<string, number>();
   const wire = (served: string) => {
@@ -332,14 +333,22 @@ export async function run(
   const committed: unknown = existsSync(file)
     ? JSON.parse(readFileSync(file, "utf-8"))
     : null;
-  // one key a section: the reference site's, every site's rasters, the
-  // bakes' hand-over (plan 092)
+  // one key a section: the reference site's, then every site's rasters,
+  // then the dressing (its recorded part only on a write: the check
+  // never compares it), then the bakes' hand-over (plan 092)
+  const check = argv.includes("--check");
   const fresh = {
     ...measure(site, root),
     rasters: await measureRasters(root),
+    dressing: measureDressing(
+      site,
+      root,
+      publishedFiles,
+      check ? undefined : { committed, today }
+    ),
     bakeStore: measureBakeStore(root),
   };
-  if (!argv.includes("--check")) {
+  if (!check) {
     const ledger = datedLedger(fresh, committed, today);
     writeFileSync(file, `${JSON.stringify(ledger, null, 2)}\n`);
     formatAsCommitted(file);

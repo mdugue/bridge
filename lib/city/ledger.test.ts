@@ -710,6 +710,7 @@ const LEDGER = {
     upstreamWorkarounds: { entries: 2, sites: 2 },
   },
   rasters: { rule: "rasters", cpuDecodes: [], sites: {}, sorts: SORT_OF },
+  dressing: { tiles: {} },
   bakeStore: {
     sites: ["dresden"],
     fileKinds: { total: 2, formats: 2, byFormat: { geojson: 1, png: 1 } },
@@ -859,6 +860,7 @@ test("the written ledger is the fresh figures, the heading first", () => {
     "buildings",
     "counters",
     "rasters",
+    "dressing",
     "bakeStore",
   ]);
   // a further section is written where it was measured, and gated
@@ -951,7 +953,7 @@ test("a path the check does not compare, with everything under it", () => {
     ])
   ).toEqual(["a.readWith: 1 → 2"]);
   expect(ledgerDiff(was, now, [])).toContain('dated: "a" → "b"');
-  expect([...UNCOMPARED]).toEqual(["dated"]);
+  expect([...UNCOMPARED]).toEqual(["dated", "dressing.recorded"]);
 });
 
 test("a name in a tileset that the site does not serve", () => {
