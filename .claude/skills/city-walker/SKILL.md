@@ -406,6 +406,15 @@ and therefore what keeps builds out of frames:
   rides in the windows' snorm16 `_FACADE` (−1 in its third,
   `lib/city/windows.ts` `FACADE_ROOF`).
   3-component snorm8/16 positions and normals are fine (three pads them).
+  A plain attribute of 8- or 16-bit integers that is **not normalized**
+  is widened to 32 bits on upload (r187, `WebGPUAttributeUtils`): two or
+  four times its bytes. An interleaved buffer is uploaded as it is, has
+  ONE typed array, and every view of it takes its format from that
+  array — so a compact record is an interleaved `Uint16Array` whose
+  fields are words (not normalized: `vec4<u32>` in the shader, exact), a
+  byte taken out of its word in the shader (`lib/city/stand-record.ts`,
+  measured by `scripts/eval/stand-record-probe.ts`; plan 090's
+  *Findings*).
 - **Eight vertex buffers a draw on WebGPU** (the device's default limit;
   three requests no more). Each non-interleaved attribute is one buffer,
   `position` and `normal` included (an interleaved instance matrix is

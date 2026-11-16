@@ -169,7 +169,7 @@ export function createStyleDressing(scene: Scene): StyleDressing {
       crownGeo(kind, tier),
       mesh.material,
       mesh.capacity,
-      mesh.instanceMatrix
+      mesh.placement
     );
     for (const [name, attribute] of Object.entries(mesh.geometry.attributes)) {
       if (!styled.geometry.hasAttribute(name) && isPerInstance(attribute)) {

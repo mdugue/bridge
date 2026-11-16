@@ -35,7 +35,11 @@ export default defineConfig({
   testDir: "./e2e",
   // The --headed snapshot harness renders every shots/*.json at the full
   // profile and overwrites the PNGs; it only runs when asked for (bun run shots).
-  testIgnore: process.env.SHOTS ? [] : ["**/snapshot-shot.spec.ts"],
+  // (and plan 090's browser figures only with DRESSING_LEDGER=1)
+  testIgnore: [
+    ...(process.env.SHOTS ? [] : ["**/snapshot-shot.spec.ts"]),
+    ...(process.env.DRESSING_LEDGER ? [] : ["**/dressing-ledger.spec.ts"]),
+  ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
