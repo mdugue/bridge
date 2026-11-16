@@ -21,6 +21,7 @@ import type { BakeStoreLedger } from "./ledger-bake-store";
 import { DRESSING_UNCOMPARED } from "./ledger-dressing";
 import type { DressingLedger } from "./ledger-dressing";
 import type { BlockLedger } from "./ledger-blocks";
+import type { CensusLedger } from "./ledger-census";
 import type { RasterLedger } from "./ledger-rasters";
 import { BLOCK_RASTER_KEYS, TERRAIN_RASTER_KEYS } from "./tileset";
 
@@ -707,6 +708,10 @@ export interface Ledger {
    *  `--browser` has run */
   browser?: BrowserFigures;
   buildings: BuildingFigures;
+  /** plan 094's census of builds over a flight of each built site
+   *  (lib/city/ledger-census.ts): recorded, never compared; absent until
+   *  `--census` has run */
+  census?: CensusLedger;
   /** the bytes and requests of each set */
   bytes: Record<LedgerSet, SetLedger>;
   counters: Counters;
@@ -738,6 +743,7 @@ export const UNCOMPARED: readonly string[] = [
   DRESSING_UNCOMPARED,
   "timings",
   "browser.readWith",
+  "census",
 ];
 
 /** Leaf paths with their values (`bytes.fine.spawn.bytes`). */

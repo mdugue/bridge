@@ -2158,7 +2158,10 @@ it is:
 - what the lite scene does not draw: the traffic bodies (the layer that
   once vanished past eight buffers: `traffic-layer.test.ts` counts its
   attributes), tram cars, the data layers, a visitor's design, and
-  whatever only another tile of the site has;
+  whatever only another tile of the site has. The ledger's census
+  (`bun run ledger -- --census`, `docs/data-pipeline.md`, "The census of
+  builds") reads those with the same probe over a flight of every site
+  with its data layers on and a design loaded — by hand, not on CI;
 - the clay under a held Ausschnitt: three's hook looks a drawable up
   outside its `ClippingGroup`, so the probe answers nothing while a cut
   is held, and the clip distances' variable on the vertex side is not

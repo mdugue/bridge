@@ -5,7 +5,9 @@
  * builds and starts one), gzips each script body it saved with this, the
  * pinned, Bun, and returns the ledger's `browser` and `timings` sections
  * (lib/city/ledger-browser.ts). Without `--browser`, the committed ones
- * stand, uncompared.
+ * stand, uncompared. With `--census` the spec also flies the sites it is
+ * handed (`LEDGER_CENSUS`) and the read returns the `census` section
+ * (lib/city/ledger-census.ts, plan 094 phase 2).
  *
  * It refuses a read whose JavaScript is not CI's: a build environment that
  * inlines a value CI does not set (next.config.ts, the crash reports'
@@ -28,6 +30,8 @@ import type {
   BrowserReading,
   Timings,
 } from "../lib/city/ledger-browser";
+import { censusLedger } from "../lib/city/ledger-census";
+import type { CensusLedger } from "../lib/city/ledger-census";
 
 const ROOT = nodePath.join(import.meta.dir, "..");
 
@@ -152,15 +156,23 @@ export function checkRun(exitCode: number | null, wroteReading: boolean): void {
   }
 }
 
-/** Runs the spec into a fresh folder. */
-async function readBrowser(root = ROOT): Promise<BrowserRead> {
+/** Runs the spec into a fresh folder; `census`: the sites it flies. */
+async function readBrowser(
+  root = ROOT,
+  census: readonly string[] = []
+): Promise<BrowserRead> {
   await refuseForeignBuild(root);
   const dir = mkdtempSync(nodePath.join(tmpdir(), "ledger-"));
   const run = Bun.spawnSync(
     ["bunx", "playwright", "test", "e2e/ledger.spec.ts", "--reporter=line"],
     {
       cwd: root,
-      env: { ...process.env, LEDGER: "1", LEDGER_OUT: dir },
+      env: {
+        ...process.env,
+        LEDGER: "1",
+        LEDGER_OUT: dir,
+        LEDGER_CENSUS: census.join(","),
+      },
       // Playwright's progress to stderr: stdout is the ledger's report
       stdio: ["ignore", process.stderr.fd, "inherit"],
     }
@@ -186,13 +198,28 @@ export function sectionsOf(
   files: Record<string, string>,
   machine: string,
   today: string
-): { browser: BrowserFigures; timings: Timings } {
+): { browser: BrowserFigures; census?: CensusLedger; timings: Timings } {
   const logicalOf = new Map(
     Object.entries(files).map(([logical, served]) => [served, logical])
   );
   const gzip = new Map(
     read.reading.firstLoad.map((f) => [f.url, jsGzip(read.body(f.body))])
   );
+  const { census } = read.reading;
+  return {
+    ...browserSectionsOf(read, logicalOf, gzip, machine, today),
+    ...(census ? { census: censusLedger(census, machine, today) } : {}),
+  };
+}
+
+/** `browserLedger` over a read whose scripts are weighed. */
+function browserSectionsOf(
+  read: Omit<BrowserRead, "done">,
+  logicalOf: ReadonlyMap<string, string>,
+  gzip: ReadonlyMap<string, number>,
+  machine: string,
+  today: string
+): { browser: BrowserFigures; timings: Timings } {
   return browserLedger(
     read.reading,
     (url) => {
@@ -208,13 +235,18 @@ export function sectionsOf(
   );
 }
 
-/** The browser's sections, read now. */
+/** The browser's sections, read now; `census`: the sites to fly. */
 export async function browserSections(
   files: Record<string, string>,
   machine: string,
-  root = ROOT
-): Promise<{ browser: BrowserFigures; timings: Timings }> {
-  const read = await readBrowser(root);
+  root = ROOT,
+  census: readonly string[] = []
+): Promise<{
+  browser: BrowserFigures;
+  census?: CensusLedger;
+  timings: Timings;
+}> {
+  const read = await readBrowser(root, census);
   try {
     return sectionsOf(
       read,

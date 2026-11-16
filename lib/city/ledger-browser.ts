@@ -7,6 +7,12 @@
  * the pinned Bun and calls `browserLedger`.
  */
 import { gzipSync } from "node:zlib";
+import { pipelineFigures } from "./ledger-census";
+import type {
+  CensusBuild,
+  CensusReading,
+  PipelineFigure,
+} from "./ledger-census";
 
 /** One timing category as the scene's `getTimings` counts it
  *  (app/_components/stream-timing.ts `TimingStat`). */
@@ -45,6 +51,11 @@ export interface BrowserReading {
     tier: string;
     tiles: CacheEntry[];
   };
+  /** plan 094's census (`LEDGER_CENSUS`): absent without it */
+  census?: CensusReading;
+  /** every build of the lite spawn, once no compile is queued, against
+   *  WebGPU's limits (plan 094) */
+  pipelines: CensusBuild[];
   /** `getTimings()` at `ready`, on the desktop and on the phone */
   timings: {
     desktop: Record<string, TimingFigure>;
@@ -100,6 +111,9 @@ export interface BrowserFigures {
     contents: Record<string, number>;
     note: string;
   };
+  /** every build of the lite spawn against WebGPU's limits, by its name
+   *  (lib/city/ledger-census.ts `pipelineFigures`; plan 094) */
+  pipelines: { builds: Record<string, PipelineFigure>; note: string };
   /** the browser and adapter they were read with: beside the figures,
    *  never compared (`readWith` is in the ledger's UNCOMPARED) */
   readWith: string;
@@ -213,6 +227,7 @@ export function browserLedger(
       readWith: `${reading.browser}, ${reading.adapter}`,
       firstLoad: firstLoadFigures(files),
       phoneLiteSpawnCache: phoneCache(reading.phone.tiles, logical),
+      pipelines: pipelineFigures(reading.pipelines),
     },
     timings: {
       note: TIMINGS_NOTE,

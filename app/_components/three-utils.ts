@@ -514,8 +514,10 @@ export function sceneMaterial<T extends Material>(
   if (!material) {
     material = make();
     material.userData.shared = true;
-    // The key names the render pipelines three builds for it (diagnostics).
+    // The key names the render pipelines three builds for it (diagnostics);
+    // the census reads it even where `make` named the material itself.
     material.name ||= key;
+    material.userData.sceneKey = key;
     sceneMaterials.set(key, material);
   }
   return material;

@@ -960,6 +960,7 @@ test("a path the check does not compare, with everything under it", () => {
     "dressing.recorded",
     "timings",
     "browser.readWith",
+    "census",
   ]);
 });
 
@@ -1022,6 +1023,7 @@ const BROWSER: NonNullable<Ledger["browser"]> = {
     workerOnly: { files: 1, gzip: 40_000 },
   },
   phoneLiteSpawnCache: { note: "n", bytes: 300, contents: { t: 300 } },
+  pipelines: { note: "n", builds: {} },
 };
 
 test("the browser's figures are compared exactly; its browser and the timings never", () => {

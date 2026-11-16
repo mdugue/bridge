@@ -98,6 +98,7 @@ const READING: BrowserReading = {
     { url: "/_next/static/chunks/a.js", body: "js-0.js", worker: false },
   ],
   workers: ["scene", "niches", "ground"],
+  pipelines: [],
   elsewhere: ["/_next/static/chunks/bvh.js"],
   phone: {
     tier: "mobile",
