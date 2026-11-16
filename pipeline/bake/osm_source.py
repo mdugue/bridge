@@ -226,10 +226,10 @@ def shortfall(boundary: shapely.Geometry, tiles: Iterable[Tile]) -> str | None:
     """None when `boundary` covers the site; else by how much it does not,
     side by side of the boundary's box ("west by 0.025°")."""
     need = needed_area(tiles)
-    if boundary.covers(need):
+    if shapely.covers(boundary, need):
         return None
-    nx0, ny0, nx1, ny1 = need.bounds
-    bx0, by0, bx1, by1 = boundary.bounds
+    nx0, ny0, nx1, ny1 = shapely.bounds(need)
+    bx0, by0, bx1, by1 = shapely.bounds(boundary)
     sides = [
         (name, gap)
         for name, gap in (

@@ -319,6 +319,7 @@ def _download_extract(url: str, dest: Path, poly: str | None = None) -> None:
     to reach the server is tried again (`osm_source.unreachable`); a 404, a
     checksum that does not match or a full disk raise at once."""
     new = dest.with_name(dest.name + ".new")
+    published: str | None = None
     for attempt in range(1, OSM_TRIES + 1):
         new.unlink(missing_ok=True)
         try:
@@ -359,10 +360,14 @@ def _fetch_bbbike(spec: Spec, url: str | None) -> bool:
         poly, problem = None, f"its boundary {poly_url(url)} not read ({type(err).__name__}: {err})"
     # the coverage first: a site it does not cover downloads nothing, and
     # a copy another site of the Land fetched stays for that site
-    if problem is None and (
-        not dest.exists()
-        or osm_source.intact(dest) is not None
-        or (read_record(dest) or {}).get("polyMd5") != osm_source.text_md5(poly)
+    if (
+        problem is None
+        and poly is not None
+        and (
+            not dest.exists()
+            or osm_source.intact(dest) is not None
+            or (read_record(dest) or {}).get("polyMd5") != osm_source.text_md5(poly)
+        )
     ):
         try:
             _download_extract(url, dest, poly)
