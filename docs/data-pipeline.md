@@ -1018,8 +1018,18 @@ near buildings differed by one to three vertices a tile between glibc
 2.39 and 2.43, 2026-11-16). So every module `prepare-data.ts` reaches
 computes with `PMath` (`lib/city/portable-math.ts`): the same functions
 in the operations IEEE 754 rounds exactly. `scripts/bake-entries.test.ts`
-holds those modules to it, `lib/city/portable-math.test.ts` pins the
-functions' bits. The gzip (libdeflate, level 9) and meshopt's codecs gave
+holds those modules to it — any use of `Math` but its exactly rounded
+members (`sqrt`, `abs`, `floor`, `round`, `min`, `max`, the constants …),
+any `**` but to a whole literal up to 1000 (what JavaScriptCore multiplies
+out), and the methods of three's maths that call the C library inside
+fail it — and `lib/city/portable-math.test.ts` pins the functions' bits.
+What a dependency computes where no bake module asks the test cannot see
+(today the CityJSON loader's material colours, which no baked file
+carries): that is held by the ledger's check in CI, which compares every
+baked byte with a file another machine wrote (ADR 0024). `sin`, `cos` and
+`tan` answer up to 2^50 and are NaN past it; a hash's large angle (an OSM
+id times its constant) is folded, good to about 1e−15 and the same bits
+everywhere. The gzip (libdeflate, level 9) and meshopt's codecs gave
 the same bytes on both machines.
 
 **Shared cache.** Vercel restores each branch's build cache from that

@@ -15,8 +15,20 @@
  * function is within a few units in the last place of the true value
  * (`pow` to a non-integer power within about |y · ln x| of them: thirty
  * for an sRGB curve near black) — less tight than a C library's, and far
- * below anything a bake quantises to. What must hold is that they give the same bits
- * everywhere: portable-math.test.ts pins them.
+ * below anything a bake quantises to. What must hold is that they give
+ * the same bits everywhere: portable-math.test.ts pins them.
+ *
+ * The contract's edges. `sin`, `cos` and `tan` hold that accuracy up to
+ * 5e8; from there to 2^50 (about 1e15) an angle is folded by 2π in two
+ * parts and the result is good to about 1e−15 absolute, not to the last
+ * place — a hash's seed times its constant (an OSM id × 12.9898 ≈ 2e10)
+ * lands here, and a hash wants the same bits everywhere, not accuracy;
+ * past 2^50 they are NaN, where `Math`'s still answer. Outside the
+ * contract, and not what `Math` gives: a whole power above 1000 or below
+ * −1000 (computed as exp(y · log x): `pow(2, 1024)` is finite), a
+ * non-integer power of an exact root (`pow(1000, 1 / 3)` is not 10; the
+ * square root is exact), `hypot` of values whose squares overflow or
+ * underflow, and subnormal results anywhere.
  *
  * Every module in a bake's cache key uses these, never `Math`'s
  * (bake-entries.test.ts). `Math.sqrt`, `abs`, `floor`, `ceil`, `round`,
@@ -42,6 +54,12 @@ function pow2(k: number): number {
   return words[0];
 }
 
+const TWO_M26 = pow2(-26);
+const TWO_M28 = pow2(-28);
+const TWO_M29 = pow2(-29);
+const TWO_M60 = pow2(-60);
+const TWO_M1022 = pow2(-1022);
+
 /** x · 2^k. */
 function scale(x: number, k: number): number {
   if (k > 1023) {
@@ -59,6 +77,10 @@ function hypot(...values: number[]): number {
   let sum = 0;
   for (const v of values) {
     sum += v * v;
+  }
+  if (Number.isNaN(sum) && values.some((v) => Math.abs(v) === Infinity)) {
+    // an infinite side outweighs a NaN one, as in `Math.hypot`
+    return Number.POSITIVE_INFINITY;
   }
   return Math.sqrt(sum);
 }
@@ -79,10 +101,19 @@ const REDUCE_MAX = 500_000;
 /** x = n · π/2 + r + tail, |r| ≤ π/4: `quadrant` holds n modulo 4. */
 const reduced = { quadrant: 0, r: 0, tail: 0 };
 
+/** The largest angle `sin`, `cos` and `tan` answer (2^50): past it the
+ *  turns taken are no longer counted to the last one. */
+const ANGLE_LIMIT = 1_125_899_906_842_624;
+
 /** A large angle less its whole turns: the remainder by 2π as a double
  *  (exact), then what that double lacks of 2π for every turn taken. Good
- *  to the last places up to about 1e15 — a hash's seed times a constant. */
+ *  to about 1e−15 absolute up to ANGLE_LIMIT, NaN past it: what reaches
+ *  here is a hash's seed times its constant, which wants the same bits on
+ *  every machine and no more. */
 function folded(x: number): number {
+  if (Math.abs(x) > ANGLE_LIMIT) {
+    return Number.NaN;
+  }
   const r = x % TWO_PI;
   const turns = Math.round((x - r) / TWO_PI);
   return r - turns * TWO_PI_LO;
@@ -168,7 +199,7 @@ function sin(x: number): number {
   if (!Number.isFinite(x)) {
     return Number.NaN;
   }
-  if (Math.abs(x) < 2 ** -26) {
+  if (Math.abs(x) < TWO_M26) {
     return x;
   }
   reduce(x);
@@ -202,7 +233,7 @@ function tan(x: number): number {
   if (!Number.isFinite(x)) {
     return Number.NaN;
   }
-  if (Math.abs(x) < 2 ** -26) {
+  if (Math.abs(x) < TWO_M26) {
     return x;
   }
   reduce(x);
@@ -256,7 +287,7 @@ function atan(x: number): number {
   if (ax >= 2 ** 66) {
     return x > 0 ? ATAN_HI[3] + ATAN_LO[3] : -ATAN_HI[3] - ATAN_LO[3];
   }
-  if (ax < 2 ** -29) {
+  if (ax < TWO_M29) {
     return x;
   }
   const [id, t] = atanInterval(ax);
@@ -314,7 +345,7 @@ function atan2(y: number, x: number): number {
   let z = 0;
   if (ratio > 2 ** 60) {
     z = Math.PI / 2 + 0.5 * PI_LO;
-  } else if (!(x < 0 && ratio < 2 ** -60)) {
+  } else if (!(x < 0 && ratio < TWO_M60)) {
     z = atan(ratio);
   }
   if (x > 0) {
@@ -361,7 +392,7 @@ function exp(x: number): number {
   if (x < EXP_UNDERFLOW) {
     return 0;
   }
-  if (Math.abs(x) < 2 ** -28) {
+  if (Math.abs(x) < TWO_M28) {
     return 1 + x;
   }
   const k = Math.floor(x * Math.LOG2E + 0.5);
@@ -387,7 +418,7 @@ function mantissa(value: number): [k: number, f: number] {
   let x = value;
   let k = 0;
   // a subnormal, scaled into the normal range first
-  if (x < 2 ** -1022) {
+  if (x < TWO_M1022) {
     x *= 2 ** 54;
     k = -54;
   }
@@ -435,6 +466,9 @@ function log1p(x: number): number {
 }
 
 function atanh(x: number): number {
+  if (x === 0) {
+    return x;
+  }
   const a = Math.abs(x);
   const r = 0.5 * log1p((2 * a) / (1 - a));
   return x < 0 ? -r : r;
@@ -442,10 +476,14 @@ function atanh(x: number): number {
 
 function asinh(x: number): number {
   const a = Math.abs(x);
-  if (!Number.isFinite(a)) {
+  if (!Number.isFinite(a) || a === 0) {
     return x;
   }
-  const r = log1p(a + (a * a) / (1 + Math.sqrt(1 + a * a)));
+  // (past 2^28 the square would overflow in time, and 1 no longer counts)
+  const r =
+    a > 2 ** 28
+      ? log(a) + Math.LN2
+      : log1p(a + (a * a) / (1 + Math.sqrt(1 + a * a)));
   return x < 0 ? -r : r;
 }
 
@@ -477,6 +515,9 @@ function pow(x: number, y: number): number {
   if (x === 0) {
     return y > 0 ? 0 : Number.POSITIVE_INFINITY;
   }
+  if (y === 0.5) {
+    return Math.sqrt(x);
+  }
   return exp(y * log(x));
 }
 
@@ -485,6 +526,10 @@ function cbrt(x: number): number {
     return x;
   }
   const a = Math.abs(x);
+  if (a > 1e100) {
+    // (the cube of the estimate would overflow: an exact 2^300 off first)
+    return scale(cbrt(scale(x, -300)), 100);
+  }
   let t = exp(log(a) / 3);
   // two Newton steps take the estimate to the last place
   t -= (t * t * t - a) / (3 * t * t);
@@ -492,10 +537,34 @@ function cbrt(x: number): number {
   return x < 0 ? -t : t;
 }
 
+/** Past this e^x overflows while its half does not. */
+const EXP_HALVED = 709;
+
+/** e^a / 2 for a past EXP_HALVED: what sinh and cosh both are there. */
+function halfExp(a: number): number {
+  const e = exp(a / 2);
+  return (e / 2) * e;
+}
+
 function cosh(x: number): number {
-  const e = exp(Math.abs(x));
+  const a = Math.abs(x);
+  if (a > EXP_HALVED) {
+    return halfExp(a);
+  }
+  const e = exp(a);
   return (e + 1 / e) / 2;
 }
+
+/** A logarithm to a whole base: log(x) / log(base), and exactly n where x
+ *  is base^n (the quotient alone gives 2.9999999999999996 for 1000). */
+function logBase(x: number, base: number, lnBase: number): number {
+  const r = log(x) / lnBase;
+  const n = Math.round(r);
+  return Math.abs(r - n) < 1e-9 && pow(base, n) === x ? n : r;
+}
+
+const log10 = (x: number): number => logBase(x, 10, Math.LN10);
+const log2 = (x: number): number => logBase(x, 2, Math.LN2);
 
 function sinh(x: number): number {
   const a = Math.abs(x);
@@ -513,7 +582,7 @@ function sinh(x: number): number {
     );
   }
   const e = exp(a);
-  const s = (e - 1 / e) / 2;
+  const s = a > EXP_HALVED ? halfExp(a) : (e - 1 / e) / 2;
   return x < 0 ? -s : s;
 }
 
@@ -530,7 +599,9 @@ export {
   exp,
   hypot,
   log,
+  log10,
   log1p,
+  log2,
   pow,
   sin,
   sinh,

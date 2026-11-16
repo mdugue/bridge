@@ -219,3 +219,55 @@ test("a whole power is the product, as ** gives it", () => {
   expect(PMath.pow(0, 2.4)).toBe(0);
   expect(PMath.pow(5, 0)).toBe(1);
 });
+
+test("past its range an angle is NaN, and a hash's angle keeps today's bits", () => {
+  // the contract's bound, said in the module's head: 2^50
+  expect(PMath.sin(2 ** 50)).not.toBeNaN();
+  expect(PMath.sin(2 ** 51)).toBeNaN();
+  expect(PMath.cos(-1e17)).toBeNaN();
+  expect(PMath.tan(1e100)).toBeNaN();
+  expect(PMath.sin(Number.POSITIVE_INFINITY)).toBeNaN();
+  // an OSM id times the hash's constant: folded, not reduced to the last
+  // place — the bits every published tree and tram car was hashed with
+  expect(bits(PMath.sin(1_600_000_000 * 12.9898))).toBe("bfe8ad65b9cba03f");
+  expect(
+    Math.abs(PMath.cos(-604_396_868.7448095) - Math.cos(-604_396_868.7448095))
+  ).toBeLessThan(1e-14);
+});
+
+test("the edges a bake does not reach answer as Math does", () => {
+  expect(PMath.hypot(Number.POSITIVE_INFINITY, Number.NaN)).toBe(
+    Number.POSITIVE_INFINITY
+  );
+  expect(PMath.hypot(Number.NaN, 1)).toBeNaN();
+  expect(Object.is(PMath.atanh(-0), -0)).toBe(true);
+  expect(Object.is(PMath.asinh(-0), -0)).toBe(true);
+  expect(ulps(PMath.asinh(1.4e154), Math.asinh(1.4e154))).toBeLessThanOrEqual(
+    2
+  );
+  expect(ulps(PMath.sinh(710), Math.sinh(710))).toBeLessThanOrEqual(4);
+  expect(ulps(PMath.cosh(-710), Math.cosh(-710))).toBeLessThanOrEqual(4);
+  expect(PMath.sinh(711)).toBe(Number.POSITIVE_INFINITY);
+  expect(
+    ulps(PMath.cbrt(Number.MAX_VALUE), Math.cbrt(Number.MAX_VALUE))
+  ).toBeLessThanOrEqual(2);
+  expect(PMath.cbrt(-1e300)).toBe(-1e100);
+  expect(PMath.pow(100, 0.5)).toBe(10);
+  expect(PMath.pow(2, 0.5)).toBe(Math.SQRT2);
+});
+
+test("a logarithm to a whole base is exact at its powers", () => {
+  for (let n = -20; n <= 22; n += 1) {
+    expect(PMath.log10(PMath.pow(10, n))).toBe(n);
+  }
+  for (let n = -60; n <= 60; n += 1) {
+    expect(PMath.log2(PMath.pow(2, n))).toBe(n);
+  }
+  sweep(5000, (u) => {
+    const x = Math.abs(u) * 1000;
+    expect(ulps(PMath.log10(x), Math.log10(x))).toBeLessThanOrEqual(3);
+    expect(ulps(PMath.log2(x), Math.log2(x))).toBeLessThanOrEqual(3);
+  });
+  expect(PMath.log10(0)).toBe(Number.NEGATIVE_INFINITY);
+  expect(PMath.log2(-1)).toBeNaN();
+});
