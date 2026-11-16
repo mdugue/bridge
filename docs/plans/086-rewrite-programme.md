@@ -60,6 +60,24 @@ Beside them, counted but not an aim of its own: a phone's memory
    series: every bump of three is a risk to the look, which plan 087's
    plates exist to catch; and plan 094 waits for what upstream does
    with `compileAsync` before it builds machinery around it.
+3. **The result need not equal today's.** A slight deviation — in the
+   picture, in a published byte, in a value a bake writes — is
+   acceptable where it serves one of the three aims. Wherever a plan of
+   the series says "identical", "the same bytes" or "no pixel changes",
+   read: identical, **or** a deviation that is slight, named in the PR
+   and shown there (a plate or a snapshot before and after, the
+   ledger's figures). Identity stays the cheapest proof for a change
+   that means none — a move, a refactor — and the plans keep using it
+   for those. What is not slight is a fault as before: a layer that is
+   gone, a thing visibly displaced, ground painted as the wrong class,
+   a phone's memory that grew.
+4. **A decision record may be questioned.** A plan that finds an ADR in
+   its way does not work around it: it says which one, why its reason
+   no longer holds or what it costs the aims, and rewrites it in the
+   same PR, as `docs/adr/README.md` says a record is rewritten. Still
+   the maintainer's to grant first: rulings 1 and 2 above, and what
+   AGENTS.md lists under "When in doubt, ask before" (a backend, a
+   heavy dependency, a second render path, committing raw data).
 
 ## The plans, in the order they go
 
@@ -91,7 +109,11 @@ others leave, not for today's alone. These are the joints.
 
 1. **Measure first.** Nothing that changes the picture merges before
    087's plates exist, and every plan writes its numbers into 087's
-   ledger. A plate is compared with main rendered on the same machine,
+   ledger. The plates come in two tiers (ruling 4 reopened ADR 0018's
+   rejection of pixel comparison on SwiftShader): in CI, base against
+   head on the same runner's software renderer, as a tripwire for a
+   change nobody meant — it says *changed*, never *good*; and on a real
+   GPU, where light, shadow and anti-aliasing are the product's. A plate is compared with main rendered on the same machine,
    so no reference image is kept anywhere; a PR with a *Snapshots*
    section claims a change and the plates report it, a PR without one
    claims none and a differing view fails it. The reason is the series' own history: PR #156 (plan 074

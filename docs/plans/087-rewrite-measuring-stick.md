@@ -162,7 +162,9 @@ lives in `lib/city/` with a unit test beside it; a CI report goes to
 - Any look, material, bake or tile format. A plate that shows a fault is
   reported, not fixed here.
 - Plan 019's checks by hand (below, "What stays plan 019's").
-- Pixel comparison on SwiftShader, in any form.
+- Judging a look on SwiftShader. (Comparing base with head there, as a
+  tripwire, is in scope since the maintainer's ruling of 2026-11-16 —
+  see "Two tiers" below.)
 - A new image or diff dependency: `sharp` is already pinned and decodes
   a PNG to raw pixels.
 - Golden images in git, Git-LFS, or a bucket of this plan's own.
@@ -237,6 +239,29 @@ read on.
 and 2 equal within their tolerance. **STOP** if the first-load set
 differs between two runs of the same build: find out why before gating
 it. **Ledger**: JavaScript, a phone's tile bytes, the first timings.
+
+### Two tiers (the maintainer's ruling 4 in plan 086, 2026-11-16)
+
+ADR 0018 rejected pixel comparison on SwiftShader because its picture
+"is not the product". That holds for judging a look. It does not hold
+for the question a refactor asks — did anything change that nobody
+meant — and a GPU is not at hand for every PR. So phases 3 and 4 are
+built twice over the same code (`lib/city/plate-diff.ts`,
+`scripts/plates.ts`, the held clock):
+
+- **Tier 1, in CI**: the merge base and the head rendered by the same
+  runner's software renderer (`SHOTS_SMALL=1`, the views that hold
+  there), compared with a tolerance from that renderer's own noise
+  floor. It reports *changed* and names the views. A PR with a
+  *Snapshots* section may differ; one without may not. It never says a
+  picture is good.
+- **Tier 2, on a real GPU**: as phases 3 and 4 describe — light, shadow,
+  anti-aliasing and precision as a visitor's device draws them. It
+  gates nothing until the maintainer has chosen where it runs.
+
+Since ruling 3 (a slight deviation that is named and shown is
+acceptable), a differing view is a question to answer in the PR, not
+by itself a fault. Phase 6's rewrite of ADR 0018 records both tiers.
 
 ### Phase 3 — A frame that repeats (spike; its numbers decide)
 
