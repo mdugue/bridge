@@ -16,6 +16,7 @@
  */
 import { gzipSync } from "node:zlib";
 import type { Counters } from "./ledger-counters";
+import type { BakeStoreLedger } from "./ledger-bake-store";
 import type { RasterLedger } from "./ledger-rasters";
 import { TERRAIN_RASTER_KEYS } from "./tileset";
 
@@ -684,6 +685,9 @@ export type BuildingFigures = ByLevel<MeshFigures>;
  * `datedLedger` and `ledgerDiff` take whatever they are handed.
  */
 export interface Ledger {
+  /** what the bakes hand over and how they cross a tile's edge (plan 092,
+   *  ledger-bake-store.ts) */
+  bakeStore: BakeStoreLedger;
   buildings: BuildingFigures;
   /** the bytes and requests of each set */
   bytes: Record<LedgerSet, SetLedger>;

@@ -516,9 +516,13 @@ the PR's reviewer. FlatGeobuf, GeoPackage, every time, the forked
 workers, DuckDB and the Grimma re-bake are single runs of this
 session.
 
-**Numbers for 087's ledger** (not written into `qa/ledger.json` here:
-the coordinator adds the rows once the ledger's own rewrite has
-landed):
+**Numbers for 087's ledger.** Those that are a function of the tree
+alone are gated in `qa/ledger.json`'s `bakeStore` section
+(`lib/city/ledger-bake-store.ts`): the file kinds and formats, the
+kinds with no single key order, the step cache's lines of code (503 of
+its 619 lines), the modules calling `.neighbours()` and `owns(`. The
+steps that write another's path are in a bake's manifests only and
+stay here:
 
 | Counter | At phase 0 |
 |---|---|

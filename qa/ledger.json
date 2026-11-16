@@ -4294,5 +4294,29 @@
         }
       }
     }
+  },
+  "bakeStore": {
+    "sites": [
+      "dresden",
+      "grimma",
+      "hamburg",
+      "leipzig",
+      "meissen",
+      "muenchen",
+      "unna"
+    ],
+    "fileKinds": {
+      "total": 51,
+      "formats": 3,
+      "byFormat": {
+        "geojson": 28,
+        "json": 13,
+        "png": 10
+      }
+    },
+    "mixedKeyOrder": ["furniture", "traffic"],
+    "stepCacheCodeLines": 503,
+    "neighboursModules": 14,
+    "ownsModules": 17
   }
 }
