@@ -58,15 +58,20 @@ tile's object texture, while the live look uniforms are shared nodes
 crowns, trunks, hedges, fountains, furniture, wires — is one node material
 for the whole scene (`three-utils.ts` `sceneMaterial`), and instanced layers
 draw through `Instances` (`instancing.ts`) so every set with the same
-material shares one node build. A set is placed by sixteen floats an
-instance, written on the CPU; plan 090's phase 0 gave it a second way in,
-behind QA knobs only: a table of twenty-byte stand records
-(`lib/city/stand-record.ts`, `Instances.ofStands`) whose bytes are the
-instance buffer and whose matrix the vertex stage composes
-(`?stands=record`: a coarse level's crowns), and rails as a table of
-segments an instanced profile expands (`lib/city/rail-table.ts`,
-`rail-segments.ts`; `?rails=table`). What three's public API does with
-such a record, and the numbers, are in plan 090's *Findings*. Everything a tile adds —
+material shares one node build. A set is placed in one of two ways: by
+sixteen floats an instance, written on the CPU (what moves, and the
+layers plan 090 has not reached), or by a table of twenty-byte stand
+records (`lib/city/stand-record.ts`, `Instances.ofStands`) whose matrix
+the vertex stage composes — **every tree, on both terrain levels**
+(plan 090, phase 1): the build stands each tree on the fine ground and
+hands it over as what was measured (`lib/city/tree-table.ts`, in the
+level's dressing file), and the layers make its record from that
+(`lib/city/tree-stands.ts`): no ground read, no raster, no matrix. A
+canopy tree's crown tiers, its trunk and its feet draw from one table.
+Behind a QA knob still: rails as a table of segments an instanced
+profile expands (`lib/city/rail-table.ts`, `rail-segments.ts`;
+`?rails=table`). What three's public API does with such a record, and
+the numbers, are in plan 090's *Findings*. Everything a tile adds —
 material, object texture, BVH, splat, water, dressing — is disposed with it
 (`disposeTile` in `tile-stream.ts`).
 
@@ -184,7 +189,7 @@ is the codebook.
 | Crown silhouette | every tree its own crown: the shared geometry pushed in and out by three broad waves over the direction from the crown's centre, their phases from where the tree stands, and its top leaned a little; every tree leans up to 0.7 m and its trunk crooks, the crown carried along (`treeGrowth`), and the trunk forks into three limbs inside the crown (`trunkLimbs`; the register's own trunks stay unforked, a set of their own in a cell that has both) — in the vertex stage, the cast shadow too; no build added; darker and cooler underneath and in the troughs between lobes (`crownOcclusion`, a colour factor per vertex, not while printed) | where the tree stands | `vegetation-layer.ts` `crownShape`, `crownOcclusion` |
 | Crown detail | three tiers per 250 m chunk, decided over the whole site on the 10 Hz pose tick (and in the frame the tiles in view change, or the eye jumps more than 25 m), the cadastre's own silhouettes (flame, cone, pine, dome) in the same plan, their cheap crown standing for mid and far: rich multi-tuft crown near (in 220 m / out 300 m) while the site's rich trees fit a budget of 2 500 (nearest chunks first), mid crown + trunk, far crown (80 tris, no trunk, dense chunks thinned to every other tree drawn 1.35× wider) past 650 m / back at 550 m | — | `lib/city/vegetation-lod.ts`, `createVegetationLod` (no switch: the rich crown is always allowed, since 2026-11-06) |
 | Conifer crown | a canopy evergreen (`l: "e"`) or a register conifer → a three-tier lathe cone in the lobed crown's box; a canopy evergreen read as a pine (`pine: 1`) or a register pine → the pine's high, flat-topped crown (the lobed crown reshaped, starting at 0.55 h; a chunk set of its own, the same node build); a yew → the lobed crown down to the ground (on the same trunk; the coarse level a six-sided cone of one skirt), its own chunk set sharing the broad crowns' node build, an evergreen in the blue-green (`evergreenColor`), no season (a register larch keeps its leaf type's year); asked, outlined as its cone | Basis-DLM forest kind (`VEG`) / OSM `leaf_type`, DOP (leaf-off), cadastre | `conifer-crown.ts`, `vegetation-layer.ts`, `tree-inventory-layer.ts`, `coarse-crowns-layer.ts` |
-| Coarse-level trees | a fixed third of the fine level's trees (a hash of where each stands), as tall, crowns √3 wider, in their colours and season, no trunks; conifers (a register cone or a canopy evergreen) as a six-sided cone, cones and pines as their own sets (`coarseForm`), each crown from its own base — wherever the tile renderer shows the coarse terrain: far off, from the air, in Modell past 2.5 m/px or wherever a coarsened stream or a load leaves the fine level out, at any scale; the fine level draws every tree | where each tree stands (`drawnCoarse`) | `coarse-crowns-layer.ts`, `lib/city/coarse-crowns.ts`, `scripts/coarse-crowns.ts`, `crowns_<t>.crw.gz` |
+| Coarse-level trees | a fixed third of the fine level's trees (a hash of where each stands), as tall, crowns √3 wider, in their colours and season, no trunks; conifers (a register cone or a canopy evergreen) as a six-sided cone, cones and pines as their own sets (`coarseForm`), each crown from its own base — wherever the tile renderer shows the coarse terrain: far off, from the air, in Modell past 2.5 m/px or wherever a coarsened stream or a load leaves the fine level out, at any scale; the fine level draws every tree | where each tree stands (`drawnCoarse`) | `coarse-crowns-layer.ts`, `lib/city/coarse-crowns.ts`, `scripts/bake-dressing.ts`, `dressing_<t>.c.drs.gz` |
 | Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / pine / weeping dome; a yew a bush down to the ground); Hamburg's heights from genus and trunk (its register has none); leaf type + `Blut-`/gold cultivars → crown colour; trunk diameter `t` → trunk girth (fitted to the drawn trunk's radius at 1.3 m, flared foot included, × 1.3; else from the height); drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes; OSM `natural=tree` (`s: "osm"`) fills in where the register has no tree within max(3 m, its crown's radius); a city without a register shows all its OSM trees, as tall as DOM1 measures | Stadtbaumkataster Dresden, OSM | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
 | Tree family | genus `gn` → family (`lib/city/tree-family.ts`): a lean of the summer green (HSL offsets on the NDVI colour, not on cultivars or evergreens), bark colour as the trunk's per-instance tint (`TreeInstance.bark`); eight genera flower (`Phenology.bloom`: cherries pink in April, pears/apples/hawthorn white, …), the crown mixed toward the blossom and kept full while in flower | Stadtbaumkataster (genus) | `tree-family.ts`, `tree-inventory-layer.ts` `inventoryColor`/`barkTint`, `crown-season.ts` `bloomTargets` |
 | Tree age | planting year `y` → age (`lib/city/tree-age.ts`): under 15 years (unmeasured) a thinner trunk, under 5 years three stakes and two rails (`tree-stakes.ts`), past 80 years (unmeasured) a thicker trunk; the crown lighter when young, deeper when old (fine level); height and crown size as measured | Stadtbaumkataster (age / planting year) | `tree-age.ts`, `tree-inventory-layer.ts`, `tree-stakes.ts` |
@@ -910,8 +915,9 @@ set each frame with the lens. Nothing is built for Modell.
   above — and below it too wherever the memory governor has raised the
   error target (×4: from ≈ 1 : 2 400) or the fine tiles are still on
   their way. Each level carries its own trees: the fine one every tree,
-  the coarse one a fixed third of them, √3 wider, baked by the build
-  from the same placement (`crowns_<t>.crw.gz`). So whichever level the
+  the coarse one a fixed third of them, √3 wider: the build places every
+  tree once and puts that third into the coarse level's dressing file
+  (`dressing_<t>.c.drs.gz`). So whichever level the
   renderer shows has its trees, and Modell has no tree rule of its own.
   The bridges ride on both levels as well (the coarse one draws its
   decks too), so no river crossing goes with the level.
@@ -1018,9 +1024,9 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 | edge raster (fine level) | 0.34–0.46 MB | — |
 | kerb stones (in the fine terrain) | ≈ 0.2–0.4 MB | up to 319 k, indexed (up to 468 k vertices; 956 k as a triangle soup until 2026-11-11), as the stairs and walls are |
 | rails, ballast, sleepers, tram tracks and bridges (built at runtime from the line files, `mesh-kit.ts`) | — | welded and indexed, normals as signed bytes (`lib/city/weld.ts`): the yard tile 33408_5656 0.75 M triangles on 0.74 M vertices, 21 MB on the GPU (2.24 M vertices and 56 MB as a triangle soup until 2026-11-11); the tram tile 33410_5656 7 MB of tracks (14) |
-| canopy points (fine level) | 0.6–9.5 MB raw (forest tiles top) | up to 81 k trees: ≈ 9 MB of instance data once built (trunks, mid and rich crowns share one matrix buffer) |
-| cadastre trees, scan trees, hedges (fine level) | 0.4–0.8 / 0.65 (spawn only) / ≤ 0.03 MB raw | — |
-| coarse crowns (coarse level) | 0.04–0.29 MB (0.07–0.56 MB raw) | 3 700–27 900 crowns, 20 tris each: ≈ 90 B of instance data a crown once built (matrix, tint, season) |
+| the fine level's dressing file (two thirds of the tile's trees: canopy, scan, rows, register) | 0.08–0.47 MB (forest tiles top) | up to 84 k trees with the coarse level's third: ≈ 5.5 MB of instance data — twenty bytes a tree for its crown tiers, trunk and feet together, the far tier's kept trees again, twelve of tint (12.1 MB while each was a matrix) |
+| hedges (fine level) | ≤ 0.03 MB raw | — |
+| the coarse level's dressing file (the third of the tile's trees it draws) | 0.04–0.24 MB | 3 700–28 100 crowns, 20 tris each: ≈ 36 B of instance data a crown (record, tint, season) |
 
 Before the tileset a tile was ≈1.0 MB of buildings plus a 1.1 MB
 heightfield; quantised meshes cost more on the wire than a height blob,
