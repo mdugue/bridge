@@ -214,11 +214,23 @@ baseline of bytes, requests and counters, dated.
 - `qa/ledger.json` (version 1) has `bytes` (the five sets, each with
   `spawn`, `median`, `largest`, `site`, and `phone` where a phone reads
   other files — today the fine level only), `published` (the whole
-  manifest) and `counters`. Phase 2 adds its browser figures and a
-  `timings` section beside them; `ledgerDiff` compares every leaf but
-  `dated`, so a recorded-only section needs its own exclusion there.
-- `datedLedger` keeps the committed date while no figure moves, so a
-  second run writes the same file; the date changes only with a figure.
+  manifest), `buildings` and `counters`, all gated, and `recorded`, which
+  `--check` prints and never compares. `ledgerDiff` skips `dated` and
+  `recorded` at the top level (`UNCOMPARED`); phase 2's `timings` joins
+  that set.
+- **The buildings are gated by geometry, not bytes.** Their bake gives the
+  same bytes on one machine and different bytes on another (3–552 bytes a
+  tile between CI and a cloud container on 2026-11-16; the coordinator's
+  ruling after this phase's STOP), so the gated sets count
+  `city_*.glb.gz` as files without their bytes, `buildings` gates each
+  tile's vertices, triangles and accessors' bytes (`glbFigures`), and
+  their full wire bytes stand in `recorded` with the machine and day.
+  They return to the gate once the bake is the same everywhere (a
+  separate fix, branch `claude/rewrite-bake-machine-independent`): drop
+  `MACHINE_BOUND` and the record's buildings go back into `bytes`.
+- `datedLedger` keeps the committed date while no gated figure moves, and
+  the committed record while its own figures hold, so a second run writes
+  the same file.
 - `publishedFiles(site)` in `scripts/ledger.ts` is the one reader of the
   published site (088 repoints it). Which rasters a level reads is the
   viewer's `rasterFiles`, handed in as `RasterReads`; a change to that
@@ -228,8 +240,9 @@ baseline of bytes, requests and counters, dated.
 - CI runs `bun scripts/ledger.ts --check` as the build-check shard's last
   step, after its e2e, whenever the build succeeded.
 - Baseline (Dresden): the spawn tile's fine level 6.94 MB in 29 files
-  (a phone's 6.64 MB in 28), its far set 4.69 MB in 10, everything the
-  manifest names 197.8 MB in 698 files; 17 dressing kinds, 27 layer
+  (a phone's 6.64 MB in 28), its far set 4.69 MB in 10 (2.64 MB without
+  the far buildings), everything the manifest names 197.8 MB in 698 files
+  (135.5 MB without the buildings); 17 dressing kinds, 27 layer
   modules with 18 769 lines, `bootApp` 3 088 lines, 52 of 77 bake
   modules on seams, 8 upstream workarounds. The figures are in the file
   and in `docs/data-pipeline.md`, "Measuring what the browser downloads".

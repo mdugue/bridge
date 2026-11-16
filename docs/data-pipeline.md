@@ -1185,8 +1185,18 @@ raster. A set where a phone reads other files has a `phone` row beside the
 desktop's. Each set is recorded as the spawn tile, the median tile (the
 lower of an even count), the largest tile and the site (each file once).
 
+One kind of file is gated differently: the buildings' glTF
+(`city_<tile>.glb.gz`, near and far). Their bake gives the same bytes on one
+machine and different bytes on another — 3–552 bytes a tile between CI and
+a cloud container on 2026-11-16 — so the gated sets count them as files but
+leave their bytes out, and `buildings` gates each tile's vertices,
+triangles and accessors' bytes instead, read from the glTF's JSON. Their
+full wire bytes are kept in `recorded`, with the machine and the day they
+were read on, which `--check` prints and never compares. They return to
+the gate once that bake is the same everywhere.
+
 Baseline, 2026-11-16 (Dresden, fifteen tiles; MB = 10⁶ bytes on the wire,
-files in brackets):
+the buildings in them, as `recorded` holds them; files in brackets):
 
 | Set | Spawn tile | Median tile | Largest tile | Site |
 |---|---|---|---|---|
@@ -1201,8 +1211,8 @@ Everything the manifest names is 197.8 MB in 698 files (the rest beyond
 the tiles: the tileset, the minimap and site map, the walks' photos, the
 murals, the plate, the timetable). The last count by hand, 2026-09-25
 with the same rule over every file named after a tile (the set *all*
-today), gave a tile 4.0–9.7 MB and the site ≈ 98.9 MB. A visit fetches less than a set's site figure: streaming loads a
-tile's content only when it is in view, and a far tile stops at its far
+today), gave a tile 4.0–9.7 MB and the site ≈ 98.9 MB. A visit fetches
+less than a set's site figure: streaming loads a tile's content only when it is in view, and a far tile stops at its far
 set. Sources on disk that are never served: the DGM GeoTIFF
 (12.9–15.6 MB a tile) and the CityJSON (2.7–13.6 MB a tile).
 

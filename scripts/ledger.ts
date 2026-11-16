@@ -14,7 +14,9 @@
  * dresden`) comes first.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpus } from "node:os";
 import nodePath from "node:path";
+import { gunzipSync } from "node:zlib";
 import { RASTER_KINDS, rasterFiles } from "../app/_components/tile-rasters";
 import type { RasterKind } from "../app/_components/tile-rasters";
 import {
@@ -22,10 +24,13 @@ import {
   datedLedger,
   distinctExtensions,
   functionLines,
+  gatedWire,
+  glbFigures,
   LEDGER_VERSION,
   ledgerDiff,
   ledgerTiles,
   layerModules,
+  RECORDED_NOTE,
   seamModules,
   upstreamWorkarounds,
   WIRE_RULE,
@@ -36,6 +41,7 @@ import type {
   Counters,
   Ledger,
   RasterReads,
+  Recorded,
   SourceText,
 } from "../lib/city/ledger";
 import {
@@ -149,8 +155,23 @@ function counters(published: Record<string, string>): Counters {
   };
 }
 
-/** The ledger's figures for `site`, from its published files. */
-export function measure(site: string): Omit<Ledger, "dated"> {
+/** This machine, as the recorded figures name it. */
+function machine(): string {
+  const cpu = cpuCount();
+  return `${cpu.model} ×${cpu.count}, ${process.platform}-${process.arch}, Bun ${Bun.version}`;
+}
+
+function cpuCount(): { count: number; model: string } {
+  const all = cpus();
+  return { count: all.length, model: all[0]?.model.trim() ?? "unknown CPU" };
+}
+
+/** The ledger's figures for `site`, from its published files: the gated
+ *  ones and the recorded ones. */
+export function measure(site: string): {
+  gated: Omit<Ledger, "dated" | "recorded">;
+  recorded: Omit<Recorded, "machine" | "read">;
+} {
   const published = publishedFiles(site);
   const wireOf = new Map<string, number>();
   const wire = (served: string) => {
@@ -161,15 +182,30 @@ export function measure(site: string): Omit<Ledger, "dated"> {
     }
     return bytes;
   };
+  const gated = gatedWire(wire);
   const tiles = ledgerTiles(published.tileset);
+  const servedNames = Object.values(published.files).toSorted();
+  const mesh = (served: string) =>
+    glbFigures(new Uint8Array(gunzipSync(published.read(served))));
   return {
-    version: LEDGER_VERSION,
-    site,
-    wire: WIRE_RULE,
-    tiles: tiles.length,
-    published: weigh(Object.values(published.files).toSorted(), wire),
-    bytes: bytesLedger(tiles, viewerReads, wire),
-    counters: counters(published.files),
+    gated: {
+      version: LEDGER_VERSION,
+      site,
+      wire: WIRE_RULE,
+      tiles: tiles.length,
+      published: weigh(servedNames, gated),
+      bytes: bytesLedger(tiles, viewerReads, gated),
+      buildings: {
+        near: Object.fromEntries(tiles.map((t) => [t.id, mesh(t.city)])),
+        far: Object.fromEntries(tiles.map((t) => [t.id, mesh(t.cityFar)])),
+      },
+      counters: counters(published.files),
+    },
+    recorded: {
+      note: RECORDED_NOTE,
+      published: weigh(servedNames, wire),
+      bytes: bytesLedger(tiles, viewerReads, wire),
+    },
   };
 }
 
@@ -177,11 +213,19 @@ function main(check: boolean): void {
   const committed: unknown = existsSync(LEDGER_FILE)
     ? JSON.parse(readFileSync(LEDGER_FILE, "utf-8"))
     : null;
-  const fresh = measure(REFERENCE_SITE);
+  const { gated, recorded } = measure(REFERENCE_SITE);
   if (check) {
-    const moved = ledgerDiff(committed ?? {}, fresh);
+    const moved = ledgerDiff(committed ?? {}, gated);
     for (const line of moved) {
       process.stdout.write(`differs: ${line}\n`);
+    }
+    // the recorded figures, for the reader only: never a failure
+    const was = (committed as Partial<Ledger> | null)?.recorded;
+    for (const line of ledgerDiff(
+      { published: was?.published, bytes: was?.bytes },
+      { published: recorded.published, bytes: recorded.bytes }
+    )) {
+      process.stdout.write(`recorded, not compared: ${line}\n`);
     }
     process.stdout.write(
       moved.length === 0
@@ -194,7 +238,7 @@ function main(check: boolean): void {
     return;
   }
   const today = new Date().toISOString().slice(0, 10);
-  const ledger = datedLedger(fresh, committed, today);
+  const ledger = datedLedger(gated, recorded, committed, today, machine());
   writeFileSync(LEDGER_FILE, `${JSON.stringify(ledger, null, 2)}\n`);
   process.stdout.write(`qa/ledger.json (${ledger.dated})\n`);
 }

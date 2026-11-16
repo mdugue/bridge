@@ -6,6 +6,14 @@
  * caller reads the files (scripts/ledger.ts, `publishedFiles`) and hands
  * their names, bytes and texts in. `qa/ledger.json` is the result; its
  * `--check` names each figure that moved (`ledgerDiff`).
+ *
+ * The buildings' glTF are the one exception to "a function of the tree":
+ * their bake gives the same bytes on one machine and different bytes on
+ * another (3–552 bytes a tile between this repo's CI and a cloud container
+ * on 2026-11-16), so the gate counts what does not depend on the machine —
+ * their vertices, triangles and accessors' bytes (`glbFigures`) — and their
+ * wire bytes are recorded beside it, never compared (`recorded`). They
+ * return to the gate once that bake is the same everywhere.
  */
 import { gzipSync } from "node:zlib";
 import { TERRAIN_RASTER_KEYS } from "./tileset";
@@ -15,7 +23,101 @@ export const PACKED_EXTENSIONS = [".png", ".webp", ".gz"] as const;
 /** The gzip level a static host compresses the rest at. */
 export const WIRE_GZIP_LEVEL = 6;
 export const WIRE_RULE =
-  ".png, .webp and .gz at face value; every other file gzipped at level 6 (Bun's zlib)";
+  ".png, .webp and .gz at face value; every other file gzipped at level 6 (Bun's zlib). The gated figures leave the buildings' glTF (city_*.glb.gz, near and far) out of the bytes but count them as files: their bake differs by machine, so `buildings` gates their geometry and `recorded` keeps the full wire bytes, never compared.";
+
+/** The published files whose bytes depend on the machine that baked them:
+ *  the buildings' glTF, near and far (served `city_<tile>[_far].<hash>.glb.gz`). */
+export const MACHINE_BOUND = /^city_[^/]*\.glb\.gz$/u;
+
+/** A wire measure that counts the machine-bound files as no bytes. */
+export function gatedWire(
+  wire: (file: string) => number
+): (file: string) => number {
+  return (file) => (MACHINE_BOUND.test(file) ? 0 : wire(file));
+}
+
+/** What a glTF holds, whoever baked it: its vertices (the positions'
+ *  counts), its triangles and its accessors' decoded bytes. */
+export interface MeshFigures {
+  accessorBytes: number;
+  triangles: number;
+  vertices: number;
+}
+
+const COMPONENT_BYTES: Record<number, number> = {
+  5120: 1,
+  5121: 1,
+  5122: 2,
+  5123: 2,
+  5125: 4,
+  5126: 4,
+};
+const TYPE_COMPONENTS: Record<string, number> = {
+  SCALAR: 1,
+  VEC2: 2,
+  VEC3: 3,
+  VEC4: 4,
+  MAT2: 4,
+  MAT3: 9,
+  MAT4: 16,
+};
+const GLB_MAGIC = 0x46_54_6c_67;
+const TRIANGLES = 4;
+
+interface GltfJson {
+  accessors?: { componentType: number; count: number; type: string }[];
+  meshes?: {
+    primitives: {
+      attributes: Record<string, number>;
+      indices?: number;
+      mode?: number;
+    }[];
+  }[];
+}
+
+/** A binary glTF's mesh figures, read from its JSON chunk alone (so a
+ *  meshopt-compressed buffer needs no decoding). */
+export function glbFigures(glb: Uint8Array): MeshFigures {
+  const view = new DataView(glb.buffer, glb.byteOffset, glb.byteLength);
+  if (glb.byteLength < 20 || view.getUint32(0, true) !== GLB_MAGIC) {
+    throw new Error("ledger: not a binary glTF");
+  }
+  const length = view.getUint32(12, true);
+  const json = JSON.parse(
+    new TextDecoder().decode(glb.subarray(20, 20 + length))
+  ) as GltfJson;
+  const accessors = json.accessors ?? [];
+  const accessorBytes = accessors.reduce(
+    (sum, a) =>
+      sum +
+      a.count *
+        (COMPONENT_BYTES[a.componentType] ?? 0) *
+        (TYPE_COMPONENTS[a.type] ?? 0),
+    0
+  );
+  const positions = new Set<number>();
+  let triangles = 0;
+  for (const mesh of json.meshes ?? []) {
+    for (const primitive of mesh.primitives) {
+      const position = primitive.attributes.POSITION;
+      if (position !== undefined) {
+        positions.add(position);
+      }
+      if ((primitive.mode ?? TRIANGLES) !== TRIANGLES) {
+        continue;
+      }
+      const counted = primitive.indices ?? position;
+      triangles += Math.floor(
+        (counted === undefined ? 0 : (accessors[counted]?.count ?? 0)) / 3
+      );
+    }
+  }
+  const vertices = [...positions].reduce(
+    (sum, i) => sum + (accessors[i]?.count ?? 0),
+    0
+  );
+  return { vertices, triangles, accessorBytes };
+}
 
 /** A published file's bytes on the wire: packed files at face value,
  *  everything else (JSON, GeoJSON) gzipped as a static host would. */
@@ -397,26 +499,55 @@ export interface Counters {
 
 export const LEDGER_VERSION = 1;
 
-/** `qa/ledger.json`. Every figure but `dated` is a function of the tree. */
+/** The buildings' geometry per tile, near (as baked) and far (simplified). */
+export interface BuildingFigures {
+  far: Record<string, MeshFigures>;
+  near: Record<string, MeshFigures>;
+}
+
+/** Figures recorded with the machine and day they were read on, never
+ *  compared by `--check`. */
+export interface Recorded {
+  /** every set's full wire bytes, the buildings' glTF in them */
+  bytes: Record<LedgerSet, SetLedger>;
+  machine: string;
+  note: string;
+  published: Weight;
+  read: string;
+}
+
+export const RECORDED_NOTE =
+  "Recorded, never compared: the full wire bytes, the buildings' glTF in them, whose bake differs by machine.";
+
+/** `qa/ledger.json`. Every figure but `dated` and `recorded` is a function
+ *  of the tree. */
 export interface Ledger {
-  /** the bytes and requests of each set */
+  buildings: BuildingFigures;
+  /** the bytes (the buildings' glTF left out) and requests of each set */
   bytes: Record<LedgerSet, SetLedger>;
   counters: Counters;
-  /** the day the figures last changed (kept while they hold) */
+  /** the day the gated figures last changed (kept while they hold) */
   dated: string;
-  /** every file the manifest names */
+  /** every file the manifest names (the buildings' glTF's bytes left out) */
   published: Weight;
+  recorded: Recorded;
   site: string;
   tiles: number;
   version: typeof LEDGER_VERSION;
   wire: string;
 }
 
+/** The parts `--check` never compares. */
+const UNCOMPARED = new Set(["dated", "recorded"]);
+
 /** Leaf paths with their values (`bytes.fine.spawn.bytes`). */
 function leaves(value: unknown, path = ""): Map<string, string> {
   const out = new Map<string, string>();
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
     for (const [key, inner] of Object.entries(value)) {
+      if (path === "" && UNCOMPARED.has(key)) {
+        continue;
+      }
       for (const [p, v] of leaves(inner, path ? `${path}.${key}` : key)) {
         out.set(p, v);
       }
@@ -427,14 +558,12 @@ function leaves(value: unknown, path = ""): Map<string, string> {
   return out;
 }
 
-/** Each figure that differs between the committed ledger and a fresh one,
- *  as `path: was → now` (`dated` is no figure). */
+/** Each gated figure that differs between the committed ledger and a fresh
+ *  one, as `path: was → now` (`dated` and `recorded` are none). */
 export function ledgerDiff(was: unknown, now: unknown): string[] {
   const a = leaves(was);
   const b = leaves(now);
-  const paths = [...new Set([...a.keys(), ...b.keys()])]
-    .filter((p) => p !== "dated")
-    .toSorted();
+  const paths = [...new Set([...a.keys(), ...b.keys()])].toSorted();
   return paths.flatMap((p) =>
     a.get(p) === b.get(p)
       ? []
@@ -442,19 +571,47 @@ export function ledgerDiff(was: unknown, now: unknown): string[] {
   );
 }
 
-/** The ledger to write: the committed one's date while no figure moved,
- *  else `today`. */
+type Gated = Omit<Ledger, "dated" | "recorded">;
+type RecordedFigures = Omit<Recorded, "machine" | "read">;
+
+/** The ledger to write: the committed one's date while no gated figure
+ *  moved, else `today`; the committed record while its figures hold, else
+ *  this one, read on `machine` today. */
 export function datedLedger(
-  fresh: Omit<Ledger, "dated">,
+  fresh: Gated,
+  recorded: RecordedFigures,
   committed: unknown,
-  today: string
+  today: string,
+  machine: string
 ): Ledger {
   const was = committed as Partial<Ledger> | null;
   const kept =
-    was !== null &&
-    typeof was?.dated === "string" &&
-    ledgerDiff(was, fresh).length === 0;
+    typeof was?.dated === "string" && ledgerDiff(was, fresh).length === 0;
   const dated = kept && was?.dated ? was.dated : today;
+  const sameRecord =
+    was?.recorded !== undefined &&
+    ledgerDiff(
+      {
+        note: was.recorded.note,
+        published: was.recorded.published,
+        bytes: was.recorded.bytes,
+      },
+      {
+        note: recorded.note,
+        published: recorded.published,
+        bytes: recorded.bytes,
+      }
+    ).length === 0;
+  const record: Recorded =
+    sameRecord && was?.recorded
+      ? was.recorded
+      : {
+          note: recorded.note,
+          machine,
+          read: today,
+          published: recorded.published,
+          bytes: recorded.bytes,
+        };
   // the heading first, then the figures, in one order
   return {
     version: fresh.version,
@@ -464,6 +621,8 @@ export function datedLedger(
     tiles: fresh.tiles,
     published: fresh.published,
     bytes: fresh.bytes,
+    buildings: fresh.buildings,
     counters: fresh.counters,
+    recorded: record,
   };
 }
