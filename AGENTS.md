@@ -41,6 +41,7 @@ bun run site <site>     # where a site stands (--all: every site)
 bun run fetch <site>    # downloads → data/_raw/<provider>/, sources → data/<site>/
 bun run bake <site>     # offline bakes [tile…] [--step X] [--jobs N] [--force]
 bun run osm-coverage <site>  # OSM's built things no bake decided about
+bun scripts/compare-tilesets.ts <a> <b> [--within m]  # two published sites by content
 bun run test:pipeline   # pytest + ruff + types for pipeline/
 bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
 bun run docs:matrix     # regenerate the guide's sources-by-city pages

@@ -21,27 +21,17 @@
     "bake/canopy.py": {
       "reportArgumentType": {
         "row_trees: Argument of type \"tuple[ndarray[_AnyShape, dtype[float64]] | ndarray[_AnyShape, dtype[intp]] | ndarray[_AnyShape, dtype[Unknown]] | ndarray[_AnyShape, dtype[Incomplete]] | Unknown, ndarray[_AnyShape, dtype[float64]] | ndarray[_AnyShape, dtype[intp]] | ndarray[_AnyShape, dtype[Unknown]] | ndarray[_AnyShape, dtype[Incomplete]] | Unknown]\" cannot be assigned to parameter \"key\" of type \"_ToIndices\" in function \"__getitem__\"": 1,
-        "row_trees: Argument of type \"tuple[ndarray[_AnyShape, dtype[float64]] | ndarray[_AnyShape, dtype[intp]] | ndarray[_AnyShape, dtype[Unknown]] | ndarray[_AnyShape, dtype[Incomplete]] | Unknown, ndarray[_AnyShape, dtype[float64]] | ndarray[_AnyShape, dtype[intp]] | ndarray[_AnyShape, dtype[Unknown]] | ndarray[_AnyShape, dtype[Incomplete]] | Unknown]\" cannot be assigned to parameter \"key\" of type \"list[str]\" in function \"__getitem__\"": 1,
-        "verge_mask: Argument of type \"ndarray[Unknown, Unknown] | _Array1D[signedinteger[_NBitIntP] | signedinteger[_32Bit]] | _Array1D[float64] | Unknown\" cannot be assigned to parameter \"key\" of type \"_ToIndices\" in function \"__getitem__\"": 1,
-        "verge_mask: Argument of type \"ndarray[tuple[int], dtype[signedinteger[_NBitIntP] | signedinteger[_32Bit]]] | ndarray[tuple[int], dtype[float64]] | ndarray[tuple[int], Unknown] | Unknown\" cannot be assigned to parameter \"x\" of type \"_ArrayLikeInt_co\" in function \"bincount\"": 1
+        "row_trees: Argument of type \"tuple[ndarray[_AnyShape, dtype[float64]] | ndarray[_AnyShape, dtype[intp]] | ndarray[_AnyShape, dtype[Unknown]] | ndarray[_AnyShape, dtype[Incomplete]] | Unknown, ndarray[_AnyShape, dtype[float64]] | ndarray[_AnyShape, dtype[intp]] | ndarray[_AnyShape, dtype[Unknown]] | ndarray[_AnyShape, dtype[Incomplete]] | Unknown]\" cannot be assigned to parameter \"key\" of type \"list[str]\" in function \"__getitem__\"": 1
       },
       "reportAttributeAccessIssue": {
         "<module>: \"cKDTree\" is unknown import symbol": 1,
         "carriageway_mask: Cannot access attribute \"is_empty\" for class \"Geometry\"": 1
       },
       "reportCallIssue": {
-        "row_trees: No overloads for \"__getitem__\" match the provided arguments": 1,
-        "verge_mask: No overloads for \"__getitem__\" match the provided arguments": 1
-      },
-      "reportGeneralTypeIssues": {
-        "verge_mask: \"Literal[0]\" is not iterable": 1,
-        "verge_mask: \"Literal[1]\" is not iterable": 1
+        "row_trees: No overloads for \"__getitem__\" match the provided arguments": 1
       },
       "reportIndexIssue": {
         "row_trees: \"__getitem__\" method not defined on type \"Point\"": 1
-      },
-      "reportOperatorIssue": {
-        "over_carriageway: Operator \"*\" not supported for types \"tuple[Unknown, ...] | Unknown | None\" and \"float\"": 1
       }
     },
     "bake/citygml.py": {
@@ -70,19 +60,9 @@
         "grid_trees: Cannot access attribute \"buffer\" for class \"Geometry\"": 1,
         "long_axis: Cannot access attribute \"exterior\" for class \"BaseGeometry\"": 1,
         "mean_gradient: Cannot access attribute \"bounds\" for class \"Geometry\"": 1,
-        "orchard_dom: \"transform\" is not a known attribute of module \"rasterio\"": 1,
         "orchard_dom: Cannot access attribute \"bounds\" for class \"Geometry\"": 1,
         "parcels_of: Cannot access attribute \"area\" for class \"Geometry\"": 4,
         "vine_rows: Cannot access attribute \"centroid\" for class \"Geometry\"": 1
-      },
-      "reportCallIssue": {
-        "orchard_dom: Expected 0 positional arguments": 1
-      },
-      "reportGeneralTypeIssues": {
-        "colony_raster: \"None\" is not iterable": 1
-      },
-      "reportOperatorIssue": {
-        "signed_distance: Operator \"-\" not supported for types \"tuple[Unknown, ...] | Unknown | None\" and \"float\"": 2
       },
       "reportOptionalMemberAccess": {
         "colony_raster: \"any\" is not a known attribute of \"None\"": 1,
@@ -103,17 +83,6 @@
         "snap: Cannot access attribute \"interiors\" for class \"Geometry\"": 1
       }
     },
-    "bake/dop_lean.py": {
-      "reportArgumentType": {
-        "lean_map: Argument of type \"tuple[Dispatchable]\" cannot be assigned to parameter \"x1\" of type \"_SupportsArrayUFunc\" in function \"__call__\"": 1
-      },
-      "reportCallIssue": {
-        "lean_map: No overloads for \"__call__\" match the provided arguments": 1
-      },
-      "reportOperatorIssue": {
-        "lean_map: Operator \"%\" not supported for types \"_Array1D[int_]\" and \"None\"": 2
-      }
-    },
     "bake/dop_light.py": {
       "reportReturnType": {
         "_Shadows.usable: Type \"bool_\" is not assignable to return type \"bool\"": 1
@@ -123,8 +92,6 @@
       "reportArgumentType": {
         "Roofs.__init__: Argument of type \"Point | GeoArray\" cannot be assigned to parameter \"geoms\" of type \"GeoArrayLikeSeq\" in function \"__init__\"": 1,
         "in_rows: Argument of type \"tuple[dict[Unknown, Unknown], int]\" cannot be assigned to parameter \"object\" of type \"dict[Unknown, Unknown]\" in function \"append\"": 1,
-        "moved_roof: Argument of type \"tuple[Unknown, ...] | Unknown | None\" cannot be assigned to parameter \"iterable\" of type \"Iterable[_T_co@tuple]\" in function \"__new__\"": 2,
-        "plan_offset: Argument of type \"tuple[Unknown, ...] | Unknown | None\" cannot be assigned to parameter \"iterable\" of type \"Iterable[_T_co@tuple]\" in function \"__new__\"": 2,
         "uncrowded: Argument of type \"Point | GeoArray\" cannot be assigned to parameter \"geoms\" of type \"GeoArrayLikeSeq\" in function \"__init__\"": 1
       },
       "reportAttributeAccessIssue": {
@@ -142,19 +109,6 @@
         "moved_roof: Expected 5 positional arguments": 2,
         "moved_seams: Expected 5 positional arguments": 2
       },
-      "reportGeneralTypeIssues": {
-        "blobs: \"Literal[0]\" is not iterable": 1,
-        "blobs: \"Literal[1]\" is not iterable": 1,
-        "building_labels: \"None\" is not iterable": 1,
-        "split: \"Literal[0]\" is not iterable": 1,
-        "split: \"Literal[1]\" is not iterable": 1,
-        "split: \"None\" is not iterable": 1
-      },
-      "reportOperatorIssue": {
-        "Roofs.__init__: Operator \"~\" not supported for type \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\"": 1,
-        "pitched_cells: Operator \"|\" not supported for types \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\" and \"NDArray[bool_]\"": 1,
-        "seams: Operator \"~\" not supported for type \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\"": 1
-      },
       "reportOptionalMemberAccess": {
         "flank_cells: \"astype\" is not a known attribute of \"None\"": 1
       },
@@ -163,21 +117,8 @@
       }
     },
     "bake/edges.py": {
-      "reportArgumentType": {
-        "verge_green: Argument of type \"ndarray[tuple[int], dtype[signedinteger[_NBitIntP] | signedinteger[_32Bit]]] | ndarray[tuple[int], dtype[float64]] | ndarray[tuple[int], Unknown] | Unknown\" cannot be assigned to parameter \"x\" of type \"_ArrayLikeInt_co\" in function \"bincount\"": 1,
-        "woods: Argument of type \"ndarray[tuple[int], dtype[signedinteger[_NBitIntP] | signedinteger[_32Bit]]] | ndarray[tuple[int], dtype[float64]] | ndarray[tuple[int], Unknown] | Unknown\" cannot be assigned to parameter \"x\" of type \"_ArrayLikeInt_co\" in function \"bincount\"": 2
-      },
       "reportAttributeAccessIssue": {
         "verge_green: Cannot access attribute \"is_empty\" for class \"Geometry\"": 1
-      },
-      "reportCallIssue": {
-        "woods: No overloads for \"bincount\" match the provided arguments": 1
-      },
-      "reportGeneralTypeIssues": {
-        "verge_green: \"Literal[0]\" is not iterable": 1,
-        "verge_green: \"Literal[1]\" is not iterable": 1,
-        "woods: \"Literal[0]\" is not iterable": 1,
-        "woods: \"Literal[1]\" is not iterable": 1
       }
     },
     "bake/facade_glass.py": {
@@ -193,48 +134,16 @@
     },
     "bake/facade_measure.py": {
       "reportArgumentType": {
-        "_holes: Argument of type \"ndarray[Unknown, Unknown] | _Array1D[signedinteger[_NBitIntP] | signedinteger[_32Bit]] | _Array1D[float64] | Unknown\" cannot be assigned to parameter \"key\" of type \"list[str]\" in function \"__getitem__\"": 1,
         "profile: Argument of type \"Any | NDArray[bool_] | None\" cannot be assigned to parameter \"holes\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"ground_top\"": 1,
         "rings: Argument of type \"int | bytes\" cannot be assigned to parameter \"b\" of type \"bytes\" in function \"_fields\"": 1,
         "rings: Argument of type \"int | bytes\" cannot be assigned to parameter \"b\" of type \"bytes\" in function \"_packed\"": 1,
         "rings: Argument of type \"int | bytes\" cannot be assigned to parameter \"extent\" of type \"int\" in function \"_feature_rings\"": 1
-      },
-      "reportCallIssue": {
-        "_holes: No overloads for \"__getitem__\" match the provided arguments": 1
-      },
-      "reportGeneralTypeIssues": {
-        "_holes: \"Literal[0]\" is not iterable": 1,
-        "_holes: \"Literal[1]\" is not iterable": 1,
-        "ground_top: \"Literal[0]\" is not iterable": 1,
-        "ground_top: \"Literal[1]\" is not iterable": 1
-      },
-      "reportOperatorIssue": {
-        "_holes: Operator \"~\" not supported for type \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\"": 1,
-        "valid_mask: Operator \"~\" not supported for type \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\" when expected type is \"ndarray[_AnyShape, dtype[Any]]\"": 1
       },
       "reportOptionalMemberAccess": {
         "project: \"get\" is not a known attribute of \"None\"": 1
       },
       "reportPossiblyUnboundVariable": {
         "project: \"th\" is possibly unbound": 1
-      }
-    },
-    "bake/facade_traits.py": {
-      "reportArgumentType": {
-        "_surround: Argument of type \"ndarray[Unknown, Unknown] | _Array1D[signedinteger[_NBitIntP] | signedinteger[_32Bit]] | _Array1D[float64] | Unknown\" cannot be assigned to parameter \"key\" of type \"list[str]\" in function \"__getitem__\"": 1
-      },
-      "reportCallIssue": {
-        "_surround: No overloads for \"__getitem__\" match the provided arguments": 1
-      },
-      "reportGeneralTypeIssues": {
-        "_surround: \"Literal[0]\" is not iterable": 1,
-        "_surround: \"Literal[1]\" is not iterable": 1,
-        "openings: \"Literal[0]\" is not iterable": 1,
-        "openings: \"Literal[1]\" is not iterable": 1
-      },
-      "reportOperatorIssue": {
-        "_surround: Operator \"~\" not supported for type \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\"": 1,
-        "traits_of: Operator \"~\" not supported for type \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\"": 2
       }
     },
     "bake/facades.py": {
@@ -287,7 +196,6 @@
         "_equipment_piece: Cannot access attribute \"interpolate\" for class \"Geometry\"": 3,
         "_equipment_piece: Cannot access attribute \"is_ring\" for class \"Geometry\"": 2,
         "_equipment_piece: Cannot access attribute \"representative_point\" for class \"Geometry\"": 1,
-        "_ndom_window: \"errors\" is not a known attribute of module \"rasterio\"": 1,
         "_outline: Cannot access attribute \"area\" for class \"Geometry\"": 1,
         "_outline: Cannot access attribute \"coords\" for class \"Geometry\"": 1,
         "_outline: Cannot access attribute \"exterior\" for class \"Geometry\"": 1,
@@ -301,13 +209,6 @@
         "facing: Cannot access attribute \"x\" for class \"GeoArray\"": 1,
         "facing: Cannot access attribute \"y\" for class \"GeoArray\"": 1,
         "play_blobs: Cannot access attribute \"buffer\" for class \"Geometry\"": 1
-      },
-      "reportGeneralTypeIssues": {
-        "play_blobs: \"Literal[0]\" is not iterable": 1,
-        "play_blobs: \"Literal[1]\" is not iterable": 1
-      },
-      "reportOperatorIssue": {
-        "play_blobs: Operator \"&\" not supported for types \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\" and \"NDArray[bool_]\"": 1
       },
       "reportOptionalMemberAccess": {
         "repeater: \"junction_ahead\" is not a known attribute of \"None\"": 1
@@ -344,14 +245,11 @@
     },
     "bake/lowveg.py": {
       "reportArgumentType": {
-        "canopy_extra: Argument of type \"ndarray[Unknown, Unknown] | _Array1D[signedinteger[_NBitIntP] | signedinteger[_32Bit]] | _Array1D[float64] | Unknown\" cannot be assigned to parameter \"key\" of type \"list[str]\" in function \"__getitem__\"": 1,
         "load_inputs: Argument of type \"_Array[tuple[int, int], Incomplete] | ndarray[tuple[int], _dtype] | ndarray[Unknown, _dtype] | Unknown\" cannot be assigned to parameter \"value\" of type \"Grid\" in function \"__setitem__\"": 4,
         "load_inputs: Argument of type \"bool\" cannot be assigned to parameter \"value\" of type \"Grid\" in function \"__setitem__\"": 2,
         "load_inputs: Argument of type \"ndarray[_AnyShape, _dtype]\" cannot be assigned to parameter \"value\" of type \"Grid\" in function \"__setitem__\"": 3,
         "load_inputs: Argument of type \"ndarray[_AnyShape, dtype[Any]] | NDArray[floating[Any]] | _Array[tuple[int, int], floating[_32Bit]]\" cannot be assigned to parameter \"value\" of type \"Grid\" in function \"__setitem__\"": 1,
-        "load_inputs: Argument of type \"ndarray[_AnyShape, dtype[Any]] | NDArray[floating[Any]]\" cannot be assigned to parameter \"value\" of type \"Grid\" in function \"__setitem__\"": 1,
-        "lowveg_mask: Argument of type \"ndarray[Unknown, Unknown] | _Array1D[signedinteger[_NBitIntP] | signedinteger[_32Bit]] | _Array1D[float64] | Unknown\" cannot be assigned to parameter \"key\" of type \"list[str]\" in function \"__getitem__\"": 1,
-        "split_components: Argument of type \"ndarray[Unknown, Unknown] | _Array1D[signedinteger[_NBitIntP] | signedinteger[_32Bit]] | _Array1D[float64] | Unknown\" cannot be assigned to parameter \"key\" of type \"list[str]\" in function \"__getitem__\"": 1
+        "load_inputs: Argument of type \"ndarray[_AnyShape, dtype[Any]] | NDArray[floating[Any]]\" cannot be assigned to parameter \"value\" of type \"Grid\" in function \"__setitem__\"": 1
       },
       "reportAttributeAccessIssue": {
         "<module>: \"cKDTree\" is unknown import symbol": 1,
@@ -359,50 +257,11 @@
         "build: Cannot access attribute \"intersects\" for class \"Geometry\"": 1,
         "merge_lines: Cannot access attribute \"geoms\" for class \"LineString\"": 1
       },
-      "reportCallIssue": {
-        "canopy_extra: No overloads for \"__getitem__\" match the provided arguments": 1,
-        "lowveg_mask: No overloads for \"__getitem__\" match the provided arguments": 1,
-        "split_components: No overloads for \"__getitem__\" match the provided arguments": 1
-      },
-      "reportGeneralTypeIssues": {
-        "canopy_extra: \"Literal[0]\" is not iterable": 1,
-        "canopy_extra: \"Literal[1]\" is not iterable": 1,
-        "lowveg_mask: \"Literal[0]\" is not iterable": 1,
-        "lowveg_mask: \"Literal[1]\" is not iterable": 1,
-        "split_components: \"Literal[0]\" is not iterable": 1,
-        "split_components: \"Literal[1]\" is not iterable": 1
-      },
-      "reportOperatorIssue": {
-        "canopy_extra: Operator \"~\" not supported for type \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\"": 1,
-        "hedge_lines: Operator \"*\" not supported for types \"tuple[Unknown, ...] | Unknown | None\" and \"float\"": 1,
-        "lowveg_mask: Operator \"|\" not supported for types \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\" and \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\"": 1,
-        "split_components: Operator \"*\" not supported for types \"tuple[Unknown, ...] | Unknown | None\" and \"float\"": 1
-      },
       "reportOptionalMemberAccess": {
         "Grid.burn: \"astype\" is not a known attribute of \"None\"": 1
       }
     },
     "bake/lsc.py": {
-      "reportArgumentType": {
-        "merge_laz: Argument of type \"PackedPointRecord | SubFieldView | ScaledArrayView | Unknown\" cannot be assigned to parameter \"y\" of type \"ArrayLike\" in function \"where\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "merge_laz: Cannot access attribute \"classification\" for class \"ScaledArrayView\"": 1,
-        "merge_laz: Cannot access attribute \"classification\" for class \"SubFieldView\"": 1,
-        "merge_laz: Cannot access attribute \"intensity\" for class \"ScaledArrayView\"": 1,
-        "merge_laz: Cannot access attribute \"intensity\" for class \"SubFieldView\"": 1,
-        "merge_laz: Cannot access attribute \"number_of_returns\" for class \"ScaledArrayView\"": 1,
-        "merge_laz: Cannot access attribute \"number_of_returns\" for class \"SubFieldView\"": 1,
-        "merge_laz: Cannot access attribute \"x\" for class \"ScaledArrayView\"": 1,
-        "merge_laz: Cannot access attribute \"x\" for class \"SubFieldView\"": 1,
-        "merge_laz: Cannot access attribute \"y\" for class \"ScaledArrayView\"": 1,
-        "merge_laz: Cannot access attribute \"y\" for class \"SubFieldView\"": 1,
-        "merge_laz: Cannot access attribute \"z\" for class \"ScaledArrayView\"": 1,
-        "merge_laz: Cannot access attribute \"z\" for class \"SubFieldView\"": 1
-      },
-      "reportCallIssue": {
-        "merge_laz: No overloads for \"where\" match the provided arguments": 1
-      },
       "reportPossiblyUnboundVariable": {
         "merge_laz: \"keep\" is possibly unbound": 1,
         "merge_laz: \"mapped\" is possibly unbound": 1
@@ -426,12 +285,6 @@
         "tangent_at: Cannot access attribute \"interpolate\" for class \"Geometry\"": 2,
         "tangent_at: Cannot access attribute \"length\" for class \"Geometry\"": 1,
         "tangent_at: Cannot access attribute \"project\" for class \"Geometry\"": 1
-      },
-      "reportGeneralTypeIssues": {
-        "nearest_way_fields: \"None\" is not iterable": 1
-      },
-      "reportOperatorIssue": {
-        "lane_fields: Operator \"*\" not supported for types \"tuple[Unknown, ...] | Unknown | None\" and \"float\"": 2
       },
       "reportOptionalOperand": {
         "burn_mask: Operator \">\" not supported for \"None\"": 1
@@ -479,11 +332,6 @@
         "ring_way: Type \"list[tuple[float, ...]]\" is not assignable to return type \"list[tuple[float, float]]\"": 2
       }
     },
-    "bake/osm.py": {
-      "reportAttributeAccessIssue": {
-        "read_extract: \"raw\" is not a known attribute of module \"pyogrio\"": 1
-      }
-    },
     "bake/osm_buildings.py": {
       "reportArgumentType": {
         "describe: Argument of type \"tuple[str, str] | None\" cannot be assigned to parameter \"object\" of type \"tuple[str, str]\" in function \"append\"": 1
@@ -491,15 +339,6 @@
       "reportAttributeAccessIssue": {
         "<module>: \"cKDTree\" is unknown import symbol": 1,
         "covered_by: Cannot access attribute \"area\" for class \"Geometry\"": 1
-      }
-    },
-    "bake/osm_index.py": {
-      "reportAttributeAccessIssue": {
-        "_build_areas: \"raw\" is not a known attribute of module \"pyogrio\"": 2,
-        "_build_whole: \"raw\" is not a known attribute of module \"pyogrio\"": 1,
-        "_direct: \"raw\" is not a known attribute of module \"pyogrio\"": 1,
-        "_part: \"raw\" is not a known attribute of module \"pyogrio\"": 1,
-        "_write: \"raw\" is not a known attribute of module \"pyogrio\"": 1
       }
     },
     "bake/passages.py": {
@@ -580,8 +419,6 @@
         "River.bank_near: Cannot access attribute \"exterior\" for class \"Geometry\"": 1,
         "River.bank_near: Cannot access attribute \"geom_type\" for class \"Geometry\"": 1,
         "River.open_water: Cannot access attribute \"buffer\" for class \"Geometry\"": 2,
-        "River.wet_part: \"transform\" is not a known attribute of module \"rasterio\"": 1,
-        "River.wet_part: \"windows\" is not a known attribute of module \"rasterio\"": 1,
         "_length: Cannot access attribute \"exterior\" for class \"BaseGeometry\"": 1,
         "far_out: Cannot access attribute \"geom_type\" for class \"Geometry\"": 1,
         "far_out: Cannot access attribute \"interpolate\" for class \"Geometry\"": 1,
@@ -594,9 +431,6 @@
         "pier_shape: Cannot access attribute \"geoms\" for class \"Geometry\"": 1,
         "pier_shape: Cannot access attribute \"is_empty\" for class \"Geometry\"": 1,
         "pier_shape: Cannot access attribute \"is_ring\" for class \"Geometry\"": 1
-      },
-      "reportCallIssue": {
-        "River.wet_part: Expected 0 positional arguments": 1
       },
       "reportOptionalMemberAccess": {
         "River.cells: \"astype\" is not a known attribute of \"None\"": 1
@@ -628,64 +462,28 @@
       "reportAttributeAccessIssue": {
         "_face_facets: Cannot access attribute \"area\" for class \"Geometry\"": 2,
         "_face_facets: Cannot access attribute \"covers\" for class \"Geometry\"": 1
-      },
-      "reportGeneralTypeIssues": {
-        "tidy: \"None\" is not iterable": 1
       }
     },
     "bake/roof_planes.py": {
       "reportArgumentType": {
-        "_explained: Argument of type \"ndarray[Unknown, Unknown] | _Array1D[signedinteger[_NBitIntP] | signedinteger[_32Bit]] | _Array1D[float64] | Unknown\" cannot be assigned to parameter \"key\" of type \"_ToIndices\" in function \"__getitem__\"": 1,
-        "_explained: Argument of type \"ndarray[tuple[int], dtype[signedinteger[_NBitIntP] | signedinteger[_32Bit]]] | ndarray[tuple[int], dtype[float64]] | ndarray[tuple[int], Unknown] | Unknown\" cannot be assigned to parameter \"x\" of type \"_ArrayLikeInt_co\" in function \"bincount\"": 1,
-        "_flank_cores: Argument of type \"ndarray[tuple[int], dtype[signedinteger[_NBitIntP] | signedinteger[_32Bit]]] | ndarray[tuple[int], dtype[float64]] | ndarray[tuple[int], Unknown] | Unknown\" cannot be assigned to parameter \"x\" of type \"_ArrayLikeInt_co\" in function \"bincount\"": 1,
         "_grow: Argument of type \"float64\" cannot be assigned to parameter \"cols\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"_plane\"": 2,
         "_grow: Argument of type \"float64\" cannot be assigned to parameter \"rows\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"_plane\"": 2,
-        "_inward: Argument of type \"tuple[slice[Literal[1], Literal[-1], None], slice[Literal[1], Literal[-1], None]]\" cannot be assigned to parameter \"key\" of type \"slice[SupportsIndex | None, SupportsIndex | None, SupportsIndex | None]\" in function \"__getitem__\"": 1,
-        "_own_blocks: Argument of type \"ndarray[Unknown, Unknown] | _Array1D[signedinteger[_NBitIntP] | signedinteger[_32Bit]] | _Array1D[float64] | Unknown\" cannot be assigned to parameter \"key\" of type \"_ToIndices\" in function \"__getitem__\"": 1,
-        "_own_blocks: Argument of type \"ndarray[tuple[int], dtype[signedinteger[_NBitIntP] | signedinteger[_32Bit]]] | ndarray[tuple[int], dtype[float64]] | ndarray[tuple[int], Unknown] | Unknown\" cannot be assigned to parameter \"x\" of type \"_ArrayLikeInt_co\" in function \"bincount\"": 1,
         "creases: Argument of type \"tuple[slice[Any, Any, Any], slice[Any, Any, Any]]\" cannot be assigned to parameter \"key\" of type \"tuple[None, ...]\" in function \"__getitem__\"": 2
       },
       "reportCallIssue": {
-        "_explained: No overloads for \"__getitem__\" match the provided arguments": 1,
-        "_inward: No overloads for \"__getitem__\" match the provided arguments": 1,
-        "_own_blocks: No overloads for \"__getitem__\" match the provided arguments": 1,
         "creases: No overloads for \"__getitem__\" match the provided arguments": 2
       },
       "reportGeneralTypeIssues": {
-        "_explained: \"Literal[0]\" is not iterable": 1,
-        "_explained: \"Literal[1]\" is not iterable": 1,
-        "_fitted_sections: \"Literal[0]\" is not iterable": 1,
-        "_fitted_sections: \"Literal[1]\" is not iterable": 1,
-        "_flank_cores: \"Literal[0]\" is not iterable": 1,
-        "_flank_cores: \"Literal[1]\" is not iterable": 1,
-        "_gable_fit: \"None\" is not iterable": 1,
-        "_own_blocks: \"Literal[0]\" is not iterable": 1,
-        "_own_blocks: \"Literal[1]\" is not iterable": 1,
-        "curved_surface: \"None\" is not iterable": 1,
-        "fill_nearest: \"None\" is not iterable": 1,
-        "flank_facets: \"Literal[0]\" is not iterable": 1,
-        "flank_facets: \"Literal[1]\" is not iterable": 1,
-        "plausible_fit: \"None\" is not iterable": 1
-      },
-      "reportOperatorIssue": {
-        "_gable_fit: Operator \"&\" not supported for types \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown] | ndarray[_AnyShape, dtype[Any]]\" and \"NDArray[bool_]\"": 1
-      },
-      "reportOptionalSubscript": {
-        "_inward: Object of type \"None\" is not subscriptable": 1,
-        "creases: Object of type \"None\" is not subscriptable": 1
+        "curved_surface: \"None\" is not iterable": 1
       }
     },
     "bake/roofs.py": {
       "reportArgumentType": {
         "Area.__init__: Argument of type \"Grid\" cannot be assigned to parameter \"field\" of type \"Field\" in function \"burn_triangles\"": 1,
         "_gap_owner: Argument of type \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\" cannot be assigned to parameter \"key\" of type \"(_T@max) -> SupportsRichComparison\" in function \"max\"": 1,
-        "_kept_whole: Argument of type \"ndarray[tuple[int], dtype[signedinteger[_NBitIntP] | signedinteger[_32Bit]]] | ndarray[tuple[int], dtype[float64]] | ndarray[tuple[int], Unknown] | Unknown\" cannot be assigned to parameter \"x\" of type \"_ArrayLikeInt_co\" in function \"bincount\"": 1,
-        "_pockets: Argument of type \"ndarray[Unknown, Unknown] | _Array1D[signedinteger[_NBitIntP] | signedinteger[_32Bit]] | _Array1D[float64] | Unknown\" cannot be assigned to parameter \"key\" of type \"_ToIndices\" in function \"__getitem__\"": 1,
-        "_pockets: Argument of type \"ndarray[tuple[int], dtype[signedinteger[_NBitIntP] | signedinteger[_32Bit]]] | ndarray[tuple[int], dtype[float64]] | ndarray[tuple[int], Unknown] | Unknown\" cannot be assigned to parameter \"x\" of type \"_ArrayLikeInt_co\" in function \"bincount\"": 1,
         "_ring_lines: Argument of type \"ndarray[_AnyShape, dtype[Any]] | Any | None\" cannot be assigned to parameter \"point\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"__new__\"": 1,
         "rebuild: Argument of type \"Grid\" cannot be assigned to parameter \"field\" of type \"Field\" in function \"burn_triangles\"": 1,
         "rebuild: Argument of type \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\" cannot be assigned to parameter \"key\" of type \"_ToIndices\" in function \"__getitem__\"": 1,
-        "rebuild: Argument of type \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\" cannot be assigned to parameter \"key\" of type \"list[str]\" in function \"__getitem__\"": 1,
         "roof_triangles: Argument of type \"list[ndarray[_AnyShape, Any] | list[Unknown | None]]\" cannot be assigned to parameter \"tup\" of type \"Sequence[ArrayLike]\" in function \"column_stack\"": 1
       },
       "reportAttributeAccessIssue": {
@@ -701,26 +499,11 @@
       },
       "reportCallIssue": {
         "_gap_owner: No overloads for \"max\" match the provided arguments": 1,
-        "_pockets: No overloads for \"__getitem__\" match the provided arguments": 1,
         "rebuild: No overloads for \"__getitem__\" match the provided arguments": 1,
         "roof_triangles: No overloads for \"column_stack\" match the provided arguments": 1
       },
-      "reportGeneralTypeIssues": {
-        "_downhill: \"None\" is not iterable": 1,
-        "_kept_whole: \"Literal[0]\" is not iterable": 1,
-        "_kept_whole: \"Literal[1]\" is not iterable": 1,
-        "_pockets: \"Literal[0]\" is not iterable": 1,
-        "_pockets: \"Literal[1]\" is not iterable": 1,
-        "_regions: \"Literal[0]\" is not iterable": 2,
-        "_regions: \"Literal[1]\" is not iterable": 2,
-        "extend_face: \"None\" is not iterable": 1,
-        "rebuild: \"Literal[0]\" is not iterable": 1,
-        "rebuild: \"Literal[1]\" is not iterable": 1
-      },
       "reportOperatorIssue": {
-        "_face_cells: Operator \"|\" not supported for types \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\" and \"NDArray[bool_]\"": 1,
-        "inclined_cells: Operator \"|=\" not supported for types \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\" and \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\"": 1,
-        "rebuild: Operator \"&\" not supported for types \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\" and \"ndarray[_AnyShape, dtype[bool_]]\"": 1
+        "inclined_cells: Operator \"|=\" not supported for types \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\" and \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\"": 1
       },
       "reportOptionalOperand": {
         "drawn_miss.share: Operator \">\" not supported for \"None\"": 2
@@ -751,30 +534,17 @@
       "reportAttributeAccessIssue": {
         "face_triangles: Cannot access attribute \"bounds\" for class \"Geometry\"": 1
       },
-      "reportGeneralTypeIssues": {
-        "extend_edges: \"None\" is not iterable": 1,
-        "fill_footprints: \"None\" is not iterable": 1
-      },
       "reportOptionalOperand": {
         "sky_view: Operator \"/\" not supported for \"None\"": 1
       }
     },
     "bake/small_buildings.py": {
-      "reportArgumentType": {
-        "core_blobs: Argument of type \"ndarray[Unknown, Unknown] | _Array1D[signedinteger[_NBitIntP] | signedinteger[_32Bit]] | _Array1D[float64] | Unknown\" cannot be assigned to parameter \"key\" of type \"_ToIndices\" in function \"__getitem__\"": 1,
-        "core_blobs: Argument of type \"ndarray[tuple[int], dtype[signedinteger[_NBitIntP] | signedinteger[_32Bit]]] | ndarray[tuple[int], dtype[float64]] | ndarray[tuple[int], Unknown] | Unknown\" cannot be assigned to parameter \"x\" of type \"_ArrayLikeInt_co\" in function \"bincount\"": 1
-      },
       "reportAttributeAccessIssue": {
         "ground_under: Cannot access attribute \"bounds\" for class \"Geometry\"": 1,
         "ground_under: Cannot access attribute \"exterior\" for class \"Geometry\"": 1,
         "measure: Cannot access attribute \"exterior\" for class \"BaseGeometry\"": 1
       },
-      "reportCallIssue": {
-        "core_blobs: No overloads for \"__getitem__\" match the provided arguments": 1
-      },
       "reportGeneralTypeIssues": {
-        "core_blobs: \"Literal[0]\" is not iterable": 1,
-        "core_blobs: \"Literal[1]\" is not iterable": 1,
         "load_rasters: \"None\" is not iterable": 1
       }
     },
@@ -802,13 +572,7 @@
       }
     },
     "bake/structures.py": {
-      "reportArgumentType": {
-        "roof_holes: Argument of type \"NDArray[signedinteger[_NBitIntP] | signedinteger[_32Bit] | float64]\" cannot be assigned to parameter \"key\" of type \"_ToIndices\" in function \"__setitem__\"": 1,
-        "roof_holes: Argument of type \"ndarray[Unknown, Unknown] | _Array1D[signedinteger[_NBitIntP] | signedinteger[_32Bit]] | _Array1D[float64] | Unknown\" cannot be assigned to parameter \"key\" of type \"_ToIndices\" in function \"__getitem__\"": 1,
-        "roof_holes: Argument of type \"ndarray[tuple[int], dtype[signedinteger[_NBitIntP] | signedinteger[_32Bit]]] | ndarray[tuple[int], dtype[float64]] | ndarray[tuple[int], Unknown] | Unknown\" cannot be assigned to parameter \"x\" of type \"_ArrayLikeInt_co\" in function \"bincount\"": 1
-      },
       "reportAttributeAccessIssue": {
-        "Surfaces.mask: \"transform\" is not a known attribute of module \"rasterio\"": 1,
         "Surfaces.window: Cannot access attribute \"buffer\" for class \"Geometry\"": 1,
         "building: Cannot access attribute \"area\" for class \"Geometry\"": 1,
         "building: Cannot access attribute \"simplify\" for class \"Geometry\"": 1,
@@ -817,21 +581,7 @@
         "column: Cannot access attribute \"geom_type\" for class \"Geometry\"": 2,
         "missing: Cannot access attribute \"intersects\" for class \"Geometry\"": 1,
         "open_roof: Cannot access attribute \"area\" for class \"Geometry\"": 1,
-        "open_roof: Cannot access attribute \"simplify\" for class \"Geometry\"": 1,
-        "relief: \"transform\" is not a known attribute of module \"rasterio\"": 1
-      },
-      "reportCallIssue": {
-        "roof_holes: No overloads for \"__getitem__\" match the provided arguments": 1,
-        "roof_holes: No overloads for \"__setitem__\" match the provided arguments": 1
-      },
-      "reportGeneralTypeIssues": {
-        "column: \"Literal[0]\" is not iterable": 1,
-        "column: \"Literal[1]\" is not iterable": 1,
-        "fill_voids: \"None\" is not iterable": 1,
-        "relief: \"Literal[0]\" is not iterable": 1,
-        "relief: \"Literal[1]\" is not iterable": 1,
-        "roof_holes: \"Literal[0]\" is not iterable": 1,
-        "roof_holes: \"Literal[1]\" is not iterable": 1
+        "open_roof: Cannot access attribute \"simplify\" for class \"Geometry\"": 1
       },
       "reportOptionalMemberAccess": {
         "Surfaces.mask: \"astype\" is not a known attribute of \"None\"": 1
@@ -863,11 +613,6 @@
       "reportAttributeAccessIssue": {
         "_pieces: Cannot access attribute \"geoms\" for class \"Geometry\"": 1,
         "_pieces: Cannot access attribute \"is_empty\" for class \"Geometry\"": 1
-      }
-    },
-    "bake/traffic_sources.py": {
-      "reportAttributeAccessIssue": {
-        "_read_vector: \"raw\" is not a known attribute of module \"pyogrio\"": 1
       }
     },
     "bake/tram.py": {
@@ -909,15 +654,9 @@
     "bake/water.py": {
       "reportArgumentType": {
         "drop_lines: Argument of type \"intp\" cannot be assigned to parameter \"c\" of type \"float\" in function \"xy\"": 1,
-        "drop_lines: Argument of type \"intp\" cannot be assigned to parameter \"r\" of type \"float\" in function \"xy\"": 1,
-        "drop_zones: Argument of type \"ndarray[Unknown, Unknown] | _Array1D[signedinteger[_NBitIntP] | signedinteger[_32Bit]] | _Array1D[float64] | Unknown\" cannot be assigned to parameter \"key\" of type \"_ToIndices\" in function \"__getitem__\"": 1,
-        "drop_zones: Argument of type \"ndarray[tuple[int], dtype[signedinteger[_NBitIntP] | signedinteger[_32Bit]]] | ndarray[tuple[int], dtype[float64]] | ndarray[tuple[int], Unknown] | Unknown\" cannot be assigned to parameter \"x\" of type \"_ArrayLikeInt_co\" in function \"bincount\"": 1,
-        "dry_cells: Argument of type \"NDArray[signedinteger[_NBitIntP] | signedinteger[_32Bit] | float64]\" cannot be assigned to parameter \"key\" of type \"_ToIndices\" in function \"__setitem__\"": 1,
-        "dry_cells: Argument of type \"ndarray[Unknown, Unknown] | _Array1D[signedinteger[_NBitIntP] | signedinteger[_32Bit]] | _Array1D[float64] | Unknown\" cannot be assigned to parameter \"key\" of type \"list[str]\" in function \"__getitem__\"": 1,
-        "dry_cells: Argument of type \"ndarray[tuple[int], dtype[signedinteger[_NBitIntP] | signedinteger[_32Bit]]] | ndarray[tuple[int], dtype[float64]] | ndarray[tuple[int], Unknown] | Unknown\" cannot be assigned to parameter \"x\" of type \"_ArrayLikeInt_co\" in function \"bincount\"": 1
+        "drop_lines: Argument of type \"intp\" cannot be assigned to parameter \"r\" of type \"float\" in function \"xy\"": 1
       },
       "reportAttributeAccessIssue": {
-        "Grid.__init__: \"transform\" is not a known attribute of module \"rasterio\"": 1,
         "_direction: Cannot access attribute \"coords\" for class \"Geometry\"": 1,
         "cut_lines: Cannot access attribute \"distance\" for class \"Geometry\"": 2,
         "cut_lines: Cannot access attribute \"interpolate\" for class \"Geometry\"": 2,
@@ -926,26 +665,7 @@
         "cut_lines: Cannot access attribute \"project\" for class \"Geometry\"": 1
       },
       "reportCallIssue": {
-        "cut_lines: Expected 6 positional arguments": 4,
-        "drop_zones: No overloads for \"__getitem__\" match the provided arguments": 1,
-        "dry_cells: No overloads for \"__getitem__\" match the provided arguments": 1,
-        "dry_cells: No overloads for \"__setitem__\" match the provided arguments": 1
-      },
-      "reportGeneralTypeIssues": {
-        "drop_zones: \"Literal[0]\" is not iterable": 1,
-        "drop_zones: \"Literal[1]\" is not iterable": 1,
-        "dry_cells: \"Literal[0]\" is not iterable": 1,
-        "dry_cells: \"Literal[1]\" is not iterable": 1,
-        "label_bodies: \"Literal[0]\" is not iterable": 1,
-        "label_bodies: \"Literal[1]\" is not iterable": 1,
-        "label_bodies: \"None\" is not iterable": 1,
-        "reclass: \"None\" is not iterable": 1,
-        "tint_grid: \"None\" is not iterable": 1
-      },
-      "reportOperatorIssue": {
-        "colours: Operator \">=\" not supported for types \"tuple[Unknown, ...] | Unknown | None\" and \"float\"": 1,
-        "drop_lines: Operator \">=\" not supported for types \"tuple[Unknown, ...] | Unknown | None\" and \"Literal[2]\"": 1,
-        "dry_cells: Operator \"&\" not supported for types \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\" and \"NDArray[bool_]\"": 1
+        "cut_lines: Expected 6 positional arguments": 4
       },
       "reportOptionalMemberAccess": {
         "label_bodies: \"astype\" is not a known attribute of \"None\"": 1

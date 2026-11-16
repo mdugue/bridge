@@ -27,7 +27,7 @@
   runs, not hours in
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: IN PROGRESS — phases 0–1 done (2026-11-16); phase 2 next, phases 3–4 wait for decision B
+- **Status**: IN PROGRESS — phases 0–2 done (2026-11-16); phases 3–4 wait for decision B
 
 ## Why this matters
 
@@ -419,3 +419,62 @@ Verify ("no entry for is not iterable") therefore reads as: no
 `reportGeneralTypeIssues` left where `ndi.label` was.
 
 Decision B: open (the maintainer's).
+
+### Phase 2: the stubs (2026-11-16)
+
+`pipeline/typings/` holds four **partial** stub packages (`<library>-stubs/`
+with `py.typed` saying `partial`, PEP 561): only the modules they hold
+replace the library's for pyright; every other module is read from the
+source as before, and a module stub re-exports by name, from the library's
+own modules, what it does not type. Each is written from the installed
+source (file and version in its docstring), or, for a compiled function,
+from what it returns on that version. No bake module, no `uv.lock`, no
+setting changed.
+
+Why partial packages and not plain module stubs: a stub directory without
+an `__init__.pyi` is ignored beside the real package, and one with it
+replaces the whole package, so `from scipy import fft` stops resolving. And
+a stub of `scipy/ndimage` alone was read or not by the order pyright
+happened to check the bakes in: after `dop_lean.py`'s `from scipy import
+fft`, pyright had cached the source package's subpackages, and every later
+`from scipy import ndimage` got the source (24 `label` findings came back
+in a full run and not in any half of it). The partial `scipy-stubs` makes
+the result the same in any order (checked forwards and backwards).
+
+The baseline: **593 → 405 findings** (`--update`; nothing rose, the escapes
+unchanged). By rule: `reportGeneralTypeIssues` 78 → 2,
+`reportArgumentType` 119 → 83, `reportAttributeAccessIssue` 233 → 206,
+`reportOperatorIssue` 29 → 3, `reportCallIssue` 52 → 31,
+`reportOptionalSubscript` 13 → 11; the rest as they were. By library, each
+stub package alone over the old baseline: scipy 157 (`ndimage.label` 60
+and what follows from its labels, `distance_transform_edt`'s `tuple |
+None` — 16 of the 18 "`None` is not iterable" were it — the binary
+morphology's float arrays, `fft.rfft2`/`irfft2` and `next_fast_len`),
+laspy 14 (the point records' `__getitem__`), rasterio 9 (its submodules
+as attributes, `Window`'s constructor), pyogrio 8 (`pyogrio.raw`).
+
+Held back, each because typing it honestly raises a key the gate counts
+(the phase's STOP condition):
+
+- **`scipy.spatial.cKDTree`** (compiled, no stub; 5 "unknown import
+  symbol"): typed, `query_ball_point` on an array returns `list[int] |
+  NDArray[object_]`, and `canopy.thinned` indexes a mask with it (2 new
+  findings) — the point is 1-D there, which its type does not say. With
+  that fix in phase 4: −5 +0.
+- **`ndimage.binary_opening`**: typed like its siblings it lowers 3
+  findings and re-words one in `facade_measure.profile` (`Any |
+  NDArray[bool_] | None` becomes `NDArray[bool_] | None`: the same
+  `None`, a new key). With that `None`'s fix in phase 4.
+
+Left for phase 4, not a stub's: `"BICUBIC" is not a known attribute of
+module "PIL.Image"` (`facade_glass.py`). Pillow ships types; it binds the
+old constants with `setattr` at import, which its types do not declare.
+The bake should say `Image.Resampling.BICUBIC` (the same value). So
+phase 2's Verify holds for the libraries without types: no "is not
+iterable" on a `Literal` and no unknown attribute of a module of theirs
+remain.
+
+No key moved: `step_cache.code_hash` of each of the 81 bake modules is the
+same on `origin/rewrite` and on the branch, from the same `.venv`, and so
+is `locked_runtime`.
+
