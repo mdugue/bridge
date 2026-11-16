@@ -1051,7 +1051,7 @@ bun run bake dresden 33412_5656_2_sn   # one tile, all steps
 bun run bake dresden --step canopy     # one step; the order is STEPS in pipeline/bake/__main__.py,
                                        # each entry's comment says what it must follow;
                                        # `transit` runs once for the site (SITE_STEPS)
-bun run test:pipeline                  # pytest + ruff
+bun run test:pipeline                  # pytest + ruff + types (typecheck.py)
 ```
 
 Missing DOM1 or DOP skips the canopy, NDVI and roof-colour steps (the

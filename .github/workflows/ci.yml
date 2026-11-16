@@ -103,7 +103,7 @@ jobs:
   # unit tests and ruff. The bakes themselves need the raw downloads and run
   # on the maintainer's machine (bun run bake), never here.
   pipeline:
-    name: Pipeline (pytest + ruff)
+    name: Pipeline (pytest + ruff + types)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -117,6 +117,8 @@ jobs:
       - run: uv run pytest -q tests
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      # The bakes' types, against a baseline that only shrinks (plan 089).
+      - run: uv run python typecheck.py
 
   # Build and e2e share a job: its build step is the build check, and the
   # Playwright step serves the artifact it just produced instead of
