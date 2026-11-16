@@ -27,13 +27,11 @@ import {
   datedLedger,
   distinctExtensions,
   functionLines,
-  gatedWire,
   glbFigures,
   LEDGER_VERSION,
   ledgerDiff,
   ledgerTiles,
   layerModules,
-  RECORDED_NOTE,
   seamModules,
   upstreamWorkarounds,
   WIRE_RULE,
@@ -41,12 +39,9 @@ import {
   wireBytes,
 } from "../lib/city/ledger";
 import type {
-  ByLevel,
   Counters,
   Ledger,
-  MeshFigures,
   RasterReads,
-  Recorded,
   SourceText,
 } from "../lib/city/ledger";
 import {
@@ -161,15 +156,7 @@ function counters(published: Record<string, string>): Counters {
   };
 }
 
-/** The gated part of the buildings' figures: their triangles. */
-const triangles = (
-  level: Record<string, MeshFigures>
-): Record<string, { triangles: number }> =>
-  Object.fromEntries(
-    Object.entries(level).map(([tile, m]) => [tile, { triangles: m.triangles }])
-  );
-
-/** This machine, as the recorded figures name it. */
+/** This machine, for a check that fails: the JSON's wire bytes are zlib's. */
 function machine(): string {
   const cpu = cpuCount();
   return `${cpu.model} ×${cpu.count}, ${process.platform}-${process.arch}, Bun ${Bun.version}`;
@@ -180,12 +167,9 @@ function cpuCount(): { count: number; model: string } {
   return { count: all.length, model: all[0]?.model.trim() ?? "unknown CPU" };
 }
 
-/** The ledger's figures for `site`, from its published files: the gated
- *  ones and the recorded ones. */
-export function measure(site: string): {
-  gated: Omit<Ledger, "dated" | "recorded" | "rasters">;
-  recorded: Omit<Recorded, "machine" | "read">;
-} {
+/** The ledger's figures for `site`, from its published files (the
+ *  rasters are every site's, `measureRasters`). */
+export function measure(site: string): Omit<Ledger, "dated" | "rasters"> {
   const published = publishedFiles(site);
   const wireOf = new Map<string, number>();
   const wire = (served: string) => {
@@ -196,35 +180,22 @@ export function measure(site: string): {
     }
     return bytes;
   };
-  const gated = gatedWire(wire);
   const tiles = ledgerTiles(published.tileset);
   const servedNames = Object.values(published.files).toSorted();
   const mesh = (served: string) =>
     glbFigures(new Uint8Array(gunzipSync(published.read(served))));
-  const meshes: ByLevel<MeshFigures> = {
-    near: Object.fromEntries(tiles.map((t) => [t.id, mesh(t.city)])),
-    far: Object.fromEntries(tiles.map((t) => [t.id, mesh(t.cityFar)])),
-  };
   return {
-    gated: {
-      version: LEDGER_VERSION,
-      site,
-      wire: WIRE_RULE,
-      tiles: tiles.length,
-      published: weigh(servedNames, gated),
-      bytes: bytesLedger(tiles, viewerReads, gated),
-      buildings: {
-        near: triangles(meshes.near),
-        far: triangles(meshes.far),
-      },
-      counters: counters(published.files),
+    version: LEDGER_VERSION,
+    site,
+    wire: WIRE_RULE,
+    tiles: tiles.length,
+    published: weigh(servedNames, wire),
+    bytes: bytesLedger(tiles, viewerReads, wire),
+    buildings: {
+      near: Object.fromEntries(tiles.map((t) => [t.id, mesh(t.city)])),
+      far: Object.fromEntries(tiles.map((t) => [t.id, mesh(t.cityFar)])),
     },
-    recorded: {
-      note: RECORDED_NOTE,
-      published: weigh(servedNames, wire),
-      bytes: bytesLedger(tiles, viewerReads, wire),
-      buildings: meshes,
-    },
+    counters: counters(published.files),
   };
 }
 
@@ -255,29 +226,14 @@ async function main(check: boolean): Promise<void> {
   const committed: unknown = existsSync(LEDGER_FILE)
     ? JSON.parse(readFileSync(LEDGER_FILE, "utf-8"))
     : null;
-  const measured = measure(REFERENCE_SITE);
-  const { recorded } = measured;
-  const gated = { ...measured.gated, rasters: await measureRasters() };
+  const fresh = {
+    ...measure(REFERENCE_SITE),
+    rasters: await measureRasters(),
+  };
   if (check) {
-    const moved = ledgerDiff(committed ?? {}, gated);
+    const moved = ledgerDiff(committed ?? {}, fresh);
     for (const line of moved) {
       process.stdout.write(`differs: ${line}\n`);
-    }
-    // the recorded figures, for the reader only: never a failure
-    const was = (committed as Partial<Ledger> | null)?.recorded;
-    for (const line of ledgerDiff(
-      {
-        published: was?.published,
-        bytes: was?.bytes,
-        buildings: was?.buildings,
-      },
-      {
-        published: recorded.published,
-        bytes: recorded.bytes,
-        buildings: recorded.buildings,
-      }
-    )) {
-      process.stdout.write(`recorded, not compared: ${line}\n`);
     }
     process.stdout.write(
       moved.length === 0
@@ -285,17 +241,15 @@ async function main(check: boolean): Promise<void> {
         : `${moved.length} figures differ: run bun scripts/ledger.ts and commit qa/ledger.json\n`
     );
     if (moved.length > 0) {
-      // the gated JSON bytes are zlib's on CI's platform: a platform
+      // the JSON's wire bytes are zlib's on CI's platform: a platform
       // difference shows here at a glance
-      process.stdout.write(
-        `platform: here ${machine()}; the ledger's record: ${was?.machine ?? "(none)"}\n`
-      );
+      process.stdout.write(`platform: here ${machine()}\n`);
       process.exitCode = 1;
     }
     return;
   }
   const today = new Date().toISOString().slice(0, 10);
-  const ledger = datedLedger(gated, recorded, committed, today, machine());
+  const ledger = datedLedger(fresh, committed, today);
   writeFileSync(LEDGER_FILE, `${JSON.stringify(ledger, null, 2)}\n`);
   formatAsCommitted(LEDGER_FILE);
   process.stdout.write(`qa/ledger.json (${ledger.dated})\n`);

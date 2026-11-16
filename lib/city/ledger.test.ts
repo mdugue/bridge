@@ -6,7 +6,6 @@ import {
   distinctExtensions,
   extensionOf,
   functionLines,
-  gatedWire,
   glbFigures,
   layerModules,
   ledgerDiff,
@@ -18,7 +17,7 @@ import {
   upstreamWorkarounds,
   wireBytes,
 } from "./ledger";
-import type { Ledger, RasterReads, Recorded } from "./ledger";
+import type { Ledger, RasterReads } from "./ledger";
 import { SORT_OF } from "./ledger-rasters";
 import { buildTileset } from "./tileset";
 import type { BakedTile, TerrainFiles } from "./tileset";
@@ -220,17 +219,6 @@ test("the comments that name a workaround for upstream", () => {
   ).toBe(2);
 });
 
-test("the machine-bound files are no bytes in the gate, but files", () => {
-  const wire = gatedWire(() => 7);
-  expect(wire("city_33412_5656_2_sn.fa5c0c5f.glb.gz")).toBe(0);
-  expect(wire("city_33412_5656_2_sn_far.c85037b5.glb.gz")).toBe(0);
-  // the tileset JSONs name the buildings by their content hash
-  expect(wire("tileset.804b2f60.json")).toBe(0);
-  expect(wire("tileset-spawn.6a2504c0.json")).toBe(0);
-  expect(wire("terrain_33412_5656_2_sn_l0.12c82968.glb.gz")).toBe(7);
-  expect(wire("facades_33412_5656_2_sn.4c9c5f53.json")).toBe(7);
-});
-
 /** A binary glTF with `json` as its only chunk. */
 const glb = (gltf: object): Uint8Array => {
   const text = new TextEncoder().encode(JSON.stringify(gltf));
@@ -277,17 +265,7 @@ test("a glTF's vertices, triangles and accessor bytes from its JSON", () => {
   expect(() => glbFigures(new Uint8Array(24))).toThrow();
 });
 
-const RECORDED: Recorded = {
-  note: "recorded",
-  machine: "a machine",
-  read: "2026-11-16",
-  published: { bytes: 20, files: 2 },
-  bytes: {} as Ledger["bytes"],
-  buildings: {
-    near: { a: { vertices: 3, triangles: 1, accessorBytes: 36 } },
-    far: { a: { vertices: 3, triangles: 1, accessorBytes: 36 } },
-  },
-};
+const MESH = { vertices: 3, triangles: 1, accessorBytes: 36 };
 
 const LEDGER = {
   version: 1,
@@ -297,7 +275,7 @@ const LEDGER = {
   tiles: 2,
   published: { bytes: 10, files: 2 },
   bytes: {} as Ledger["bytes"],
-  buildings: { near: { a: { triangles: 1 } }, far: { a: { triangles: 1 } } },
+  buildings: { near: { a: MESH }, far: { a: MESH } },
   counters: {
     askKinds: 1,
     bakeSeamModules: { matching: 2, of: 3 },
@@ -309,64 +287,37 @@ const LEDGER = {
     upstreamWorkarounds: 2,
   },
   rasters: { rule: "rasters", cpuDecodes: [], sites: {}, sorts: SORT_OF },
-  recorded: RECORDED,
 } satisfies Ledger;
 
-test("the check names each figure that moved, never the date or the record", () => {
-  expect(
-    ledgerDiff(LEDGER, {
-      ...LEDGER,
-      dated: "2027-01-01",
-      recorded: {
-        ...RECORDED,
-        buildings: {
-          ...RECORDED.buildings,
-          near: { a: { vertices: 4, triangles: 1, accessorBytes: 48 } },
-        },
-      },
-    })
-  ).toEqual([]);
+test("the check names each figure that moved, never the date", () => {
+  expect(ledgerDiff(LEDGER, { ...LEDGER, dated: "2027-01-01" })).toEqual([]);
   const moved = {
     ...LEDGER,
     published: { bytes: 12, files: 2 },
     buildings: {
       ...LEDGER.buildings,
-      near: { a: { triangles: 2 } },
+      // one vertex more at a weld: what another machine's bake gave
+      near: { a: { ...MESH, vertices: 4, accessorBytes: 48 } },
     },
     counters: { ...LEDGER.counters, publishedExtensions: [".png", ".json"] },
   };
   expect(ledgerDiff(LEDGER, moved)).toEqual([
-    "buildings.near.a.triangles: 1 → 2",
+    "buildings.near.a.accessorBytes: 36 → 48",
+    "buildings.near.a.vertices: 3 → 4",
     'counters.publishedExtensions: [".png"] → [".png",".json"]',
     "published.bytes: 10 → 12",
   ]);
   expect(ledgerDiff({}, LEDGER)).toContain("tiles: (none) → 2");
 });
 
-test("the date holds while the gated figures do; the record while its own do", () => {
-  const { dated: _, recorded: __, ...fresh } = LEDGER;
-  const { machine: ___, read: ____, ...figures } = RECORDED;
+test("the date holds while the figures do", () => {
+  const { dated: _, ...fresh } = LEDGER;
   const today = "2027-01-01";
-  const same = datedLedger(fresh, figures, LEDGER, today, "another");
-  expect(same.dated).toBe("2026-11-16");
-  expect(same.recorded).toEqual(RECORDED);
-  const moved = datedLedger(
-    { ...fresh, tiles: 3 },
-    figures,
-    LEDGER,
-    today,
-    "b"
-  );
-  expect(moved.dated).toBe(today);
-  // another machine's bytes: a new record, the gated date kept
-  const other = datedLedger(
-    fresh,
-    { ...figures, published: { bytes: 21, files: 2 } },
-    LEDGER,
-    today,
-    "another"
-  );
-  expect(other.dated).toBe("2026-11-16");
-  expect(other.recorded).toMatchObject({ machine: "another", read: today });
-  expect(datedLedger(fresh, figures, null, today, "b").dated).toBe(today);
+  expect(datedLedger(fresh, LEDGER, today).dated).toBe("2026-11-16");
+  expect(datedLedger({ ...fresh, tiles: 3 }, LEDGER, today).dated).toBe(today);
+  // a committed ledger of the time the buildings were recorded only
+  expect(
+    datedLedger(fresh, { ...LEDGER, recorded: { machine: "a" } }, today).dated
+  ).toBe(today);
+  expect(datedLedger(fresh, null, today).dated).toBe(today);
 });

@@ -22,6 +22,7 @@
  * layer lays its ballast on the same beds (`BedIndex`), so the ballast,
  * the sleepers and the rails stand on one surface the ground lies under.
  */
+import * as PMath from "./portable-math";
 import type { RailFeature, TramBed } from "./features";
 import type { Point2 } from "./polyline";
 
@@ -130,7 +131,7 @@ function onSegment(bed: Bed, i: number, x: number, y: number): Hit | null {
   }
   const t = Math.min(1, Math.max(0, along));
   return {
-    d: Math.hypot(ax + ex * t - x, ay + ey * t - y),
+    d: PMath.hypot(ax + ex * t - x, ay + ey * t - y),
     level: bed.z[i] + (bed.z[i + 1] - bed.z[i]) * t - bed.drop,
   };
 }

@@ -24,6 +24,7 @@
  * `MIN_STEP_M` — so freestanding garden walls and flat fountain rims leave the
  * terrain alone. A `MAX_STEP_M` clamp stops a bad height tag gouging a canyon.
  */
+import * as PMath from "./portable-math";
 import { subdividePolyline } from "./polyline";
 import { isInvalidElevation, sampleHeightfield } from "./terrain-geometry";
 import type { TerrainBounds } from "./terrain-geometry";
@@ -141,7 +142,7 @@ export function conflateWalls(input: ConflateInput): Float32Array {
       const b = pts[Math.min(pts.length - 1, i + 1)];
       let tx = b[0] - a[0];
       let ty = b[1] - a[1];
-      const tl = Math.hypot(tx, ty) || 1;
+      const tl = PMath.hypot(tx, ty) || 1;
       tx /= tl;
       ty /= tl;
       const s = stepAt(input, pts[i][0], pts[i][1], tx, ty);
