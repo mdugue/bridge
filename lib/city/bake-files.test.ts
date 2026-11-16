@@ -36,6 +36,7 @@ import { muralsSource } from "./murals";
 import { MURALS_FILE_SPEC } from "./murals-file";
 import type { FACADE_MATERIALS, WALL_MATERIALS } from "./osm-buildings-file";
 import { OSM_BUILDINGS_FILE } from "./osm-buildings-file";
+import { PROVENANCE_FILE_SPEC } from "./provenance-file";
 import { ROOF_COLOURS_FILE } from "./roof-colours-file";
 import type { Site } from "./site";
 import {
@@ -81,6 +82,7 @@ const SPECS: [BakeFile, string[]][] = [
     perTile((s, t) => sideFileSource(s, tileArtifacts(t).monuments.file)),
   ],
   [MURALS_FILE_SPEC, perSite(muralsSource)],
+  [PROVENANCE_FILE_SPEC, perSite((dir) => `${dir}/provenance.json`)],
   [TRAMS_FILE, perSite(tramTimetableSource)],
   [ROOF_COLOURS_FILE, perTile((s, t) => cityMeshSourceFiles(s, t).roofColor)],
   [

@@ -25,6 +25,7 @@ export const BERLIN: Site = {
     id: "berlin",
     credit: "Baumbestand: Geoportal Berlin, dl-de/zero-2-0",
   },
+  bbbike: "Berlin",
   spawn: "pariser-platz",
   tiles: [
     { e: 390, n: 5818 },

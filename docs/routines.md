@@ -32,7 +32,8 @@ there is nothing to say, and never merges, resolves or deletes.
 - `bun scripts/open-data-watch.ts [site…] [--json]` — the providers'
   services (answered or not), Saxony's `Stand` per tile and product
   against `data/<site>/provenance.json`, the Basis-DLM's
-  `Last-Modified`, the OSM date the bakes used and BBBike's extract.
+  `Last-Modified`, the OSM date the bakes used and the BBBike extract the
+  site names (`Site.bbbike`).
   Downloads nothing. `--record` writes the current `Stand` into the
   tiles whose provenance records none (Leipzig, Grimma and Meißen were
   recorded that way on 2026-11-02): only a recorded edition can be

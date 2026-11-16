@@ -472,10 +472,10 @@
       "path": "app/_components/create-app.ts"
     },
     "bakeSeamModules": {
-      "matching": 57,
-      "of": 83,
+      "matching": 58,
+      "of": 84,
       "ways": {
-        "osmMargin": 37,
+        "osmMargin": 38,
         "readMargin": 27,
         "owns": 17,
         "neighbourRasters": 4,

@@ -11,7 +11,14 @@ ADR 0012 (sources and stand-ins), ADR 0005 (CRS).
 ## A city in a Land that is already covered
 
 1. `sites/<id>.ts`: name, label, tiles (the first is the spawn), viewpoints,
-   optional smaller OSM extract, street-tree register (`treeCadastre`, its
+   optional smaller OSM extract, the BBBike city extract the fetch falls
+   back on where Geofabrik cannot be reached (`bbbike`: the city's own, or
+   a neighbour's whose rectangle reaches past the tiles — BBBike's list is
+   download.bbbike.org/osm/bbbike/, each one's boundary its `<City>.poly`;
+   the fetch takes it only where it covers the tiles with 0.05° to spare,
+   and says so otherwise; add its row to the coverage table in
+   docs/data-pipeline.md, "Where the OSM extract comes from"),
+   street-tree register (`treeCadastre`, its
    field mapping in `pipeline/bake/cadastre.py`), `dataLayers` where the
    city publishes a feed. Register it in `sites/index.ts`.
 2. `bun run fetch <id>` (add `--lsc` where the provider reads a laser scan),
