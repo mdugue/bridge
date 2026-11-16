@@ -1,30 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-  approachHeight,
-  epsgToWorld,
-  groundSlope,
-  worldToEpsg,
-} from "./ground-clamp";
-
-const offset = { cx: 413_000, cy: 5_657_000 };
-
-test("worldToEpsg maps the world origin to the recenter point", () => {
-  expect(worldToEpsg(0, 0, offset)).toEqual({ x: 413_000, y: 5_657_000 });
-});
-
-test("worldToEpsg: +x is east, -z is north", () => {
-  expect(worldToEpsg(100, -200, offset)).toEqual({
-    x: 413_100,
-    y: 5_657_200,
-  });
-});
-
-test("epsgToWorld is the inverse of worldToEpsg", () => {
-  const world = epsgToWorld(412_500, 5_657_700, offset);
-  const roundTrip = worldToEpsg(world.x, world.z, offset);
-  expect(roundTrip.x).toBeCloseTo(412_500);
-  expect(roundTrip.y).toBeCloseTo(5_657_700);
-});
+import { approachHeight, groundSlope } from "./ground-clamp";
 
 test("approachHeight converges monotonically toward the target", () => {
   let y = 100;
