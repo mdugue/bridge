@@ -22,7 +22,7 @@ import {
   report,
   sameSites,
 } from "./compare-tilesets";
-import type { SiteComparison } from "./compare-tilesets";
+import type { SiteComparison, Tolerance } from "./compare-tilesets";
 import { readGlb, writeGlb } from "./glb-container";
 import { toExtMeshopt } from "./khr-meshopt";
 import { createPublisher } from "./publisher";
@@ -46,11 +46,13 @@ function publishedDir(files: Record<string, Uint8Array>): string {
 
 async function compare(
   a: Record<string, Uint8Array>,
-  b: Record<string, Uint8Array>
+  b: Record<string, Uint8Array>,
+  tolerance: Tolerance = {}
 ): Promise<SiteComparison> {
   return await compareSites(
     readSite(publishedDir(a)),
-    readSite(publishedDir(b))
+    readSite(publishedDir(b)),
+    tolerance
   );
 }
 
@@ -58,9 +60,11 @@ async function compare(
 async function onlyDiffers(
   name: string,
   a: Record<string, Uint8Array>,
-  b: Record<string, Uint8Array>
+  b: Record<string, Uint8Array>,
+  tolerance: Tolerance = {}
 ): Promise<string[]> {
-  const result = await compare(a, b);
+  const result = await compare(a, b, tolerance);
+  expect(result.unreadable.size).toBe(0);
   expect([...result.differs.keys()]).toEqual([name]);
   expect(sameSites(result)).toBe(false);
   return result.differs.get(name) ?? [];
@@ -68,9 +72,10 @@ async function onlyDiffers(
 
 async function same(
   a: Record<string, Uint8Array>,
-  b: Record<string, Uint8Array>
+  b: Record<string, Uint8Array>,
+  tolerance: Tolerance = {}
 ): Promise<SiteComparison> {
-  const result = await compare(a, b);
+  const result = await compare(a, b, tolerance);
   expect(report(result)).toContain("0 differ");
   expect(sameSites(result)).toBe(true);
   return result;
@@ -116,6 +121,22 @@ test("a manifest path is the site it names, not its folder", async () => {
   expect(result.onlyA).toEqual(["a.json"]);
   expect(result.onlyB).toEqual(["b.json"]);
   expect(sameSites(result)).toBe(false);
+  // the folder's other files are not that manifest's site
+  expect([...readSite(path.join(dir, "one.json")).files.keys()]).toEqual([
+    "a.json",
+  ]);
+});
+
+/** A site with a dated file beside its manifest holding `n`. */
+function withStats(n: number) {
+  const dir = publishedDir({ "a.json": text(1) });
+  writeFileSync(path.join(dir, "site-stats.20261116.json"), text(n));
+  return readSite(dir);
+}
+
+test("a folder's site is its manifest and every file beside it", async () => {
+  const result = await compareSites(withStats(1), withStats(2));
+  expect(result.differs.get("site-stats.20261116.json")).toEqual(["1 → 2"]);
 });
 
 test("a folder without a manifest is an error, not a listing", () => {
@@ -128,11 +149,14 @@ test("sites that name no file are an error, never the same", async () => {
   const empty = readSite(publishedDir({}));
   await expect(compareSites(empty, empty)).rejects.toThrow("names a file");
   const nothing: SiteComparison = {
+    deviation: { position: 0, unit: 0 },
     differs: new Map(),
     equalByContent: 0,
     equalByHash: 0,
     onlyA: [],
     onlyB: [],
+    tolerance: {},
+    unreadable: new Map(),
   };
   expect(sameSites(nothing)).toBe(false);
   expect(
@@ -152,6 +176,10 @@ test("a named file missing or changed under the same name differs", async () => 
   const result = await compareSites(a, readSite(dirB));
   expect(result.differs.get("a.json")).toEqual(["named but missing in b"]);
   expect(result.differs.get("b.json")).toEqual(["2 → 3"]);
+  // named by both, on neither disk
+  const both = await compareSites(readSite(dirB), readSite(dirB));
+  expect(both.differs.get("a.json")).toEqual(["named but missing in a and b"]);
+  expect(sameSites(both)).toBe(false);
 });
 
 test("files in one site only are listed", async () => {
@@ -175,6 +203,14 @@ test("keys in another order are the same document", async () => {
 
 const trams = (patterns: unknown[]) =>
   text({ patterns, profiles: [{ pattern: 0 }] });
+
+const proto = (n: number) => new TextEncoder().encode(`{"__proto__":${n}}`);
+
+test("a member named __proto__ is an ordinary member", async () => {
+  expect(
+    await onlyDiffers("a.json", { "a.json": proto(1) }, { "a.json": proto(2) })
+  ).toEqual(["__proto__: 1 → 2"]);
+});
 
 test("records in another order differ: rows are read by position", async () => {
   const lines = await onlyDiffers(
@@ -232,32 +268,57 @@ test("an unhashed name is not the served file it would resolve to", async () => 
 interface Prim {
   code?: number;
   extras?: Record<string, unknown>;
+  /** metres a stored position step is worth (positions as snorm16) */
+  grid?: number;
   index?: number[];
+  /** the node mirrored (scale z −1), the positions mirrored back */
+  mirror?: boolean;
   normalZ?: number;
+  /** a node in no scene, its triangle's last z */
+  orphan?: number;
   roughness?: number;
+  /** a morph target's last z */
+  target?: number;
+  /** the node turned 180° about X, the positions turned back */
+  turn?: boolean;
   w?: number;
+  /** the triangle's last vertex z (m) */
   z?: number;
 }
 
-/** A glb of one triangle written plainly: float positions, int8 normals,
- *  a snorm16 packed code (`_FACADE`), a float field (`_W`). */
+type Stored =
+  | Float32Array<ArrayBuffer>
+  | Int16Array<ArrayBuffer>
+  | Int8Array<ArrayBuffer>
+  | Uint16Array<ArrayBuffer>;
+
+/** The triangle's positions as the prim asks: float, or snorm16 steps. */
+function positions(p: Prim): { array: Stored; scale: number } {
+  const z = p.z ?? 0;
+  const flip = p.turn ? -1 : 1;
+  const xyz = [0, 0, 0, 4, 0, 0, 0, 4 * flip, (p.mirror ? -1 : 1) * flip * z];
+  if (p.grid === undefined) {
+    return { array: new Float32Array(xyz), scale: 1 };
+  }
+  const { grid } = p;
+  return {
+    array: Int16Array.from(xyz, (v) => Math.round(v / grid)),
+    scale: grid * 32_767,
+  };
+}
+
+/** A glb of one triangle written plainly: float (or snorm16) positions,
+ *  int8 normals, a snorm16 packed code (`_FACADE`), a float field (`_W`). */
 async function glbOf(p: Prim = {}): Promise<Uint8Array> {
   const doc = new Document();
   const buffer = doc.createBuffer();
-  const acc = (
-    array:
-      | Float32Array<ArrayBuffer>
-      | Int16Array<ArrayBuffer>
-      | Int8Array<ArrayBuffer>
-      | Uint16Array<ArrayBuffer>,
-    type: "SCALAR" | "VEC3"
-  ) => doc.createAccessor().setType(type).setArray(array).setBuffer(buffer);
+  const acc = (array: Stored, type: "SCALAR" | "VEC3") =>
+    doc.createAccessor().setType(type).setArray(array).setBuffer(buffer);
+  const { array, scale } = positions(p);
+  const position = acc(array, "VEC3").setNormalized(p.grid !== undefined);
   const prim = doc
     .createPrimitive()
-    .setAttribute(
-      "POSITION",
-      acc(new Float32Array([0, 0, 0, 4, 0, 0, 0, 4, p.z ?? 0]), "VEC3")
-    )
+    .setAttribute("POSITION", position)
     .setAttribute(
       "NORMAL",
       acc(
@@ -274,22 +335,48 @@ async function glbOf(p: Prim = {}): Promise<Uint8Array> {
     .setMaterial(
       doc.createMaterial("clay").setRoughnessFactor(p.roughness ?? 0.5)
     );
+  if (p.target !== undefined) {
+    prim.addTarget(
+      doc
+        .createPrimitiveTarget()
+        .setAttribute(
+          "POSITION",
+          acc(new Float32Array([0, 0, 0, 0, 0, 0, 0, 0, p.target]), "VEC3")
+        )
+    );
+  }
   const node = doc
     .createNode("city")
     .setMesh(doc.createMesh("city").addPrimitive(prim))
+    .setScale([scale, scale, p.mirror ? -scale : scale])
     .setExtras(p.extras ?? { kind: "city", tileId: "t" });
+  if (p.turn) {
+    node.setRotation([1, 0, 0, 0]);
+  }
   doc.createScene().addChild(node);
+  if (p.orphan !== undefined) {
+    const lost = doc
+      .createPrimitive()
+      .setAttribute(
+        "POSITION",
+        acc(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, p.orphan]), "VEC3")
+      );
+    doc.createNode("lost").setMesh(doc.createMesh("lost").addPrimitive(lost));
+  }
   return await new NodeIO().writeBinary(doc);
 }
 
 interface EditableGltf {
+  accessors: { max?: number[] }[];
   extensions: {
     EXT_structural_metadata: {
       schema: { classes: Record<string, { description?: string }> };
     };
   };
   extras?: unknown;
-  meshes: { primitives: { extensions?: unknown }[] }[];
+  meshes: { primitives: { extensions?: unknown; material?: number }[] }[];
+  materials: unknown[];
+  nodes: { extensions?: unknown }[];
 }
 
 /** The glb with its JSON chunk changed by `edit`. */
@@ -299,48 +386,70 @@ function patched(glb: Uint8Array, edit: (json: EditableGltf) => void) {
   return writeGlb(json, [bin]);
 }
 
-const glbFile = async (glb: Uint8Array) => ({
-  "city_t.glb.gz": gzipSync(glb),
-});
+const glbFile = (glb: Uint8Array) => ({ "city_t.glb.gz": gzipSync(glb) });
 
-async function glbLines(a: Uint8Array, b: Uint8Array): Promise<string[]> {
-  return await onlyDiffers("city_t.glb.gz", await glbFile(a), await glbFile(b));
+async function glbLines(
+  a: Uint8Array,
+  b: Uint8Array,
+  tolerance: Tolerance = {}
+): Promise<string[]> {
+  return await onlyDiffers("city_t.glb.gz", glbFile(a), glbFile(b), tolerance);
 }
 
 test("a glb compared with itself, written again, is equal", async () => {
-  await same(await glbFile(await glbOf()), await glbFile(await glbOf()));
+  await same(glbFile(await glbOf()), glbFile(await glbOf()));
 });
 
-test("a packed code one step apart differs: only measurements are tolerant", async () => {
+test("a packed code one step apart differs", async () => {
   const lines = await glbLines(await glbOf(), await glbOf({ code: 3 }));
   expect(lines).toEqual([
-    "city/city#0 _FACADE: 1 values differ (vertex 2: (0.0001) → (0.0001))",
+    "mesh 0#0 _FACADE: 1 values differ (first at 2: 2 → 3)",
   ]);
 });
 
-test("a normal one quantisation step apart is the same normal", async () => {
-  await same(
-    await glbFile(await glbOf()),
-    await glbFile(await glbOf({ normalZ: 126 }))
-  );
+test("a normal one step apart differs, unless a unit tolerance is asked for", async () => {
+  const [a, b] = [await glbOf(), await glbOf({ normalZ: 126 })];
+  expect(await glbLines(a, b)).toEqual([
+    "mesh 0#0 NORMAL: 1 values differ (first at 8: 127 → 126)",
+  ]);
+  const result = await same(glbFile(a), glbFile(b), { withinUnit: 0.001 });
+  expect(report(result)).toContain("within 0.001 for unit vectors (largest");
 });
 
-test("NaN is equal only to NaN", async () => {
+test("NaN is equal only to NaN, exact or placed", async () => {
   const lines = await glbLines(await glbOf(), await glbOf({ w: Number.NaN }));
-  expect(lines[0]).toStartWith("city/city#0 _W: 1 values differ");
+  expect(lines[0]).toStartWith("mesh 0#0 _W: 1 values differ");
   await same(
-    await glbFile(await glbOf({ w: Number.NaN })),
-    await glbFile(await glbOf({ w: Number.NaN }))
+    glbFile(await glbOf({ w: Number.NaN })),
+    glbFile(await glbOf({ w: Number.NaN }))
+  );
+  const within = { within: 1 };
+  const placed = await glbLines(
+    await glbOf(),
+    await glbOf({ z: Number.NaN }),
+    within
+  );
+  expect(placed[0]).toStartWith("node 0#0 POSITION: 1 vertices beyond 1");
+  await same(
+    glbFile(await glbOf({ z: Number.NaN })),
+    glbFile(await glbOf({ z: Number.NaN })),
+    within
   );
 });
 
 test("a glb's moved vertex, indices, extras, material differ", async () => {
-  expect(await glbLines(await glbOf(), await glbOf({ z: 0.01 }))).toEqual([
-    "city/city#0 POSITION: 1 values differ (vertex 2: (0, 4, 0) → (0, 4, 0.01))",
-  ]);
+  const moved = await glbLines(await glbOf(), await glbOf({ z: 0.01 }));
+  expect(
+    moved.some((l) => l.startsWith("mesh 0#0 POSITION: 1 values differ"))
+  ).toBe(true);
   expect(
     await glbLines(await glbOf(), await glbOf({ index: [0, 2, 1] }))
-  ).toEqual(["city/city#0 indices: 2 differ"]);
+  ).toEqual(["mesh 0#0 indices: 2 values differ (first at 1: 1 → 2)"]);
+  const longer = await glbLines(
+    await glbOf(),
+    await glbOf({ index: [0, 1, 2, 0, 2, 1] })
+  );
+  expect(longer).toContain("mesh 0#0 indices: 3 values in a, 6 in b");
   expect(
     await glbLines(
       await glbOf(),
@@ -352,7 +461,7 @@ test("a glb's moved vertex, indices, extras, material differ", async () => {
   ).toEqual(["materials[0].pbrMetallicRoughness.roughnessFactor: 0.5 → 0.25"]);
 });
 
-test("a member nobody named is compared: a primitive's extension, the root's extras", async () => {
+test("a member nobody named is compared: extensions, material index, root extras", async () => {
   const glb = await glbOf();
   const featured = (count: number) =>
     patched(glb, (json) => {
@@ -369,6 +478,162 @@ test("a member nobody named is compared: a primitive's extension, the root's ext
     json.extras = { site: "x" };
   });
   expect(await glbLines(glb, rooted)).toEqual(["extras: only in b"]);
+  const secondMaterial = patched(glb, (json) => {
+    json.materials.push(json.materials[0]);
+  });
+  const usesSecond = patched(secondMaterial, (json) => {
+    json.meshes[0].primitives[0].material = 1;
+  });
+  expect(await glbLines(secondMaterial, usesSecond)).toEqual([
+    "meshes[0].primitives[0].material: 0 → 1",
+  ]);
+  const extended = patched(glb, (json) => {
+    json.nodes[0].extensions = { EXT_mesh_gpu_instancing: { attributes: {} } };
+  });
+  expect(await glbLines(glb, extended)).toEqual([
+    "nodes[0].extensions: only in b",
+  ]);
+});
+
+test("one quantisation step off on the same grid differs", async () => {
+  const lines = await glbLines(
+    await glbOf({ grid: 0.001, z: 0.01 }),
+    await glbOf({ grid: 0.001, z: 0.011 })
+  );
+  expect(lines).toEqual([
+    "meshes[0].primitives[0].attributes.POSITION.max[2]: 10 → 11",
+    "mesh 0#0 POSITION: 1 values differ (first at 8: 10 → 11)",
+  ]);
+});
+
+test("another quantisation differs; a tolerance is the caller's, with the largest deviation", async () => {
+  // 1 mm against 1 cm steps, the last vertex 9 mm apart
+  const [fine, coarse] = [
+    await glbOf({ grid: 0.001, z: 0.009 }),
+    await glbOf({ grid: 0.01, z: 0 }),
+  ];
+  const exact = await glbLines(fine, coarse);
+  expect(
+    exact.some((l) =>
+      l.startsWith("meshes[0].primitives[0].attributes.POSITION")
+    )
+  ).toBe(true);
+  expect(exact.some((l) => l.startsWith("nodes[0].scale"))).toBe(true);
+  expect(await glbLines(fine, coarse, { within: 0.005 })).toEqual([
+    "node 0#0 POSITION: 1 vertices beyond 0.005 (vertex 2: (0, 4, 0.009) → (0, 4, 0))",
+  ]);
+  const result = await same(glbFile(fine), glbFile(coarse), { within: 0.01 });
+  expect(report(result)).toContain(
+    "compared within 0.01 m (largest 0.00900 m)"
+  );
+});
+
+test("an accessor's min or max is its storage, compared", async () => {
+  const glb = await glbOf();
+  const wider = patched(glb, (json) => {
+    json.accessors[0].max = [0.5, 0.5, 0.5];
+  });
+  const [first] = await glbLines(glb, wider);
+  expect(first).toStartWith("meshes[0].primitives[0].attributes.POSITION.max");
+});
+
+test("a node turned or mirrored with its positions turned back differs", async () => {
+  const [plain, turned, mirrored] = [
+    await glbOf({ z: 1 }),
+    await glbOf({ turn: true, z: 1 }),
+    await glbOf({ mirror: true, z: 1 }),
+  ];
+  const exact = await glbLines(plain, turned);
+  expect(exact.some((l) => l.startsWith("nodes[0].rotation"))).toBe(true);
+  const placed = { within: 0.001, withinUnit: 0.001 };
+  expect(await glbLines(plain, turned, placed)).toEqual([
+    "node 0#0 NORMAL: 3 vertices beyond 0.001 (vertex 0: (0, 0, 1) → (0, 0, -1))",
+  ]);
+  const flipped = await glbLines(plain, mirrored, placed);
+  expect(flipped[0]).toBe("node 0#0: the winding turns over");
+});
+
+/** A triangle in the plane y + z = 0 (normal (0, 1, 1)/√2), as stored by
+ *  a node that stretches y by `stretch`: positions and normal stored so
+ *  that the world sees the same triangle. */
+async function slanted(stretch: number): Promise<Uint8Array> {
+  const doc = new Document();
+  const buffer = doc.createBuffer();
+  const y = 1 / stretch;
+  const prim = doc
+    .createPrimitive()
+    .setAttribute(
+      "POSITION",
+      doc
+        .createAccessor()
+        .setType("VEC3")
+        .setArray(new Float32Array([0, 0, 0, 1, 0, 0, 0, y, -1]))
+        .setBuffer(buffer)
+    )
+    .setAttribute(
+      "NORMAL",
+      // the stored normal the stretch's inverse transpose turns into the
+      // world's (0, 1, 1)/√2: (0, stretch, 1) normalised
+      doc
+        .createAccessor()
+        .setType("VEC3")
+        .setArray(
+          Float32Array.from(
+            { length: 9 },
+            (_, i) => [0, stretch, 1][i % 3] / Math.hypot(stretch, 1)
+          )
+        )
+        .setBuffer(buffer)
+    );
+  const node = doc
+    .createNode("city")
+    .setMesh(doc.createMesh("city").addPrimitive(prim))
+    .setScale([1, stretch, 1]);
+  doc.createScene().addChild(node);
+  return await new NodeIO().writeBinary(doc);
+}
+
+test("normals are placed by the inverse transpose: a stretched node's same plane is equal", async () => {
+  const placed = { within: 1e-6, withinUnit: 1e-6 };
+  const result = await same(
+    glbFile(await slanted(1)),
+    glbFile(await slanted(2)),
+    placed
+  );
+  expect(result.equalByContent).toBe(1);
+});
+
+test("morph targets and a node in no scene are compared", async () => {
+  expect(
+    await glbLines(await glbOf({ target: 1 }), await glbOf({ target: 2 }))
+  ).toEqual([
+    "meshes[0].primitives[0].targets[0].POSITION.max[2]: 1 → 2",
+    "mesh 0#0 target0.POSITION: 1 values differ (first at 8: 1 → 2)",
+  ]);
+  expect(
+    await glbLines(await glbOf({ orphan: 1 }), await glbOf({ orphan: 2 }))
+  ).toEqual([
+    "meshes[1].primitives[0].attributes.POSITION.max[2]: 1 → 2",
+    "mesh 1#0 POSITION: 1 values differ (first at 8: 1 → 2)",
+  ]);
+  expect(
+    await glbLines(await glbOf({ orphan: 1 }), await glbOf({ orphan: 2 }), {
+      within: 0.5,
+    })
+  ).toEqual([
+    "node 1#0 POSITION: 1 vertices beyond 0.5 (vertex 2: (0, 1, 1) → (0, 1, 2))",
+  ]);
+});
+
+test("a glb both sides hold, that cannot be read, is unreadable", async () => {
+  const broken = { "city_t.glb.gz": gzipSync(new Uint8Array([1, 2, 3, 4])) };
+  const result = await compare(
+    { ...broken, "a.json": text(1) },
+    { ...broken, "a.json": text(1) }
+  );
+  expect([...result.unreadable.keys()]).toEqual(["city_t.glb.gz"]);
+  expect(result.equalByHash).toBe(1);
+  expect(sameSites(result)).toBe(false);
 });
 
 // The tile glbs as the build writes them: meshopt, quantised, a table.
@@ -415,26 +680,30 @@ test("a tile glb encoded again with the same content is equal", async () => {
   const glb = await writeMeshGlb(mesh(0, 100, false));
   const again = await reencoded(glb);
   expect(Buffer.compare(glb, again)).not.toBe(0);
-  const result = await same(await glbFile(glb), await glbFile(again));
+  const result = await same(glbFile(glb), glbFile(again));
   expect(result.equalByContent).toBe(1);
 });
 
-test("a tile glb's property table is compared row by row", async () => {
-  const lines = await glbLines(
-    await writeMeshGlb(mesh()),
-    await writeMeshGlb(mesh(0, 102))
-  );
-  expect(lines).toEqual(["property table [0].baseZ[0]: 100 → 102"]);
+test("a tile glb's property table is compared row by row, NaN not Infinity", async () => {
+  expect(
+    await glbLines(await writeMeshGlb(mesh()), await writeMeshGlb(mesh(0, 102)))
+  ).toEqual(["property table [0].baseZ[0]: 100 → 102"]);
+  expect(
+    await glbLines(
+      await writeMeshGlb(mesh(0, Number.NaN)),
+      await writeMeshGlb(mesh(0, Number.POSITIVE_INFINITY))
+    )
+  ).toEqual(["property table [0].baseZ[0]: ⟪number⟫NaN → ⟪number⟫Infinity"]);
 });
 
-test("a quantised position three steps off differs", async () => {
+test("a quantised tile position three steps off differs", async () => {
   // 3 m extent over snorm16: a step is 3 / 32 767 m ≈ 0.09 mm
   const lines = await glbLines(
     await writeMeshGlb(mesh()),
     await writeMeshGlb(mesh(0.0003))
   );
   expect(lines).toHaveLength(1);
-  expect(lines[0]).toContain("POSITION: 1 values beyond the quantisation step");
+  expect(lines[0]).toStartWith("mesh 0#0 POSITION: 1 values differ");
 });
 
 test("a tile glb's metadata schema is compared, not only its values", async () => {
@@ -454,7 +723,6 @@ test("a glb with a table against one without is a report, not an error", async (
     await writeMeshGlb(mesh(0, 100, false))
   );
   expect(lines.some((l) => l.includes("only in a"))).toBe(true);
-  expect(lines.some((l) => l.startsWith("cannot be read"))).toBe(false);
 });
 
 // --- rasters ----------------------------------------------------------------------
@@ -504,8 +772,8 @@ test("a WebP compares by its decoded values", async () => {
 
 const origin: [number, number] = [392_000, 5_668_000];
 const point = (x: number) => ({ h: 10, x, y: 1 });
-const pts = (xs: number[]) => ({
-  "canopy_t.pts.gz": gzipSync(packPoints(xs.map(point), origin, 3)),
+const pts = (xs: number[], flags = 0) => ({
+  "canopy_t.pts.gz": gzipSync(packPoints(xs.map(point), origin, 3, flags)),
 });
 
 test("canopy points: a moved point, or the same in another order, differ", async () => {
@@ -518,6 +786,11 @@ test("canopy points: a moved point, or the same in another order, differ", async
   expect(
     await onlyDiffers("canopy_t.pts.gz", pts([1, 2]), pts([2, 1]))
   ).toEqual(["the same 2 points in another order"]);
+  expect(
+    await onlyDiffers("canopy_t.pts.gz", pts([1, 2]), pts([1, 2], 1))
+  ).toEqual([
+    "stride 3, flags 0, origin 392000 5668000 → stride 3, flags 1, origin 392000 5668000",
+  ]);
 });
 
 const crown = (x: number): CoarseCrown => ({
@@ -603,13 +876,20 @@ test("a kind without a reader compares as bytes", async () => {
   expect(lines).toEqual(["bytes differ (2 in a, 2 in b)"]);
 });
 
-test("a file its reader refuses differs, with the reason", async () => {
-  const lines = await onlyDiffers(
-    "a.json",
+test("a file its reader refuses is unreadable, with the reason", async () => {
+  const result = await compare(
     { "a.json": text(1) },
     { "a.json": new TextEncoder().encode("{not json") }
   );
-  expect(lines[0]).toStartWith("cannot be read as its kind");
+  expect(result.unreadable.get("a.json")).toStartWith("SyntaxError");
+  expect(sameSites(result)).toBe(false);
+});
+
+test("a PNG of another bit depth is refused, not read at 8 bits", async () => {
+  const png = await grey(new Uint8Array([1, 2, 3, 4]), 9);
+  png[24] = 16; // IHDR: bit depth
+  const result = await compare({ "a.png": png }, { "a.png": png });
+  expect(result.unreadable.get("a.png")).toContain("bit depth 16");
 });
 
 // --- the command ----------------------------------------------------------------------
@@ -622,6 +902,15 @@ function run(...args: string[]): number {
   }).exitCode;
 }
 
+test("the command's tolerance flags reach the comparison", async () => {
+  // the last vertex 9 mm apart, on 1 mm and on 1 cm steps
+  const fine = publishedDir(glbFile(await glbOf({ grid: 0.001, z: 0.009 })));
+  const coarse = publishedDir(glbFile(await glbOf({ grid: 0.01, z: 0 })));
+  expect(run(fine, coarse)).toBe(1);
+  expect(run(fine, coarse, "--within", "0.005")).toBe(1);
+  expect(run(fine, coarse, "--within", "0.01")).toBe(0);
+});
+
 test("the command exits 0 when the same, 1 on a difference, 2 when it cannot read", () => {
   const a = publishedDir({ "a.json": text(1) });
   const b = publishedDir({ "a.json": text(2) });
@@ -629,6 +918,10 @@ test("the command exits 0 when the same, 1 on a difference, 2 when it cannot rea
   expect(run(a, b)).toBe(1);
   expect(run(a, fresh())).toBe(2);
   expect(run(a)).toBe(2);
+  expect(run(a, a, "--within", "x")).toBe(2);
+  expect(run(a, a, "--within", "0.01")).toBe(0);
+  const broken = publishedDir({ "a.json": new TextEncoder().encode("{") });
+  expect(run(broken, broken)).toBe(2);
 });
 
 test("a multiset keeps each copy of a row", () => {
