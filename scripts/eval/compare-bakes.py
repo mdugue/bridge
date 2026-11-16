@@ -23,19 +23,27 @@ what it replaces.
       - anything else: its bytes.
 
       Numbers are compared exactly; 1 and 1.0 are the same number (a reader
-      in TypeScript cannot tell them apart). A row's identity is what
-      IDENTITY names for its kind, else its geometry; rows that share an
-      identity are matched as a multiset.
+      in TypeScript cannot tell them apart), 0 and -0.0 are not (it can).
+      A key that is null is not a key that is absent. A row's identity is
+      what IDENTITY names for its kind, else its geometry; rows that share
+      an identity are matched as a multiset.
+
+      Where a row's place in its file is a key another file reads
+      (POSITIONAL: the trees and their facts, a raster that holds a row's
+      number), the rows are compared in place as well, whatever the flags.
+      CityJSON vertices no boundary names are not compared.
 
       --kind K      only these kinds (repeat; a kind is the file's name
                     before its tile id: bridge, markings_low, lod2)
-      --order       the order of rows and of a row's keys counts too (the
-                    build's bytes follow both, ADR 0059)
+      --order       every kind's rows in place, and each row as it is
+                    written: the order of its keys, 1 against 1.0 (the
+                    build's bytes follow the file's order, ADR 0059)
       --examples N  how many differences to print a file (default 3)
 
   uv run --project pipeline python scripts/eval/compare-bakes.py --ref HEAD [path]
       the work tree's `path` (default data) against the same path at a git
-      ref: what a re-bake changed.
+      ref: what a re-bake changed. The raw downloads (`_raw/`) are no part
+      of either side.
 
   uv run --project pipeline python scripts/eval/compare-bakes.py \\
       --rasters data/_raw/sn/lsc/33412_5656_2_sn data/_raw/lsc/derived/33412_5656_2_sn
@@ -50,8 +58,11 @@ one side only, 2 when a side or a file cannot be read. Not part of the app.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import json
+import math
+import os
 import re
 import subprocess
 import sys
@@ -98,6 +109,17 @@ TABLES: dict[str, tuple[str, tuple[str, ...]]] = {
     "sport": ("grounds", ()),
 }
 
+# The kinds whose rows another file names by their place (plan 092's
+# inventory): `treefacts` is columns in the trees' order; `markings.png` and
+# `sport.png` hold 1 + a row of their tables; `roofcolor` names the rows of
+# `smallbuild` and `structures` (`scan`, `gaps`) and a building's parts in
+# `roofs` by number; the build's solved levels go by the rows of `rail` and
+# `tram`, the terrain study by the walls'. (The land cover's water bodies
+# and `treefacts` itself are plain JSON, compared in order anyway.)
+POSITIONAL = frozenset(
+    {"trees", "markings", "sport", "smallbuild", "structures", "roofs", "rail", "tram", "walls"}
+)
+
 _KIND = re.compile(r"^(.*?)_\d")
 _MISSING = object()
 
@@ -115,8 +137,9 @@ def kind_of(name: str) -> str:
 
 def canon(v: Any) -> Any:
     """A JSON value with every whole float as an int, so 1.0 equals 1 the
-    way it does for a reader in TypeScript."""
-    if isinstance(v, float) and v.is_integer():
+    way it does for a reader in TypeScript — but for negative zero, which
+    that reader tells from 0."""
+    if isinstance(v, float) and v.is_integer() and not (v == 0 and math.copysign(1, v) < 0):
         return int(v)
     if isinstance(v, dict):
         return {k: canon(x) for k, x in v.items()}
@@ -162,16 +185,26 @@ class Report:
             self.notes.append(note)
 
 
-Row = tuple[str, Any]  # identity, content
+Row = tuple[str, Any, Any]  # identity, what is compared under it, the row as written
 
 
-def compare_rows(a: list[Row], b: list[Row], rep: Report, what: str, order: bool, examples: int):
-    """Rows matched by identity; those that share one, as a multiset."""
+def compare_rows(
+    a: list[Row],
+    b: list[Row],
+    rep: Report,
+    what: str,
+    order: bool,
+    examples: int,
+    in_place: bool = False,
+):
+    """Rows matched by identity; those that share one, as a multiset. With
+    `in_place` (a positional kind) or `order`, the same row must also stand
+    at the same place; with `order`, written the same way."""
     ga: dict[str, list[Any]] = defaultdict(list)
     gb: dict[str, list[Any]] = defaultdict(list)
-    for k, v in a:
+    for k, v, _ in a:
         ga[k].append(v)
-    for k, v in b:
+    for k, v, _ in b:
         gb[k].append(v)
     only_a: list[str] = []
     only_b: list[str] = []
@@ -192,19 +225,27 @@ def compare_rows(a: list[Row], b: list[Row], rep: Report, what: str, order: bool
         f"{len(differ)} {what} differ in {dict(keys.most_common(8))}, "
         f"e.g. {_some(differ, examples)}",
     )
-    if order and not rep.count:
-        moved = sum(k != j for (k, _), (j, _) in zip(a, b, strict=True))
-        rep.add(moved, f"{moved} {what} at another place in the file")
-        rekeyed = sum(
-            text(v, ordered=True) != text(w, ordered=True)
-            for (_, v), (_, w) in zip(sorted(a, key=_row_key), sorted(b, key=_row_key), strict=True)
+    if (order or in_place) and not rep.count:
+        pairs = list(zip(a, b, strict=True))
+        moved = [i for i, (x, y) in enumerate(pairs) if text(x[2]) != text(y[2])]
+        rep.add(
+            len(moved),
+            f"{len(moved)} {what} at another place in the file"
+            + (" (a row's place is a key of this kind)" if in_place else "")
+            + f", the first at row {moved[0] if moved else 0}",
         )
-        rep.add(rekeyed, f"{rekeyed} {what} with their keys in another order")
+        if order and not moved:
+            rewritten = sum(_written(x[2]) != _written(y[2]) for x, y in pairs)
+            rep.add(
+                rewritten,
+                f"{rewritten} {what} written otherwise (their keys in another order, 1 for 1.0)",
+            )
     rep.summary = f"{len(a)} → {len(b)} {what}"
 
 
-def _row_key(row: Row) -> tuple[str, str]:
-    return row[0], text(row[1])
+def _written(v: Any) -> str:
+    """A value as its file writes it, but for the white space."""
+    return json.dumps(v, ensure_ascii=False)
 
 
 def _unmatched(xs: list[Any], ys: list[Any]) -> tuple[list[Any], list[Any]]:
@@ -234,20 +275,23 @@ def _head(a: dict, b: dict, without: str, rep: Report, order: bool) -> None:
     hb = {k: v for k, v in b.items() if k != without}
     where = paths(ha, hb)
     rep.add(len(where), f"the head differs in {', '.join(where[:6])}")
-    if order and not where and text(ha, ordered=True) != text(hb, ordered=True):
-        rep.add(1, "the head's keys are in another order")
+    if order and not where and _written(ha) != _written(hb):
+        rep.add(1, "the head is written otherwise (its keys in another order, 1 for 1.0)")
 
 
 def feature_rows(doc: Any, kind: str, path: Path) -> list[Row]:
     if not isinstance(doc, dict) or not isinstance(doc.get("features"), list):
         raise Unreadable(f"{path}: not a feature collection")
     named = IDENTITY.get(kind)
-    rows = []
-    for f in doc["features"]:
+    rows: list[Row] = []
+    for i, f in enumerate(doc["features"]):
+        ok = isinstance(f, dict) and isinstance(f.get("properties"), dict) and "geometry" in f
+        if not ok:
+            raise Unreadable(f"{path}: feature {i} lacks its geometry or its properties")
         if named:
-            rows.append((text({k: f["properties"].get(k) for k in named}), f))
+            rows.append((text({k: f["properties"].get(k) for k in named}), f, f))
         else:
-            rows.append((text(f["geometry"]), {k: v for k, v in f.items() if k != "geometry"}))
+            rows.append((text(f["geometry"]), {k: v for k, v in f.items() if k != "geometry"}, f))
     return rows
 
 
@@ -255,7 +299,13 @@ def compare_geojson(a: Path, b: Path, kind: str, order: bool, examples: int) -> 
     da, db = _load(a), _load(b)
     rep = Report()
     compare_rows(
-        feature_rows(da, kind, a), feature_rows(db, kind, b), rep, "features", order, examples
+        feature_rows(da, kind, a),
+        feature_rows(db, kind, b),
+        rep,
+        "features",
+        order,
+        examples,
+        kind in POSITIONAL,
     )
     _head(da, db, "features", rep, order)
     return rep
@@ -264,10 +314,10 @@ def compare_geojson(a: Path, b: Path, kind: str, order: bool, examples: int) -> 
 def table_rows(doc: dict, member: str, named: tuple[str, ...], path: Path) -> list[Row]:
     table = doc.get(member)
     if isinstance(table, dict):
-        return list(table.items())
+        return [(k, v, {k: v}) for k, v in table.items()]
     if isinstance(table, list):
         return [
-            (text({k: r.get(k) for k in named}) if named and isinstance(r, dict) else text(r), r)
+            (text({k: r.get(k) for k in named}) if named and isinstance(r, dict) else text(r), r, r)
             for r in table
         ]
     raise Unreadable(f"{path}: no table `{member}`")
@@ -275,22 +325,30 @@ def table_rows(doc: dict, member: str, named: tuple[str, ...], path: Path) -> li
 
 def city_rows(doc: dict, path: Path) -> list[Row]:
     """A city object with the vertices its boundaries index written out."""
-    try:
-        vertices = doc["vertices"]
-        objects = doc["CityObjects"]
-    except (KeyError, TypeError) as err:
-        raise Unreadable(f"{path}: not CityJSON") from err
+    vertices = doc.get("vertices") if isinstance(doc, dict) else None
+    objects = doc.get("CityObjects") if isinstance(doc, dict) else None
+    if not isinstance(vertices, list) or not isinstance(objects, dict):
+        raise Unreadable(f"{path}: not CityJSON")
 
     def solid(v: Any) -> Any:
-        return vertices[v] if isinstance(v, int) else [solid(x) for x in v]
+        if isinstance(v, list):
+            return [solid(x) for x in v]
+        if isinstance(v, bool) or not isinstance(v, int) or not 0 <= v < len(vertices):
+            raise Unreadable(f"{path}: a boundary names vertex {v!r} of {len(vertices)}")
+        return vertices[v]
 
-    rows = []
+    rows: list[Row] = []
     for oid, obj in objects.items():
+        if not isinstance(obj, dict) or not isinstance(obj.get("geometry", []), list):
+            raise Unreadable(f"{path}: city object {oid} is not an object")
         geometry = [
-            {**g, "boundaries": solid(g["boundaries"])} if "boundaries" in g else g
+            {**g, "boundaries": solid(g["boundaries"])}
+            if isinstance(g, dict) and "boundaries" in g
+            else g
             for g in obj.get("geometry", [])
         ]
-        rows.append((oid, {**obj, "geometry": geometry}))
+        whole = {**obj, "geometry": geometry}
+        rows.append((oid, whole, {oid: whole}))
     return rows
 
 
@@ -316,29 +374,34 @@ def compare_json(a: Path, b: Path, kind: str, order: bool, examples: int) -> Rep
             member,
             order,
             examples,
+            kind in POSITIONAL,
         )
         _head(da, db, member, rep, order)
     else:
         where = paths(da, db)
         rep.add(len(where), f"{len(where)} values differ: {', '.join(where[:examples])}")
-        if order and not where and text(da, ordered=True) != text(db, ordered=True):
-            rep.add(1, "the keys are in another order")
+        if order and not where and _written(da) != _written(db):
+            rep.add(1, "written otherwise (keys in another order, 1 for 1.0)")
     return rep
 
 
 def cells(path: Path) -> tuple[np.ndarray, str]:
-    """A raster as (bands, rows, cols) and what else must agree: its type,
-    and for a GeoTIFF where it lies."""
+    """A raster as (bands, rows, cols) and what else must agree: its type;
+    a PNG's mode, palette and transparency; where a GeoTIFF lies, its
+    no-data value and its bands' names."""
     try:
         if path.suffix == ".png":
             with Image.open(path) as im:
                 a = np.asarray(im)
-                where = f"{im.mode}"
+                palette = hashlib.sha256(bytes(im.getpalette() or [])).hexdigest()[:8]
+                where = f"{im.mode} palette {palette} transparency {im.info.get('transparency')!r}"
             a = a[None] if a.ndim == 2 else np.moveaxis(a, 2, 0)
         else:
             with rasterio.open(path) as ds:
                 a = ds.read()
-                where = f"{ds.crs} {tuple(ds.transform)[:6]} nodata {ds.nodata}"
+                where = (
+                    f"{ds.crs} {tuple(ds.transform)[:6]} nodata {ds.nodata} bands {ds.descriptions}"
+                )
     except (OSError, ValueError, rasterio.errors.RasterioError) as err:
         raise Unreadable(f"{path}: not a raster ({err})") from err
     return a, f"{a.dtype} {where}"
@@ -350,8 +413,12 @@ def compare_raster(a: Path, b: Path) -> Report:
     if x.shape != y.shape or wx != wy:
         rep.add(1, f"{x.shape} {wx} → {y.shape} {wy}")
         return rep
+    # compared in their own type (a 64-bit integer does not fit a float);
+    # the size of a difference is for the reader, and may be rounded
+    differs = x != y
+    if x.dtype.kind in "fc":
+        differs &= ~(np.isnan(x) & np.isnan(y))
     fx, fy = x.astype(np.float64), y.astype(np.float64)
-    differs = (fx != fy) & ~(np.isnan(fx) & np.isnan(fy))
     for i in range(x.shape[0]):
         n = int(differs[i].sum())
         if n:
@@ -368,10 +435,14 @@ def compare_raster(a: Path, b: Path) -> Report:
 
 def compare_file(a: Path, b: Path, order: bool = False, examples: int = 3) -> Report:
     kind = kind_of(a.name)
-    if a.suffix == ".geojson":
-        return compare_geojson(a, b, kind, order, examples)
-    if a.suffix == ".json":
-        return compare_json(a, b, kind, order, examples)
+    try:
+        if a.suffix == ".geojson":
+            return compare_geojson(a, b, kind, order, examples)
+        if a.suffix == ".json":
+            return compare_json(a, b, kind, order, examples)
+    except (KeyError, TypeError, IndexError, AttributeError) as err:
+        # a row that is not shaped as its kind: never a verdict
+        raise Unreadable(f"{a.name}: not shaped as its kind ({type(err).__name__}: {err})") from err
     if a.suffix in (".png", ".tif", ".tiff"):
         return compare_raster(a, b)
     rep = Report()
@@ -380,13 +451,19 @@ def compare_file(a: Path, b: Path, order: bool = False, examples: int = 3) -> Re
 
 
 def files_of(root: Path) -> dict[str, Path]:
+    """Every file below `root` by its path there — through linked folders
+    too (a site's folder may be a link into a store) —, but for the raw
+    downloads and the step cache, which are no part of what a bake hands
+    over."""
     if root.is_file():
         return {root.name: root}
-    return {
-        str(p.relative_to(root)): p
-        for p in sorted(root.rglob("*"))
-        if p.is_file() and ".bake-cache" not in p.parts
-    }
+    found = {}
+    for folder, folders, names in os.walk(root, followlinks=True):
+        folders[:] = sorted(d for d in folders if d not in ("_raw", ".bake-cache"))
+        for name in sorted(names):
+            path = Path(folder) / name
+            found[str(path.relative_to(root))] = path
+    return found
 
 
 def compare_trees(
@@ -405,9 +482,13 @@ def compare_trees(
     fa, fb = files_of(a), files_of(b)
     if a.is_file() and b.is_file():
         fb = {a.name: b}
-    names = sorted(n for n in fa.keys() | fb.keys() if not kinds or kind_of(Path(n).name) in kinds)
-    if not names:
-        print("nothing to compare", file=out)
+    every = fa.keys() | fb.keys()
+    names = sorted(n for n in every if not kinds or kind_of(Path(n).name) in kinds)
+    unknown = sorted((kinds or set()) - {kind_of(Path(n).name) for n in every})
+    if unknown or not names:
+        print(
+            f"no file of kind {', '.join(unknown)}" if unknown else "nothing to compare", file=out
+        )
         return 2
     differences = 0
     differing = 0
@@ -449,9 +530,12 @@ def at_ref(ref: str, path: str, into: Path) -> Path:
 
 
 def band(path: Path, desc: str | None) -> np.ndarray:
-    with rasterio.open(path) as ds:
-        i = list(ds.descriptions).index(desc) + 1 if desc else 1
-        a = ds.read(i).astype(np.float64)
+    try:
+        with rasterio.open(path) as ds:
+            i = list(ds.descriptions).index(desc) + 1 if desc else 1
+            a = ds.read(i).astype(np.float64)
+    except (OSError, ValueError, rasterio.errors.RasterioError) as err:
+        raise Unreadable(f"{path}: no raster with a band {desc or 1} ({err})") from err
     a[a == -9999] = np.nan
     return a
 
@@ -484,7 +568,11 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     kinds = set(args.kind) if args.kind else None
     if args.rasters:
-        return 0 if compare_lsc_rasters(*args.rasters) else 1
+        try:
+            return 0 if compare_lsc_rasters(*args.rasters) else 1
+        except Unreadable as err:
+            print(err)
+            return 2
     if args.ref or not args.sides:
         if len(args.sides) > 1:
             p.error("--ref takes one path")
