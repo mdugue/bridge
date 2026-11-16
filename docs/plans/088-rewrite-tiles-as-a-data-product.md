@@ -27,7 +27,9 @@
   gain); beside the aims: the repository's size and the build's time
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: TODO
+- **Status**: IN PROGRESS — phase 0: step 1 measured (brotli clears
+  the 3 % line), decisions 1–3 prepared in *Findings*, waiting for the
+  maintainer (2026-11-16)
 
 ## Why this matters
 
@@ -401,4 +403,258 @@ alone. In the series:
 
 ## Findings
 
-(empty — phase 0 writes here)
+### Phase 0, step 1 — what transport compression buys (2026-11-16)
+
+Step 1 is done. Decisions 1–3 below are prepared for the maintainer and
+not yet taken. Nothing after them has started. No store, account or
+credential was created, and nothing was uploaded.
+
+**Method.** I baked Dresden at `67e6d45` with
+`bun scripts/prepare-sites.ts dresden`: 146 s wall on four cores, cache
+cold, 700 files, 208 MB in `public/data/dresden/`. For every file I took
+the bytes before any gzip (a `.gz` file gunzipped, every other file as it
+is). I compressed those bytes three ways:
+
+- gzip level 9, the level the bake writes today
+  (`scripts/prepare/context.ts`; the `.gz` files on disk come within
+  0.05 % of it);
+- brotli at quality 11 with a 16 MB window (`lgwin` 24);
+- zstd at level 19.
+
+All three ran on Bun's `node:zlib`. Brotli 11 took 11 min on one core
+for the whole site. That is a publishing cost, paid once for each new
+file, never by the deploy.
+
+**What the host sends today was not read off the wire.** Production is
+`mit.manuel.fyi` (named in the `sentry-triage` skill). Its newest
+production deployment builds the same commit as this measurement
+(`67e6d45`). Every request from this session answered `429` with
+`x-vercel-mitigated: challenge`, the "Vercel Security Checkpoint" page.
+That held for plain `curl -sI -H 'Accept-Encoding: br, gzip'` and for
+Vercel's own authenticated fetch, both on the domain and on the
+deployment's `*.vercel.app` URL. I did not try to get past the
+checkpoint. The *today* column is therefore what Vercel documents, not
+what was measured:
+
+- Vercel compresses only an allowlist of MIME types, with gzip or br.
+  JSON and GeoJSON are on it. PNG and WebP are left out on purpose
+  ("already compressed"). `model/gltf-binary`, `application/gzip` and
+  `application/octet-stream` are not listed
+  ([CDN compression](https://vercel.com/docs/how-vercel-cdn-works/compression),
+  updated 2026-03-05).
+- So the pre-gzipped kinds go out as stored, and the viewer inflates them
+  (`fetch-optional.ts`, `isGzipped`). PNG and WebP go out as stored too.
+- JSON is compressed on the fly at a level Vercel does not document. The
+  table brackets it: gzip 9 as the upper bound, brotli 11 as the lower
+  (no gain on JSON at all).
+
+**Before step 2 is closed, the maintainer runs this from a browser
+session that has passed the checkpoint:**
+`curl -sI -H 'Accept-Encoding: br, gzip'` on three files of each kind,
+with the cookie that session holds. If a `.glb.gz` comes back with
+`content-encoding: gzip`, the *today* column is wrong for that kind.
+
+The `brotli saves` and `zstd saves` columns compare against *today*, a
+file never getting larger than it is today. Sizes are in MB (10⁶ bytes).
+
+| Dresden, whole site (700 files) | files | before gzip | today | brotli 11 | zstd 19 | brotli saves | zstd saves |
+|---|--:|--:|--:|--:|--:|--:|--:|
+| `.glb.gz` (buildings near and far, terrain L0 and L1) | 60 | 184.60 | 99.93 | 89.98 | 93.23 | 10.0 % | 6.7 % |
+| `.pts.gz` / `.crw.gz` | 45 | 10.09 | 4.36 | 3.58 | 4.04 | 17.9 % | 7.4 % |
+| other `.gz` (`footprints.fpr.gz`, `plate.bin.gz`) | 16 | 4.61 | 1.98 | 1.67 | 1.74 | 15.5 % | 12.1 % |
+| `.png` | 236 | 85.29 | 85.29 | 83.77 | 83.98 | 1.8 % | 1.5 % |
+| `.webp` | 33 | 3.34 | 3.34 | 3.34 | 3.34 | 0.0 % | 0.0 % |
+| GeoJSON (today = gzip 9) | 225 | 15.19 | 1.62 | 1.24 | 1.33 | 23.5 % | 17.9 % |
+| JSON (today = gzip 9) | 85 | 6.10 | 1.15 | 0.86 | 0.93 | 25.1 % | 19.0 % |
+| **site, JSON today = gzip 9** | 700 | 309.21 | 197.68 | 184.44 | 188.60 | **6.7 %** | **4.6 %** |
+| **site, JSON today = brotli 11** | 700 | 309.21 | 197.01 | 184.44 | 188.44 | **6.4 %** | **4.4 %** |
+
+| Bracketed total (JSON today = gzip 9 … brotli 11) | files | today | brotli 11 | zstd 19 | brotli saves | zstd saves |
+|---|--:|--:|--:|--:|--:|--:|
+| spawn tile `33412_5656_2_sn`: every file named for it, both levels and the buildings¹ | 44 | 13.83 … 13.77 | 12.89 | 13.16 … 13.15 | 6.8 … 6.4 % | 4.8 … 4.5 % |
+| the spawn tile's fine level: terrain L0 and every file its extras name in `tileset.json` | 35 | 7.99 … 7.96 | 7.64 | 7.76 … 7.75 | 4.4 … 4.0 % | 3.0 … 2.6 % |
+
+**The verdict on the plan's 3 % line.**
+
+- **Brotli 11 clears it.** It saves 6.4–6.7 % for the whole site (about
+  13 MB of Dresden's 197 MB), 6.4–6.8 % for the spawn tile and 4.0–4.4 %
+  for a fine level.
+- **Zstd 19 clears it only for the site and the spawn tile** (4.4–4.8 %).
+  On a fine level it sits on the line (2.6–3.0 %), and it is behind
+  brotli on every kind.
+- **Brotli clears the plan's 3 % bar.** Whether phase 5 is built
+  follows from the plan's rule and from the maintainer's choice of store:
+  the store must pass a stored `Content-Encoding` through (decision 1).
+- **The gain is in the meshes and the point packs.** `.glb` brotli is
+  10 % smaller than its gzip, and the packed points 18 %. PNGs gain 1.5–2 %
+  and stay as they are; plan 091 decides their future. WebP gains
+  nothing.
+- **What phase 5 can claim over today is the `.gz` kinds alone.** On
+  JSON the gain over the host's own on-the-fly brotli is unknown, between
+  0 and 25 %.
+- **PR #307's ledger** (plan 087, `qa/ledger.json`, now on `rewrite`)
+  is generated by `scripts/ledger.ts` with its own stand-in for the wire
+  (text at gzip 6, `.gz`, PNG and WebP at face value), so its byte
+  figures and this table differ by design; phase 5 makes both exact. Its
+  spawn tile counts 43 files where the table above
+  counts 44 (¹): the 44th is the tile's Stadtwissen
+  (`stadtwissen_33412_5656_2_sn.<hash>.json`), which the bake publishes
+  under the tile's name but `tileset.json` does not name. The ledger
+  counts what the tileset names; this table counts every published file
+  with the tile in its name. It is 0.31 MB before gzip; over the 43
+  files the ledger counts, brotli saves 6.4–6.7 % (13.74–13.78 MB today,
+  12.86 MB with brotli).
+
+**Side observations.**
+
+- `public/data/dresden` holds 208 MB on disk, against the
+  "≈ 98.9 MB on the wire" `docs/data-pipeline.md` measured on
+  2026-09-25. The difference is every raster twin and both terrain
+  levels counted at once; a visit never fetches them all. 087 measures
+  what a visit fetches.
+- The bake writes `manifest.json` and `site-stats.json` unhashed. Every
+  other file carries its hash.
+
+### Decisions 1–3, prepared (not decided)
+
+Decisions 1–3 rest on the providers' documentation, read on 2026-11-16,
+with the page cited. "Not documented" means the cited pages say nothing
+about it; "documented, not tried" means a page says so and nobody here
+has tried it. Nothing below is asserted from memory. **The plan's ten-file
+trial has not been run.** It needs an account on each candidate, which
+this step was not to create. Each "not documented" below is something
+that trial must answer.
+
+**Decision 1 — the store.** The plan's criteria, one per column.
+
+| Candidate | stored `Content-Encoding` served as-is | `Cache-Control … immutable` per object | missing object | HTTP/2–3 | write credential scoped to the store | price (storage; traffic; requests) |
+|---|---|---|---|---|---|---|
+| **Vercel Blob**, public store | not documented: `put()` takes `contentType`, `cacheControlMaxAge` and no other header ([SDK](https://vercel.com/docs/vercel-blob/using-blob-sdk)) | **no**: `cacheControlMaxAge` only, "defaults to one month", and "blobs may occasionally expire earlier" ([public storage](https://vercel.com/docs/vercel-blob/public-storage)) | not documented for a URL (the SDK's `get()` returns `null`) | not documented | the store's `BLOB_READ_WRITE_TOKEN`, "long-lived static", one token a store; to be used "outside Vercel, such as in a CI job" ([Blob](https://vercel.com/docs/vercel-blob)) | fra1: $0.025/GB-month; Blob Data Transfer $0.05/GB; Simple operations $0.43 a million, counted on a cache MISS only; every read is a CDN request ([fra1](https://vercel.com/docs/pricing/regional-pricing/fra1), [usage and pricing](https://vercel.com/docs/vercel-blob/usage-and-pricing), 2026-09-23). Hobby: 1 GB storage, 10 GB transfer, then "you will not be able to access Vercel Blob" for 30 days. Rate limits on operations (Hobby 20/s, Pro 120/s simple) |
+| **Cloudflare R2** behind a custom domain | `Content-Encoding` and `Cache-Control` are object metadata on PutObject ([S3 API](https://developers.cloudflare.com/r2/api/s3/api/)). At the edge Cloudflare "will keep the same compression" for br or gzip when the client supports it, and may convert unless the origin sends `cache-control: no-transform`; it asks its origin with `accept-encoding: br, gzip` ([compression](https://developers.cloudflare.com/speed/optimization/content/compression/)). zstd from the origin is not documented | yes, per object; but "HTML and JSON are not cached" by default and `.glb` is not in the default list, so a Cache Rule is needed ([default cache behaviour](https://developers.cloudflare.com/cache/concepts/default-cache-behavior/)) | 404 `NoSuchKey` on the S3 API ([error codes](https://developers.cloudflare.com/r2/api/error-codes/)); not documented for the custom domain | HTTP/3 "available to all plans" ([HTTP/3](https://developers.cloudflare.com/speed/optimization/protocol/http3/)) | an API token limited "to a set of buckets", read and write ([tokens](https://developers.cloudflare.com/r2/api/tokens/)) | $0.015/GB-month; "no charges for egress bandwidth"; Class B reads $0.36 a million; free: 10 GB-month, 10 M reads ([pricing](https://developers.cloudflare.com/r2/pricing/), 2026-10-30). `r2.dev` is "rate-limited", for development only ([public buckets](https://developers.cloudflare.com/r2/buckets/public-buckets/)) |
+| **Bunny Storage + pull zone** | not documented for storage: upload headers are `AccessKey`, `Content-Type`, `Checksum` ([storage HTTP](https://bunny.net/docs/storage/http)). The CDN "automatically compresses responses using gzip, Brotli, or Zstandard", glTF and JSON included ([performance](https://bunny.net/docs/cdn/performance)): it may serve phase 5's gain without phase 5 | "Bunny follows the origin's `Cache-Control`"; per object on storage not documented; an Edge Rule can set it ([smart cache](https://bunny.net/docs/cdn/smart-cache), [edge rules](https://bunny.net/docs/cdn/edge-rules)) | not documented | not documented | the storage zone's password, one a zone ([storage HTTP](https://bunny.net/docs/storage/http)) | storage $0.01/GB (one region), "No API Request Fees"; CDN EU $0.01/GB, "No Request Fees"; $1 monthly minimum ([storage](https://bunny.net/pricing/storage/), [CDN](https://bunny.net/pricing/cdn/)) |
+| **Hetzner Object Storage**, no CDN | not documented ([supported actions](https://docs.hetzner.com/storage/object-storage/supported-actions/)) | not documented | not documented | not documented | a key pair is "valid for every Bucket within the same project": a project of its own is needed ([credentials](https://docs.hetzner.com/storage/object-storage/faq/s3-credentials)) | €6.49 a month for 1 TB storage and 1 TB egress, operations free, but a "minimum billable object size of 64 kB"; "up to 750 requests/s per Bucket" ([product](https://www.hetzner.com/storage/object-storage/), [overview](https://docs.hetzner.com/storage/object-storage/overview/)) |
+| GitHub release assets | not documented | not documented | the API answers 404; the download URL is not documented ([assets](https://docs.github.com/en/rest/releases/assets)) | not documented | push access | "Up to 1000 release assets" a release ([releases](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)) |
+
+**Reading the table for decision 1.**
+
+- **GitHub releases fall out.** A thousand assets a release is less than
+  one site after plan 093.
+- **Hetzner falls out as a store the browser reads directly.** It has no
+  edge, a 750-requests-a-second ceiling, and a 64 kB minimum that bills
+  most of our files at several times their size. It stays possible only
+  behind a CDN.
+- **Vercel Blob fails the `immutable` criterion as documented.** It also
+  cannot be shown to keep a stored encoding, and Hobby's limits would
+  lock it for 30 days once passed.
+- **R2's documentation answers the most criteria, not all.**
+  - Documented, not tried: a stored `Content-Encoding` and
+    `Cache-Control` on each object, kept at the edge for br and gzip
+    (with a Cache Rule for JSON and `.glb`); HTTP/3; a token limited to
+    the bucket.
+  - Not documented: what a missing object answers on the custom domain
+    (the 404 is documented for the S3 API only), and what the edge does
+    with a stored zstd.
+- **A 404 is documented on an API, never on the public URL.** That holds
+  for R2's S3 API and for GitHub's assets API alike. No candidate
+  documents the status a browser gets for a missing object; the trial
+  must.
+- **Storage and egress, each from its page:**
+  - Vercel Blob: $0.025/GB-month, Blob Data Transfer $0.05/GB in fra1
+    ([fra1](https://vercel.com/docs/pricing/regional-pricing/fra1)).
+  - R2: $0.015/GB-month, egress free
+    ([R2 pricing](https://developers.cloudflare.com/r2/pricing/)).
+  - Bunny: storage $0.01/GB in one region
+    ([storage pricing](https://bunny.net/pricing/storage/)), CDN traffic
+    in Europe $0.01/GB ([CDN pricing](https://bunny.net/pricing/cdn/)).
+  - Hetzner: €6.49 a month including 1 TB storage and 1 TB egress
+    ([product](https://www.hetzner.com/storage/object-storage/)).
+
+  Bunny stores for less; R2 sends for nothing. Which is cheaper depends
+  on the ratio of traffic to stored bytes, which 087's ledger and the
+  host's traffic figures give.
+- **Bunny is EU-based but documents least.** Its CDN's own brotli or
+  zstd might make phase 5 unnecessary; the trial would tell.
+- **A recommendation, for the maintainer to accept or not:** R2 behind a
+  custom domain, with Bunny as the alternative the ten-file trial is also
+  run on.
+
+**Decision 2 — the site's own origin or a second one.**
+
+- **Forwarding `/data/*` through the site's host.** A Vercel external
+  rewrite honours the upstream's `Cache-Control` and `CDN-Cache-Control`
+  "for projects created on or after April 6, 2026"
+  ([rewrites](https://vercel.com/docs/routing/rewrites), 2026-08-11).
+  Whether the project falls under that date, or needs
+  `x-vercel-enable-rewrite-caching`, the trial checks.
+- **What Vercel does not document about forwarding.** Its pages say
+  nothing on:
+  - whether the upstream's `Content-Encoding` is passed through or redone;
+  - what a 404 from upstream becomes, and whether it is cached;
+  - whether a forwarded byte is billed twice.
+
+  On billing, Vercel documents only that each external rewrite counts as
+  a CDN request
+  ([changelog](https://vercel.com/changelog/fast-data-transfer-for-rewrites-between-a-teams-projects-is-now-free),
+  2025-02-27). The visitor's bytes are Fast Data Transfer at $0.15/GB in
+  fra1 ([fra1](https://vercel.com/docs/pricing/regional-pricing/fra1)), on
+  top of whatever the store bills.
+- **Where forwarding hits the STOP conditions.** "Forwarding not cached
+  at the edge, or bills the bytes twice": the first is documented, not
+  tried; the second is open. "The store drops the `Content-Encoding`": open.
+  The ten-file trial has to answer all three before forwarding is chosen.
+- **The checkpoint above applies to forwarded files too.** A forwarded
+  `/data/*` stays behind Vercel's checkpoint, as the files are today. A
+  second host does not.
+- **A second host** needs a CORS rule for the worker's fetches. R2's
+  custom domain "automatically return[s] CORS response headers" once a
+  bucket policy exists
+  ([CORS](https://developers.cloudflare.com/r2/buckets/cors/)), and Bunny
+  has a pull-zone switch
+  ([pull zone API](https://bunny.net/docs/api-reference/core/pull-zone/add-pull-zone.md)).
+  It also needs `images.remotePatterns`, and a page on the privacy policy.
+
+**What each choice means for `app/(legal)/datenschutz/page.mdx`**
+([ADR 0043](../adr/0043-crash-and-page-reports-to-an-error-tracker.md):
+"a new request to a third party … is not done until the page says so").
+
+| Choice | The visitor's browser talks to | The privacy page |
+|---|---|---|
+| Vercel Blob, any host | Vercel Inc. (the same processor; DPF, DPA for Pro and Enterprise: [DPA](https://vercel.com/legal/dpa), [privacy policy](https://vercel.com/legal/privacy-policy)) | One sentence in "Aufruf der Seite und Hosting": the city's files come from Vercel's storage host. There is no new processor, but on Hobby there is no DPA to name. |
+| R2 or Bunny, forwarded through `/data/*` | Vercel only | Whether Vercel passes the visitor's address on to the upstream is not documented. Until the trial shows it, name the store as a further processor in the hosting section. |
+| R2, its own host | Cloudflare, Inc., USA ("complies with the EU-U.S. DPF", [privacy policy](https://www.cloudflare.com/privacypolicy/)) | A new section: who, which data (IP address, URL, User-Agent, as for Vercel), Art. 6 (1) f and Art. 28, transfer to the USA under DPF (Art. 45). Storage can be held in the EU ("eu" jurisdiction, [data location](https://developers.cloudflare.com/r2/reference/data-location/)), but the edge's location is not documented. |
+| Bunny, its own host | BunnyWay d.o.o., Ljubljana, Slovenia ([terms](https://bunny.net/tos/)); a DPA "within your bunny.net panel" ([GDPR](https://bunny.net/gdpr/)) | A new section: who, which data, Art. 6 (1) f and Art. 28. A processor in the EU; whether its edge serves EU visitors from outside the EU is not documented. |
+
+**Decision 3 — who publishes.**
+
+- **The plan's recommendation stands:** a CI job with the write
+  credential, and `bun scripts/publish-data.ts` as the way out.
+- **I found no page documenting GitHub Actions OIDC** for writes to any
+  candidate, on the pages cited in decision 1's table. Vercel Blob
+  documents an OIDC token for code that runs on Vercel, and for "a CI
+  job" outside Vercel names the read-write token instead
+  ([Blob](https://vercel.com/docs/vercel-blob)). The credential is
+  therefore a long-lived token in a repository or environment secret:
+  - Blob: the store's token;
+  - R2: a token limited to the bucket;
+  - Bunny: the zone's password;
+  - Hetzner: a key in a project of its own.
+- **GitHub keeps secrets from forked pull requests.** "With the exception
+  of `GITHUB_TOKEN`, secrets are not passed to the runner when a workflow
+  is triggered from a forked repository"
+  ([secrets](https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions)).
+  So a fork's pull request cannot publish, which the STOP conditions want.
+  Its lock is then republished by the maintainer, by hand or by a re-run
+  on a branch of the repository.
+- **What the maintainer decides:**
+  - whether the job runs on every pull request that fails
+    `data-lock check` or only on a label;
+  - which of the two holds the credential: a GitHub environment, or the
+    maintainer's machine alone.
+
+**Still open before phase 1:**
+
+- the maintainer's name and date on each decision;
+- the ten-file trial on the chosen candidates: the encoding, the
+  `Cache-Control`, a missing object, HTTP/2 or 3, and for forwarding the
+  edge cache and the bill;
+- the curl on the production host (above).
