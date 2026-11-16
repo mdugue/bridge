@@ -3,7 +3,7 @@ import {
   carryOf,
   coverFigures,
   cpuDecodes,
-  fineBySort,
+  levelBySort,
   shapeOf,
   sortBytes,
   variantCounts,
@@ -68,8 +68,8 @@ test("a level's bytes go by sort, the splat apart", () => {
 const tile = (id: string, fine: LevelHold, phoneFine = fine): TileHold => ({
   tile: id,
   levels: {
-    desktop: { fine, coarse: hold({ class: 1 }) },
-    phone: { fine: phoneFine, coarse: hold({ class: 1 }) },
+    desktop: { fine, fineFar: fine, coarse: hold({ class: 1 }) },
+    phone: { fine: phoneFine, fineFar: phoneFine, coarse: hold({ class: 1 }) },
   },
 });
 
@@ -78,7 +78,7 @@ test("the fine level's spawn and largest tile, and the distinct programs", () =>
     tile("b", hold({ class: 4 })),
     tile("a", hold({ class: 4, sport: 4 }), hold({ class: 2 })),
   ];
-  const fine = fineBySort(holds);
+  const fine = levelBySort(holds, "fine");
   expect(fine.desktop.spawn.total).toBe(4);
   expect(fine.desktop.largest).toMatchObject({ tile: "a", total: 8 });
   expect(fine.phone.largest).toMatchObject({ tile: "b", total: 4 });

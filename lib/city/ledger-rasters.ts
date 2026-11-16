@@ -126,7 +126,7 @@ export interface HeldRaster {
   kind: LedgerRasterKind;
 }
 
-/** What one terrain level holds on one tier near the camera: its rasters
+/** What one terrain level holds on one tier at one reach: its rasters
  *  (the tables are float textures the cache does not weigh, left out), the
  *  colour splat painted from its classes, and its ground program's key. */
 export interface LevelHold {
@@ -138,10 +138,13 @@ export interface LevelHold {
 
 export const TIERS = ["desktop", "phone"] as const;
 export type Tier = (typeof TIERS)[number];
-export const LEVELS = ["fine", "coarse"] as const;
+/** A tile's terrain levels as the viewer holds them: the fine level near
+ *  the camera, the fine level beyond the ground detail's reach (the
+ *  rasters' far twins, lib/city/ground-reach.ts), and the coarse level. */
+export const LEVELS = ["fine", "fineFar", "coarse"] as const;
 export type LevelName = (typeof LEVELS)[number];
 
-/** A tile's levels on both tiers (`level` 0 is the fine one). */
+/** A tile's levels on both tiers. */
 export interface TileHold {
   levels: Record<Tier, Record<LevelName, LevelHold>>;
   tile: string;
@@ -273,16 +276,17 @@ function codeOrder(a: string, b: string): number {
   return a < b ? -1 : 1;
 }
 
-/** A fine level by sort on each tier: the spawn tile's and the largest
- *  tile's (by total; ties to the tile id). */
-export function fineBySort(
-  holds: readonly TileHold[]
+/** A level by sort on each tier: the spawn tile's and the largest tile's
+ *  (by total; ties to the tile id). */
+export function levelBySort(
+  holds: readonly TileHold[],
+  level: LevelName
 ): Record<Tier, { largest: SortBytes & { tile: string }; spawn: SortBytes }> {
-  const out = {} as ReturnType<typeof fineBySort>;
+  const out = {} as ReturnType<typeof levelBySort>;
   for (const tier of TIERS) {
     const rows = holds.map((h) => ({
       tile: h.tile,
-      ...sortBytes(h.levels[tier].fine),
+      ...sortBytes(h.levels[tier][level]),
     }));
     const first = holds[0];
     const largest = rows.toSorted(
@@ -291,7 +295,7 @@ export function fineBySort(
     if (first === undefined || largest === undefined) {
       throw new Error("ledger: no tiles");
     }
-    out[tier] = { spawn: sortBytes(first.levels[tier].fine), largest };
+    out[tier] = { spawn: sortBytes(first.levels[tier][level]), largest };
   }
   return out;
 }
@@ -323,8 +327,6 @@ export interface TileCover {
   carry: Carry;
   /** the full raster's texels */
   of: number;
-  /** where the published file lies in the full raster (a crop's corner) */
-  offset?: [number, number];
 }
 
 /** A sparse kind's cover over the tiles that have it: the share of
@@ -399,7 +401,10 @@ export function artifactFigures(
 export interface SiteRasters {
   artifacts: Record<string, ArtifactFigures>;
   cover: Record<SparseKind, CoverFigures>;
-  fine: ReturnType<typeof fineBySort>;
+  /** the fine level near the camera, by sort */
+  fine: ReturnType<typeof levelBySort>;
+  /** the fine level beyond the ground detail's reach, by sort */
+  fineFar: ReturnType<typeof levelBySort>;
   gpu: ReturnType<typeof gpuByKind>;
   tiles: number;
   variants: ReturnType<typeof variantCounts>;
@@ -415,7 +420,8 @@ export function siteRasters(
     tiles: holds.length,
     artifacts: artifactFigures(files),
     gpu: gpuByKind(holds),
-    fine: fineBySort(holds),
+    fine: levelBySort(holds, "fine"),
+    fineFar: levelBySort(holds, "fineFar"),
     cover: Object.fromEntries(
       SPARSE_KINDS.map((kind) => [kind, coverFigures(covers[kind])])
     ) as Record<SparseKind, CoverFigures>,
@@ -443,7 +449,7 @@ export interface RasterLedger {
 }
 
 export const RASTER_RULE =
-  "Per site, from its published files: each raster and table artifact's files, wire bytes (as `wire`) and decoded texture shapes; each kind's GPU bytes on the spawn tile and the largest over the tiles, per tier and level, near the camera (the viewer's `rasterFiles` and `textureBytes`; the float tables are not weighed, as in the viewer); a fine level by sort, the colour splat painted from the classes apart; the share of texels the sparse rasters carry anything in, and of their bounding box, against the full tile raster; the distinct ground programs (`splatVariant` keys) per tier. Gated: every figure is a function of the tree.";
+  "Per site, from its published files: each raster and table artifact's files, wire bytes (as `wire`) and decoded texture shapes; each kind's GPU bytes on the spawn tile and the largest over the tiles, per tier and level — the fine level near the camera (`fine`) and beyond the ground detail's reach (`fineFar`, the far twins), the coarse level — by the viewer's `rasterFiles` and `textureBytes` (the float tables are not weighed, as in the viewer); the fine level by sort at both reaches, the colour splat painted from the classes apart; the share of texels the sparse rasters carry anything in, and of their bounding box, against the full tile raster, over the tiles whose fine level holds the raster on a desktop; the distinct ground programs (`splatVariant` keys) per tier. Gated: every figure is a function of the tree.";
 
 /** The modules under `app/` that call the PNG decoder, but the upload
  *  path's: what the CPU decodes without uploading. The caller scans the

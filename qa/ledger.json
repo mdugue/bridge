@@ -259,7 +259,7 @@
     "upstreamWorkarounds": 8
   },
   "rasters": {
-    "rule": "Per site, from its published files: each raster and table artifact's files, wire bytes (as `wire`) and decoded texture shapes; each kind's GPU bytes on the spawn tile and the largest over the tiles, per tier and level, near the camera (the viewer's `rasterFiles` and `textureBytes`; the float tables are not weighed, as in the viewer); a fine level by sort, the colour splat painted from the classes apart; the share of texels the sparse rasters carry anything in, and of their bounding box, against the full tile raster; the distinct ground programs (`splatVariant` keys) per tier. Gated: every figure is a function of the tree.",
+    "rule": "Per site, from its published files: each raster and table artifact's files, wire bytes (as `wire`) and decoded texture shapes; each kind's GPU bytes on the spawn tile and the largest over the tiles, per tier and level — the fine level near the camera (`fine`) and beyond the ground detail's reach (`fineFar`, the far twins), the coarse level — by the viewer's `rasterFiles` and `textureBytes` (the float tables are not weighed, as in the viewer); the fine level by sort at both reaches, the colour splat painted from the classes apart; the share of texels the sparse rasters carry anything in, and of their bounding box, against the full tile raster, over the tiles whose fine level holds the raster on a desktop; the distinct ground programs (`splatVariant` keys) per tier. Gated: every figure is a function of the tree.",
     "sorts": {
       "class": "exact",
       "surface": "exact",
@@ -408,6 +408,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
               "coarse": {
                 "spawn": 1048576,
                 "max": 1048576
@@ -415,6 +419,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
                 "spawn": 4194304,
                 "max": 4194304
               },
@@ -430,6 +438,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -439,6 +451,10 @@
               "fine": {
                 "spawn": 16777216,
                 "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
               },
               "coarse": {
                 "spawn": 0,
@@ -452,6 +468,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -459,6 +479,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
                 "spawn": 0,
                 "max": 0
               },
@@ -474,6 +498,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -481,6 +509,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
                 "spawn": 4194304,
                 "max": 4194304
               },
@@ -496,6 +528,10 @@
                 "spawn": 8388608,
                 "max": 8388608
               },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -505,6 +541,10 @@
               "fine": {
                 "spawn": 8388608,
                 "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
               },
               "coarse": {
                 "spawn": 0,
@@ -518,6 +558,10 @@
                 "spawn": 436176,
                 "max": 8028160
               },
+              "fineFar": {
+                "spawn": 109044,
+                "max": 2007040
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -525,6 +569,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 109044,
+                "max": 2007040
+              },
+              "fineFar": {
                 "spawn": 109044,
                 "max": 2007040
               },
@@ -540,6 +588,10 @@
                 "spawn": 1398101,
                 "max": 1398101
               },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
               "coarse": {
                 "spawn": 1398101,
                 "max": 1398101
@@ -547,6 +599,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
                 "spawn": 1398101,
                 "max": 1398101
               },
@@ -562,6 +618,10 @@
                 "spawn": 1398101,
                 "max": 1398101
               },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
               "coarse": {
                 "spawn": 1398101,
                 "max": 1398101
@@ -569,6 +629,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
                 "spawn": 1398101,
                 "max": 1398101
               },
@@ -584,6 +648,10 @@
                 "spawn": 2097152,
                 "max": 2097152
               },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
               "coarse": {
                 "spawn": 2097152,
                 "max": 2097152
@@ -591,6 +659,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
                 "spawn": 2097152,
                 "max": 2097152
               },
@@ -606,6 +678,10 @@
                 "spawn": 22369621,
                 "max": 22369621
               },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
               "coarse": {
                 "spawn": 5592405,
                 "max": 5592405
@@ -613,6 +689,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
                 "spawn": 22369621,
                 "max": 22369621
               },
@@ -663,6 +743,46 @@
             }
           }
         },
+        "fineFar": {
+          "desktop": {
+            "spawn": {
+              "exact": 29360128,
+              "measured": 2206196,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 58829299,
+              "softShare": 0.083
+            },
+            "largest": {
+              "tile": "33410_5658_2_sn",
+              "exact": 29360128,
+              "measured": 4104192,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60727295,
+              "softShare": 0.081
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 12582912,
+              "measured": 2206196,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 42052083,
+              "softShare": 0.116
+            },
+            "largest": {
+              "tile": "33410_5658_2_sn",
+              "exact": 12582912,
+              "measured": 4104192,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 43950079,
+              "softShare": 0.111
+            }
+          }
+        },
         "cover": {
           "surface": {
             "tiles": 15,
@@ -676,13 +796,13 @@
             }
           },
           "sport": {
-            "tiles": 15,
+            "tiles": 14,
             "share": {
-              "mean": 0.011,
+              "mean": 0.0118,
               "max": 0.0377
             },
             "box": {
-              "mean": 0.6163,
+              "mean": 0.6604,
               "max": 1
             }
           },
@@ -828,6 +948,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
               "coarse": {
                 "spawn": 1048576,
                 "max": 1048576
@@ -835,6 +959,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
                 "spawn": 4194304,
                 "max": 4194304
               },
@@ -850,6 +978,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -859,6 +991,10 @@
               "fine": {
                 "spawn": 16777216,
                 "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
               },
               "coarse": {
                 "spawn": 0,
@@ -872,6 +1008,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -879,6 +1019,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
                 "spawn": 0,
                 "max": 0
               },
@@ -894,6 +1038,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -901,6 +1049,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
                 "spawn": 4194304,
                 "max": 4194304
               },
@@ -916,6 +1068,10 @@
                 "spawn": 8388608,
                 "max": 8388608
               },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -925,6 +1081,10 @@
               "fine": {
                 "spawn": 8388608,
                 "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
               },
               "coarse": {
                 "spawn": 0,
@@ -938,6 +1098,10 @@
                 "spawn": 7389184,
                 "max": 7389184
               },
+              "fineFar": {
+                "spawn": 1847296,
+                "max": 1847296
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -945,6 +1109,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1847296,
+                "max": 1847296
+              },
+              "fineFar": {
                 "spawn": 1847296,
                 "max": 1847296
               },
@@ -960,6 +1128,10 @@
                 "spawn": 1398101,
                 "max": 1398101
               },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
               "coarse": {
                 "spawn": 1398101,
                 "max": 1398101
@@ -967,6 +1139,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
                 "spawn": 1398101,
                 "max": 1398101
               },
@@ -982,6 +1158,10 @@
                 "spawn": 1398101,
                 "max": 1398101
               },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
               "coarse": {
                 "spawn": 1398101,
                 "max": 1398101
@@ -989,6 +1169,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
                 "spawn": 1398101,
                 "max": 1398101
               },
@@ -1004,6 +1188,10 @@
                 "spawn": 2097152,
                 "max": 2097152
               },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
               "coarse": {
                 "spawn": 2097152,
                 "max": 2097152
@@ -1011,6 +1199,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
                 "spawn": 2097152,
                 "max": 2097152
               },
@@ -1026,6 +1218,10 @@
                 "spawn": 22369621,
                 "max": 22369621
               },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
               "coarse": {
                 "spawn": 5592405,
                 "max": 5592405
@@ -1033,6 +1229,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
                 "spawn": 22369621,
                 "max": 22369621
               },
@@ -1080,6 +1280,46 @@
               "splat": 22369621,
               "total": 62664703,
               "softShare": 0.078
+            }
+          }
+        },
+        "fineFar": {
+          "desktop": {
+            "spawn": {
+              "exact": 29360128,
+              "measured": 3944448,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60567551,
+              "softShare": 0.081
+            },
+            "largest": {
+              "tile": "33340_5678_2_sn",
+              "exact": 29360128,
+              "measured": 3944448,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60567551,
+              "softShare": 0.081
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 12582912,
+              "measured": 3944448,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 43790335,
+              "softShare": 0.112
+            },
+            "largest": {
+              "tile": "33340_5678_2_sn",
+              "exact": 12582912,
+              "measured": 3944448,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 43790335,
+              "softShare": 0.112
             }
           }
         },
@@ -1235,6 +1475,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
               "coarse": {
                 "spawn": 1048576,
                 "max": 1048576
@@ -1242,6 +1486,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
                 "spawn": 4194304,
                 "max": 4194304
               },
@@ -1257,6 +1505,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -1266,6 +1518,10 @@
               "fine": {
                 "spawn": 16777216,
                 "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
               },
               "coarse": {
                 "spawn": 0,
@@ -1279,6 +1535,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -1286,6 +1546,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
                 "spawn": 0,
                 "max": 0
               },
@@ -1301,6 +1565,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -1308,6 +1576,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
                 "spawn": 4194304,
                 "max": 4194304
               },
@@ -1323,6 +1595,10 @@
                 "spawn": 8388608,
                 "max": 8388608
               },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -1332,6 +1608,10 @@
               "fine": {
                 "spawn": 8388608,
                 "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
               },
               "coarse": {
                 "spawn": 0,
@@ -1345,6 +1625,10 @@
                 "spawn": 0,
                 "max": 0
               },
+              "fineFar": {
+                "spawn": 0,
+                "max": 0
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -1352,6 +1636,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
                 "spawn": 0,
                 "max": 0
               },
@@ -1367,6 +1655,10 @@
                 "spawn": 1398101,
                 "max": 1398101
               },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
               "coarse": {
                 "spawn": 1398101,
                 "max": 1398101
@@ -1374,6 +1666,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
                 "spawn": 1398101,
                 "max": 1398101
               },
@@ -1389,6 +1685,10 @@
                 "spawn": 1398101,
                 "max": 1398101
               },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
               "coarse": {
                 "spawn": 1398101,
                 "max": 1398101
@@ -1396,6 +1696,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
                 "spawn": 1398101,
                 "max": 1398101
               },
@@ -1411,6 +1715,10 @@
                 "spawn": 2097152,
                 "max": 2097152
               },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
               "coarse": {
                 "spawn": 2097152,
                 "max": 2097152
@@ -1418,6 +1726,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
                 "spawn": 2097152,
                 "max": 2097152
               },
@@ -1433,6 +1745,10 @@
                 "spawn": 22369621,
                 "max": 22369621
               },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
               "coarse": {
                 "spawn": 5592405,
                 "max": 5592405
@@ -1440,6 +1756,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
                 "spawn": 22369621,
                 "max": 22369621
               },
@@ -1487,6 +1807,46 @@
               "splat": 22369621,
               "total": 60817407,
               "softShare": 0.08
+            }
+          }
+        },
+        "fineFar": {
+          "desktop": {
+            "spawn": {
+              "exact": 29360128,
+              "measured": 2097152,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 58720255,
+              "softShare": 0.083
+            },
+            "largest": {
+              "tile": "32564_5932_2_hh",
+              "exact": 29360128,
+              "measured": 2097152,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 58720255,
+              "softShare": 0.083
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 12582912,
+              "measured": 2097152,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 41943039,
+              "softShare": 0.117
+            },
+            "largest": {
+              "tile": "32564_5932_2_hh",
+              "exact": 12582912,
+              "measured": 2097152,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 41943039,
+              "softShare": 0.117
             }
           }
         },
@@ -1652,6 +2012,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
               "coarse": {
                 "spawn": 1048576,
                 "max": 1048576
@@ -1659,6 +2023,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
                 "spawn": 4194304,
                 "max": 4194304
               },
@@ -1674,6 +2042,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -1683,6 +2055,10 @@
               "fine": {
                 "spawn": 16777216,
                 "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
               },
               "coarse": {
                 "spawn": 0,
@@ -1696,6 +2072,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -1703,6 +2083,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
                 "spawn": 0,
                 "max": 0
               },
@@ -1718,6 +2102,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -1725,6 +2113,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
                 "spawn": 4194304,
                 "max": 4194304
               },
@@ -1740,6 +2132,10 @@
                 "spawn": 8388608,
                 "max": 8388608
               },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -1749,6 +2145,10 @@
               "fine": {
                 "spawn": 8388608,
                 "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
               },
               "coarse": {
                 "spawn": 0,
@@ -1762,6 +2162,10 @@
                 "spawn": 5568,
                 "max": 8380416
               },
+              "fineFar": {
+                "spawn": 1392,
+                "max": 2095104
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -1769,6 +2173,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1392,
+                "max": 2095104
+              },
+              "fineFar": {
                 "spawn": 1392,
                 "max": 2095104
               },
@@ -1784,6 +2192,10 @@
                 "spawn": 1398101,
                 "max": 1398101
               },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
               "coarse": {
                 "spawn": 1398101,
                 "max": 1398101
@@ -1791,6 +2203,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
                 "spawn": 1398101,
                 "max": 1398101
               },
@@ -1806,6 +2222,10 @@
                 "spawn": 1398101,
                 "max": 1398101
               },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
               "coarse": {
                 "spawn": 1398101,
                 "max": 1398101
@@ -1813,6 +2233,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
                 "spawn": 1398101,
                 "max": 1398101
               },
@@ -1828,6 +2252,10 @@
                 "spawn": 2097152,
                 "max": 2097152
               },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
               "coarse": {
                 "spawn": 2097152,
                 "max": 2097152
@@ -1835,6 +2263,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
                 "spawn": 2097152,
                 "max": 2097152
               },
@@ -1850,6 +2282,10 @@
                 "spawn": 22369621,
                 "max": 22369621
               },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
               "coarse": {
                 "spawn": 5592405,
                 "max": 5592405
@@ -1857,6 +2293,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
                 "spawn": 22369621,
                 "max": 22369621
               },
@@ -1904,6 +2344,46 @@
               "splat": 22369621,
               "total": 62912511,
               "softShare": 0.078
+            }
+          }
+        },
+        "fineFar": {
+          "desktop": {
+            "spawn": {
+              "exact": 29360128,
+              "measured": 2098544,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 58721647,
+              "softShare": 0.083
+            },
+            "largest": {
+              "tile": "33318_5690_2_sn",
+              "exact": 29360128,
+              "measured": 4192256,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60815359,
+              "softShare": 0.08
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 12582912,
+              "measured": 2098544,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 41944431,
+              "softShare": 0.117
+            },
+            "largest": {
+              "tile": "33318_5690_2_sn",
+              "exact": 12582912,
+              "measured": 4192256,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 44038143,
+              "softShare": 0.111
             }
           }
         },
@@ -2069,6 +2549,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
               "coarse": {
                 "spawn": 1048576,
                 "max": 1048576
@@ -2076,6 +2560,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
                 "spawn": 4194304,
                 "max": 4194304
               },
@@ -2091,6 +2579,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -2100,6 +2592,10 @@
               "fine": {
                 "spawn": 16777216,
                 "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
               },
               "coarse": {
                 "spawn": 0,
@@ -2113,6 +2609,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -2120,6 +2620,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
                 "spawn": 0,
                 "max": 0
               },
@@ -2135,6 +2639,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -2142,6 +2650,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
                 "spawn": 4194304,
                 "max": 4194304
               },
@@ -2157,6 +2669,10 @@
                 "spawn": 8388608,
                 "max": 8388608
               },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -2166,6 +2682,10 @@
               "fine": {
                 "spawn": 8388608,
                 "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
               },
               "coarse": {
                 "spawn": 0,
@@ -2179,6 +2699,10 @@
                 "spawn": 8249344,
                 "max": 8249344
               },
+              "fineFar": {
+                "spawn": 2062336,
+                "max": 2062336
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -2186,6 +2710,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 2062336,
+                "max": 2062336
+              },
+              "fineFar": {
                 "spawn": 2062336,
                 "max": 2062336
               },
@@ -2201,6 +2729,10 @@
                 "spawn": 1398101,
                 "max": 1398101
               },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
               "coarse": {
                 "spawn": 1398101,
                 "max": 1398101
@@ -2208,6 +2740,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
                 "spawn": 1398101,
                 "max": 1398101
               },
@@ -2223,6 +2759,10 @@
                 "spawn": 1398101,
                 "max": 1398101
               },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
               "coarse": {
                 "spawn": 1398101,
                 "max": 1398101
@@ -2230,6 +2770,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
                 "spawn": 1398101,
                 "max": 1398101
               },
@@ -2245,6 +2789,10 @@
                 "spawn": 2097152,
                 "max": 2097152
               },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
               "coarse": {
                 "spawn": 2097152,
                 "max": 2097152
@@ -2252,6 +2800,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
                 "spawn": 2097152,
                 "max": 2097152
               },
@@ -2267,6 +2819,10 @@
                 "spawn": 22369621,
                 "max": 22369621
               },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
               "coarse": {
                 "spawn": 5592405,
                 "max": 5592405
@@ -2274,6 +2830,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
                 "spawn": 22369621,
                 "max": 22369621
               },
@@ -2321,6 +2881,46 @@
               "splat": 22369621,
               "total": 62879743,
               "softShare": 0.078
+            }
+          }
+        },
+        "fineFar": {
+          "desktop": {
+            "spawn": {
+              "exact": 29360128,
+              "measured": 4159488,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60782591,
+              "softShare": 0.081
+            },
+            "largest": {
+              "tile": "33392_5668_2_sn",
+              "exact": 29360128,
+              "measured": 4159488,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 60782591,
+              "softShare": 0.081
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 12582912,
+              "measured": 4159488,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 44005375,
+              "softShare": 0.111
+            },
+            "largest": {
+              "tile": "33392_5668_2_sn",
+              "exact": 12582912,
+              "measured": 4159488,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 44005375,
+              "softShare": 0.111
             }
           }
         },
@@ -2486,6 +3086,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
               "coarse": {
                 "spawn": 1048576,
                 "max": 1048576
@@ -2493,6 +3097,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
                 "spawn": 4194304,
                 "max": 4194304
               },
@@ -2508,6 +3116,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -2517,6 +3129,10 @@
               "fine": {
                 "spawn": 16777216,
                 "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
               },
               "coarse": {
                 "spawn": 0,
@@ -2530,6 +3146,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -2537,6 +3157,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
                 "spawn": 0,
                 "max": 0
               },
@@ -2552,6 +3176,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -2559,6 +3187,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
                 "spawn": 4194304,
                 "max": 4194304
               },
@@ -2574,6 +3206,10 @@
                 "spawn": 8388608,
                 "max": 8388608
               },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -2583,6 +3219,10 @@
               "fine": {
                 "spawn": 8388608,
                 "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
               },
               "coarse": {
                 "spawn": 0,
@@ -2596,6 +3236,10 @@
                 "spawn": 0,
                 "max": 1281488
               },
+              "fineFar": {
+                "spawn": 0,
+                "max": 320372
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -2603,6 +3247,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 0,
+                "max": 320372
+              },
+              "fineFar": {
                 "spawn": 0,
                 "max": 320372
               },
@@ -2618,6 +3266,10 @@
                 "spawn": 1398101,
                 "max": 1398101
               },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
               "coarse": {
                 "spawn": 1398101,
                 "max": 1398101
@@ -2625,6 +3277,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
                 "spawn": 1398101,
                 "max": 1398101
               },
@@ -2640,6 +3296,10 @@
                 "spawn": 1398101,
                 "max": 1398101
               },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
               "coarse": {
                 "spawn": 1398101,
                 "max": 1398101
@@ -2647,6 +3307,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
                 "spawn": 1398101,
                 "max": 1398101
               },
@@ -2662,6 +3326,10 @@
                 "spawn": 2097152,
                 "max": 2097152
               },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
               "coarse": {
                 "spawn": 2097152,
                 "max": 2097152
@@ -2669,6 +3337,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
                 "spawn": 2097152,
                 "max": 2097152
               },
@@ -2684,6 +3356,10 @@
                 "spawn": 22369621,
                 "max": 22369621
               },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
               "coarse": {
                 "spawn": 5592405,
                 "max": 5592405
@@ -2691,6 +3367,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
                 "spawn": 22369621,
                 "max": 22369621
               },
@@ -2738,6 +3418,46 @@
               "splat": 22369621,
               "total": 61137779,
               "softShare": 0.08
+            }
+          }
+        },
+        "fineFar": {
+          "desktop": {
+            "spawn": {
+              "exact": 29360128,
+              "measured": 2097152,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 58720255,
+              "softShare": 0.083
+            },
+            "largest": {
+              "tile": "32690_5332_2_by",
+              "exact": 29360128,
+              "measured": 2417524,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 59040627,
+              "softShare": 0.083
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 12582912,
+              "measured": 2097152,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 41943039,
+              "softShare": 0.117
+            },
+            "largest": {
+              "tile": "32690_5332_2_by",
+              "exact": 12582912,
+              "measured": 2417524,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 42263411,
+              "softShare": 0.116
             }
           }
         },
@@ -2905,6 +3625,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 16777216,
+                "max": 16777216
+              },
               "coarse": {
                 "spawn": 1048576,
                 "max": 1048576
@@ -2912,6 +3636,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
                 "spawn": 4194304,
                 "max": 4194304
               },
@@ -2927,6 +3655,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -2936,6 +3668,10 @@
               "fine": {
                 "spawn": 16777216,
                 "max": 16777216
+              },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
               },
               "coarse": {
                 "spawn": 0,
@@ -2949,6 +3685,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -2956,6 +3696,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 0,
+                "max": 0
+              },
+              "fineFar": {
                 "spawn": 0,
                 "max": 0
               },
@@ -2971,6 +3715,10 @@
                 "spawn": 16777216,
                 "max": 16777216
               },
+              "fineFar": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -2978,6 +3726,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 4194304,
+                "max": 4194304
+              },
+              "fineFar": {
                 "spawn": 4194304,
                 "max": 4194304
               },
@@ -2993,6 +3745,10 @@
                 "spawn": 8388608,
                 "max": 8388608
               },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -3002,6 +3758,10 @@
               "fine": {
                 "spawn": 8388608,
                 "max": 8388608
+              },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
               },
               "coarse": {
                 "spawn": 0,
@@ -3015,6 +3775,10 @@
                 "spawn": 1105280,
                 "max": 1105280
               },
+              "fineFar": {
+                "spawn": 276320,
+                "max": 276320
+              },
               "coarse": {
                 "spawn": 0,
                 "max": 0
@@ -3022,6 +3786,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 276320,
+                "max": 276320
+              },
+              "fineFar": {
                 "spawn": 276320,
                 "max": 276320
               },
@@ -3037,6 +3805,10 @@
                 "spawn": 1398101,
                 "max": 1398101
               },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
               "coarse": {
                 "spawn": 1398101,
                 "max": 1398101
@@ -3044,6 +3816,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
                 "spawn": 1398101,
                 "max": 1398101
               },
@@ -3059,6 +3835,10 @@
                 "spawn": 1398101,
                 "max": 1398101
               },
+              "fineFar": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
               "coarse": {
                 "spawn": 1398101,
                 "max": 1398101
@@ -3066,6 +3846,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 1398101,
+                "max": 1398101
+              },
+              "fineFar": {
                 "spawn": 1398101,
                 "max": 1398101
               },
@@ -3081,6 +3865,10 @@
                 "spawn": 2097152,
                 "max": 2097152
               },
+              "fineFar": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
               "coarse": {
                 "spawn": 2097152,
                 "max": 2097152
@@ -3088,6 +3876,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 2097152,
+                "max": 2097152
+              },
+              "fineFar": {
                 "spawn": 2097152,
                 "max": 2097152
               },
@@ -3103,6 +3895,10 @@
                 "spawn": 22369621,
                 "max": 22369621
               },
+              "fineFar": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
               "coarse": {
                 "spawn": 5592405,
                 "max": 5592405
@@ -3110,6 +3906,10 @@
             },
             "phone": {
               "fine": {
+                "spawn": 22369621,
+                "max": 22369621
+              },
+              "fineFar": {
                 "spawn": 22369621,
                 "max": 22369621
               },
@@ -3157,6 +3957,46 @@
               "splat": 22369621,
               "total": 61093727,
               "softShare": 0.08
+            }
+          }
+        },
+        "fineFar": {
+          "desktop": {
+            "spawn": {
+              "exact": 29360128,
+              "measured": 2373472,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 58996575,
+              "softShare": 0.083
+            },
+            "largest": {
+              "tile": "32408_5710_2_nw",
+              "exact": 29360128,
+              "measured": 2373472,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 58996575,
+              "softShare": 0.083
+            }
+          },
+          "phone": {
+            "spawn": {
+              "exact": 12582912,
+              "measured": 2373472,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 42219359,
+              "softShare": 0.116
+            },
+            "largest": {
+              "tile": "32408_5710_2_nw",
+              "exact": 12582912,
+              "measured": 2373472,
+              "soft": 4893354,
+              "splat": 22369621,
+              "total": 42219359,
+              "softShare": 0.116
             }
           }
         },

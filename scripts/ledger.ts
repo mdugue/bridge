@@ -13,8 +13,8 @@
  * It reads public/data/<site>/, so a build (or `bun scripts/prepare-sites.ts`)
  * comes first: the reference site for the bytes and counters, and every site
  * a build serves for the `rasters` section (plan 091 phase 0,
- * scripts/ledger-rasters.ts). After a write, `bun run fix` formats the file
- * as committed; `--check` compares values, not layout.
+ * scripts/ledger-rasters.ts). A write formats the file with oxfmt, as it is
+ * committed; `--check` compares values, not layout.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { cpus } from "node:os";
@@ -238,6 +238,19 @@ export async function measureRasters(): Promise<Ledger["rasters"]> {
   );
 }
 
+/** Formats a written file with the repository's formatter (oxfmt, as
+ *  `bun run fix` and the lint's `--check` do), so a fresh run writes the
+ *  committed file byte for byte. */
+function formatAsCommitted(file: string): void {
+  const run = Bun.spawnSync(
+    [nodePath.join(ROOT, "node_modules/.bin/oxfmt"), file],
+    { cwd: ROOT, stdout: "ignore", stderr: "pipe" }
+  );
+  if (run.exitCode !== 0) {
+    throw new Error(`ledger: oxfmt failed: ${run.stderr.toString()}`);
+  }
+}
+
 async function main(check: boolean): Promise<void> {
   const committed: unknown = existsSync(LEDGER_FILE)
     ? JSON.parse(readFileSync(LEDGER_FILE, "utf-8"))
@@ -284,6 +297,7 @@ async function main(check: boolean): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   const ledger = datedLedger(gated, recorded, committed, today, machine());
   writeFileSync(LEDGER_FILE, `${JSON.stringify(ledger, null, 2)}\n`);
+  formatAsCommitted(LEDGER_FILE);
   process.stdout.write(`qa/ledger.json (${ledger.dated})\n`);
 }
 

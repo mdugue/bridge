@@ -28,6 +28,7 @@ import type {
   CpuDecode,
   HeldRaster,
   LedgerRasterKind,
+  LevelName,
   LevelHold,
   RasterLedger,
   SiteRasters,
@@ -37,7 +38,7 @@ import type {
   TileHold,
 } from "../lib/city/ledger-rasters";
 import type { SourceText } from "../lib/city/ledger";
-import { wireBytes } from "../lib/city/ledger";
+import { ledgerTiles, wireBytes } from "../lib/city/ledger";
 import { decodeGreyPng } from "../lib/city/png-raster";
 import { siteReport } from "../lib/city/site-report";
 import { tileArtifacts, TERRAIN_RASTER_KINDS } from "../lib/city/tile";
@@ -205,39 +206,35 @@ export interface RasterSource {
   tileset: unknown;
 }
 
-interface TileInfo {
+/** A site tile's id, bounds and terrain levels' extras (fine 0, coarse 1). */
+interface TileLevels {
   bounds: [number, number, number, number];
+  extras: Record<0 | 1, Record<string, unknown>>;
   id: string;
 }
 
-/** The terrain levels' extras, by tile (fine 0, coarse 1). */
-interface TileLevels {
-  extras: Record<0 | 1, Record<string, unknown>>;
-  info: TileInfo;
-}
-
-interface Node {
-  children?: Node[];
-  extras?: Record<string, unknown>;
-}
-
-/** The site tiles and their levels' extras, spawn first (as
- *  lib/city/ledger.ts `ledgerTiles` walks the tree). */
-function tileLevels(tileset: unknown): TileLevels[] {
-  const json = tileset as {
-    extras?: { tiles?: TileInfo[] };
-    root?: { children?: Node[] };
-  };
-  const infos = json.extras?.tiles ?? [];
-  const nodes = json.root?.children ?? [];
-  return infos.map((info, i) => {
-    const coarse = nodes[i]?.children?.[1];
+/** The site tiles, spawn first, walked by the ledger's own reader
+ *  (`ledgerTiles`, which throws on a tree it does not know), with the
+ *  bounds the tileset's tile list gives each. */
+export function tileLevels(tileset: unknown): TileLevels[] {
+  const infos =
+    (tileset as { extras?: { tiles?: { bounds?: unknown }[] } }).extras
+      ?.tiles ?? [];
+  return ledgerTiles(tileset).map((tile, i) => {
+    const bounds = infos[i]?.bounds;
+    if (
+      !(
+        Array.isArray(bounds) &&
+        bounds.length === 4 &&
+        bounds.every((v) => typeof v === "number")
+      )
+    ) {
+      throw new Error(`ledger: the tileset gives ${tile.id} no bounds`);
+    }
     return {
-      info,
-      extras: {
-        1: coarse?.extras ?? {},
-        0: coarse?.children?.[0]?.extras ?? {},
-      },
+      id: tile.id,
+      bounds: bounds as [number, number, number, number],
+      extras: { 0: tile.terrain[0].extras, 1: tile.terrain[1].extras },
     };
   });
 }
@@ -248,8 +245,8 @@ async function fileFacts(
   tiles: readonly TileLevels[]
 ): Promise<Map<string, FileFacts>> {
   const out = new Map<string, FileFacts>();
-  for (const { info } of tiles) {
-    const named = tileArtifacts(info.id);
+  for (const { id } of tiles) {
+    const named = tileArtifacts(id);
     for (const { artifact, kind, table } of RASTER_ARTIFACTS) {
       const served = source.files[named[artifact].file];
       if (served === undefined || out.has(served)) {
@@ -273,11 +270,33 @@ async function fileFacts(
   return out;
 }
 
-/** What one level holds on one tier, by the viewer's rules. */
+/** A file the extras name, read; an extras name the site did not
+ *  publish is an error, never an absent raster. */
+function factsOf(
+  facts: ReadonlyMap<string, FileFacts>,
+  served: string
+): FileFacts {
+  const found = facts.get(served);
+  if (!found) {
+    throw new Error(
+      `ledger: the extras name ${served}, which is not published`
+    );
+  }
+  return found;
+}
+
+/** Where a level is read: its level, and whether beyond the ground
+ *  detail's reach (the far twins). */
+interface Reach {
+  far: boolean;
+  level: 0 | 1;
+  phone: boolean;
+}
+
+/** What one level holds on one tier at one reach, by the viewer's rules. */
 function levelHold(
   extras: Record<string, unknown>,
-  level: 0 | 1,
-  phone: boolean,
+  { level, phone, far }: Reach,
   size: [number, number],
   facts: ReadonlyMap<string, FileFacts>
 ): LevelHold {
@@ -290,10 +309,11 @@ function levelHold(
       // reason: a terrain level's extras, read for their file names only
       { ...extras, level } as unknown as ContentExtras,
       kind,
-      phone
+      phone,
+      far
     );
-    const raster = files ? facts.get(files.raster)?.raster : undefined;
-    const tableOk = !files?.table || facts.get(files.table)?.rows === true;
+    const raster = files ? factsOf(facts, files.raster).raster : undefined;
+    const tableOk = !files?.table || factsOf(facts, files.table).rows === true;
     if (!(raster?.valid && tableOk)) {
       continue;
     }
@@ -315,13 +335,19 @@ function levelHold(
   };
 }
 
-/** One tile's sparse covers, from its fine level's full files. */
+/** One tile's sparse covers, from its fine level's full files: those a
+ *  desktop's fine level holds (`held`; a sports raster without grounds in
+ *  its table is none). */
 function tileCovers(
   extras: Record<string, unknown>,
+  held: LevelHold,
   facts: ReadonlyMap<string, FileFacts>
 ): Partial<Record<SparseKind, TileCover>> {
   const out: Partial<Record<SparseKind, TileCover>> = {};
   for (const kind of SPARSE_KINDS) {
+    if (!held.rasters.some((r) => r.kind === kind)) {
+      continue;
+    }
     const served = extras[RASTER_KINDS[kind].extras];
     const raster =
       typeof served === "string" ? facts.get(served)?.raster : undefined;
@@ -351,22 +377,34 @@ export async function measureRasters(
     markings: [],
     colonies: [],
   };
-  const holds: TileHold[] = tiles.map(({ info, extras }) => {
+  const holds: TileHold[] = tiles.map(({ id, bounds, extras }) => {
     const size: [number, number] = [
-      info.bounds[2] - info.bounds[0],
-      info.bounds[3] - info.bounds[1],
+      bounds[2] - bounds[0],
+      bounds[3] - bounds[1],
     ];
-    for (const [kind, cover] of Object.entries(tileCovers(extras[0], facts))) {
-      covers[kind as SparseKind].push(cover);
-    }
-    const tier = (phone: boolean) => ({
-      fine: levelHold(extras[0], 0, phone, size, facts),
-      coarse: levelHold(extras[1], 1, phone, size, facts),
+    const tier = (phone: boolean): Record<LevelName, LevelHold> => ({
+      fine: levelHold(extras[0], { level: 0, phone, far: false }, size, facts),
+      fineFar: levelHold(
+        extras[0],
+        { level: 0, phone, far: true },
+        size,
+        facts
+      ),
+      coarse: levelHold(
+        extras[1],
+        { level: 1, phone, far: false },
+        size,
+        facts
+      ),
     });
     const levels = Object.fromEntries(
       TIERS.map((t) => [t, tier(t === "phone")])
-    ) as Record<Tier, Record<"fine" | "coarse", LevelHold>>;
-    return { tile: info.id, levels };
+    ) as Record<Tier, Record<LevelName, LevelHold>>;
+    const covered = tileCovers(extras[0], levels.desktop.fine, facts);
+    for (const [kind, cover] of Object.entries(covered)) {
+      covers[kind as SparseKind].push(cover);
+    }
+    return { tile: id, levels };
   });
   const files = [...facts.values()].map(({ artifact, shape, wire }) => ({
     artifact,
