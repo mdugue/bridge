@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
+import { ledgerDiff } from "./ledger";
 import type { LedgerTile } from "./ledger";
-import { dressingLedger, dressingLevel } from "./ledger-dressing";
+import { dressingLevel, dressingTiles } from "./ledger-dressing";
 
 const wire = (file: string) => file.length;
 
@@ -32,8 +33,8 @@ test("a level's dressing is weighed kind by kind, a kind it lacks left out", () 
   });
 });
 
-test("the watched tiles, in the order asked, with the fine level's sports table", () => {
-  const [only, ...rest] = dressingLedger(
+test("the watched tiles, each under what it is watched for, with the fine level's sports table", () => {
+  const tiles = dressingTiles(
     [tile("a"), tile("b")],
     [
       { tile: "b", what: "yards" },
@@ -41,15 +42,29 @@ test("the watched tiles, in the order asked, with the fine level's sports table"
     ],
     wire
   );
-  expect(rest).toEqual([]);
-  expect(only).toEqual({
-    tile: "b",
-    what: "yards",
-    fine: {
-      bytes: 12 + 9 + 10,
-      files: 3,
-      kinds: { lamps: 9, sportTable: 10, tram: 12 },
+  expect(tiles).toEqual({
+    yards: {
+      tile: "b",
+      what: "yards",
+      fine: {
+        bytes: 12 + 9 + 10,
+        files: 3,
+        kinds: { lamps: 9, sportTable: 10, tram: 12 },
+      },
+      coarse: { bytes: 8, files: 1, kinds: { crowns: 8 } },
     },
-    coarse: { bytes: 8, files: 1, kinds: { crowns: 8 } },
   });
+});
+
+test("every gated figure is a named leaf, and the recorded part is none", () => {
+  const section = {
+    tiles: dressingTiles([tile("b")], [{ tile: "b", what: "yards" }], wire),
+    recorded: { note: "n", browser: { ms: 1 } },
+  };
+  const moved = structuredClone(section);
+  moved.tiles.yards.fine.kinds.tram = 13;
+  moved.recorded.browser.ms = 2;
+  expect(ledgerDiff({ dressing: section }, { dressing: moved })).toEqual([
+    "dressing.tiles.yards.fine.kinds.tram: 12 → 13",
+  ]);
 });

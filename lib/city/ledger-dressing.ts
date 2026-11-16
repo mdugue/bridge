@@ -7,7 +7,8 @@
  * later phase of plan 090 reads its gate here ("a fine level's bytes not
  * larger, its requests fewer"). Pure; scripts/ledger.ts reads the files.
  *
- * Beside it, recorded and never compared (`DressingRecorded`): München's
+ * Beside it, recorded and never compared (`DressingRecorded`, at
+ * `dressing.recorded`): München's
  * tile (the gate builds the reference site alone), what only a browser
  * can measure — the scene thread's milliseconds by builder, the bytes the
  * dressing weighs in the tile cache — and the two spikes' figures, each
@@ -82,18 +83,33 @@ export function dressingTile(
   };
 }
 
-/** The watched tiles' dressing (`wanted` in its order; a tile the site
- *  lacks is left out). */
-export function dressingLedger(
+/** The watched tiles' dressing, each under what it is watched for
+ *  (`spawn`, `forest`, `yards`: every figure a named leaf, so the check
+ *  names the one that moved); a tile the site lacks is left out. */
+export function dressingTiles(
   tiles: readonly LedgerTile[],
   wanted: readonly { tile: string; what: string }[],
   wire: (file: string) => number
-): DressingTile[] {
-  return wanted.flatMap(({ tile, what }) => {
+): Record<string, DressingTile> {
+  const out: Record<string, DressingTile> = {};
+  for (const { tile, what } of wanted) {
     const found = tiles.find((t) => t.id === tile);
-    return found ? [dressingTile(found, what, wire)] : [];
-  });
+    if (found) {
+      out[what] = dressingTile(found, what, wire);
+    }
+  }
+  return out;
 }
+
+/** The ledger's `dressing` section: the gated tiles, and the recorded
+ *  part (`dressing.recorded`, in the ledger's `UNCOMPARED`). */
+export interface DressingLedger {
+  recorded?: DressingRecorded;
+  tiles: Record<string, DressingTile>;
+}
+
+/** The path of the part the check never compares. */
+export const DRESSING_UNCOMPARED = "dressing.recorded";
 
 /** What the gate never compares (see the head). Each member is written by
  *  the tool that measured it and kept until measured again. */

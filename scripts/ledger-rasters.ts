@@ -8,6 +8,7 @@
  * result into `qa/ledger.json`'s `rasters` section, every built site.
  */
 import { existsSync } from "node:fs";
+import nodePath from "node:path";
 import { splatScaleFor } from "../app/_components/landcover-splat";
 import { RASTER_KINDS, rasterFiles } from "../app/_components/tile-rasters";
 import type { RasterKind } from "../app/_components/tile-rasters";
@@ -79,9 +80,11 @@ export const UPLOAD_PATH = "app/_components/raster-upload.ts";
 
 /** The sites a build serves: every one whose data is ready, as
  *  scripts/prepare-sites.ts picks them. */
-export function readySites(): SiteId[] {
+export function readySites(root = process.cwd()): SiteId[] {
+  // (the report names its files from the repository's root)
+  const exists = (file: string) => existsSync(nodePath.resolve(root, file));
   return (Object.keys(SITES) as SiteId[]).filter((id) =>
-    siteReport(SITES[id], existsSync).every((t) => t.next === "ready")
+    siteReport(SITES[id], exists).every((t) => t.next === "ready")
   );
 }
 

@@ -13,7 +13,7 @@
  * the builders are the product's, only the frames are cheap. The figures
  * go to `.cache/ledger-dressing/browser.json` beside the machine and the
  * day they were read on; `bun run ledger` folds them into the ledger's
- * recorded section (`dressingRecorded.browser`), where nothing compares
+ * recorded section (`dressing.recorded.browser`), where nothing compares
  * them: on a software renderer a timing
  * says which builder is heavy, not how many milliseconds a phone pays.
  *

@@ -34,6 +34,30 @@ test("a Stand is newer by its latest day, LoD2's by its leading year", () => {
   expect(newerStand(undefined, "2025-03-01")).toBe(false);
 });
 
+test("a bake's unknown extract day reads as unknown, and its own day as none", () => {
+  const days = osmDataDays({
+    baked: {
+      lamps: {
+        a: {
+          dataAsOf: "unknown (sachsen-latest.osm.pbf placed by hand)",
+          on: "2026-11-16",
+        },
+        b: { dataAsOf: "2026-11-14 (BBBike extract …)", on: "2026-11-16" },
+      },
+    },
+  });
+  expect(days).toEqual({
+    oldest: "2026-11-14",
+    newest: "2026-11-14",
+    unknown: 1,
+  });
+  expect(
+    osmDataDays({
+      baked: { lamps: { a: { dataAsOf: "unknown (…)", on: "2026-11-16" } } },
+    })
+  ).toEqual({ oldest: undefined, newest: undefined, unknown: 1 });
+});
+
 test("the OSM data's days are its dataAsOf days, past the overpass history", () => {
   expect(
     osmDataDays({
@@ -44,7 +68,7 @@ test("the OSM data's days are its dataAsOf days, past the overpass history", () 
       },
       retrieved: "2026-10-20",
     })
-  ).toEqual({ oldest: "2026-06-15", newest: "2026-10-17" });
+  ).toEqual({ oldest: "2026-06-15", newest: "2026-10-17", unknown: 0 });
   expect(osmDataDays(undefined)).toBeNull();
   expect(httpDay("Sat, 24 Oct 2026 16:58:41 GMT")).toBe("2026-10-24");
   expect(httpDay("not a date")).toBeNull();

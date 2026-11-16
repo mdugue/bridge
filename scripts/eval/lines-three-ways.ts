@@ -28,7 +28,7 @@
  *   bun scripts/eval/lines-three-ways.ts [site] [tile]
  *
  * Writes .cache/ledger-dressing/lines.json; `bun run ledger` folds it into
- * the ledger's `dressingRecorded.lines`.
+ * the ledger's `dressing.recorded.lines`.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { cpus } from "node:os";
@@ -69,7 +69,7 @@ import {
 } from "../../lib/city/rail-table";
 import type { RailLook, RailRun } from "../../lib/city/rail-table";
 import { toExtMeshopt } from "../khr-meshopt";
-import { DRESSING_SCRATCH } from "../ledger";
+import { DRESSING_SCRATCH } from "../ledger-dressing";
 import { writeMeshGlb } from "../tile-glb";
 import { gpuBytesOf } from "./gpu-bytes";
 import { publishedTile } from "./published-ground";

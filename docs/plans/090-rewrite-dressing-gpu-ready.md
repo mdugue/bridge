@@ -501,7 +501,7 @@ compressed, the container is pre-gzipped like the packs it replaces.
 ### Phase 0 (2026-11-16) — the baseline, the stand record, the rails' home
 
 Every figure is in `qa/ledger.json`: `dressing` (gated) and
-`dressingRecorded` (the browser's, München's and the spikes', never
+`dressing.recorded` (the browser's, München's and the spikes', never
 compared). The tools: `e2e/dressing-ledger.spec.ts`,
 `scripts/eval/stand-record-probe.ts`, `stand-record-bytes.ts`,
 `lines-three-ways.ts`. The yards' tile is `33410_5656_2_sn` (Bahnhof
@@ -716,9 +716,10 @@ trees' files as they are and reports the figures. It does not plan on a
 grant.
 
 **The counters this phase raised, and where they fall again.**
-`layerModules.lines` 18 770 → 18 883 (+113) and `bootAppLines`
-3 090 → 3 094 (+4) are the spikes behind their knobs and the baseline's
-read:
+The layer modules' lines (+113; +96 as the ledger counts code lines
+since PR #318: `layerModules.codeLines` 14 420 → 14 516) and `bootApp`'s
+(+4: `longestFunction.lines` 2 354 → 2 358) are the spikes behind their
+knobs and the baseline's read:
 
 - `coarse-crowns-layer.ts` (+69: `crownStand`, the record branch of
   `coarseCrownSteps`) — goes in Phase 1, when the build writes the
@@ -733,8 +734,8 @@ read:
   are gone, and the call goes with `dressing-figures.ts`' wrappers in
   `buildDressing`.
 
-So the milestone's counters are read against 18 770 and 3 090, not
-against this phase's.
+So the milestone's counters are read against 14 420 code lines and
+2 354, not against this phase's.
 
 PR #156's own builders (`rail-mesh.ts` …) were not copied: today's
 builders run under Bun as they are (`mesh-kit.ts`), so the measurement

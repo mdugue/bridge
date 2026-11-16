@@ -49,8 +49,11 @@ WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC
 class Recorder:
     """What one step on one tile touched, by absolute path."""
 
-    def __init__(self, roots: list[str]) -> None:
+    def __init__(self, roots: list[str], forbid: tuple[str, ...] = ()) -> None:
         self.roots = tuple(os.path.abspath(r).rstrip(os.sep) + os.sep for r in roots)
+        # files the step must not read (the OSM extract, for a step listed
+        # as reading none): a read raises at once, before the step writes
+        self.forbid = frozenset(os.path.abspath(f) for f in forbid)
         # read: the entry it was read at where that is known already (a
         # memo's), else None (taken when the run is saved)
         self.reads: dict[str, list | None] = {}
@@ -79,6 +82,8 @@ class Recorder:
         p = self._norm(path)
         if p is None:
             return
+        if p in self.forbid:
+            raise ForbiddenRead(f"{p} is read by a step that must not read it")
         if p in self.writes:
             return
         if not os.path.isfile(p):
@@ -209,11 +214,16 @@ def note_read(path) -> None:
     _each(lambda r: r.read(path))
 
 
+class ForbiddenRead(RuntimeError):
+    """A step read a file its recorder forbids (`recording(forbid=…)`)."""
+
+
 @contextmanager
-def recording(roots: list[str]):
-    """Records what the body touches under `roots`."""
+def recording(roots: list[str], forbid: tuple[str, ...] = ()):
+    """Records what the body touches under `roots`; a read of a file in
+    `forbid` raises `ForbiddenRead` there."""
     _install()
-    rec = Recorder(roots)
+    rec = Recorder(roots, forbid)
     _ACTIVE.append(rec)
     try:
         yield rec
@@ -382,7 +392,7 @@ def _module_path(module: str) -> Path | None:
     return PACKAGE / "__init__.py" if module == "bake" else None
 
 
-def _closure(module: str) -> set[str]:
+def closure(module: str) -> set[str]:
     """`module` and every bake module it reaches through its imports."""
     seen: set[str] = set()
     todo = [module]
@@ -434,7 +444,7 @@ def code_hash(module: str) -> str:
     memos, and `VERSION` says when its meaning changes."""
     if module not in _CODE:
         h = hashlib.sha256(f"{VERSION}:{sys.version_info[:2]}".encode())
-        for m in sorted(_closure(module) - {__name__}):
+        for m in sorted(closure(module) - {__name__}):
             p = _module_path(m)
             if p is not None:
                 h.update(m.encode() + b"\0" + p.read_bytes() + b"\0")
@@ -446,7 +456,7 @@ def code_hash(module: str) -> str:
 def dated(module: str) -> bool:
     """Whether the step reads the clock (the cadastre's young trees are
     young by today's year): its key then carries the year."""
-    return any(_reads_clock(p) for m in _closure(module) if (p := _module_path(m)) is not None)
+    return any(_reads_clock(p) for m in closure(module) if (p := _module_path(m)) is not None)
 
 
 def _reads_clock(path: Path) -> bool:

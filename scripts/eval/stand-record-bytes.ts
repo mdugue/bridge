@@ -18,7 +18,7 @@
  *
  * Writes .cache/ledger-dressing/stands.json (with the probe's answers,
  * scripts/eval/stand-record-probe.ts --out, where that was run first);
- * `bun run ledger` folds it into the ledger's `dressingRecorded.stands`.
+ * `bun run ledger` folds it into the ledger's `dressing.recorded.stands`.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -37,7 +37,7 @@ import {
 } from "../../lib/city/stand-record";
 import type { Stand } from "../../lib/city/stand-record";
 import { bucketByCell } from "../../lib/city/tree-placement";
-import { DRESSING_SCRATCH } from "../ledger";
+import { DRESSING_SCRATCH } from "../ledger-dressing";
 import { publishedTile } from "./published-ground";
 
 const TILES = [

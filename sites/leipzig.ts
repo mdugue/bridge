@@ -21,6 +21,7 @@ export const LEIPZIG: Site = {
       "Baumkataster: Stadt Leipzig, Amt für Stadtgrün und Gewässer, dl-de/by-2-0",
   },
   mapillary: { objects: false },
+  bbbike: "Leipzig",
   spawn: "markt",
   tiles: [
     { e: 316, n: 5690 },
