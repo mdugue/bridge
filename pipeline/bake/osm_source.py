@@ -346,6 +346,73 @@ def provenance_entry(record: dict | None, pbf: Path, today: str) -> dict:
     return {"dataAsOf": what, "on": today}
 
 
+def _member_span(text: str, key: str) -> tuple[int, int] | None:
+    """Where the top-level member `key`'s value starts and ends in a JSON
+    object's text (None where there is none)."""
+    depth, i, n = 0, 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == '"':
+            end = i + 1
+            while text[end] != '"':
+                end += 2 if text[end] == "\\" else 1
+            if depth == 1 and json.loads(text[i : end + 1]) == key:
+                j = end + 1
+                while text[j] in " \t\r\n:":
+                    j += 1
+                start, d = j, 0
+                while True:
+                    if text[j] == '"':
+                        j += 1
+                        while text[j] != '"':
+                            j += 2 if text[j] == "\\" else 1
+                    elif text[j] in "{[":
+                        d += 1
+                    elif text[j] in "}]":
+                        d -= 1
+                        if d == 0:
+                            return start, j + 1
+                    j += 1
+            i = end + 1
+            continue
+        depth += c in "{[" and 1 or (-1 if c in "}]" else 0)
+        i += 1
+    return None
+
+
+def with_member(text: str, key: str, value) -> str:
+    """The JSON text with its top-level member `key` replaced by `value`,
+    every other byte as it was (a hand-formatted record stays so);
+    rewritten whole where the member is not there to replace."""
+    span = _member_span(text, key)
+    if span is None:
+        doc = json.loads(text)
+        doc[key] = value
+        return json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
+    dumped = json.dumps(value, indent=2, ensure_ascii=False).replace("\n", "\n  ")
+    return text[: span[0]] + dumped + text[span[1] :]
+
+
+def with_baked(text: str, baked: dict) -> str:
+    """The provenance text with `openstreetmap.baked` set to `baked` and
+    every other byte as it was: only that member is written (added at the
+    end of `openstreetmap` where it is new)."""
+    osm = _member_span(text, "openstreetmap")
+    if osm is None:
+        return with_member(text, "openstreetmap", {"baked": baked})
+    inner = text[osm[0] : osm[1]]
+    span = _member_span(inner, "baked")
+    dumped = json.dumps(baked, indent=2, ensure_ascii=False).replace("\n", "\n    ")
+    if span is not None:
+        inner = inner[: span[0]] + dumped + inner[span[1] :]
+    else:
+        close = inner.rstrip().rindex("}")
+        body = inner[:close].rstrip()
+        sep = "" if body.endswith("{") else ","
+        inner = f'{body}{sep}\n    "baked": {dumped}\n  ' + inner[close:]
+    return text[: osm[0]] + inner + text[osm[1] :]
+
+
 def record_bake(
     provenance: Path, pbf: Path, read: Iterable[tuple[str, str]], without: Iterable[tuple[str, str]]
 ) -> None:
@@ -373,7 +440,7 @@ def record_bake(
         baked.get(step, {}).pop(tile, None)
     osm["baked"] = {s: dict(sorted(t.items())) for s, t in sorted(baked.items()) if t}
     ran = read
-    provenance.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+    provenance.write_text(with_baked(provenance.read_text(), osm["baked"]))
     steps = sorted({s for s, _ in ran})
     if steps:
         print(f"{provenance}: {', '.join(steps)} recorded as baked from {pbf.name}")

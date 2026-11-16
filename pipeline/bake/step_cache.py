@@ -49,8 +49,11 @@ WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_APPEND | os.O_TRUNC
 class Recorder:
     """What one step on one tile touched, by absolute path."""
 
-    def __init__(self, roots: list[str]) -> None:
+    def __init__(self, roots: list[str], forbid: tuple[str, ...] = ()) -> None:
         self.roots = tuple(os.path.abspath(r).rstrip(os.sep) + os.sep for r in roots)
+        # files the step must not read (the OSM extract, for a step listed
+        # as reading none): a read raises at once, before the step writes
+        self.forbid = frozenset(os.path.abspath(f) for f in forbid)
         # read: the entry it was read at where that is known already (a
         # memo's), else None (taken when the run is saved)
         self.reads: dict[str, list | None] = {}
@@ -79,6 +82,8 @@ class Recorder:
         p = self._norm(path)
         if p is None:
             return
+        if p in self.forbid:
+            raise ForbiddenRead(f"{p} is read by a step that must not read it")
         if p in self.writes:
             return
         if not os.path.isfile(p):
@@ -209,11 +214,16 @@ def note_read(path) -> None:
     _each(lambda r: r.read(path))
 
 
+class ForbiddenRead(RuntimeError):
+    """A step read a file its recorder forbids (`recording(forbid=…)`)."""
+
+
 @contextmanager
-def recording(roots: list[str]):
-    """Records what the body touches under `roots`."""
+def recording(roots: list[str], forbid: tuple[str, ...] = ()):
+    """Records what the body touches under `roots`; a read of a file in
+    `forbid` raises `ForbiddenRead` there."""
     _install()
-    rec = Recorder(roots)
+    rec = Recorder(roots, forbid)
     _ACTIVE.append(rec)
     try:
         yield rec

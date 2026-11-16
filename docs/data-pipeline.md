@@ -445,11 +445,14 @@ falls back on BBBike's city extract the site names (`Site.bbbike`):
   would skip, but some rewrite their committed files with less (the OSM
   extract's row in [portability.md](./portability.md#degradation-matrix)).
   `--without-osm` runs them anyway, for a new site or a test; a step
-  that ran without an extract keeps no day in the provenance. Which
+  that wrote its files without an extract keeps no day in the
+  provenance, one that skipped (its committed file stays) keeps the day
+  it had. Which
   steps read OSM is a hand list (`OSM_FREE` in `__main__.py` names the
   seven whose code reaches `osm.py` only for a helper: skyview, roofs,
-  dormers, windows, facades, plinths, lamp-water); a bake fails where a
-  step on that list reads the extract after all. Geofabrik's extract is
+  dormers, windows, facades, plinths, lamp-water); a step on that list
+  that reads the extract after all fails at that read, before it writes
+  and before its run is recorded, so every next bake fails the same way. Geofabrik's extract is
   a Land's or a Regierungsbezirk's, which holds every site configured on
   it, so it gets no coverage check.
 - **Each under its own name, and checked.** BBBike's extract lands as
@@ -457,8 +460,12 @@ falls back on BBBike's city extract the site names (`Site.bbbike`):
   read Geofabrik's where it is there, else the site's BBBike one where it
   covers the site (`osm_source.resolve`). A file whose md5 is not the one
   its record names is not taken; the fetch fetches it again, into a file
-  beside it that takes its place only once complete and checked, so it
-  never deletes an extract it cannot replace. The
+  beside it (`<extract>.new`) that takes its place only once complete
+  and checked, so it never deletes an extract it cannot replace. A `.new`
+  left by a download cut short stays beside the extract until the next
+  download, which starts by removing it; no bake reads it. A record
+  without an md5 (none written by this fetch) checks nothing, and its day
+  is taken as the record says. The
   fallback's URL travels beside the spec (`--osm-fallback`), not in it,
   and is resolved outside `spec.py`, so no step's code key changes with
   it. Which extract a step read is in its cache key all the same
@@ -476,7 +483,8 @@ falls back on BBBike's city extract the site names (`Site.bbbike`):
   a failed bake's too, a `--jobs` bake's whichever tile failed — in the
   site's `provenance.json` as `openstreetmap.baked.<step>.<tile>`:
   `dataAsOf`, the data's day first, then source and URL, and `on`, the
-  bake's day, apart. An extract with no day (placed by hand, or no
+  bake's day, apart; only that member of the file is written, every
+  other byte of the hand-kept record stays as it was. An extract with no day (placed by hand, or no
   `Last-Modified`) is recorded as `unknown`, never as the bake's day:
   after this lands, the first bake on the maintainer's hand-placed
   extracts writes `unknown` for each step it runs (`mapillary` first, the

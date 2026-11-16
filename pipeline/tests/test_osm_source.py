@@ -16,7 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 from bake import __main__ as bake_main
-from bake import osm_source
+from bake import osm_source, step_cache
 from bake.common import Tile
 from bake.spec import parse
 
@@ -199,20 +199,20 @@ def test_a_bake_that_fails_midway_keeps_what_its_finished_tiles_ran(tmp_path, mo
     def run(spec, step, tile, *args):
         if tile.id == "t2":
             raise RuntimeError("tile two fails")
-        return True
+        return True, True
 
     monkeypatch.setattr(bake_main, "recorded_tile", run)
     bake = bake_main.Bake(spec, 1, False, "h", "off")
     with pytest.raises(RuntimeError):
         bake.step("walls", tiles)
-    assert bake.ran == {("walls", "t"): True}
+    assert bake.ran == {("walls", "t"): (True, True)}
 
 
 def _first_tile_fails(spec, step, tile, *args):
     """A step's run in a `--jobs` worker (module level: a pool pickles it)."""
     if tile.id == "t0":
         raise RuntimeError("the first tile fails")
-    return True
+    return True, True
 
 
 def test_with_jobs_the_tiles_that_finished_count_when_the_first_fails(tmp_path, monkeypatch):
@@ -223,7 +223,7 @@ def test_with_jobs_the_tiles_that_finished_count_when_the_first_fails(tmp_path, 
     bake = bake_main.Bake(spec, 3, False, "h", "off")
     with pytest.raises(RuntimeError):
         bake.step("walls", tiles)
-    assert bake.ran == {("walls", "t1"): True, ("walls", "t2"): True}
+    assert bake.ran == {("walls", "t1"): (True, True), ("walls", "t2"): (True, True)}
 
 
 def test_which_steps_read_osm_is_what_they_read_not_what_they_import():
@@ -342,3 +342,58 @@ def test_no_bake_reads_osm_beyond_the_margin_the_coverage_check_uses():
     wide = [s for s in seen if s[2] is not None and s[2] > osm_source.MAX_MARGIN_DEG]
     assert not wide, f"read beyond MAX_MARGIN_DEG — raise it, and the docs' coverage table: {wide}"
     assert max(s[2] for s in seen if s[2] is not None) == osm_source.MAX_MARGIN_DEG
+
+
+def test_a_step_listed_as_reading_no_osm_fails_at_the_read_every_time(tmp_path, monkeypatch):
+    # roofs made to read the extract: it fails at the read, before it
+    # writes and before its run is recorded, so the next bake fails too
+    spec = _spec(tmp_path, 412, 5656)
+    spec.osm.parent.mkdir(parents=True, exist_ok=True)
+    spec.osm.write_bytes(b"x")
+    tile = spec.tiles[0]
+    out = tmp_path / "data" / "roofs_t.geojson"
+
+    def reads_then_writes(step, tile, tiles, research):
+        step_cache.note_read(tile.osm)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text("{}")
+
+    monkeypatch.setattr(bake_main, "run_tile", reads_then_writes)
+    manifest = step_cache.manifest_path(spec.raw, spec.site, "roofs", tile.id)
+    for _ in range(2):
+        with pytest.raises(step_cache.ForbiddenRead):
+            bake_main.recorded_tile(spec, "roofs", tile, False, {"k": 1}, True)
+        assert not out.exists() and not manifest.exists()
+
+
+def test_a_step_that_skipped_without_the_extract_keeps_its_day(tmp_path):
+    spec = _spec(tmp_path, 412, 5656)
+    provenance = spec.data / "provenance.json"
+    provenance.parent.mkdir(parents=True)
+    day = {"dataAsOf": "2026-11-14 (…)", "on": "2026-11-16"}
+    provenance.write_text(json.dumps({"openstreetmap": {"baked": {"walls": {"t": day}}}}))
+    bake = bake_main.Bake(spec, 1, False, "h", "off")
+    # walls ran with --without-osm and skipped: its committed file stays
+    bake.ran = {("walls", "t"): (False, False)}
+    bake_main.record_provenance(spec, bake)
+    assert json.loads(provenance.read_text())["openstreetmap"]["baked"]["walls"]["t"] == day
+    # trees wrote its file without the extract: no day of any extract now
+    bake.ran = {("walls", "t"): (False, True)}
+    bake_main.record_provenance(spec, bake)
+    assert "walls" not in json.loads(provenance.read_text())["openstreetmap"]["baked"]
+
+
+def test_the_bake_writes_only_its_own_member_of_a_hand_formatted_record():
+    text = (
+        '{\n  "tiles": ["a", "b"],\n  "openstreetmap": {\n    "licence": "ODbL",'
+        '\n    "x": [1, 2]\n  },\n  "wikidata": {"dataAsOf": "2026-11-01"}\n}\n'
+    )
+    run = {"lamps": {"a": {"dataAsOf": "2026-11-14 (…)", "on": "2026-11-16"}}}
+    out = osm_source.with_baked(text, run)
+    assert json.loads(out)["openstreetmap"]["baked"] == run
+    kept = [ln for ln in text.splitlines() if "baked" not in ln]
+    # every line of the record is still there as it was, but the one the
+    # member's comma joins
+    assert [ln for ln in kept if ln not in out.splitlines()] == ['    "x": [1, 2]']
+    again = osm_source.with_baked(out, {})
+    assert json.loads(again)["openstreetmap"]["baked"] == {}

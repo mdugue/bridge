@@ -224,26 +224,34 @@ def step_key(step: str, research: bool, spec_hash: str, osm=None) -> dict:
     return key
 
 
-def recorded_tile(spec, step: str, tile, research: bool, key: dict, save: bool) -> bool:
+def recorded_tile(
+    spec, step: str, tile, research: bool, key: dict, save: bool
+) -> tuple[bool, bool]:
     """The step on the tile, its run recorded (step_cache.py) — or, with the
     cache off, its old record dropped. A step that fails says on which
     site, tile and step before the error goes on (in a worker of a
-    `--jobs` run as well): tile 11 of 15 names itself. True when it read
-    the OSM extract (`took_extract`)."""
+    `--jobs` run as well): tile 11 of 15 names itself. Returns whether it
+    read the OSM extract (`took_extract`) and whether it wrote anything.
+    A step listed as reading no OSM (`OSM_FREE`) that reads the extract
+    fails at that read, before it writes and before its run is recorded,
+    so every next bake fails the same way."""
     started = time.perf_counter()
     try:
         manifest = step_cache.manifest_path(spec.raw, spec.site, step, tile.id)
         if not save:
             Path(manifest).unlink(missing_ok=True)
-        with step_cache.recording([os.getcwd(), str(spec.data), str(spec.raw)]) as rec:
+        extract = getattr(tile, "osm", None)
+        forbid = () if reads_osm(step) or extract is None else (str(extract),)
+        roots = [os.getcwd(), str(spec.data), str(spec.raw)]
+        with step_cache.recording(roots, forbid) as rec:
             run_tile(step, tile, spec.tiles, research)
+        read = took_extract(step, tile, rec)
         if save:
             step_cache.save(manifest, key, rec)
-        read = took_extract(step, tile, rec)
         # where a bake's minutes go, tile by tile (the step's own line says
         # what it found)
         print(f"{tile.id}: {step} took {time.perf_counter() - started:.1f} s")
-        return read
+        return read, bool(rec.writes)
     except (Exception, SystemExit) as exc:  # a step's `SystemExit("no OSM extract")` too
         print(f"{spec.site} {tile.id} {step}: {exc}", file=sys.stderr)
         raise
@@ -288,8 +296,8 @@ class Bake:
         self.ledger = step_cache.Ledger(spec.raw, spec.site, list(STEPS))
         self.tiles = {t.id: t for t in spec.tiles}
         # each (step, tile) that ran in this bake and finished → whether
-        # it read the OSM extract
-        self.ran: dict[tuple[str, str], bool] = {}
+        # it read the OSM extract, and whether it wrote anything
+        self.ran: dict[tuple[str, str], tuple[bool, bool]] = {}
 
     def _key(self, step: str) -> dict:
         return step_key(step, self.research, self.spec_hash, self.osm)
@@ -377,7 +385,8 @@ def took_extract(step: str, tile, rec) -> bool:
     """Whether the step's run on the tile read the OSM extract (the index
     notes the extract as read, osm_index.py), from its recorded reads.
     Raises where a step listed as reading none (`OSM_FREE`) read it."""
-    read = tile.osm is not None and os.path.abspath(tile.osm) in rec.reads
+    extract = getattr(tile, "osm", None)
+    read = extract is not None and os.path.abspath(extract) in rec.reads
     if read and not reads_osm(step):
         raise RuntimeError(f"{step} read the OSM extract but is listed in OSM_FREE (__main__.py)")
     return read
@@ -399,6 +408,19 @@ def refuse_without_extract(spec, steps: list[str], without_osm: bool) -> None:
             "some would rewrite committed files with less. `bun run fetch` first, or pass "
             "--without-osm to bake without one."
         )
+
+
+def record_provenance(spec, bake: Bake) -> None:
+    """Which extract each step was baked from on each tile it finished
+    where it read one, a failed bake's too (the Wächter reads the age
+    there); an OSM step that wrote its files without one keeps no day, one
+    that skipped (its committed file stays) keeps the day it had."""
+    osm_source.record_bake(
+        spec.data / "provenance.json",
+        spec.osm,
+        [st for st, (read, _) in bake.ran.items() if read],
+        [st for st, (read, wrote) in bake.ran.items() if not read and wrote and reads_osm(st[0])],
+    )
 
 
 def main() -> None:
@@ -481,15 +503,7 @@ def main() -> None:
         for step in steps:
             bake.step(step, tiles)
     finally:
-        # which extract each step was baked from on each tile it finished
-        # where it read one, a failed bake's too (the Wächter reads the age
-        # there); an OSM step that ran without one keeps no day
-        osm_source.record_bake(
-            spec.data / "provenance.json",
-            spec.osm,
-            [st for st, read in bake.ran.items() if read],
-            [st for st, read in bake.ran.items() if not read and reads_osm(st[0])],
-        )
+        record_provenance(spec, bake)
     if args.step == "all" and not args.tile:
         for step in SITE_STEPS:
             run_site_step(spec, step)
