@@ -563,7 +563,7 @@ export function publishedLedger(
   return {
     files: servedNames.size,
     boot: weight(byClass.boot, "boot"),
-    tiles: weigh([...tileFiles].toSorted(), wire),
+    tiles: weigh([...tileFiles], wire),
     site: weight(byClass.site, "site"),
     server: weight(byClass.server, "server"),
     kinds: Object.fromEntries(
