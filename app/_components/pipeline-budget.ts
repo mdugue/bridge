@@ -138,25 +138,23 @@ function buildOf(object: Drawable, material: Material): string {
  * read in the compiles' turn; the scene keeps drawing meanwhile.
  */
 export async function pipelineBudget(
-  scene: {
-    renderer: object;
-    roots: Object3D[];
-    shadersOf: PostStack["shadersOf"];
-    view: Camera;
-  },
+  renderer: object,
+  stack: Pick<PostStack, "shadersOf">,
+  root: Object3D,
+  view: Camera,
   query: PipelineBudgetQuery = {}
 ): Promise<PipelineBudget> {
-  const limits = deviceLimits(scene.renderer);
+  const limits = deviceLimits(renderer);
   const report: PipelineBudget = { limits, rows: [], unread: 0 };
   if (!pocEnabled) {
     return report;
   }
-  const camera = (scene.view as { isOrthographicCamera?: boolean })
+  const camera = (view as { isOrthographicCamera?: boolean })
     .isOrthographicCamera
     ? "parallel"
     : "perspective";
   const seen = new Set<string>();
-  for (const object of compileRepresentatives(scene.roots) as Drawable[]) {
+  for (const object of compileRepresentatives([root]) as Drawable[]) {
     const { material } = object;
     if (!material || Array.isArray(material)) {
       report.unread += 1;
@@ -167,7 +165,7 @@ export async function pipelineBudget(
       continue;
     }
     seen.add(build);
-    const shaders = await scene.shadersOf(object, scene.view);
+    const shaders = await stack.shadersOf(object, view);
     if (!(shaders?.vertexShader && shaders.fragmentShader)) {
       report.unread += 1;
       continue;

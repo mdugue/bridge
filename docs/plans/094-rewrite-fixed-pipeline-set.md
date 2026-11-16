@@ -492,8 +492,12 @@ The fixtures are the clay's texts, `lib/city/__fixtures__/wgsl-budget/`
 
 **Open after phases 0–1**
 
-- **The ledger** (phase 1 step 4): plan 087's `qa/ledger.json` does not
-  exist yet. When it does, its rows are `getPipelineBudget()`'s.
+- **The ledger** (phase 1 step 4): `qa/ledger.json` (plan 087) is
+  written by a script from the published files, without a browser; the
+  rows here need the headless scene. They go in with phase 2's census,
+  which runs the scene over the whole site anyway. This PR moves one of
+  the ledger's counters: `bootAppLines` 3088 → 3090, the two lines that
+  hand `getPipelineBudget` out of `bootApp`.
 - **`clay|double`, `clay|double|niches` and the clip distances**: the
   Schnitt comes with a cut, and the probe does not read under a held cut
   (above). By the specification a cut's clip distances (up to four)

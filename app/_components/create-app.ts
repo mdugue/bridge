@@ -4437,15 +4437,7 @@ async function bootApp(
       memory: { ...renderer.info.memory },
     }),
     getPipelineBudget: async (query) =>
-      await pipelineBudget(
-        {
-          renderer,
-          roots: [scene],
-          shadersOf: postStack.shadersOf,
-          view: activeCamera(),
-        },
-        query
-      ),
+      await pipelineBudget(renderer, postStack, scene, activeCamera(), query),
     getGpuDebug: () => {
       const cache = stream.tiles.lruCache as unknown as {
         cachedBytes: number;
