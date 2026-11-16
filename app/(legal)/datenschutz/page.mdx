@@ -132,6 +132,7 @@ und liest es nur auf deinem Gerät:
 - deine Wahl zu den Fehlerberichten (`crash-reports.declined`),
 - deinen Schlüssel für *Frag die Stadt*, wenn du einen eingibst
   (`frag-die-stadt`; siehe [Frag die Stadt](#frag-die-stadt)),
+- die Stimme, die du fürs Vorlesen gewählt hast (`vorlese-stimme`),
 - wenn sich die Seite nach einem Grafikfehler selbst neu lädt, bis du den Tab
   schließt: die Stelle, an der du in der Stadt standest, und wann das war –
   damit sie dich dorthin zurückbringt und nicht endlos neu lädt
@@ -238,7 +239,12 @@ Schreib in deine Fragen nichts, was du dem Anbieter nicht anvertrauen
 willst.
 
 *Vorlesen* spricht die Antworten mit einer Stimme deines Geräts; der
-Text dafür verlässt dein Gerät nicht. Solange *Vorlesen* an ist, sagt
+Text dafür verlässt dein Gerät nicht. Manche Browser bieten zusätzlich
+Online-Stimmen an (Chrome die von Google, Edge die von Microsoft); sie
+sind in der Stimmenwahl als *online* markiert. Nur wenn du eine davon
+auswählst, schickt dein Browser den vorgelesenen Text an diesen
+Anbieter, und es gelten dessen Datenschutzhinweise. Deine Wahl merkt
+sich der Browser (`vorlese-stimme`). Solange *Vorlesen* an ist, sagt
 jede Frage dem Anbieter des Sprachmodells, dass die Antwort vorgelesen
 wird, damit sie kurz und ohne Links ausfällt. *Sprechen* nutzt die Spracherkennung deines
 Browsers: Chrome und Safari schicken die Aufnahme dafür an Server von
