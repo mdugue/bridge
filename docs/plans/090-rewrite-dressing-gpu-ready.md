@@ -420,16 +420,35 @@ at a time. Each grant is recorded here by whoever has that word at first
 hand; a grant is never widened to another kind.
 
 - **2026-11-16 — the rails of `rail` and `tram` as a segment table.**
-  Phase 0 measured the rails three ways on the yards' tile (PR #319;
-  wire gzipped / GPU): built at runtime as today 34.7 kB / 7.08 MB;
-  baked triangles as PR #156 did 364 kB / 6.09 MB, on a 3 cm position
-  step; a segment table the GPU expands 72.5 kB / 0.15 MB, on a 4 mm
-  step. The table costs 38 kB more on the wire on that tile than
-  today's files and takes about 6.9 MB off the GPU and the rail
-  builder's time (840 ms on the software renderer) off the scene's
-  thread. Put to the maintainer by the coordinating session and
-  accepted ("Ok", 2026-11-16). It covers the rails' table on any tile;
-  it does not cover ballast, platforms, wires or any other kind.
+  Phase 0 measured the rails' homes on the yards' tile (PR #319, the
+  table under "The rails' home" in *Findings*; wire gzipped / GPU
+  bytes): built at runtime as today 34.7 kB / 7.08 MB; baked triangles
+  as PR #156 did, simplified, 288.1 kB / 2.41 MB; a segment table the
+  GPU expands, simplified alike, 72.5 kB / 0.15 MB. The table is 38 kB
+  more on the wire on that tile than the tracks' GeoJSON it replaces,
+  and takes about 6.9 MB off the GPU and the rails' share of the
+  builders (about 0.3 s under Bun) off the scene's thread. Put to the
+  maintainer by the coordinating session and accepted ("Ok",
+  2026-11-16).
+
+  What it covers: the rails' table *in place of* the tracks' GeoJSON,
+  on any tile, at the yards' rate (38 kB on 47.7 km of track). A tile
+  that costs more than that rate is put to the maintainer again.
+
+  What it does not cover: any other kind (sleepers, ballast, platforms,
+  wires); and a level that ships the table *and* the tracks' GeoJSON.
+  While another reader of those lines (sleepers, catenary, beds,
+  `lampsBy`) still needs the GeoJSON, the table is 72.5 kB more, not
+  38: that state stays behind `?rails=table` and does not reach main.
+
+  The figures were corrected on 2026-11-16, after the review of
+  PR #319 and after the maintainer's word; the maintainer was told. The
+  first wording set the unsimplified triangles (364.4 kB / 6.09 MB)
+  against the simplified table, named the whole rail builder's 840 ms
+  where the rails' share is about 0.3 s, and gave the table's step as
+  4 mm (that is its height; 8 mm in plan) against "3 cm" for the
+  triangles (that is one step of a tile-wide node, not the triangles'
+  error). The 38 kB and the 6.9 MB stand as they were put.
 
 ## Maintenance notes
 
