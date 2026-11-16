@@ -142,3 +142,17 @@ test("the stream's teardown stops the loads still on their way", async () => {
   expect(signals.map((s) => s.aborted)).toEqual([false, true]);
   expect(await pending).toBeNull();
 });
+
+test("the first asker's rank reaches the load", async () => {
+  const ranks: (number | undefined)[] = [];
+  const share = createSharedRasters(
+    async (_key, _signal, rank) => {
+      ranks.push(rank);
+      return await Promise.resolve("raster");
+    },
+    () => {}
+  );
+  await Promise.all([share.acquire("near", 0), share.acquire("near", 900)]);
+  await share.acquire("far", 2400);
+  expect(ranks).toEqual([0, 2400]);
+});

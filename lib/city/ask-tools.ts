@@ -273,12 +273,3 @@ export function sceneToolsFor(layers: readonly AskLayer[]) {
     ...(layers.length > 0 ? [layerToolOf(layers)] : []),
   ];
 }
-
-/** The tools the server runs on the Stadtwissen. */
-export const KNOWLEDGE_TOOLS = [
-  searchTool,
-  nearTool,
-  factsTool,
-  sourcesTool,
-  suggestTool,
-] as const;

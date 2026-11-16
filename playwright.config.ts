@@ -39,7 +39,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  // Software-rendered WebGL is CPU-bound, so parallel viewer pages steal frames
+  // Software-rendered WebGPU is CPU-bound, so parallel viewer pages steal frames
   // from each other: on a 4-core runner two workers roughly halve each spec's
   // frame rate and push both past their timeout. Serial is slower on paper and
   // far faster in practice here.
@@ -48,7 +48,7 @@ export default defineConfig({
   // through the full post stack, so they run in tens of seconds, not
   // milliseconds. The `lite` scene profile (see app/_components/scene-profile.ts)
   // is what keeps that from being minutes: the specs load one tile instead of
-  // four and shadow-map at 512² instead of 3072². This has to be the config
+  // four and shadow-map at 256². This has to be the config
   // default rather than `test.setTimeout()` in the spec: under load the browser
   // context itself can take longer than Playwright's 30 s default to come up,
   // and that happens before any code in the test body runs.

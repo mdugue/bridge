@@ -7,8 +7,7 @@
 
 Every custom look used to be a string patch on three.js shader chunks
 (`onBeforeCompile`), fragile against renames and silent when a patch
-failed. three (r186 then, r187 now) ships `WebGPURenderer` (WebGPU, with
-a WebGL2 backend), TSL node materials, `scene.fogNode` and node
+failed. three (r186 then, r187 now) ships `WebGPURenderer`, TSL node materials, `scene.fogNode` and node
 post-processing. A spike measured WebGPU 40–80 % faster at the same look,
 and found where a naive port stalls: node builds run on the main thread,
 every `InstancedMesh` built separately, and a scene pass nested in the
@@ -18,9 +17,9 @@ kept misbehaving.
 
 ## Decision
 
-- **One renderer:** `WebGPURenderer`, on WebGPU where the browser has it,
-  else its WebGL2 backend (`?gpu=webgl2` forces it). No WebGLRenderer, no
-  GLSL, no second path.
+- **One renderer, one backend:** `WebGPURenderer` on WebGPU. A browser
+  without a WebGPU adapter is told so; three's WebGL2 backend is not
+  used. No WebGLRenderer, no GLSL, no second path.
 - **Every look term is a TSL node** on a node material; a fixed strength is
   a named constant node, anything that moves a shared uniform's `.value`.
   What the sun and the date move lives in `scene-environment.ts`: a layer
@@ -38,8 +37,7 @@ kept misbehaving.
 - A look term is a type-checked expression; there are no chunk names to
   pin.
 - The shadow pass's pipelines for new casters still build in the frame
-  that first draws them, and the WebGL2 backend compiles synchronously —
-  the price of public API. Measure before adding machinery.
+  that first draws them — the price of public API. Measure before adding machinery.
 - Compiles run one at a time (`compileInTurn`), and a frame names the
   targets it draws into: three r187's `compileAsync` keeps its state on
   the renderer around every await inside it, so two in flight resume into
@@ -51,8 +49,12 @@ kept misbehaving.
   zoom in runs.
 - WebGPU's limits bind every material: eight vertex buffers, sixteen
   inter-stage variables (the clay uses all but two). A mesh past either
-  does not draw on WebGPU while WebGL2 still draws it.
-- Headless CI renders through the WebGL2 backend over SwiftShader.
+  does not draw.
+- Headless CI renders WebGPU over SwiftShader's Vulkan (Chrome's own
+  Vulkan on SwiftShader too, or the canvas cannot present), so it meets
+  the same limits as a device.
+- iPhones before iOS 26, Firefox without WebGPU and blocklisted GPUs get
+  the no-WebGPU message (decided 2026-11).
 
 ## Alternatives
 

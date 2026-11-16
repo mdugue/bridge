@@ -10,7 +10,7 @@ import {
   Vector3,
 } from "three/webgpu";
 import type { BufferGeometry, Mesh, Object3D } from "three/webgpu";
-import { PIER_REACH, ringDistanceXz } from "@/lib/city/ask-solids";
+import { PIER_REACH, ringBoxXz, ringDistanceXz } from "@/lib/city/ask-solids";
 import type { AskSolid, Slab } from "@/lib/city/ask-solids";
 import { liveTriangles } from "@/lib/city/city-mesh";
 import { bvhBuilding } from "./bvh-client";
@@ -161,14 +161,10 @@ export function standInDepth(solids: readonly AskSolid[]): number {
     if ("cylinder" in s) {
       depth = Math.max(depth, s.cylinder.r);
     } else if ("prism" in s) {
-      const xs = s.prism.ring.map(([x]) => x);
-      const zs = s.prism.ring.map(([, z]) => z);
+      const box = ringBoxXz(s.prism.ring);
       depth = Math.max(
         depth,
-        Math.hypot(
-          Math.max(...xs) - Math.min(...xs),
-          Math.max(...zs) - Math.min(...zs)
-        ) / 2
+        Math.hypot(box.maxX - box.minX, box.maxZ - box.minZ) / 2
       );
     }
   }

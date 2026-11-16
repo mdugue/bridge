@@ -310,11 +310,15 @@ function inSite(
   let carried = false;
   for (const layer of layers) {
     if (layer.epsg === null || layer.epsg === epsg) {
-      features.push(...layer.features);
+      for (const f of layer.features) {
+        features.push(f);
+      }
     } else if (utmZone(layer.epsg) === null) {
       foreign.push(`${layer.name} (EPSG:${layer.epsg})`);
     } else {
-      features.push(...mapPoints(layer.features, carryOver(layer.epsg, epsg)));
+      for (const f of mapPoints(layer.features, carryOver(layer.epsg, epsg))) {
+        features.push(f);
+      }
       carried = true;
     }
   }

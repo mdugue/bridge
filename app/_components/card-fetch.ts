@@ -3,8 +3,9 @@
  * boot: one fetch per URL for the page's life (the files are
  * content-hashed and immutable, ADR 0024); a failed one is not kept, so
  * the next card tries again. The nameplate (nameplate-ask.ts) reads a
- * tree's facts through the same cache, so card and plate fetch a tile's
- * file once between them and name the tree alike.
+ * tree's facts through the same loader in the scene's worker (ADR 0061),
+ * a cache of its own there — the second fetch of a tile's file comes from
+ * the HTTP cache — so card and plate name the tree alike.
  */
 import type { TreeFactsFile } from "@/lib/city/features";
 

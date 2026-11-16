@@ -1,5 +1,6 @@
 import { SHADOW_RINGS } from "../lib/city/shadow-rings";
 import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import path from "node:path";
 import { Document, WebIO } from "@gltf-transform/core";
 import { expect, test } from "@playwright/test";
@@ -8,6 +9,7 @@ import { fromArrayBuffer } from "geotiff";
 import proj4 from "proj4";
 import type { LookValues } from "../lib/city/look-controls";
 import { utmToLatLng } from "../lib/city/crs";
+import { readFootprints, unpackedFootprints } from "../lib/city/footprint-pack";
 import { EYE_HEIGHT } from "../lib/city/pose";
 import {
   parseSnapshot,
@@ -15,6 +17,7 @@ import {
   snapshotHref,
 } from "../lib/city/snapshot";
 import { tfwToBounds } from "../lib/city/tfw";
+import { SWIFTSHADER_WEBGPU } from "./swiftshader-webgpu";
 
 /**
  * Inner waits scale with the machine. Without a GPU every frame is rendered in
@@ -52,17 +55,9 @@ const DESKTOP_VIEWPORT = { width: 800, height: 600 };
  */
 const SITE_VIEWPORT = { width: 400, height: 300 };
 
-// Software-rendered WebGL so the smoke test also runs on headless CI boxes
-// without a GPU (ANGLE -> SwiftShader).
-test.use({
-  launchOptions: {
-    args: [
-      "--use-gl=angle",
-      "--use-angle=swiftshader",
-      "--enable-unsafe-swiftshader",
-    ],
-  },
-});
+// Software-rendered WebGPU so the smoke test also runs on headless CI boxes
+// without a GPU (swiftshader-webgpu.ts).
+test.use({ launchOptions: SWIFTSHADER_WEBGPU });
 
 /** Page/console errors seen since the last `expectNoErrors`. */
 interface ErrorLog {
@@ -189,11 +184,44 @@ function designBlockObj() {
   ].join("\n");
 }
 
+/** The block as OBJ in a textured material of its MTL (`block.mtl`,
+ *  `map_Kd block.png`). */
+function designBlockObjTextured() {
+  const faces = designBlockObj()
+    .split("\n")
+    .filter((line) => line.startsWith("f "))
+    .map((line) => {
+      const [a, b, c, d] = line.slice(2).split(" ");
+      return `f ${a}/1 ${b}/2 ${c}/3 ${d}/4`;
+    });
+  const obj = [
+    "mtllib block.mtl",
+    ...designBlockObj()
+      .split("\n")
+      .filter((line) => line.startsWith("v ")),
+    "vt 0 0",
+    "vt 1 0",
+    "vt 1 1",
+    "vt 0 1",
+    "usemtl putz",
+    ...faces,
+    "",
+  ].join("\n");
+  const mtl = ["newmtl putz", "Kd 1 1 1", "map_Kd block.png", ""].join("\n");
+  return { obj, mtl };
+}
+
 /**
  * The block as a Rhino .3dm in millimetres, Z up, its earth anchor at
- * (`east`, `north`) in EPSG:25833 and `height` m.
+ * (`east`, `north`) in EPSG:25833 and `height` m; with `dot`, a TextDot
+ * beside it, which three's loader would draw through a `<canvas>`.
  */
-async function designBlock3dm(east: number, north: number, height: number) {
+async function designBlock3dm(
+  east: number,
+  north: number,
+  height: number,
+  dot = false
+) {
   const { default: rhino3dm } = await import("rhino3dm");
   const rhino = await rhino3dm();
   const doc = new rhino.File3dm();
@@ -236,6 +264,9 @@ async function designBlock3dm(east: number, north: number, height: number) {
     data: { attributes: { position: { itemSize: 3, array } } },
   });
   doc.objects().add(mesh, new rhino.ObjectAttributes());
+  if (dot) {
+    doc.objects().addTextDot("A", [0, 0, 0], new rhino.ObjectAttributes());
+  }
   return [...doc.toByteArray()];
 }
 
@@ -401,12 +432,12 @@ async function dataUrl(page: Page, file: string): Promise<string> {
   return `/data${SITE}/${manifest.files[file] ?? file}`;
 }
 
-/** True when the browser has WebGL at all (render assertions need it). */
-async function hasWebGl(page: Page): Promise<boolean> {
-  return await page.evaluate(() => {
-    const probe = document.createElement("canvas");
-    return Boolean(probe.getContext("webgl2") ?? probe.getContext("webgl"));
-  });
+/** True when the browser gives a WebGPU adapter (render assertions need
+ *  it). */
+async function hasWebGpu(page: Page): Promise<boolean> {
+  return await page.evaluate(
+    async () => (await navigator.gpu?.requestAdapter()) != null
+  );
 }
 
 /** Turns one pointer type's drag across the canvas into synthetic events. */
@@ -419,7 +450,7 @@ async function dragAcrossCanvas(
     ({ kind, clientY }) => {
       const canvas = document.querySelector("canvas[data-engine]");
       if (!canvas) {
-        throw new Error("no WebGL canvas");
+        throw new Error("no scene canvas");
       }
       const fire = (type: string, x: number) =>
         canvas.dispatchEvent(
@@ -524,9 +555,11 @@ async function aimAtBuilding(page: Page): Promise<void> {
   // building whose bounding-box centre lies inside it — a perimeter block's
   // centre is its courtyard, and the ray would hit the ground.
   const footprintsRes = await page.request.get(
-    await dataUrl(page, "footprints_33412_5656_2_sn.json")
+    await dataUrl(page, "footprints_33412_5656_2_sn.fpr.gz")
   );
-  const footprints = (await footprintsRes.json()) as [number, number][][][];
+  const pack = readFootprints(gunzipSync(await footprintsRes.body()));
+  expect(pack).not.toBeNull();
+  const footprints = pack ? unpackedFootprints(pack) : [];
   const target = footprints
     .filter((polys) => polys.length === 1)
     .map(([ring]) => {
@@ -548,13 +581,15 @@ async function aimAtBuilding(page: Page): Promise<void> {
   expect(target).toBeDefined();
   const [centreX, centreY] = target?.centre ?? [0, 0];
   await page.evaluate(
-    ([easting, northing]) => {
+    async ([easting, northing]) => {
       const api = window.__poc?.handle;
       if (!api) {
         throw new Error("scene handle not published");
       }
-      // Stand on the ground there to learn its height, then hover above.
+      // Stand on the ground there to learn its height, then hover above
+      // (the scene answers in its own turn: sync reads the pose after it).
       api.teleportTo(easting, northing);
+      await api.sync();
       const ground = api.getCameraState().pos.y - 1.7;
       // EPSG:25833 -> world: x = X - cx, z = -(Y - cy), y = elevation.
       const x = easting - api.offset.cx;
@@ -583,15 +618,15 @@ async function aimAtBuilding(page: Page): Promise<void> {
  * state. `serial` makes that ordering a guarantee and stops a broken boot from
  * being reported five times over.
  *
- * Two groups, two boots: CI runs each on a runner of its own (ci.yml, the e2e
- * matrix, by the `@desktop-hud` and `@desktop-render` tags). SwiftShader
- * leaves no room for a second page on the same cores, so a second runner is
- * the only way to run them side by side, and one more boot (~20 s on a
- * runner) is cheaper than the minute and a half the second group takes.
+ * Three groups, three boots: CI runs each on a runner of its own (ci.yml, the
+ * e2e matrix, by the `@desktop-hud`, `@desktop-render` and `@desktop-look`
+ * tags). SwiftShader leaves no room for a second page on the same cores, so
+ * another runner is the only way to run them side by side, and one more boot
+ * (~20 s on a runner) is cheaper than the minutes each group takes.
  */
 let page: Page;
 let errors: ErrorLog;
-let webgl = false;
+let gpu = false;
 
 /** Boots the shared desktop page for the enclosing describe. */
 function bootDesktopViewer(): void {
@@ -602,13 +637,13 @@ function bootDesktopViewer(): void {
     page = await context.newPage();
     errors = watchErrors(page);
     await page.goto(LITE);
-    webgl = await hasWebGl(page);
-    // On CI the SwiftShader flags above must yield WebGL; a silent skip
+    gpu = await hasWebGpu(page);
+    // On CI the SwiftShader flags above must yield WebGPU; a silent skip
     // would let a Chromium/Playwright bump turn the whole suite green.
     if (process.env.CI) {
-      expect(webgl).toBe(true);
+      expect(gpu).toBe(true);
     }
-    if (!webgl) {
+    if (!gpu) {
       return;
     }
     // Debug hook (dev/test builds only) is set after the first successful load.
@@ -620,13 +655,13 @@ function bootDesktopViewer(): void {
   });
 
   test.beforeEach(() => {
-    // Conditional runtime skip — render assertions are meaningless without WebGL.
-    test.skip(!webgl, "WebGL is genuinely unavailable in this environment");
+    // Conditional runtime skip — render assertions are meaningless without WebGPU.
+    test.skip(!gpu, "WebGPU is genuinely unavailable in this environment");
   });
 
   test.afterAll(async () => {
     // Errors logged after the last test's own check must not go unnoticed.
-    if (webgl) {
+    if (gpu) {
       expectNoErrors(errors);
     }
     await page?.context().close();
@@ -638,7 +673,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
   bootDesktopViewer();
 
   test("the renderer draws, with shadows, and every scene layer is built on the primary tile", async () => {
-    // Renderer booted -> exactly one sized WebGL canvas (the minimap adds
+    // Renderer booted -> exactly one sized scene canvas (the minimap adds
     // 2D canvases of its own; three.js tags its canvas with data-engine).
     const canvas = page.locator("canvas[data-engine]");
     await expect(canvas).toBeVisible({ timeout: slow(60_000) });
@@ -725,8 +760,10 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     });
     // The click glides there: where it lands is the glide's target (the
     // glide itself takes dozens of software-rendered frames).
-    const pose = await page.evaluate(() => {
+    const pose = await page.evaluate(async () => {
       const handle = window.__poc?.handle;
+      // the click reached the scene: its glide is in the mirror
+      await handle?.sync();
       return handle?.getGlideTarget() ?? handle?.getPose();
     });
     // 50 m on a 2 km tile — loose enough for the rounding a click position
@@ -742,11 +779,12 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // no building, stair or deck lifts the camera here (ADR 0032), so its
     // height is the measured ground plus the eye.
     const at = { x: 412_060, y: 5_656_745 };
-    const state = await page.evaluate(({ x, y }) => {
+    const state = await page.evaluate(async ({ x, y }) => {
       const api = window.__poc?.handle;
       // On foot (the spawn view is aerial): the teleport then stands there.
       api?.setMovementMode("walk");
       api?.teleportTo(x, y);
+      await api?.sync();
       return api?.getCameraState();
     }, at);
     expect(state?.mode).toBe("walk");
@@ -856,9 +894,11 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       undefined,
       { timeout: slow(45_000) }
     );
-    const state = await page.evaluate(() =>
-      window.__poc?.handle?.getCameraState()
-    );
+    const state = await page.evaluate(async () => {
+      // the HUD said it once it asked: the scene's pose follows in its turn
+      await window.__poc?.handle?.sync();
+      return window.__poc?.handle?.getCameraState();
+    });
     expect(state?.mode).toBe("walk");
     expect(Math.abs((state?.epsg.x ?? 0) - target.x)).toBeLessThan(1);
     expect(Math.abs((state?.epsg.y ?? 0) - target.y)).toBeLessThan(1);
@@ -1007,9 +1047,11 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       () => window.__poc?.handle?.getPose().heading ?? 0
     );
     await dragAcrossCanvas(page, "mouse", 300);
-    const headingAfter = await page.evaluate(
-      () => window.__poc?.handle?.getPose().heading ?? 0
-    );
+    const headingAfter = await page.evaluate(async () => {
+      // the drag's turns reached the scene
+      await window.__poc?.handle?.sync();
+      return window.__poc?.handle?.getPose().heading ?? 0;
+    });
     expect(Math.abs(headingAfter - headingBefore)).toBeGreaterThan(0.2);
     expectNoErrors(errors);
   });
@@ -1391,12 +1433,12 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       // I asks under the pointer, not at the centre: find a spot off the
       // middle (clear of the panel on the right) where another building
       // stands, rest the pointer there and press I.
-      const off = await page.evaluate(() => {
+      const off = await page.evaluate(async () => {
         const h = window.__poc?.handle;
         if (!h) {
           throw new Error("scene handle not published");
         }
-        const centre = h.inquireAt();
+        const centre = await h.inquireAt();
         const same =
           centre?.kind === "building"
             ? new Set(centre.tree.map((o) => `${centre.tile}:${o.objectIndex}`))
@@ -1411,7 +1453,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
           [0.25, 0.35],
         ];
         for (const [x, y] of spots) {
-          const asked = h.inquireAt({ x, y });
+          const asked = await h.inquireAt({ x, y });
           if (
             asked?.kind === "building" &&
             !same.has(`${asked.tile}:${asked.picked.objectIndex}`)
@@ -1422,6 +1464,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
         return null;
       });
       expect(off).not.toBeNull();
+      // (the search asked, so its card is up: only a mounted card hears
+      // the key)
+      await expect(card).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
       await page.mouse.move(
@@ -1462,8 +1507,8 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     });
     // the nameplate: a building with a name or an address is named in
     // the scene while the question stands (present, never judged)
-    const named = await page.evaluate(() => {
-      const asked = window.__poc?.handle?.inquireAt();
+    const named = await page.evaluate(async () => {
+      const asked = await window.__poc?.handle?.inquireAt();
       return (
         asked?.kind === "building" &&
         asked.tree.some((o) => o.facts.addr !== "" || o.facts.name !== "")
@@ -1484,8 +1529,13 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await page.keyboard.press("Escape");
       await expect(page.getByTestId("inquiry-card")).toBeHidden();
     });
+    // the mirror after the Escape's call has reached the scene
     expect(
-      await page.evaluate(() => window.__poc?.handle?.nameplateShown() ?? null)
+      await page.evaluate(async () => {
+        const handle = window.__poc?.handle;
+        await handle?.sync();
+        return handle?.nameplateShown() ?? null;
+      })
     ).toBeNull();
     expectNoErrors(errors);
   });
@@ -1510,12 +1560,13 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(tree).toBeDefined();
     const [east, north] = tree?.geometry.coordinates ?? [0, 0];
     await page.evaluate(
-      ([e, n]) => {
+      async ([e, n]) => {
         const api = window.__poc?.handle;
         if (!api) {
           throw new Error("scene handle not published");
         }
         api.teleportTo(e, n);
+        await api.sync();
         const ground = api.getCameraState().pos.y - 1.7;
         const x = e - api.offset.cx;
         const z = -(n - api.offset.cy);
@@ -1525,7 +1576,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       [east, north]
     );
     await waitForFrames(page, 1);
-    const asked = await page.evaluate(() => window.__poc?.handle?.inquireAt());
+    const asked = await page.evaluate(
+      async () => await window.__poc?.handle?.inquireAt()
+    );
     expect(asked?.kind).toBe("tree");
     await withFramesHeld(page, async () => {
       const card = page.getByTestId("inquiry-card");
@@ -1614,7 +1667,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       async (bytes) => {
         const design = window.__poc?.handle?.design;
         await design?.load([new File([new Uint8Array(bytes)], "block.glb")]);
-        return design?.status() ?? null;
+        return (await design?.status()) ?? null;
       },
       [...glb]
     );
@@ -1629,7 +1682,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       { timeout: slow(30_000) }
     );
     await waitForFrames(page, 1);
-    await page.evaluate(() => window.__poc?.handle?.design.remove());
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
     await page.waitForFunction(
       (n) => (window.__poc?.stats?.layerStats.city.triangles ?? 0) === n,
       before,
@@ -1646,7 +1701,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     const status = await page.evaluate(async (text) => {
       const design = window.__poc?.handle?.design;
       await design?.load([new File([text], "block.ifc")]);
-      return design?.status() ?? null;
+      return (await design?.status()) ?? null;
     }, ifc);
     expect(status?.source).toBe("file");
     expect(status?.note).toContain("IfcMapConversion");
@@ -1667,7 +1722,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       api.flyTo({ x, y: 140, z: z + 90 }, { x, y: 122, z });
     });
     await waitForFrames(page, 1);
-    const asked = await page.evaluate(() => window.__poc?.handle?.inquireAt());
+    const asked = await page.evaluate(
+      async () => await window.__poc?.handle?.inquireAt()
+    );
     expect(asked?.kind).toBe("design");
     await withFramesHeld(page, async () => {
       const card = page.getByTestId("inquiry-card");
@@ -1678,7 +1735,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
     });
-    await page.evaluate(() => window.__poc?.handle?.design.remove());
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
     expectNoErrors(errors);
   });
 
@@ -1686,16 +1745,16 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     const obj = await page.evaluate(async (text) => {
       const design = window.__poc?.handle?.design;
       await design?.load([new File([text], "block.obj")]);
-      return design?.status() ?? null;
+      return (await design?.status()) ?? null;
     }, designBlockObj());
     expect(obj?.source).toBe("here");
     expect(obj?.triangles).toBe(12);
     expect(obj?.size).toEqual([40, 30, 20]);
     // read in centimetres it shrinks about its foot, which stays
-    const cm = await page.evaluate(() => {
+    const cm = await page.evaluate(async () => {
       const design = window.__poc?.handle?.design;
-      design?.setScale({ unit: "cm", factor: 1 });
-      return design?.status() ?? null;
+      await design?.setScale({ unit: "cm", factor: 1 });
+      return (await design?.status()) ?? null;
     });
     expect(cm?.scale).toEqual({ unit: "cm", factor: 1 });
     expect(cm?.size[2]).toBeCloseTo(0.2, 6);
@@ -1706,7 +1765,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       async (bytes) => {
         const design = window.__poc?.handle?.design;
         await design?.load([new File([new Uint8Array(bytes)], "block.3dm")]);
-        return design?.status() ?? null;
+        return (await design?.status()) ?? null;
       },
       await designBlock3dm(412_300, 5_657_420, 112)
     );
@@ -1715,7 +1774,58 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(rhino?.placement.north).toBeCloseTo(5_657_420, 1);
     expect(rhino?.placement.base).toBeCloseTo(112, 3);
     expect(rhino?.hidden ?? 0).toBeGreaterThan(0);
-    await page.evaluate(() => window.__poc?.handle?.design.remove());
+    expect(rhino?.note).not.toContain("Textpunkte");
+    // a TextDot is taken out in the Rhino worker (the prelude), the rest loads
+    const dotted = await page.evaluate(
+      async (bytes) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([new Uint8Array(bytes)], "dot.3dm")]);
+        return (await design?.status()) ?? null;
+      },
+      await designBlock3dm(412_300, 5_657_420, 112, true)
+    );
+    expect(dotted?.note).toContain("Geo-Ankerpunkt");
+    expect(dotted?.note).toContain("Textpunkte");
+    expect(dotted?.triangles).toBe(rhino?.triangles);
+    expect(dotted?.size).toEqual(rhino?.size);
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
+    expectNoErrors(errors);
+  });
+
+  test("an OBJ's textures decode in the scene's worker", async () => {
+    // three's TextureLoader makes an <img>, which the worker has not
+    const plain = await page.evaluate(async (text) => {
+      const design = window.__poc?.handle?.design;
+      await design?.load([new File([text], "block.obj")]);
+      return (await design?.status()) ?? null;
+    }, designBlockObj());
+    const textured = await page.evaluate(async ({ obj, mtl }) => {
+      const canvas = new OffscreenCanvas(64, 64);
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = "#c86450";
+        ctx.fillRect(0, 0, 64, 64);
+      }
+      const png = await canvas.convertToBlob({ type: "image/png" });
+      const design = window.__poc?.handle?.design;
+      await design?.load([
+        new File([obj], "block.obj"),
+        new File([mtl], "block.mtl"),
+        new File([png], "block.png"),
+      ]);
+      return (await design?.status()) ?? null;
+    }, designBlockObjTextured());
+    expect(textured?.triangles).toBe(12);
+    expect(textured?.note).toBeNull();
+    expect(textured?.hasLooks).toBe(true);
+    expect(textured?.texturesDropped).toBe(false);
+    // the decoded texture is weighed with it
+    expect(textured?.bytes ?? 0).toBeGreaterThan(plain?.bytes ?? 0);
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
     expectNoErrors(errors);
   });
 
@@ -1726,7 +1836,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       async (text) => {
         const design = window.__poc?.handle?.design;
         await design?.load([new File([text], "plan.dxf")]);
-        return design?.status() ?? null;
+        return (await design?.status()) ?? null;
       },
       designPlanDxf([412_300, 5_657_420])
     );
@@ -1742,13 +1852,15 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       async (bytes) => {
         const design = window.__poc?.handle?.design;
         await design?.load([new File([new Uint8Array(bytes)], "plan.gpkg")]);
-        return design?.status() ?? null;
+        return (await design?.status()) ?? null;
       },
       await designPlanGpkg([412_300, 5_657_420])
     );
     expect(gpkg?.note).toContain("Rasen");
     expect(gpkg?.placement.north).toBeCloseTo(5_657_400, 0);
-    await page.evaluate(() => window.__poc?.handle?.design.remove());
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
     expectNoErrors(errors);
   });
 
@@ -1779,6 +1891,16 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(trianglesAfter).toBeLessThan(trianglesBefore);
     expectNoErrors(errors);
   });
+});
+
+/**
+ * The look controls and the motion-keyed quality, on a page of their own:
+ * CI runs them, with the view link below, on a runner of their own (the
+ * `@desktop-look` shard), since the rendering group above had grown to
+ * twice the other shards. Each sets the pose and the time it needs itself.
+ */
+test.describe("desktop viewer, look", { tag: "@desktop-look" }, () => {
+  bootDesktopViewer();
 
   /**
    * The style/post controls, each bound to real rendered frames: a shader that
@@ -1832,22 +1954,36 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     }
     // Night (scene-environment.ts): the lamps' halos and pools are drawn
     // by their shared materials after dark only, and compiled ahead by day
-    // all the same — a first night builds nothing inside a frame.
-    const builtBefore = await page.evaluate(() => {
+    // all the same — a first night builds nothing inside a frame. On
+    // SwiftShader a tile shows after its compile wait while its compile
+    // still waits for its turn: the night is asked once they have all run.
+    await expect
+      .poll(
+        async () =>
+          await page.evaluate(async () => {
+            const info = await window.__poc?.handle?.getRenderInfo();
+            return info?.compilesQueued ?? -1;
+          }),
+        { timeout: slow(120_000) }
+      )
+      .toBe(0);
+    const builtBefore = await page.evaluate(async () => {
       const handle = window.__poc?.handle;
       if (!handle) {
         throw new Error("handle not published");
       }
-      const before = handle.getRenderInfo().framedBuilds.other;
+      const info = await handle.getRenderInfo();
+      const before = info.framedBuilds.other;
       handle.setSun(new Date("2026-07-15T23:00:00.000Z"));
       return before;
     });
     let builtAfter: number;
     try {
       await waitForFrames(page, 2);
-      builtAfter = await page.evaluate(
-        () => window.__poc?.handle?.getRenderInfo().framedBuilds.other ?? -1
-      );
+      builtAfter = await page.evaluate(async () => {
+        const info = await window.__poc?.handle?.getRenderInfo();
+        return info?.framedBuilds.other ?? -1;
+      });
     } finally {
       // back to day for the tests after, whether or not the night held;
       // its shadow redraw lands here, not in theirs
@@ -1866,10 +2002,10 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // every step). Asserted through __poc.regressed rather than pixels — the
     // pass's visual delta is exactly what SwiftShader renders least like a
     // GPU.
-    // On foot: the specs before leave the camera flying, 50 m over these
-    // frames, where the finest ring rightly redraws. What they asked of the
-    // rings is drawn first, one a frame (the last of them ends with a
-    // `setSun`, which asks all four).
+    // On foot: a camera left flying, 50 m over these frames, rightly
+    // redraws the finest ring. What the test before asked of the rings is
+    // drawn first, one a frame (it ends with a `setSun`, which asks all
+    // four).
     await page.evaluate(() => {
       const handle = window.__poc?.handle;
       const state = handle?.getCameraState();
@@ -1915,8 +2051,8 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
  * the link is read at the boot. A committed QA view on the spawn tile
  * (the lite profile streams that one) is the link.
  */
-test.describe("a view link", { tag: "@desktop-render" }, () => {
-  test("opens the page at the linked view, and Link kopieren writes one", async ({
+test.describe("a view link", { tag: "@desktop-look" }, () => {
+  test("opens the page at the linked view, Link kopieren writes one, and leaving ends the scene", async ({
     browser,
   }) => {
     const parsed = parseSnapshot(
@@ -1934,11 +2070,11 @@ test.describe("a view link", { tag: "@desktop-render" }, () => {
     const linkPage = await context.newPage();
     const linkErrors = watchErrors(linkPage);
     await linkPage.goto(snapshotHref(LITE, linked));
-    const gl = await hasWebGl(linkPage);
+    const gl = await hasWebGpu(linkPage);
     if (process.env.CI) {
       expect(gl).toBe(true);
     }
-    test.skip(!gl, "WebGL is genuinely unavailable in this environment");
+    test.skip(!gl, "WebGPU is genuinely unavailable in this environment");
     await linkPage.waitForFunction(
       () => window.__poc?.ready === true,
       undefined,
@@ -1979,6 +2115,43 @@ test.describe("a view link", { tag: "@desktop-render" }, () => {
       expect(back.snapshot.date).toBe(linked.date);
     }
     expectNoErrors(linkErrors);
+
+    // Leaving for the start page ends the scene: its teardown answers well
+    // inside the page's cut-off (scene-client.ts WORKER_TEARDOWN_MS, 3 s),
+    // not after three waited for the GPU's whole queue, and the start page
+    // takes a click.
+    await linkPage.evaluate(() => {
+      const handle = window.__poc?.handle;
+      if (!handle) {
+        return;
+      }
+      const dispose = handle.dispose.bind(handle);
+      handle.dispose = async () => {
+        const started = performance.now();
+        await dispose();
+        (window as { leftMs?: number }).leftMs = performance.now() - started;
+      };
+    });
+    await linkPage.getByRole("link", { name: "Andere Stadt wählen" }).click();
+    await linkPage.waitForURL((at) => at.pathname === "/");
+    const left = await linkPage.waitForFunction(
+      () => (window as { leftMs?: number }).leftMs,
+      undefined,
+      { timeout: slow(10_000) }
+    );
+    const leftMs = await left.jsonValue();
+    expect(leftMs).toBeLessThan(2000);
+    // nothing failed on the way out but the timestamps' read-back three
+    // logs once the device it waited on is gone (docs/rendering.md,
+    // "Workarounds for upstream bugs")
+    expect(linkErrors.page).toEqual([]);
+    expect(
+      linkErrors.console.filter(
+        (line) => !line.includes("THREE.Error resolving queries")
+      )
+    ).toEqual([]);
+    await linkPage.locator(`a[href="${SITE}"]`).first().click();
+    await linkPage.waitForURL((at) => at.pathname === SITE);
     await context.close();
   });
 });
@@ -2000,12 +2173,12 @@ test.describe("mobile", { tag: "@phone" }, () => {
     const phoneErrors = watchErrors(phonePage);
 
     await phonePage.goto(LITE);
-    const phoneGl = await hasWebGl(phonePage);
+    const phoneGl = await hasWebGpu(phonePage);
     if (process.env.CI) {
       expect(phoneGl).toBe(true);
     }
-    // Conditional runtime skip — render assertions are meaningless without WebGL.
-    test.skip(!phoneGl, "WebGL is genuinely unavailable in this environment");
+    // Conditional runtime skip — render assertions are meaningless without WebGPU.
+    test.skip(!phoneGl, "WebGPU is genuinely unavailable in this environment");
     await phonePage.waitForFunction(
       () => window.__poc?.ready === true,
       undefined,
@@ -2057,7 +2230,11 @@ test.describe("mobile", { tag: "@phone" }, () => {
       // a hidden toolbar has no box, and two missing boxes compare equal
       expect(flyingBox).not.toBeNull();
       await flyButton.tap();
-      await expect(phonePage.getByTestId("altitude-stick")).toHaveCount(0);
+      // the mode is the scene's: it answers once its turn comes, which a
+      // software-rendered compile in the worker can hold for seconds
+      await expect(phonePage.getByTestId("altitude-stick")).toHaveCount(0, {
+        timeout: slow(30_000),
+      });
       // The stick sits above the toolbar, so the toolbar doesn't jump.
       const walkingBox = await toolbar.boundingBox();
       expect(walkingBox?.y).toBe(flyingBox?.y);
@@ -2083,9 +2260,11 @@ test.describe("mobile", { tag: "@phone" }, () => {
       () => window.__poc?.handle?.getPose().heading ?? 0
     );
     await dragAcrossCanvas(phonePage, "touch", 400);
-    const headingAfter = await phonePage.evaluate(
-      () => window.__poc?.handle?.getPose().heading ?? 0
-    );
+    const headingAfter = await phonePage.evaluate(async () => {
+      // the drag's turns reached the scene
+      await window.__poc?.handle?.sync();
+      return window.__poc?.handle?.getPose().heading ?? 0;
+    });
     expect(Math.abs(headingAfter - headingBefore)).toBeGreaterThan(0.2);
 
     // Double-tap on the ground ahead travels there. Synthetic events with
@@ -2097,7 +2276,7 @@ test.describe("mobile", { tag: "@phone" }, () => {
     await phonePage.evaluate(() => {
       const canvas = document.querySelector("canvas[data-engine]");
       if (!canvas) {
-        throw new Error("no WebGL canvas");
+        throw new Error("no scene canvas");
       }
       const fire = (type: string, pointerId: number) =>
         canvas.dispatchEvent(
@@ -2140,7 +2319,7 @@ test.describe("mobile", { tag: "@phone" }, () => {
       await phonePage.evaluate((event) => {
         const canvas = document.querySelector("canvas[data-engine]");
         if (!canvas) {
-          throw new Error("no WebGL canvas");
+          throw new Error("no scene canvas");
         }
         const rect = canvas.getBoundingClientRect();
         canvas.dispatchEvent(
@@ -2204,8 +2383,8 @@ test.describe("mobile", { tag: "@phone" }, () => {
  * every tile in the tileset (scene-profile.ts). The specs above stream the
  * spawn tile alone, so this is the one that walks the multi-tile path — tile
  * events arriving while the spawn tile boots, dressings queued for several
- * tiles, the site-wide minimap footprints. A load event that throws there
- * leaves `ready` false forever, which is exactly what this waits on.
+ * tiles. A load event that throws there leaves `ready` false forever,
+ * which is exactly what this waits on.
  */
 test.describe("whole site streamed", () => {
   // A retry would start the same long boot again and run the job past
@@ -2233,11 +2412,14 @@ test.describe("whole site streamed", () => {
     const tilesErrors = watchErrors(tilesPage);
     try {
       await tilesPage.goto(`${LITE}&block=1`);
-      const tilesGl = await hasWebGl(tilesPage);
+      const tilesGl = await hasWebGpu(tilesPage);
       if (process.env.CI) {
         expect(tilesGl).toBe(true);
       }
-      test.skip(!tilesGl, "WebGL is genuinely unavailable in this environment");
+      test.skip(
+        !tilesGl,
+        "WebGPU is genuinely unavailable in this environment"
+      );
 
       await tilesPage.waitForFunction(
         () => window.__poc?.ready === true,
@@ -2255,19 +2437,6 @@ test.describe("whole site streamed", () => {
       expect(stats?.city.meshes ?? 0).toBeGreaterThan(1);
       expect(stats?.vegetation.instances ?? 0).toBeGreaterThan(1000);
 
-      // The minimap names every site tile's footprints up front, streamed
-      // or not: some lie west of the spawn tile (412 000 E).
-      const westmost = await tilesPage.evaluate(() => {
-        const polys = window.__poc?.handle?.getFootprints() ?? [];
-        let minX = Number.POSITIVE_INFINITY;
-        for (const poly of polys) {
-          for (const [x] of poly.pts) {
-            minX = Math.min(minX, x);
-          }
-        }
-        return minX;
-      });
-      expect(westmost).toBeLessThan(412_000);
       expectNoErrors(tilesErrors);
     } finally {
       await context.close();

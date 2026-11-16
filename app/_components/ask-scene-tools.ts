@@ -16,8 +16,7 @@ import {
   whereTool,
 } from "@/lib/city/ask-tools";
 import type { TimeChange } from "@/lib/city/ask-tools";
-import { frameTargets, streetView } from "@/lib/city/ask-view";
-import type { AskTarget, FrameContext } from "@/lib/city/ask-view";
+import type { AskTarget, Framed } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -44,9 +43,19 @@ export interface AskScene {
   /** selects what stands at each place (site CRS), as Shift+click does:
    *  the places an answer shows */
   select: (places: readonly { r?: number; x: number; y: number }[]) => void;
-  /** what the framing reads of the moment: the screen, the sun, the
-   *  loaded buildings' sight lines (lib/city/ask-view.ts) */
-  frame: () => Omit<FrameContext, "from">;
+  /** the view of `places` as the scene frames it (lib/city/ask-view.ts:
+   *  its canvas, the sun, the loaded buildings' sight lines), from where
+   *  the camera stands; null while there is no scene */
+  frameView: (
+    places: readonly AskTarget[],
+    from: { x: number; y: number } | null
+  ) => Promise<Framed | null>;
+  /** on foot before `place`, on the side of `from`, as the scene stands
+   *  it on its terrain; null while there is no scene */
+  streetView: (
+    place: AskTarget,
+    from: { x: number; y: number } | null
+  ) => Promise<ViewpointGeometry | null>;
   /** what the first questions read of the moment (plan 085) */
   moment: () => StarterContext;
   /** the player's pose, mode, time, style and layers, for the model */
@@ -69,7 +78,7 @@ export function sceneTools(scene: AskScene) {
     lookTool.client(
       async (_input, context) => await scene.look(context?.abortSignal)
     ),
-    showTool.client((input) => showPlaces(scene, input)),
+    showTool.client(async (input) => await showPlaces(scene, input)),
     timeTool.client(({ uhrzeit, datum }) => {
       const problem = timeProblem({ uhrzeit, datum });
       return problem
@@ -112,10 +121,10 @@ export const AERIAL_REACH = 900;
  * place with `alle` (spread too far, their cards are a click apart in
  * the selection), the first alone without.
  */
-export function showPlaces(
+export async function showPlaces(
   scene: AskScene,
   ask: { alle?: boolean; aus_der_luft?: boolean; ziele: readonly AskPlace[] }
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const places = ask.ziele
     .filter((p) => scene.within(p.x, p.y))
     .slice(0, SHOW_TARGETS);
@@ -127,12 +136,12 @@ export function showPlaces(
   const all = ask.alle !== false && places.length > 1;
   scene.select(all ? places : [first]);
   if (ask.aus_der_luft === false) {
-    return scene.show(streetView(first, from ?? first, scene.frame().groundAt))
+    const street = await scene.streetView(first, from);
+    return street && scene.show(street)
       ? { ok: true, gezeigt: [first.name] }
       : LOADING;
   }
-  const context = { ...scene.frame(), from };
-  const framed = all ? frameTargets(places, context) : null;
+  const framed = all ? await scene.frameView(places, from) : null;
   if (framed && framed.distance <= AERIAL_REACH) {
     return scene.show(framed.view, framed.ground)
       ? {
@@ -142,8 +151,8 @@ export function showPlaces(
         }
       : LOADING;
   }
-  const alone = frameTargets([first], context);
-  if (!scene.show(alone.view, alone.ground)) {
+  const alone = await scene.frameView([first], from);
+  if (!(alone && scene.show(alone.view, alone.ground))) {
     return LOADING;
   }
   return {

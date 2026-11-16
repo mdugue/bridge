@@ -50,14 +50,15 @@ async function paint(classRaster: string) {
 }
 
 /**
- * The block as a WebP `size` px wide: `rasters[i]` is the class raster of
- * `cells[i]` (any edge; each is scaled to its cell).
+ * The block's land cover in the palette, about `size` px wide, as raw RGB:
+ * `rasters[i]` is the class raster of `cells[i]` (any edge; each is scaled
+ * to its cell).
  */
-export async function bakeWissenHero(
+export async function landcoverBlock(
   cells: readonly TileCell[],
   rasters: readonly string[],
   size: number
-): Promise<Buffer> {
+): Promise<{ data: Buffer; height: number; width: number }> {
   const grid = gridOf(cells);
   const cols = Math.max(...grid.map((g) => g.col)) + 1;
   const rows = Math.max(...grid.map((g) => g.row)) + 1;
@@ -72,7 +73,7 @@ export async function bakeWissenHero(
       return { input, left: col * cell, top: row * cell };
     })
   );
-  return await sharp({
+  const { data, info } = await sharp({
     create: {
       width: cell * cols,
       height: cell * rows,
@@ -81,6 +82,21 @@ export async function bakeWissenHero(
     },
   })
     .composite(layers)
+    // three bytes a pixel, whatever the layers brought
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  return { data, height: info.height, width: info.width };
+}
+
+/** The block as a WebP `size` px wide (`landcoverBlock`). */
+export async function bakeWissenHero(
+  cells: readonly TileCell[],
+  rasters: readonly string[],
+  size: number
+): Promise<Buffer> {
+  const { data, height, width } = await landcoverBlock(cells, rasters, size);
+  return await sharp(data, { raw: { width, height, channels: 3 } })
     .webp({ quality: 80, effort: 5 })
     .toBuffer();
 }

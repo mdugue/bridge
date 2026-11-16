@@ -17,16 +17,12 @@
  * 404 there is a deploy fault rather than an absence.) An abort is never
  * swallowed — the doomed instance (StrictMode remount, navigation away)
  * must stop building geometry from partial data, and the caller's
- * ensureAlive() relies on the rejection. REQUIRED artifacts (the tileset)
- * throw instead, after the boot's longer wait for the network.
+ * ensureAlive() relies on the rejection. REQUIRED artifacts (the tileset:
+ * boot-ahead.ts) throw instead, after the boot's longer wait for the network.
  */
 
 import type { FeatureCollection } from "@/lib/city/features";
-import {
-  BOOT_NET_WAIT_MS,
-  OPTIONAL_FETCH_BUDGET_MS,
-  withRetry,
-} from "@/lib/city/fetch-retry";
+import { OPTIONAL_FETCH_BUDGET_MS, withRetry } from "@/lib/city/fetch-retry";
 import { PAGE_RETRY_ENV, reportRetry } from "./net-gate";
 
 /** True for the DOMException a fetch throws when its AbortSignal fires. */
@@ -355,20 +351,4 @@ export async function fetchFeaturesFrom<T>(
     urls.map(async (url) => await fetchFeatures<T>(url, signal))
   );
   return lists.flat();
-}
-
-/**
- * Fetches a REQUIRED JSON artifact: retried while the network is down for
- * up to the boot's wait (ms of a visible page), then — or on any other
- * failure — it throws (a give-up's message starts "network: ").
- */
-export async function fetchRequiredJson<T>(
-  url: string,
-  signal?: AbortSignal
-): Promise<T> {
-  const got = await fetchBytes(url, { signal, budgetMs: BOOT_NET_WAIT_MS });
-  if (!got.ok) {
-    throw new Error(`Failed to fetch ${url}: HTTP ${got.status}`);
-  }
-  return parseJson(got.bytes) as T;
 }

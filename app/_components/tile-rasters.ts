@@ -62,6 +62,17 @@ export interface IndexedRaster {
   table: DataTexture;
 }
 
+/** The kinds with a twin for a level far from the camera (their rows'
+ *  `far`). */
+export const REACH_KINDS = [
+  "surface",
+  "edges",
+  "sport",
+  "markings",
+  "colonies",
+] as const satisfies readonly RasterKind[];
+export type ReachKind = (typeof REACH_KINDS)[number];
+
 /** What a content root reads, by kind (one row each in `RASTER_KINDS`). */
 export type RasterKind =
   | "class"
@@ -97,7 +108,10 @@ export interface TileRasters {
   clear: () => void;
   /** `root`'s handle. `weighed: false` for a holder the tile cache does not
    *  weigh by its rasters (a building tile's sky view). */
-  holder: (root: object, opts?: { weighed?: boolean }) => RasterHold;
+  holder: (
+    root: object,
+    opts?: { rank?: number; weighed?: boolean }
+  ) => RasterHold;
 }
 
 export interface RasterHold {
@@ -108,8 +122,15 @@ export interface RasterHold {
   acquire: <K extends RasterKind>(
     kind: K,
     extras: ContentExtras,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    /** `far`: the kind's twin for a level far from the camera, where it
+     *  has one. `now`: on the GPU when it resolves, on every tier (a raster
+     *  swapped in under a drawn tile must not upload inside a frame). */
+    how?: { far?: boolean; now?: boolean }
   ) => Promise<RasterOf[K] | null>;
+  /** Lets go of one raster this holder took (`value`, as `acquire` gave
+   *  it): its share, and its weight in the holder's. */
+  drop: (value: unknown) => void;
   /** The holder is dressed: what it took, and takes from here on, counts in
    *  the shares. Until then it weighs nothing and moves nobody's share: the
    *  cache must not see a raster's other holders at half while this one
@@ -139,6 +160,9 @@ export interface RasterRow {
   extras: TerrainRasterKey;
   /** how it is sampled (raster-upload.ts) */
   look: RasterLook;
+  /** the extras key of the twin a level reads while it is far from the
+   *  camera (lib/city/ground-reach.ts) */
+  far?: TerrainRasterKey;
   /** the extras key of a phone's twin */
   phone?: TerrainRasterKey;
   /** a phone reads the full file where the twin is not named */
@@ -185,14 +209,15 @@ export const RASTER_KINDS: Readonly<Record<RasterKind, RasterRow>> = {
   },
   /** OSM paving (pipeline/bake/surface.py): R = the packed road/walk surface
    *  ids and parking kind, G = the bearing, BA = the along-street offset. */
-  surface: { extras: "surface", look: idLook(4) },
+  surface: { extras: "surface", far: "surfaceFar", look: idLook(4) },
   /** Signed distances to the road and the meadow edge (edges.py): LINEAR so
    *  the isolines are smooth, no mipmaps (only read near the camera). */
-  edges: { extras: "edges", look: FIELD_LOOK },
+  edges: { extras: "edges", far: "edgesFar", look: FIELD_LOOK },
   /** Sports grounds (sport.py): R = the row, G = the second row, B = the
    *  exact bit. */
   sport: {
     extras: "sport",
+    far: "sportFar",
     table: "sportTable",
     look: idLook(4),
     readWhen: readsSportGrounds,
@@ -201,6 +226,7 @@ export const RASTER_KINDS: Readonly<Record<RasterKind, RasterRow>> = {
    *  offset; phones the 1024² twin of the same table. */
   markings: {
     extras: "markings",
+    far: "markingsLow",
     phone: "markingsLow",
     phoneFallsBack: true,
     table: "markingsTable",
@@ -212,6 +238,7 @@ export const RASTER_KINDS: Readonly<Record<RasterKind, RasterRow>> = {
    *  twin of the same crop. */
   colonies: {
     extras: "cultivated",
+    far: "cultivatedLow",
     phone: "cultivatedLow",
     phoneFallsBack: true,
     look: FIELD_LOOK,
@@ -241,12 +268,14 @@ export interface RasterFiles {
  * The files `kind` reads for this content, level and tier, or null: not
  * named, gated off, or a pair with one file missing. Not one rule for the
  * twins: `markings` and `colonies` fall back to the full file on a phone,
- * the class raster does not (its row).
+ * the class raster does not (its row). `far`: the twin a level far from
+ * the camera reads, where the row and the extras name one.
  */
 export function rasterFiles(
   extras: ContentExtras,
   kind: RasterKind,
-  lowRasters: boolean
+  lowRasters: boolean,
+  far = false
 ): RasterFiles | null {
   const row = RASTER_KINDS[kind];
   // reason: a building tile's extras name only some of these keys
@@ -257,10 +286,13 @@ export function rasterFiles(
     return null;
   }
   const twin = lowRasters && row.phone ? named[row.phone] : undefined;
-  const raster =
+  const near =
     lowRasters && row.phone && !row.phoneFallsBack
       ? twin
       : (twin ?? named[row.extras]);
+  // (only beside the file it stands in for: a kind the level does not
+  // read has no twin either)
+  const raster = (far && near && row.far ? named[row.far] : undefined) ?? near;
   if (!raster) {
     return null;
   }
@@ -273,6 +305,8 @@ export function rasterFiles(
 
 /** What a raster's load is handed. */
 interface LoadContext {
+  /** the asking tile's place in the downloads' line */
+  rank?: number;
   renderer: WebGPURenderer;
   signal: AbortSignal;
 }
@@ -286,8 +320,9 @@ interface KindHooks<T> {
 
 /** A row and nothing else: one raster, its own texture. */
 const plainHooks = <T extends Texture>(): KindHooks<T> => ({
-  load: async (url, kind, { renderer, signal }) => {
+  load: async (url, kind, { rank, renderer, signal }) => {
     const loaded = await loadDataRaster(url, RASTER_KINDS[kind].look, {
+      rank,
       renderer,
       signal,
     });
@@ -304,9 +339,10 @@ const plainHooks = <T extends Texture>(): KindHooks<T> => ({
  * 2048² on a phone. Its water mask is read before its bytes go.
  */
 const classHooks: KindHooks<SplatRasters> = {
-  load: async (url, kind, { renderer, signal }) => {
+  load: async (url, kind, { rank, renderer, signal }) => {
     let water: WaterMask | null | undefined;
     const raster = await loadDataRaster(url, RASTER_KINDS[kind].look, {
+      rank,
       renderer,
       signal,
       inspect: (data, width, height) => {
@@ -380,7 +416,7 @@ const PAIR_JOIN = "\n";
 const indexedHooks = (
   pack: (doc: object) => { data: Float32Array; width: number } | null
 ): KindHooks<IndexedRaster> => ({
-  load: async (key, kind, { renderer, signal }) => {
+  load: async (key, kind, { rank, renderer, signal }) => {
     const [rasterUrl = "", tableUrl = ""] = key.split(PAIR_JOIN);
     const doc = await fetchOptionalJson<object>(tableUrl, signal);
     let table: DataTexture;
@@ -394,6 +430,7 @@ const indexedHooks = (
       return null;
     }
     const loaded = await loadDataRaster(rasterUrl, RASTER_KINDS[kind].look, {
+      rank,
       renderer,
       signal,
     }).catch((error: unknown) => {
@@ -457,7 +494,8 @@ export function createTileRasters(opts: {
   ): SharedRasters<RasterOf[K]> => {
     const hooks: KindHooks<RasterOf[K]> = HOOKS[kind];
     return createSharedRasters<RasterOf[K]>(
-      async (key, signal) => await hooks.load(key, kind, { renderer, signal }),
+      async (key, signal, rank) =>
+        await hooks.load(key, kind, { rank, renderer, signal }),
       hooks.free
     );
   };
@@ -502,7 +540,12 @@ export function createTileRasters(opts: {
   return {
     holder: (root, holderOpts) => {
       const counted = holderOpts?.weighed !== false;
-      const lets: (() => void)[] = [];
+      /** what it took: each value with how to let its share go */
+      const taken: {
+        letGo: () => void;
+        textures: Texture[];
+        value: unknown;
+      }[] = [];
       let released = false;
       let settled = false;
       const landed: Texture[] = [];
@@ -510,9 +553,10 @@ export function createTileRasters(opts: {
         acquire: async <K extends RasterKind>(
           kind: K,
           extras: ContentExtras,
-          signal?: AbortSignal
+          signal?: AbortSignal,
+          how?: { far?: boolean; now?: boolean }
         ): Promise<RasterOf[K] | null> => {
-          const files = rasterFiles(extras, kind, lowRasters);
+          const files = rasterFiles(extras, kind, lowRasters, how?.far);
           if (!files || released || cleared) {
             return null;
           }
@@ -523,18 +567,34 @@ export function createTileRasters(opts: {
           // the reference is taken here, in the caller's task; an abort lets
           // go at once (`release`), not once the raster this waits for has
           // decoded and uploaded: the last holder gone, its load stops too
-          const loading = share.acquire(key);
-          lets.push(() => share.release(key));
+          const loading = share.acquire(key, holderOpts?.rank);
+          const entry: (typeof taken)[number] = {
+            letGo: () => share.release(key),
+            textures: [],
+            value: undefined,
+          };
+          taken.push(entry);
           const value = await untilAborted(loading, signal);
           if (value === null || released) {
             return null;
           }
+          const hooks: KindHooks<RasterOf[K]> = HOOKS[kind];
+          entry.value = value;
+          if (how?.now) {
+            for (const texture of hooks.textures(value)) {
+              // (not one whose bytes went with its upload: a phone's, or
+              // another holder's that a compile bound)
+              if ((texture.image as { data?: unknown } | null)?.data) {
+                renderer.initTexture(texture);
+              }
+            }
+          }
           if (counted) {
-            const hooks: KindHooks<RasterOf[K]> = HOOKS[kind];
+            entry.textures = hooks.textures(value);
             if (settled) {
-              weigh(root, hooks.textures(value));
+              weigh(root, entry.textures);
             } else {
-              landed.push(...hooks.textures(value));
+              landed.push(...entry.textures);
             }
           }
           return value;
@@ -548,6 +608,35 @@ export function createTileRasters(opts: {
             weigh(root, landed.splice(0));
           }
         },
+        drop: (value) => {
+          const at = taken.findIndex((entry) => entry.value === value);
+          if (at === -1 || released || value === undefined) {
+            return;
+          }
+          const [entry] = taken.splice(at, 1);
+          // its weight first, as `release`: the others reweighed while it
+          // is alive
+          const held = weighed.get(root);
+          // (not what another take of this holder still reads: a phone's
+          // twin is its near file too)
+          const kept = new Set(taken.flatMap((other) => other.textures));
+          const mine = entry.textures.filter(
+            (t) => held?.has(t) && !kept.has(t)
+          );
+          for (const texture of mine) {
+            held?.delete(texture);
+          }
+          for (const texture of entry.textures) {
+            const i = kept.has(texture) ? -1 : landed.indexOf(texture);
+            if (i !== -1) {
+              landed.splice(i, 1);
+            }
+          }
+          if (mine.length > 0) {
+            reweigh(weighing.release(root, mine));
+          }
+          entry.letGo();
+        },
         release: () => {
           if (released) {
             return;
@@ -555,8 +644,8 @@ export function createTileRasters(opts: {
           released = true;
           // the shares first: the others reweighed while it is all alive
           unweigh(root);
-          for (const letGo of lets.splice(0)) {
-            letGo();
+          for (const entry of taken.splice(0)) {
+            entry.letGo();
           }
         },
       };

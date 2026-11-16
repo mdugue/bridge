@@ -19,6 +19,7 @@ import {
   dropCpuCopies,
   estimateGeometryBytes,
   markSceneShared,
+  paddedPositionBytes,
   releaseRenderState,
   retainSceneMaterials,
   sceneMaterial,
@@ -399,4 +400,27 @@ test("a compile of a group sees its descendants' night-only materials shown", ()
     ])
   ).toEqual([true, true]);
   expect([night.visible, day.visible]).toEqual([false, true]);
+});
+
+test("quantised positions weigh the two bytes a vertex they are padded with", () => {
+  const quantised = new BufferGeometry();
+  quantised.setAttribute(
+    "position",
+    new BufferAttribute(new Int16Array(3 * 100), 3, true)
+  );
+  expect(paddedPositionBytes(quantised)).toBe(200);
+  // interleaved, as a meshopt glTF arrives
+  const interleaved = new BufferGeometry();
+  interleaved.setAttribute(
+    "position",
+    new InterleavedBufferAttribute(
+      new InterleavedBuffer(new Int16Array(4 * 50), 4),
+      3,
+      0,
+      true
+    )
+  );
+  expect(paddedPositionBytes(interleaved)).toBe(100);
+  expect(paddedPositionBytes(new BoxGeometry())).toBe(0);
+  expect(paddedPositionBytes(new BufferGeometry())).toBe(0);
 });

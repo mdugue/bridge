@@ -4,6 +4,7 @@ import type {
   GroundPrep,
   GroundPrepInput,
 } from "@/lib/city/ground-prep";
+import { createWorkerClient } from "./worker-client";
 
 /**
  * A terrain level's heights and water sheets (lib/city/ground-prep.ts),
@@ -11,25 +12,17 @@ import type {
  * started at the first level. The input is copied to it (the level still
  * draws from its own buffers) except an index the site shares (the coarse
  * levels' grid index, `shared`): that one is sent once and kept there.
- * The results come back without a copy. Jobs go one at a time, so a job
- * whose level was dropped while it queued (a flight outruns the stream)
- * is skipped, never run. Where no worker starts (a test, a browser that
- * refuses it) or it dies, the work runs here, on the main thread, as it
- * did before.
+ * The results come back without a copy. Jobs go one at a time, a coarse
+ * level's first, so a job whose level was dropped while it queued (a
+ * flight outruns the stream) is skipped, never run. Where no worker starts
+ * or it dies, the work runs here, on the main thread: the one rule of the
+ * page's workers (worker-client.ts).
  */
 interface Job {
   input: GroundPrepInput;
   shared?: object;
-  signal?: AbortSignal;
-  resolve: (prep: GroundPrep) => void;
-  reject: (err: unknown) => void;
 }
 
-let worker: Worker | null = null;
-let broken = typeof Worker === "undefined";
-/** the job the worker is on, and those waiting for it */
-let running: Job | null = null;
-const queue: Job[] = [];
 /** the shared indices the worker holds, by key, oldest first; it keeps a
  *  few (a remounted stream shares new ones), each a coarse level's 6 MB */
 const sentShared = new Set<number>();
@@ -46,104 +39,18 @@ const keyOf = (shared: object): number => {
   return key;
 };
 
-/** Whether the ground worker is up (a test asks: the fallback answers alike). */
-export function groundWorkerUp(): boolean {
-  return worker !== null && !broken;
-}
-
-function runHere(job: Job): void {
-  try {
-    job.resolve(prepareGround(job.input));
-  } catch (error) {
-    job.reject(error);
-  }
-}
-
-/** Ends the worker and hands each job it held or queued to `each`. */
-function shutDown(each: (job: Job) => void): void {
-  worker?.terminate();
-  worker = null;
-  sentShared.clear();
-  const left = running ? [running, ...queue] : [...queue];
-  running = null;
-  queue.length = 0;
-  for (const job of left) {
-    each(job);
-  }
-}
-
-/** The work done here after all: the worker failed to start or died. */
-function giveUp(): void {
-  broken = true;
-  shutDown((job) => {
-    if (job.signal?.aborted) {
-      job.reject(job.signal.reason);
-    } else {
-      runHere(job);
-    }
-  });
-}
-
 interface Reply {
   prep?: GroundPrep;
   error?: string;
 }
 
-function startWorker(): Worker | null {
-  if (worker || broken) {
-    return worker;
-  }
-  let w: Worker;
-  try {
-    w = new Worker(new URL("./ground-worker.ts", import.meta.url), {
-      type: "module",
-      name: "ground",
-    });
-  } catch {
-    broken = true;
-    return null;
-  }
-  worker = w;
-  // a stopped worker's last word is not about the jobs now running
-  w.addEventListener("message", ({ data }: MessageEvent<Reply>) => {
-    if (worker !== w) {
-      return;
-    }
-    const job = running;
-    running = null;
-    if (job) {
-      if (data.prep) {
-        job.resolve(data.prep);
-      } else {
-        job.reject(new Error(`ground worker: ${data.error ?? "failed"}`));
-      }
-    }
-    next();
-  });
-  // a reply that cannot be read: that job here, the rest as before
-  w.addEventListener("messageerror", () => {
-    if (worker !== w) {
-      return;
-    }
-    const job = running;
-    running = null;
-    if (job) {
-      runHere(job);
-    }
-    next();
-  });
-  w.addEventListener("error", (event) => {
-    event.preventDefault();
-    if (worker === w) {
-      giveUp();
-    }
-  });
-  return w;
-}
-
 /** Only the numbers a job reads: a glTF accessor is a view into a buffer
  *  that may hold more, and a message copies the whole buffer. */
-function packed(job: Job): { message: unknown; transfer: Transferable[] } {
+function packed(job: Job): {
+  message: unknown;
+  transfer: Transferable[];
+  kept: boolean;
+} {
   const { input } = job;
   const positions = input.positions.slice(
     0,
@@ -172,39 +79,41 @@ function packed(job: Job): { message: unknown; transfer: Transferable[] } {
   return {
     message: { input: { ...input, positions, index }, shared, drop },
     transfer,
+    // the level's own buffers stay: the job can still run here
+    kept: true,
   };
 }
 
-function next(): void {
-  while (!running && queue.length > 0) {
-    // a coarse level first (a grid: no TIN index to build), as the stream
-    // dresses its coarse levels ahead of the fine ones
-    const coarse = queue.findIndex((j) => j.input.grid !== null);
-    const job = queue.splice(Math.max(coarse, 0), 1)[0];
-    if (job.signal?.aborted) {
-      job.reject(job.signal.reason);
-      continue;
+const client = createWorkerClient<Job, Reply, GroundPrep>({
+  name: "ground",
+  start: () =>
+    new Worker(new URL("./ground-worker.ts", import.meta.url), {
+      type: "module",
+      name: "ground",
+    }),
+  pack: packed,
+  unpack: (reply) => {
+    if (!reply.prep) {
+      throw new Error(`ground worker: ${reply.error ?? "failed"}`);
     }
-    const w = startWorker();
-    if (!w) {
-      runHere(job);
-      continue;
+    return reply.prep;
+  },
+  here: (job) => prepareGround(job.input),
+  // a coarse level first (a grid: no TIN index to build), as the stream
+  // dresses its coarse levels ahead of the fine ones
+  rank: (job) => (job.input.grid === null ? 1 : 0),
+  unsent: (job) => {
+    if (job.shared) {
+      // (sent again with the next job that shares it)
+      sentShared.delete(keyOf(job.shared));
     }
-    running = job;
-    try {
-      const { message, transfer } = packed(job);
-      w.postMessage(message, transfer);
-    } catch {
-      // a message that cannot be sent (nothing went over: a clone fails
-      // before the transfer) is done here, and the queue goes on
-      running = null;
-      if (job.shared) {
-        // (sent again with the next job that shares it)
-        sentShared.delete(keyOf(job.shared));
-      }
-      runHere(job);
-    }
-  }
+  },
+  ended: () => sentShared.clear(),
+});
+
+/** Whether the ground worker is up (a test asks: the fallback answers alike). */
+export function groundWorkerUp(): boolean {
+  return client.up();
 }
 
 /**
@@ -215,9 +124,7 @@ function next(): void {
  * with the scene); a later job starts a new worker.
  */
 export function stopGroundWorker(): void {
-  shutDown((job) => {
-    job.reject(new DOMException("the ground worker stopped", "AbortError"));
-  });
+  client.stop();
 }
 
 /**
@@ -230,8 +137,5 @@ export async function prepareGroundOffThread(
   input: GroundPrepInput,
   opts: { shared?: object; signal?: AbortSignal } = {}
 ): Promise<GroundPrep> {
-  return await new Promise<GroundPrep>((resolve, reject) => {
-    queue.push({ input, ...opts, resolve, reject });
-    next();
-  });
+  return await client.run({ input, shared: opts.shared }, opts.signal);
 }

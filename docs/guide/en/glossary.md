@@ -185,16 +185,16 @@ them for Dresden; the first is the *spawn tile*. The viewer streams them
 ## Rendering
 
 **three.js** — the JavaScript library that talks to the graphics card
-through WebGPU (or WebGL2); the whole scene is built with it.
+through WebGPU; the whole scene is built with it.
 
-**WebGPU / WebGL2** — the browser's interfaces to the graphics card. The
-viewer uses WebGPU, the newer and faster one, and falls back to WebGL2
-where a browser lacks it; one of the two is required.
+**WebGPU** — the browser's newer interface to the graphics card. The
+viewer needs it; a browser without it (older iPhones, Firefox on some
+systems) gets a message instead of the city.
 
 **Shader / node material** — the small programs the graphics card runs to
 colour each pixel. Here every material is written as a *node material*
 (three.js's TSL): the look is assembled from building blocks, which
-three.js translates for WebGPU or WebGL2.
+three.js translates for WebGPU.
 
 **Mesh / triangle** — everything drawn is triangles. A mesh is a set of
 triangles with a material. The buildings of a tile are one mesh; a

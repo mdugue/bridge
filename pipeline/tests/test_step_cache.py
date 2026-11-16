@@ -274,3 +274,106 @@ def test_code_hash_follows_imports(tmp_path, monkeypatch):
 def test_a_dated_step_is_known():
     assert step_cache.dated("bake.trees")
     assert not step_cache.dated("bake.walls")
+
+
+LOCK_TEXT = """
+version = 1
+
+[[package]]
+name = "project"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "laspy", extra = ["lazrs"] },
+    { name = "numpy" },
+]
+
+[package.dev-dependencies]
+dev = [{ name = "ruff" }]
+
+[[package]]
+name = "laspy"
+version = "2.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [{ name = "numpy" }]
+wheels = [{ url = "laspy-2.7.0-a.whl", hash = "sha256:aa" }]
+
+[package.optional-dependencies]
+lazrs = [{ name = "lazrs" }]
+other = [{ name = "unused" }]
+
+[[package]]
+name = "lazrs"
+version = "0.8.1"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "numpy"
+version = "2.5.4"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "ruff"
+version = "0.17.3"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "unused"
+version = "1.0"
+source = { registry = "https://pypi.org/simple" }
+"""
+
+
+def test_the_locked_runtime_is_what_a_bake_runs_with():
+    """The project's dependencies, the extras it asks for and what they
+    depend on; not the dev group, not an extra nobody asked for."""
+    names = [line.split()[0] for line in step_cache.locked_runtime(LOCK_TEXT).splitlines()]
+    assert names == ["laspy", "lazrs", "numpy"]
+
+
+def test_a_dev_tool_or_a_new_wheel_changes_no_key_and_a_runtime_version_does():
+    base = step_cache.locked_runtime(LOCK_TEXT)
+    assert step_cache.locked_runtime(LOCK_TEXT.replace("0.17.3", "0.17.4")) == base
+    assert step_cache.locked_runtime(LOCK_TEXT.replace("sha256:aa", "sha256:bb")) == base
+    assert step_cache.locked_runtime(LOCK_TEXT.replace("2.5.4", "2.5.5")) != base
+    assert step_cache.locked_runtime(LOCK_TEXT.replace("0.8.1", "0.8.2")) != base
+
+
+def test_a_lockfile_that_does_not_read_stands_whole():
+    assert step_cache.locked_runtime("not [toml") == "not [toml"
+    assert step_cache.locked_runtime("version = 1") == "version = 1"
+
+
+def test_the_repo_lockfile_keys_the_bake_s_imports():
+    """Every package a bake module imports by name is in the locked
+    runtime (networkx came in only through scikit-image until it was
+    named)."""
+    locked = step_cache.locked_runtime(step_cache.LOCK.read_text())
+    names = {line.split()[0] for line in locked.splitlines()}
+    assert {"networkx", "numpy", "rasterio", "shapely", "scipy"} <= names
+    assert not {"ruff", "pytest"} & names
+
+
+def test_code_hash_leaves_the_cache_s_own_module_out(tmp_path, monkeypatch):
+    """This module is in nearly every step's imports; its edits bake
+    nothing again (`VERSION` says when they should)."""
+    assert "bake.step_cache" in step_cache._closure("bake.walls")
+    real = step_cache._module_path
+
+    def edited(module):
+        p = real(module)
+        if module != "bake.step_cache" or p is None:
+            return p
+        copy = tmp_path / "step_cache.py"
+        copy.write_bytes(p.read_bytes() + b"\n")
+        return copy
+
+    def walls_hash(path, version=step_cache.VERSION):
+        monkeypatch.setattr(step_cache, "_CODE", {})
+        monkeypatch.setattr(step_cache, "_module_path", path)
+        monkeypatch.setattr(step_cache, "VERSION", version)
+        return step_cache.code_hash("bake.walls")
+
+    walls = walls_hash(real)
+    assert walls_hash(edited) == walls
+    assert walls_hash(real, step_cache.VERSION + 1) != walls
