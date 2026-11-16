@@ -17,6 +17,7 @@
  * Each wall is toned by its material (`WALL_TONES`, the mesh's vertex
  * colours).
  */
+import { PMath } from "./portable-math";
 import { epsgToWorld } from "./ground-clamp";
 import type { RecenterOffset } from "./ground-clamp";
 import { subdividePolyline } from "./polyline";
@@ -78,7 +79,7 @@ export const WALL_TONES: Readonly<Record<Masonry, number>> = {
 
 /** One sRGB channel (0–1) as linear. */
 const lin = (c: number) =>
-  c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  c <= 0.04045 ? c / 12.92 : PMath.pow((c + 0.055) / 1.055, 2.4);
 
 /** sRGB hex → linear RGB, as the mesh's COLOR_0 carries it. */
 export function linearTone(hex: number): [number, number, number] {
@@ -439,7 +440,7 @@ function pushBack(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
 function pushQuad(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
   let nx = -(b.wz - a.wz);
   let nz = b.wx - a.wx;
-  const nl = Math.hypot(nx, nz) || 1;
+  const nl = PMath.hypot(nx, nz) || 1;
   nx /= nl;
   nz /= nl;
   // a.base, b.base, b.top, a.top → two tris, wound to agree with the normal
@@ -498,7 +499,7 @@ function columnsOf(
   const perps = pts.map((_, i): Point2 => {
     const a = pts[Math.max(0, i - 1)];
     const b = pts[Math.min(pts.length - 1, i + 1)];
-    const tl = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const tl = PMath.hypot(b[0] - a[0], b[1] - a[1]) || 1;
     return [-(b[1] - a[1]) / tl, (b[0] - a[0]) / tl];
   });
   const snap = opts.snapToStep === true && RETAINING_KINDS.has(wall.kind ?? "");

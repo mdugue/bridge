@@ -1,3 +1,4 @@
+import { PMath } from "./portable-math";
 import { clamp01 } from "./math";
 /**
  * Per-building clay tint — pure, DOM/three-free so it unit-tests under `bun test`
@@ -99,7 +100,7 @@ function hash01(s: string): number {
   for (let i = 0; i < s.length; i += 1) {
     h = (h * 31 + (s.codePointAt(i) ?? 0)) % HASH_MOD;
   }
-  const x = Math.sin((h / HASH_MOD) * 127.1 + 311.7) * 43_758.5453;
+  const x = PMath.sin((h / HASH_MOD) * 127.1 + 311.7) * 43_758.5453;
   return x - Math.floor(x);
 }
 
@@ -124,7 +125,7 @@ function familyOf(fn: string | undefined): FamilyKey {
 }
 
 function srgbChannelToLinear(c: number): number {
-  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  return c <= 0.04045 ? c / 12.92 : PMath.pow((c + 0.055) / 1.055, 2.4);
 }
 
 /** What OSM says a building looks like (osm_buildings.py via

@@ -1,3 +1,4 @@
+import { PMath } from "./portable-math";
 import type { DrawnFacts } from "./drawn-facts";
 import type { ObjectFacts } from "./object-facts";
 import type { OsmBuildingRow } from "./osm-buildings-file";
@@ -134,7 +135,7 @@ export function markFlatRoofs(
     const nx = uy * wz - uz * wy;
     const ny = uz * wx - ux * wz;
     const nz = ux * wy - uy * wx;
-    const area = Math.hypot(nx, ny, nz);
+    const area = PMath.hypot(nx, ny, nz);
     const o = mesh.objectIds[v];
     const up = area > 0 ? Math.abs(nz) / area : 0;
     if (up >= STEP_NORMAL_Z && o < objects.length) {
@@ -269,7 +270,7 @@ export function isFloodlit(
   }
   const group = table.group[i];
   const seed = group > 0 ? group : table.rough[table.ensemble[i]] * 1000;
-  const h = Math.sin(seed * 12.9898 + 78.233) * 43_758.5453;
+  const h = PMath.sin(seed * 12.9898 + 78.233) * 43_758.5453;
   return h - Math.floor(h) < FLOODLIT_SHARE;
 }
 

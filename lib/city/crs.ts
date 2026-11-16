@@ -12,6 +12,7 @@
  * ellipsoid. A WGS84 fix is taken as ETRS89, as proj4 took it with these
  * definitions: no datum shift.
  */
+import { PMath } from "./portable-math";
 
 /** UTM zone by EPSG code (ETRS89 / UTM zone N, northern hemisphere). */
 const UTM_ZONES: Partial<Record<number, number>> = { 25_832: 32, 25_833: 33 };
@@ -38,7 +39,7 @@ const K0_A =
 
 /** n^power × (c₀ + c₁ n + c₂ n² + …): one coefficient of Krüger's series */
 const inN = (power: number, c: readonly number[]): number =>
-  c.reduceRight((sum, ci) => sum * N + ci, 0) * N ** power;
+  c.reduceRight((sum, ci) => sum * N + ci, 0) * PMath.pow(N, power);
 
 /** Krüger's α (conformal → projected), Karney 2011 eq. 35 */
 const ALPHA = [
@@ -65,8 +66,8 @@ const centralMeridian = (zone: number): number => zone * 6 - 183;
 
 /** tan of the conformal latitude, from tan of the geodetic (Karney eq. 7) */
 function conformalTan(tau: number): number {
-  const sigma = Math.sinh(E * Math.atanh((E * tau) / Math.hypot(1, tau)));
-  return tau * Math.hypot(1, sigma) - sigma * Math.hypot(1, tau);
+  const sigma = PMath.sinh(E * PMath.atanh((E * tau) / PMath.hypot(1, tau)));
+  return tau * PMath.hypot(1, sigma) - sigma * PMath.hypot(1, tau);
 }
 
 /** tan of the geodetic latitude, from tan of the conformal: Newton's
@@ -77,8 +78,8 @@ function geodeticTan(taup: number): number {
   for (let i = 0; i < 5; i += 1) {
     const taui = conformalTan(tau);
     const step =
-      ((taup - taui) / Math.hypot(1, taui)) *
-      ((1 + (1 - E2) * tau * tau) / ((1 - E2) * Math.hypot(1, tau)));
+      ((taup - taui) / PMath.hypot(1, taui)) *
+      ((1 + (1 - E2) * tau * tau) / ((1 - E2) * PMath.hypot(1, tau)));
     tau += step;
     if (Math.abs(step) < 1e-15 * Math.max(1, Math.abs(tau))) {
       break;
@@ -95,10 +96,10 @@ function forward(
   lng: number
 ): { gamma: number; x: number; y: number } {
   const lambda = (lng - centralMeridian(zone)) * DEG;
-  const taup = conformalTan(Math.tan(lat * DEG));
-  const xip = Math.atan2(taup, Math.cos(lambda));
-  const etap = Math.asinh(
-    Math.sin(lambda) / Math.hypot(taup, Math.cos(lambda))
+  const taup = conformalTan(PMath.tan(lat * DEG));
+  const xip = PMath.atan2(taup, PMath.cos(lambda));
+  const etap = PMath.asinh(
+    PMath.sin(lambda) / PMath.hypot(taup, PMath.cos(lambda))
   );
   let xi = xip;
   let eta = etap;
@@ -108,16 +109,16 @@ function forward(
   for (let j = 0; j < ALPHA.length; j += 1) {
     const alpha = ALPHA[j];
     const k = 2 * (j + 1);
-    const [s, c] = [Math.sin(k * xip), Math.cos(k * xip)];
-    const [sh, ch] = [Math.sinh(k * etap), Math.cosh(k * etap)];
+    const [s, c] = [PMath.sin(k * xip), PMath.cos(k * xip)];
+    const [sh, ch] = [PMath.sinh(k * etap), PMath.cosh(k * etap)];
     xi += alpha * s * ch;
     eta += alpha * c * sh;
     p += k * alpha * c * ch;
     q += k * alpha * s * sh;
   }
   const gamma =
-    Math.atan((taup / Math.hypot(1, taup)) * Math.tan(lambda)) +
-    Math.atan2(q, p);
+    PMath.atan((taup / PMath.hypot(1, taup)) * PMath.tan(lambda)) +
+    PMath.atan2(q, p);
   return { gamma, x: FALSE_EASTING + K0_A * eta, y: K0_A * xi };
 }
 
@@ -152,13 +153,13 @@ export function utmToLatLng(
   for (let j = 0; j < BETA.length; j += 1) {
     const beta = BETA[j];
     const k = 2 * (j + 1);
-    xip -= beta * Math.sin(k * xi) * Math.cosh(k * eta);
-    etap -= beta * Math.cos(k * xi) * Math.sinh(k * eta);
+    xip -= beta * PMath.sin(k * xi) * PMath.cosh(k * eta);
+    etap -= beta * PMath.cos(k * xi) * PMath.sinh(k * eta);
   }
-  const taup = Math.sin(xip) / Math.hypot(Math.sinh(etap), Math.cos(xip));
-  const lambda = Math.atan2(Math.sinh(etap), Math.cos(xip));
+  const taup = PMath.sin(xip) / PMath.hypot(PMath.sinh(etap), PMath.cos(xip));
+  const lambda = PMath.atan2(PMath.sinh(etap), PMath.cos(xip));
   return {
-    lat: Math.atan(geodeticTan(taup)) / DEG,
+    lat: PMath.atan(geodeticTan(taup)) / DEG,
     lng: lambda / DEG + centralMeridian(zone),
   };
 }

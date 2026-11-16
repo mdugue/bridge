@@ -12,6 +12,7 @@
  * (`joinStretches`).
  * Pure, no THREE.
  */
+import { PMath } from "./portable-math";
 import type { PlinthFeature } from "./features";
 import { joinsAlong, SINK } from "./ground-join";
 import type { JoinPoint } from "./ground-join";
@@ -53,8 +54,8 @@ type Profile = readonly ProfilePoint[];
 
 /** The normal (out, up) at `deg` from out towards up: a round's bend. */
 const bend = (deg: number): [number, number] => [
-  Math.cos((deg * Math.PI) / 180),
-  Math.sin((deg * Math.PI) / 180),
+  PMath.cos((deg * Math.PI) / 180),
+  PMath.sin((deg * Math.PI) / 180),
 ];
 
 /** Triangles with a normal per vertex: one smooth across a rounded
@@ -112,7 +113,7 @@ function extrude(
   hidden: readonly number[]
 ): void {
   const { a, b } = run;
-  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const len = PMath.hypot(b[0] - a[0], b[1] - a[1]);
   if (len < 1e-3) {
     return;
   }
@@ -131,13 +132,13 @@ function extrude(
   // each profile edge's normal in the wall's frame (out, up)
   const edge = profile.map((p, k) => {
     const q = profile[(k + 1) % profile.length];
-    const l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+    const l = PMath.hypot(q[0] - p[0], q[1] - p[1]) || 1;
     return [(q[1] - p[1]) / l, -(q[0] - p[0]) / l];
   });
   const normalAt = (k: number, v: number): number[] => {
     const p = profile[v];
     const both = p.length === 4 ? [p[2], p[3]] : edge[k];
-    const l = Math.hypot(both[0], both[1]) || 1;
+    const l = PMath.hypot(both[0], both[1]) || 1;
     return [(n[0] * both[0]) / l, (n[1] * both[0]) / l, both[1] / l];
   };
   const flat = [Number.NaN, Number.NaN, Number.NaN];
@@ -211,7 +212,7 @@ export function plinthPieces(
       foot: p.g[i] - PLINTH_SINK,
       top: p.top[i],
     }))
-    .filter((q) => Math.hypot(q.b[0] - q.a[0], q.b[1] - q.a[1]) > 1e-3)
+    .filter((q) => PMath.hypot(q.b[0] - q.a[0], q.b[1] - q.a[1]) > 1e-3)
     .map((q) => {
       const [sa, sb] = shift(q.a, q.b, q.top - 0.6, q.top - 0.2);
       return { ...q, sa, sb };
@@ -250,7 +251,7 @@ function cornerGroups(
 
 /** A run's unit direction. */
 const runDirection = (r: { a: readonly number[]; b: readonly number[] }) => {
-  const l = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
+  const l = PMath.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
   return [(r.b[0] - r.a[0]) / l, (r.b[1] - r.a[1]) / l];
 };
 
@@ -260,12 +261,12 @@ function corners(
   runs: readonly { a: readonly number[]; b: readonly number[] }[]
 ): [number, number][] {
   const out: [number, number][] = [];
-  const minCos = Math.cos((MITRE_MAX_DEG * Math.PI) / 180);
+  const minCos = PMath.cos((MITRE_MAX_DEG * Math.PI) / 180);
   for (let i = 0; i < runs.length; i += 1) {
     const r = runs[i];
     for (let j = 0; j < runs.length; j += 1) {
       const s = runs[j];
-      if (i === j || Math.hypot(r.b[0] - s.a[0], r.b[1] - s.a[1]) > MEET_M) {
+      if (i === j || PMath.hypot(r.b[0] - s.a[0], r.b[1] - s.a[1]) > MEET_M) {
         continue;
       }
       const [u, v] = [runDirection(r), runDirection(s)];
@@ -284,7 +285,7 @@ const SHARED_SHIFT_SIN = 0.4;
 
 /** A run's unit normal. */
 const runNormal = (r: { a: readonly number[]; b: readonly number[] }) => {
-  const l = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
+  const l = PMath.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]);
   return [(r.b[1] - r.a[1]) / l, -(r.b[0] - r.a[0]) / l];
 };
 
@@ -367,7 +368,7 @@ function corniceProfile(z: number): Profile {
   const { proud, back, height, wash } = CORNICE;
   const cx = proud * 0.3;
   // the wash's own normal, so it shades flat from the nose to the wall
-  const washUp = bend(90 - (Math.atan2(wash, cx + back) * 180) / Math.PI);
+  const washUp = bend(90 - (PMath.atan2(wash, cx + back) * 180) / Math.PI);
   return [
     [-back, z],
     [cx, z, ...bend(-90)],
@@ -448,7 +449,7 @@ export function withoutSegments(
   segments: readonly (readonly (readonly number[])[])[]
 ): Stretch[] {
   return stretches.flatMap((st) => {
-    const len = Math.hypot(st.b[0] - st.a[0], st.b[1] - st.a[1]);
+    const len = PMath.hypot(st.b[0] - st.a[0], st.b[1] - st.a[1]);
     if (len < 1e-6) {
       return [st];
     }
@@ -508,7 +509,7 @@ export function lineStretches(
  *  short of one another, and the bake leaves the party wall's end out). */
 export const BRIDGE_M = 1.2;
 /** …turning by no more than this, and standing no further aside. */
-const BRIDGE_COS = Math.cos((20 * Math.PI) / 180);
+const BRIDGE_COS = PMath.cos((20 * Math.PI) / 180);
 const BRIDGE_ASIDE_M = 0.4;
 
 /** How the levels of stretches that meet are made one: a plinth's take the
@@ -539,10 +540,10 @@ function links(st: readonly Stretch[]): Link[] {
     starts.set(k, [...(starts.get(k) ?? []), j]);
   }
   const dir = (s: Stretch) => {
-    const l = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]) || 1;
+    const l = PMath.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]) || 1;
     return [(s.b[0] - s.a[0]) / l, (s.b[1] - s.a[1]) / l];
   };
-  const minCos = Math.cos((MITRE_MAX_DEG * Math.PI) / 180);
+  const minCos = PMath.cos((MITRE_MAX_DEG * Math.PI) / 180);
   const found: Link[] = [];
   for (let i = 0; i < st.length; i += 1) {
     const s = st[i];
@@ -580,7 +581,7 @@ function linkOf(
   minCos: number
 ): { d: number; corner: boolean } | undefined {
   const g = [t.a[0] - s.b[0], t.a[1] - s.b[1]];
-  const d = Math.hypot(g[0], g[1]);
+  const d = PMath.hypot(g[0], g[1]);
   const [u, v] = [dir(s), dir(t)];
   const cos = u[0] * v[0] + u[1] * v[1];
   if (d <= MEET_M) {
@@ -643,7 +644,7 @@ export function joinStretches(
   for (let i = 0; i < st.length; i += 1) {
     const s = st[i];
     const r = root(i);
-    const w = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
+    const w = PMath.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
     const l = level.get(r) ?? {
       lo: Number.POSITIVE_INFINITY,
       hi: levelling === "plinth" ? Number.NEGATIVE_INFINITY : 0,
@@ -687,7 +688,7 @@ function onLine(
   to: readonly number[],
   p: readonly number[]
 ): number[] {
-  const l = Math.hypot(to[0] - from[0], to[1] - from[1]) || 1;
+  const l = PMath.hypot(to[0] - from[0], to[1] - from[1]) || 1;
   const u = [(to[0] - from[0]) / l, (to[1] - from[1]) / l];
   const k = (p[0] - from[0]) * u[0] + (p[1] - from[1]) * u[1];
   return [from[0] + u[0] * k, from[1] + u[1] * k];
@@ -776,7 +777,7 @@ function along(run: Run, k: WallKnots): Run[] {
   if (k.f.length <= 2) {
     return [{ ...run, sa: k.s[0], sb: k.s.at(-1) ?? 0 }];
   }
-  const len = Math.hypot(run.b[0] - run.a[0], run.b[1] - run.a[1]);
+  const len = PMath.hypot(run.b[0] - run.a[0], run.b[1] - run.a[1]);
   const n: [number, number] = [
     (run.b[1] - run.a[1]) / len,
     -(run.b[0] - run.a[0]) / len,
@@ -848,11 +849,11 @@ export function straightRuns(
     const a = line[0];
     const b = line.at(-1) ?? a;
     const last = out.at(-1);
-    if (last && Math.hypot(last[1][0] - a[0], last[1][1] - a[1]) < 0.01) {
+    if (last && PMath.hypot(last[1][0] - a[0], last[1][1] - a[1]) < 0.01) {
       const u = [last[1][0] - last[0][0], last[1][1] - last[0][1]];
       const v = [b[0] - a[0], b[1] - a[1]];
       const cos =
-        (u[0] * v[0] + u[1] * v[1]) / (Math.hypot(...u) * Math.hypot(...v));
+        (u[0] * v[0] + u[1] * v[1]) / (PMath.hypot(...u) * PMath.hypot(...v));
       if (cos > 0.9999) {
         last[1] = b;
         continue;
@@ -870,7 +871,7 @@ export function straightRuns(
  *  the foot is checked here. */
 export function plinthJoins(f: PlinthFeature): JoinPoint[] {
   return plinthPieces(f).flatMap(({ a, b, foot: z }) => {
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const len = PMath.hypot(b[0] - a[0], b[1] - a[1]);
     if (len < 1e-3) {
       return [];
     }

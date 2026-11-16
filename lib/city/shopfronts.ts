@@ -28,6 +28,7 @@
  * and own colour, with an absolute roughness in its `rough` column.
  * Pure, no THREE.
  */
+import { PMath } from "./portable-math";
 import { rayHit, trianglesOnRays } from "./doors";
 import type { V3 } from "./doors";
 import type { DoorFeature, ShopfrontWall } from "./features";
@@ -289,7 +290,7 @@ type Frame = ReturnType<typeof wallFrame>;
 /** The unit direction `ds` along the wall, `dout` out of it, `dz` up. */
 function dir3(f: Frame, ds: number, dout: number, dz: number): V3 {
   const v: V3 = [f.t[0] * ds + f.n[0] * dout, f.t[1] * ds + f.n[1] * dout, dz];
-  const l = Math.hypot(...v) || 1;
+  const l = PMath.hypot(...v) || 1;
   return [v[0] / l, v[1] / l, v[2] / l];
 }
 
@@ -320,10 +321,10 @@ function polygon(
     .map((_, i) => i)
     .filter((i) => {
       const q = p[(i + 1) % p.length];
-      return Math.hypot(p[i][0] - q[0], p[i][1] - q[1], p[i][2] - q[2]) > 1e-9;
+      return PMath.hypot(p[i][0] - q[0], p[i][1] - q[1], p[i][2] - q[2]) > 1e-9;
     });
   const n = newell(keep.map((i) => p[i]));
-  if (keep.length < 3 || Math.hypot(...n) < 1e-9) {
+  if (keep.length < 3 || PMath.hypot(...n) < 1e-9) {
     return;
   }
   const flip = n[0] * facing[0] + n[1] * facing[1] + n[2] * facing[2] < 0;
@@ -460,8 +461,8 @@ function arc(co: number, cz: number, r: number, a0: number, a1: number) {
   const out: Section[] = [];
   for (let k = 0; k <= ROUND_STEPS; k += 1) {
     const a = ((a0 + ((a1 - a0) * k) / ROUND_STEPS) * Math.PI) / 180;
-    const c = Math.cos(a);
-    const s = Math.sin(a);
+    const c = PMath.cos(a);
+    const s = PMath.sin(a);
     out.push([co + r * c, cz + r * s, c, s]);
   }
   return out;

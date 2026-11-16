@@ -153,3 +153,58 @@ test("a value module exports only what reaches keys as values", () => {
     );
   }
 });
+
+/** `Math`'s functions that are the machine's C library's: their last bits
+ *  differ between library versions and processors (lib/city/portable-math.ts). */
+const MACHINE_MATHS =
+  /\bMath\.(?:a?(?:sin|cos|tan)h?|atan2|cbrt|exp|expm1|hypot|log|log1p|log2|log10|pow)\b/u;
+/** `**` to anything but a whole literal (JavaScriptCore multiplies those
+ *  out; any other power is the C library's `pow`). */
+const MACHINE_POWER = /\*\*(?!\s*\d+(?![.\d]))/u;
+
+test("no module the bake runs calls the machine's maths", () => {
+  // a bake's bytes are a function of the tree, on any machine: whatever
+  // prepare-data.ts reaches computes with PMath (lib/city/portable-math.ts)
+  const modules = moduleGraph("scripts/prepare-data.ts", ROOT).filter(
+    (path) => path !== "lib/city/portable-math.ts"
+  );
+  expect(modules.length).toBeGreaterThan(100);
+  const calls: string[] = [];
+  for (const path of modules) {
+    const code = readFileSync(nodePath.join(ROOT, path), "utf-8")
+      // comments say `**` and name Math's functions freely
+      .replaceAll(/\/\*[\s\S]*?\*\//gu, "")
+      .replaceAll(/\/\/.*$/gmu, "");
+    for (const line of code.split("\n")) {
+      if (MACHINE_MATHS.test(line) || MACHINE_POWER.test(line)) {
+        calls.push(`${path}: ${line.trim()}`);
+      }
+    }
+  }
+  expect(calls).toEqual([]);
+});
+
+test("the maths rule reads a call and a power", () => {
+  for (const line of [
+    "Math.hypot(a, b)",
+    "Math.sin(x)",
+    "Math.atan2(y, x)",
+    "Math.asinh(x)",
+    "Math.log10(x)",
+    "c ** 2.4",
+    "a ** b",
+    "10 ** d",
+  ]) {
+    expect(MACHINE_MATHS.test(line) || MACHINE_POWER.test(line)).toBe(true);
+  }
+  for (const line of [
+    "Math.sqrt(x * x + y * y)",
+    "Math.round(x)",
+    "PMath.hypot(a, b)",
+    "(a - b) ** 2",
+    "2 ** 32",
+    "N ** 4 / 64",
+  ]) {
+    expect(MACHINE_MATHS.test(line) || MACHINE_POWER.test(line)).toBe(false);
+  }
+});

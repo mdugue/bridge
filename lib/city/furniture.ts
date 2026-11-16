@@ -4,6 +4,7 @@
  * where, turned which way and how long, and which playground patches lie
  * under them. No THREE, no DOM.
  */
+import { PMath } from "./portable-math";
 import { isFlagDesign } from "./features";
 import type { BinTone, FlagDesign, FurnitureFeature } from "./features";
 import type { Point2 } from "./polyline";
@@ -141,7 +142,7 @@ export function yawOfBearing(deg: number): number {
 
 /** A stable pseudo-random yaw for things without a front (bins, bollards). */
 export function scatterYaw(x: number, y: number): number {
-  const s = Math.sin(x * 12.9898 + y * 78.233) * 43_758.5453;
+  const s = PMath.sin(x * 12.9898 + y * 78.233) * 43_758.5453;
   return (s - Math.floor(s)) * Math.PI * 2;
 }
 
@@ -153,8 +154,8 @@ function benchModel(f: FurnitureFeature): FurnitureModel {
 function hoops(x: number, y: number, deg: number, n: number): FurniturePiece[] {
   const rad = (deg * Math.PI) / 180;
   // The row axis: the facing bearing turned a quarter to the right.
-  const ax = Math.cos(rad);
-  const ay = -Math.sin(rad);
+  const ax = PMath.cos(rad);
+  const ay = -PMath.sin(rad);
   const yaw = yawOfBearing(deg);
   const pieces: FurniturePiece[] = [];
   for (let i = 0; i < n; i += 1) {

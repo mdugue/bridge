@@ -97,10 +97,10 @@ function report(file: string, logical: string): string[] {
 /** A fixed sweep through one maths function, hashed bit for bit. */
 function probe(f: (x: number, y: number) => number): string {
   const out = new Float64Array(200_000);
-  let x = 0.123_456_7;
+  let x = 0.1234567;
   for (let i = 0; i < out.length; i += 1) {
     // a fixed linear congruence: the same arguments everywhere
-    x = (x * 16_807 + 0.318_309) % 97.531;
+    x = (x * 16_807 + 0.318309) % 97.531;
     out[i] = f(x - 48.7, (x * 1.618) % 7.3);
   }
   return sha(new Uint8Array(out.buffer));

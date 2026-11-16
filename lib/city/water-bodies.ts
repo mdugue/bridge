@@ -13,6 +13,7 @@
  *   water sheet reads (app/_components/water-layer.ts).
  */
 
+import { PMath } from "./portable-math";
 import { decodeGreyPng } from "./png-raster";
 import { isInvalidElevation } from "./terrain-geometry";
 import type { TerrainBounds } from "./terrain-geometry";
@@ -180,7 +181,7 @@ const smooth = (lo: number, hi: number, x: number): number => {
 export function labOf(rgb: number): Lab {
   const lin = [(rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255].map((v) => {
     const c = v / 255;
-    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    return c <= 0.04045 ? c / 12.92 : PMath.pow((c + 0.055) / 1.055, 2.4);
   });
   const xyz = [
     0.4124 * lin[0] + 0.3576 * lin[1] + 0.1805 * lin[2],
@@ -189,7 +190,7 @@ export function labOf(rgb: number): Lab {
   ];
   const f = xyz.map((v, i) => {
     const t = v / WHITE[i];
-    return t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+    return t > 0.008856 ? PMath.cbrt(t) : 7.787 * t + 16 / 116;
   });
   return [116 * f[1] - 16, 500 * (f[0] - f[1]), 200 * (f[1] - f[2])];
 }
@@ -208,7 +209,8 @@ export function rgbOf(lab: Lab): number {
   ];
   const [r, g, b] = lin.map((v) => {
     const c = Math.min(Math.max(v, 0), 1);
-    const s = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+    const s =
+      c <= 0.0031308 ? 12.92 * c : 1.055 * PMath.pow(c, 1 / 2.4) - 0.055;
     return Math.round(s * 255);
   });
   return (r << 16) | (g << 8) | b;
@@ -224,10 +226,10 @@ export function rgbOf(lab: Lab): number {
  */
 export function waterTint(lab: Lab): number {
   const sheet = labOf(WATER_SHEET);
-  const chroma = Math.hypot(lab[1], lab[2]);
-  const own = Math.hypot(sheet[1], sheet[2]);
+  const chroma = PMath.hypot(lab[1], lab[2]);
+  const own = PMath.hypot(sheet[1], sheet[2]);
   const turn = Math.abs(
-    ((Math.atan2(lab[2], lab[1]) - Math.atan2(sheet[2], sheet[1])) * 180) /
+    ((PMath.atan2(lab[2], lab[1]) - PMath.atan2(sheet[2], sheet[1])) * 180) /
       Math.PI
   );
   const apart = Math.min(turn % 360, 360 - (turn % 360));

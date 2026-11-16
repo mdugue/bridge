@@ -5,6 +5,7 @@
  * relief, and the markers of monuments nothing measured. Plain numbers in,
  * plain numbers out. No THREE, no DOM.
  */
+import { PMath } from "./portable-math";
 import { SINK } from "./ground-join";
 import type {
   FountainStyle,
@@ -179,7 +180,7 @@ export function jetPlaces(
   const r = 0.45 * Math.sqrt(areaM2 / Math.PI);
   const around: Point2[] = [0, 1, 2, 3].map((k) => {
     const a = (k * Math.PI) / 2 + Math.PI / 4;
-    return [centre[0] + r * Math.cos(a), centre[1] + r * Math.sin(a)];
+    return [centre[0] + r * PMath.cos(a), centre[1] + r * PMath.sin(a)];
   });
   return water ? around.filter((p) => insideRing(p, water)) : around;
 }
@@ -408,7 +409,7 @@ export function onRelief(
 /** A stable yaw (radians) from a position, so statues do not all face north
  *  and do not turn on reload. */
 export function yawOf(x: number, y: number): number {
-  const s = Math.sin(x * 12.9898 + y * 78.233) * 43_758.5453;
+  const s = PMath.sin(x * 12.9898 + y * 78.233) * 43_758.5453;
   return (s - Math.floor(s)) * Math.PI * 2;
 }
 
@@ -579,7 +580,7 @@ function principalAxis(cells: readonly Cell[]): number {
     syy += (c.y - my) ** 2;
     sxy += (c.x - mx) * (c.y - my);
   }
-  return 0.5 * Math.atan2(2 * sxy, sxx - syy);
+  return 0.5 * PMath.atan2(2 * sxy, sxx - syy);
 }
 
 /** The cells' extent along and across `axis`: its centre (projected),
@@ -588,8 +589,8 @@ function extent(
   cells: readonly Cell[],
   axis: number
 ): { centre: Point2; length: number; width: number } {
-  const ux = Math.cos(axis);
-  const uy = Math.sin(axis);
+  const ux = PMath.cos(axis);
+  const uy = PMath.sin(axis);
   let a0 = Infinity;
   let a1 = -Infinity;
   let b0 = Infinity;
@@ -634,8 +635,8 @@ function composed(
     return null;
   }
   const fig = extent(figureCells, axis);
-  const ux = Math.cos(axis);
-  const uy = Math.sin(axis);
+  const ux = PMath.cos(axis);
+  const uy = PMath.sin(axis);
   const along =
     (fig.centre[0] - whole.centre[0]) * ux +
     (fig.centre[1] - whole.centre[1]) * uy;

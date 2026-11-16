@@ -33,6 +33,7 @@
  * z triples in the recentred data frame (Z up) in and out, wound
  * counter-clockwise seen from outside. No THREE, no DOM.
  */
+import { PMath } from "./portable-math";
 import { SINK } from "./ground-join";
 
 /** A drive's clear height (m): a fire lane's 3.5 m under DIN 14090 and a
@@ -110,7 +111,7 @@ export interface PassageAxis {
 }
 
 const unit = (x: number, y: number): [number, number] => {
-  const l = Math.hypot(x, y);
+  const l = PMath.hypot(x, y);
   return l > 0 ? [x / l, y / l] : [0, 0];
 };
 
@@ -151,7 +152,7 @@ export function passageRegions(p: PassageAxis): Plane[][] {
     const a = axis[k];
     const b = axis[k + 1];
     const d = dirs[k];
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const len = PMath.hypot(b[0] - a[0], b[1] - a[1]);
     if (len === 0) {
       continue;
     }
@@ -217,7 +218,7 @@ function area2(poly: number[][]): number {
     y += u[2] * v[0] - u[0] * v[2];
     z += u[0] * v[1] - u[1] * v[0];
   }
-  return Math.hypot(x, y, z);
+  return PMath.hypot(x, y, z);
 }
 
 /** The part of a convex polygon outside a convex region, as polygons. */
@@ -306,7 +307,7 @@ export function groundUnder(
             1
           )
         : 0;
-    const d = Math.hypot(q[0] - a[0] - t * dx, q[1] - a[1] - t * dy);
+    const d = PMath.hypot(q[0] - a[0] - t * dx, q[1] - a[1] - t * dy);
     if (d < best) {
       best = d;
       z = p.ground[k] + t * (p.ground[k + 1] - p.ground[k]);

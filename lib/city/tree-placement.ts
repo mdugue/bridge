@@ -5,6 +5,7 @@
  * (lib/city/coarse-crowns.ts, scripts/coarse-crowns.ts). One owner, so a
  * coarse crown stands where its fine tree does. No THREE, no DOM.
  */
+import { PMath } from "./portable-math";
 import type { CanopyFeature, MonumentFeature, VegRowFeature } from "./features";
 import { epsgToWorld } from "./ground-clamp";
 import type { RecenterOffset } from "./ground-clamp";
@@ -21,7 +22,7 @@ export type TreeVeto = (x: number, y: number, h?: number) => boolean;
 
 /** Deterministic [0,1) jitter so the layer rebuilds identically. */
 export function hash(i: number): number {
-  const s = Math.sin(i * 12.9898) * 43_758.5453;
+  const s = PMath.sin(i * 12.9898) * 43_758.5453;
   return s - Math.floor(s);
 }
 

@@ -6,6 +6,7 @@
  * is a dozen metres, so the buildings are their cover of each pixel
  * (lib/city/footprint-figure.ts), not outlines: a block reads as a block.
  */
+import { PMath } from "../lib/city/portable-math";
 import sharp from "sharp";
 import { coverRaster } from "../lib/city/footprint-figure";
 import { packFootprints, readFootprints } from "../lib/city/footprint-pack";
@@ -110,7 +111,7 @@ export async function bakeMinimap(
     data,
     coverRaster(input.packs, extent, width, height),
     INK,
-    (c) => INK_OPACITY * c ** INK_GAMMA
+    (c) => INK_OPACITY * PMath.pow(c, INK_GAMMA)
   );
   return await sharp(data, { raw: { width, height, channels: 3 } })
     .webp({ quality: 82, effort: 5 })

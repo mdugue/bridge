@@ -24,6 +24,7 @@
  * walls run into it, as the LoD2 walls did; lower: the base is the LoD2's,
  * which already reached the lowest ground under the footprint (ADR 0030).
  */
+import { PMath } from "../lib/city/portable-math";
 import Delatin from "delatin";
 import Delaunator from "delaunator";
 import { ShapeUtils, Vector2 } from "three";
@@ -283,7 +284,7 @@ function segmentDistance(p: Point2, a: Point2, b: Point2): number {
           1
         )
       : 0;
-  return Math.hypot(p[0] - a[0] - u * dx, p[1] - a[1] - u * dy);
+  return PMath.hypot(p[0] - a[0] - u * dx, p[1] - a[1] - u * dy);
 }
 
 /** A TIN vertex closer than this to the outline is left to the outline's
@@ -465,7 +466,7 @@ function innerVertices(rings: Point2[][], tin: FaceTin): Point2[] {
 
 /** A vector scaled to length one (the zero vector kept). */
 function unit(n: readonly number[]): number[] {
-  const len = Math.hypot(n[0], n[1], n[2]) || 1;
+  const len = PMath.hypot(n[0], n[1], n[2]) || 1;
   return n.map((x) => x / len);
 }
 
@@ -521,7 +522,7 @@ function facePrism(
       around[t[k + j]].push(k / 3);
     }
   }
-  const cosCrease = Math.cos((CREASE_DEG * Math.PI) / 180);
+  const cosCrease = PMath.cos((CREASE_DEG * Math.PI) / 180);
   for (let k = 0; k < t.length; k += 1) {
     const own = unit(facets[Math.floor(k / 3)]);
     const n = [0, 0, 0];

@@ -4,6 +4,7 @@
  * columns (`assignWindows`) and each wall vertex's place on its wall, the
  * `_FACADE` attribute (`facadeOf`). No DOM.
  */
+import { PMath } from "../lib/city/portable-math";
 import { carriesPlinth } from "./city-fittings";
 import { cm } from "./city-bake";
 import type { BakedCityMesh } from "./city-bake";
@@ -395,7 +396,7 @@ function buriedWalls(
       if (!b) {
         return [];
       }
-      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const len = PMath.hypot(b[0] - a[0], b[1] - a[1]);
       if (!(top > reach(object)) || len === 0) {
         return [];
       }

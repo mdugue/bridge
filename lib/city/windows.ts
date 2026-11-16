@@ -43,6 +43,7 @@
  * are centred on the wall. Pure, no DOM.
  */
 
+import { PMath } from "./portable-math";
 import { isStructure } from "./building-tint";
 import { DORMER_SINK } from "./dormers";
 import { OPEN_ROOF_FUNCTIONS } from "./open-roofs";
@@ -702,7 +703,7 @@ function nearestModel(
     if (de > Math.max(NEAR_EAVE.m, NEAR_EAVE.share * host.eaveH)) {
       continue;
     }
-    const dist = Math.hypot(dc[0] - c[0], dc[1] - c[1]);
+    const dist = PMath.hypot(dc[0] - c[0], dc[1] - c[1]);
     const s = dist + 10 * de;
     if (dist <= NEAR_M && s < score) {
       score = s;
@@ -742,7 +743,7 @@ export const TOWARD_TYPE = {
 const toward = (
   ratio: number,
   k: { power: number; lo: number; hi: number }
-): number => Math.min(Math.max(ratio ** k.power, k.lo), k.hi);
+): number => Math.min(Math.max(PMath.pow(ratio, k.power), k.lo), k.hi);
 
 /** A spec from a rhythm, fitted into the storey: its axis and width drawn
  *  towards its type's (`TOWARD_TYPE`), a measured window as tall as its
@@ -1157,8 +1158,8 @@ function wallPlane(
   const nx = e1[1] * e2[2] - e1[2] * e2[1];
   const ny = e1[2] * e2[0] - e1[0] * e2[2];
   const nz = e1[0] * e2[1] - e1[1] * e2[0];
-  const len = Math.hypot(nx, ny, nz);
-  const lh = Math.hypot(nx, ny);
+  const len = PMath.hypot(nx, ny, nz);
+  const lh = PMath.hypot(nx, ny);
   if (len < 1e-6 || Math.abs(nz) > UPRIGHT * len) {
     return undefined;
   }
@@ -1518,7 +1519,7 @@ function placeOnWalls(
     }
   }
   for (const m of axes) {
-    const len = Math.hypot(m.b[0] - m.a[0], m.b[1] - m.a[1]);
+    const len = PMath.hypot(m.b[0] - m.a[0], m.b[1] - m.a[1]);
     if (len <= 0) {
       continue;
     }

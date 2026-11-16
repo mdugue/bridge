@@ -7,6 +7,7 @@
  * the clay without cutting the LoD2 wall. No panels, no glass, no handle.
  * Pure, no THREE.
  */
+import { PMath } from "./portable-math";
 import type { DoorFeature } from "./features";
 import { joinsAlong, SINK } from "./ground-join";
 import type { JoinPoint } from "./ground-join";
@@ -98,7 +99,7 @@ export function wallShiftAlong(
   positions: ArrayLike<number>,
   triangles: readonly number[]
 ): [number, number] {
-  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const len = PMath.hypot(b[0] - a[0], b[1] - a[1]);
   if (len < 1e-3) {
     return [0, 0];
   }
@@ -165,7 +166,7 @@ export function wallShiftKnots(
   positions: ArrayLike<number>,
   triangles: readonly number[]
 ): WallKnots {
-  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const len = PMath.hypot(b[0] - a[0], b[1] - a[1]);
   if (len < 1e-3) {
     return { f: [0, 1], s: [0, 0] };
   }
@@ -312,7 +313,7 @@ export function eaveAlong(
   /** the host's roof triangles: each one's first vertex index */
   roofs: readonly number[]
 ): number | undefined {
-  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const len = PMath.hypot(b[0] - a[0], b[1] - a[1]);
   if (len < 1e-3) {
     return undefined;
   }
@@ -362,7 +363,7 @@ function roofAt(
     const [p0, p1, p2] = [v(0), v(1), v(2)];
     const face = cross(sub(p1, p0), sub(p2, p0));
     // facing up, not a wall
-    if (face[2] <= 0.05 * Math.hypot(...face)) {
+    if (face[2] <= 0.05 * PMath.hypot(...face)) {
       continue;
     }
     const plane = (x: number, y: number) =>
@@ -441,7 +442,7 @@ export function rayHit(
   const fx = e1y * e2z - e1z * e2y;
   const fy = e1z * e2x - e1x * e2z;
   const fz = e1x * e2y - e1y * e2x;
-  if (fx * nx + fy * ny + fz * nz <= 0.7 * Math.hypot(fx, fy, fz)) {
+  if (fx * nx + fy * ny + fz * nz <= 0.7 * PMath.hypot(fx, fy, fz)) {
     return undefined;
   }
   const dx = -nx;

@@ -25,6 +25,7 @@
  * check (`checkJoins`, scripts/ground-joins.test.ts over every committed
  * tile) holds every layer — and every layer added later — to those rules.
  */
+import { PMath } from "./portable-math";
 
 /** Ground height at an EPSG point (m), or null off the known ground. */
 export type HeightAt = (x: number, y: number) => number | null;
@@ -123,7 +124,7 @@ export function followGround(
     ga: number | null,
     gb: number | null
   ): void => {
-    if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 2 * minStep) {
+    if (PMath.hypot(b[0] - a[0], b[1] - a[1]) > 2 * minStep) {
       const m: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
       const gm = heightAt(m[0], m[1]);
       if (
@@ -260,7 +261,7 @@ export function joinsAlong(
   b: JoinEnd,
   every = JOIN_EVERY_M
 ): JoinPoint[] {
-  const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / every));
+  const n = Math.max(1, Math.ceil(PMath.hypot(b.x - a.x, b.y - a.y) / every));
   const out: JoinPoint[] = [];
   for (let k = 0; k < n; k += 1) {
     const t = k / n;

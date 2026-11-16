@@ -26,6 +26,7 @@
  * The UV carries only the kind: `u` = the code's slot, `v` = the height
  * fraction (the shader's top edge and rooted foot).
  */
+import { PMath } from "./portable-math";
 import { followGround, joinsAlong, SINK } from "./ground-join";
 import type { JoinPoint } from "./ground-join";
 import { epsgToWorld } from "./ground-clamp";
@@ -120,7 +121,7 @@ function cumulative(line: Point2[]): number[] {
   for (let i = 1; i < line.length; i += 1) {
     const [x0, y0] = line[i - 1];
     const [x1, y1] = line[i];
-    out.push(out[i - 1] + Math.hypot(x1 - x0, y1 - y0));
+    out.push(out[i - 1] + PMath.hypot(x1 - x0, y1 - y0));
   }
   return out;
 }
@@ -154,7 +155,7 @@ function project(
             hi
           )
         : 0;
-    const d = Math.hypot(x0 + dx * t - p[0], y0 + dy * t - p[1]);
+    const d = PMath.hypot(x0 + dx * t - p[0], y0 + dy * t - p[1]);
     if (d < best[1]) {
       best = [acc[i] + Math.sqrt(len2) * t, d];
     }
@@ -198,7 +199,7 @@ function slice(
 function isClosed(line: Point2[]): boolean {
   const [x0, y0] = line[0];
   const [x1, y1] = line.at(-1) ?? line[0];
-  return line.length > 3 && Math.hypot(x1 - x0, y1 - y0) <= CLOSED_M;
+  return line.length > 3 && PMath.hypot(x1 - x0, y1 - y0) <= CLOSED_M;
 }
 
 interface Gap {
@@ -384,7 +385,7 @@ function simplify(line: Point2[]): Point2[] {
   }
   const [x0, y0] = line[0];
   const [x1, y1] = line.at(-1) ?? line[0];
-  const len = Math.hypot(x1 - x0, y1 - y0);
+  const len = PMath.hypot(x1 - x0, y1 - y0);
   let worst = 0;
   let at = 0;
   for (let i = 1; i < line.length - 1; i += 1) {
@@ -392,7 +393,7 @@ function simplify(line: Point2[]): Point2[] {
     const d =
       len > 0
         ? Math.abs((x1 - x0) * (y0 - y) - (x0 - x) * (y1 - y0)) / len
-        : Math.hypot(x - x0, y - y0);
+        : PMath.hypot(x - x0, y - y0);
     if (d > worst) {
       worst = d;
       at = i;
@@ -422,7 +423,7 @@ function stationsOf(
     const [x1, y1] = line[i + 1];
     const steps = Math.max(
       1,
-      Math.ceil(Math.hypot(x1 - x0, y1 - y0) / SAMPLE_M)
+      Math.ceil(PMath.hypot(x1 - x0, y1 - y0) / SAMPLE_M)
     );
     for (let s = 0; s < steps; s += 1) {
       pts.push([x0 + ((x1 - x0) * s) / steps, y0 + ((y1 - y0) * s) / steps]);
@@ -491,7 +492,7 @@ class Builder {
   quad(a: Station, b: Station, code: number, lo: number, hi: number): void {
     const dx = b.wx - a.wx;
     const dz = b.wz - a.wz;
-    const tl = Math.hypot(dx, dz) || 1;
+    const tl = PMath.hypot(dx, dz) || 1;
     const n: [number, number, number] = [-dz / tl, 0, dx / tl];
     const u = fenceU(code);
     const v0 = this.vertex(a.wx, a.g + lo, a.wz, n, u, 0);

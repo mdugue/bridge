@@ -11,6 +11,7 @@
  * Saturday, Sunday; a public holiday runs as its weekday), and the trips
  * of the day before that run past midnight are still on their way.
  */
+import { PMath } from "./portable-math";
 import type { Point2 } from "./polyline";
 import type { TramPattern, TramTimetableFile } from "./tram-timetable-file";
 
@@ -146,7 +147,7 @@ export function routeOperator(tt: TramTimetable, route: number): TramOperator {
 export function carLength(livery: TramLivery, seed: number): number {
   const total = livery.lengths.reduce((n, [, w]) => n + w, 0);
   // a hash of the seed in [0, 1): neighbouring trips draw unalike
-  const h = Math.abs(Math.sin(seed * 12.9898 + 78.233) * 43_758.5453) % 1;
+  const h = Math.abs(PMath.sin(seed * 12.9898 + 78.233) * 43_758.5453) % 1;
   let at = h * total;
   for (const [length, w] of livery.lengths) {
     if (at < w) {
@@ -196,7 +197,7 @@ export function measurePattern(p: TramPattern): MeasuredPattern {
   for (let i = 1; i < p.coords.length; i += 1) {
     const [ax, ay] = p.coords[i - 1];
     const [bx, by] = p.coords[i];
-    dist.push(dist[i - 1] + Math.hypot(bx - ax, by - ay));
+    dist.push(dist[i - 1] + PMath.hypot(bx - ax, by - ay));
   }
   const onBridge = p.coords.map(() => false);
   for (const [from, to] of p.bridge) {
@@ -238,7 +239,7 @@ export function pointAlong(p: MeasuredPattern, d: number): PathPoint {
   const f = len > 0 ? (s - dist[lo]) / len : 0;
   const dx = bx - ax;
   const dy = by - ay;
-  const dl = Math.hypot(dx, dy) || 1;
+  const dl = PMath.hypot(dx, dy) || 1;
   return {
     x: ax + dx * f,
     y: ay + dy * f,

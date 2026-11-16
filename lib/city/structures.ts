@@ -12,6 +12,7 @@
  * shadows, collide and can be picked like any building. No THREE, no DOM:
  * the roof's triangulation is passed in.
  */
+import { PMath } from "./portable-math";
 import type { HeightField, StructureFeature, StructureKind } from "./features";
 import { postsMesh, roofDepth, roofPosts } from "./open-roofs";
 import type { Point2 } from "./polyline";
@@ -117,7 +118,7 @@ export function columnMesh(
   }));
   const around = (radius: number, z: number, k: number) => {
     const a = (2 * Math.PI * k) / sides;
-    return [cx + radius * Math.cos(a), cy + radius * Math.sin(a), z];
+    return [cx + radius * PMath.cos(a), cy + radius * PMath.sin(a), z];
   };
   for (let i = 0; i + 1 < rings.length; i += 1) {
     const lo = rings[i];
@@ -428,6 +429,6 @@ export function structureFootprint(f: StructureFeature): Point2[] {
   const r = p?.r ?? 1;
   return Array.from({ length: 8 }, (_, k): Point2 => {
     const a = (2 * Math.PI * k) / 8;
-    return [x + r * Math.cos(a), y + r * Math.sin(a)];
+    return [x + r * PMath.cos(a), y + r * PMath.sin(a)];
   });
 }

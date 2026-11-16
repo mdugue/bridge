@@ -2,6 +2,7 @@
  * The city in numbers of scripts/prepare-data.ts, for the start page. Its
  * bake's entries name this module (bake-entries.ts `siteStats`).
  */
+import { PMath } from "../../lib/city/portable-math";
 import sharp from "sharp";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -76,7 +77,8 @@ export async function publishStats(
   publisher.publishPlain(SITE_STATS_FILE, stats);
 }
 
-const round = (n: number, d = 3) => Math.round(n * 10 ** d) / 10 ** d;
+const round = (n: number, d = 3) =>
+  Math.round(n * PMath.pow(10, d)) / PMath.pow(10, d);
 
 async function siteStats(
   footprintFiles: ReadonlyMap<string, string>,

@@ -6,6 +6,7 @@
  * deck's axis from its first abutment. No THREE, no DOM.
  */
 
+import { PMath } from "./portable-math";
 import { reachLevel } from "./ground-join";
 
 /** Spacing of the baked stations (`line`, `rise`) along the axis (m) —
@@ -565,7 +566,7 @@ export function axisFrame(
   const pts: [number, number][] = [];
   for (const [x, y] of points) {
     const last = pts.at(-1);
-    if (!last || Math.hypot(x - last[0], y - last[1]) > 1e-6) {
+    if (!last || PMath.hypot(x - last[0], y - last[1]) > 1e-6) {
       pts.push([x, y]);
     }
   }
@@ -577,7 +578,7 @@ export function axisFrame(
   for (let i = 0; i < pts.length - 1; i += 1) {
     const dx = pts[i + 1][0] - pts[i][0];
     const dy = pts[i + 1][1] - pts[i][1];
-    const len = Math.hypot(dx, dy);
+    const len = PMath.hypot(dx, dy);
     dirs.push([dx / len, dy / len]);
     cum.push(cum[i] + len);
   }
@@ -610,7 +611,7 @@ export function axisFrame(
         const t = rx * dx + ry * dy;
         const open = (i === 0 && t < 0) || (i === last && t > len);
         const tc = open ? t : Math.min(Math.max(t, 0), len);
-        const d = Math.hypot(rx - dx * tc, ry - dy * tc);
+        const d = PMath.hypot(rx - dx * tc, ry - dy * tc);
         if (d < best.d) {
           best = { d, s: cum[i] + tc, offset: -rx * dy + ry * dx };
         }

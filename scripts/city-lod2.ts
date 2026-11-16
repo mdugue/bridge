@@ -5,6 +5,7 @@
  * and each roof face's own colour (`withFaceRoofColours`), and the frame a
  * tile is recentered in (`cityFrame`). No DOM.
  */
+import { PMath } from "../lib/city/portable-math";
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
 import type { Matrix4, Mesh, BufferGeometry } from "three";
 import type { RoofColours } from "../lib/city/building-tint";
@@ -164,7 +165,7 @@ function corners(c: Corners | null, x: number, y: number): Corners {
   if (!c) {
     return { x, y, more: false };
   }
-  if (!c.more && Math.hypot(x - c.x, y - c.y) > CORNER_M) {
+  if (!c.more && PMath.hypot(x - c.x, y - c.y) > CORNER_M) {
     c.more = true;
   }
   return c;
