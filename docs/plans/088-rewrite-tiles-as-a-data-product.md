@@ -162,7 +162,7 @@ a maintainer action and shows up as a data diff".
   them; they are never published.
 - **git's history.** Removing the files from the tree leaves every old
   version in the pack. Shrinking it means rewriting history: every open
-  pull request (24 on 2026-11-16) and every clone would have to follow.
+  pull request (23 on 2026-11-16) and every clone would have to follow.
   That is the maintainer's decision and no step of this plan.
 - A service worker over the store (the README's Direction item 7).
 
