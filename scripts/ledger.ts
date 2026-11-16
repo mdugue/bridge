@@ -9,6 +9,8 @@
  *
  *   bun scripts/ledger.ts           # write qa/ledger.json
  *   bun scripts/ledger.ts --check   # name each figure that differs, exit 1
+ *   … --browser                     # with what a browser reads
+ *                                   # (scripts/ledger-browser.ts)
  *
  * Any other argument is refused (exit 2) and nothing is written: a
  * mistyped `--check` must not pass as a write. It reads
@@ -16,7 +18,9 @@
  * first: the reference site for the bytes and counters, and every site a
  * build serves for the `rasters` section (plan 091 phase 0,
  * scripts/ledger-rasters.ts). A write formats the file with oxfmt, as it is
- * committed; `--check` compares values, not layout.
+ * committed; `--check` compares values, not layout. `--browser` reads the
+ * NEXT_PUBLIC_POC_DEBUG=1 build too; without it the committed browser
+ * figures stand, and `--check` says it did not compare them.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -61,6 +65,7 @@ import type { ContentExtras } from "../lib/city/tileset";
 import { TILESET_FILE, TILESET_SPAWN_FILE } from "../lib/city/tileset";
 import { REFERENCE_SITE } from "../sites";
 import { measureBakeStore } from "./ledger-bake-store";
+import { browserSections, timingReport } from "./ledger-browser";
 import { measureDressing } from "./ledger-dressing";
 import { rasterLedger, readySites } from "./ledger-rasters";
 
@@ -293,7 +298,7 @@ function formatAsCommitted(file: string): void {
 
 /** The arguments the script takes. A new one (a section's switch) joins
  *  here; anything else is refused. */
-export const FLAGS = ["--check"] as const;
+export const FLAGS = ["--check", "--browser"] as const;
 
 export interface RunOptions {
   /** where the report goes */
@@ -302,6 +307,28 @@ export interface RunOptions {
   root?: string;
   site?: string;
   today?: string;
+}
+
+/** The browser's sections (lib/city/ledger-browser.ts): read now with
+ *  `--browser`, else the committed ones, which `--check` then does not
+ *  compare. */
+async function browserPart(
+  read: boolean,
+  site: string,
+  root: string,
+  committed: Partial<Ledger> | null
+): Promise<Pick<Ledger, "browser" | "timings">> {
+  if (read) {
+    return await browserSections(
+      publishedFiles(site, root).files,
+      platform(),
+      root
+    );
+  }
+  return {
+    ...(committed?.browser ? { browser: committed.browser } : {}),
+    ...(committed?.timings ? { timings: committed.timings } : {}),
+  };
 }
 
 /**
@@ -335,8 +362,10 @@ export async function run(
     : null;
   // one key a section: the reference site's, then every site's rasters,
   // then the dressing (its recorded part only on a write: the check
-  // never compares it), then the bakes' hand-over (plan 092)
+  // never compares it), then the bakes' hand-over (plan 092), then what a
+  // browser read (`--browser`)
   const check = argv.includes("--check");
+  const browser = argv.includes("--browser");
   const fresh = {
     ...measure(site, root),
     rasters: await measureRasters(root),
@@ -347,6 +376,12 @@ export async function run(
       check ? undefined : { committed, today }
     ),
     bakeStore: measureBakeStore(root),
+    ...(await browserPart(
+      browser,
+      site,
+      root,
+      committed as Partial<Ledger> | null
+    )),
   };
   if (!check) {
     const ledger = datedLedger(fresh, committed, today);
@@ -355,16 +390,22 @@ export async function run(
     out(`${LEDGER_PATH} (${ledger.dated})\n`);
     return 0;
   }
+  if (browser && fresh.timings) {
+    out(timingReport(fresh.timings));
+  }
   const moved = ledgerDiff(committed ?? {}, fresh);
   for (const line of moved) {
     out(`differs: ${line}\n`);
+  }
+  if (!browser) {
+    out("the browser figures were not compared (no --browser)\n");
   }
   if (moved.length === 0) {
     out(`${LEDGER_PATH} holds\n`);
     return 0;
   }
   out(
-    `${moved.length} figures differ: run bun scripts/ledger.ts and commit ${LEDGER_PATH}\n`
+    `${moved.length} figures differ: run bun scripts/ledger.ts${moved.some((m) => m.startsWith("browser.")) ? " --browser" : ""} and commit ${LEDGER_PATH}\n`
   );
   // the text's wire bytes are zlib's on CI's platform: a platform
   // difference shows here at a glance

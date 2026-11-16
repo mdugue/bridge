@@ -564,7 +564,8 @@ test("a write, then a check that holds; a second write is the same file", async 
   expect(written).not.toBe(`${JSON.stringify(ledger, null, 2)}\n`);
   expect(await runOn(root, ["--check"], "2027-01-01")).toEqual({
     code: 0,
-    report: "qa/ledger.json holds\n",
+    report:
+      "the browser figures were not compared (no --browser)\nqa/ledger.json holds\n",
   });
   // another day, the same figures: the same bytes
   const again = await runOn(root, [], "2027-01-01");
@@ -598,7 +599,7 @@ test("an argument the script does not know is refused, nothing written", async (
     expect(report).toContain("unknown argument");
     expect(existsSync(nodePath.join(root, LEDGER_PATH))).toBe(false);
   }
-  expect([...FLAGS]).toEqual(["--check"]);
+  expect([...FLAGS]).toEqual(["--check", "--browser"]);
   // the script itself, as CI starts it: the code is the process's
   const script = Bun.spawnSync(["bun", "scripts/ledger.ts", "--chek"], {
     cwd: nodePath.join(import.meta.dir, ".."),

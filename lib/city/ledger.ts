@@ -15,6 +15,7 @@
  * machine (lib/city/portable-math.ts), so nothing is left out of a sum.
  */
 import { gzipSync } from "node:zlib";
+import type { BrowserFigures, Timings } from "./ledger-browser";
 import type { Counters } from "./ledger-counters";
 import type { BakeStoreLedger } from "./ledger-bake-store";
 import { DRESSING_UNCOMPARED } from "./ledger-dressing";
@@ -690,6 +691,9 @@ export interface Ledger {
   /** what the bakes hand over and how they cross a tile's edge (plan 092,
    *  ledger-bake-store.ts) */
   bakeStore: BakeStoreLedger;
+  /** what a browser reads (lib/city/ledger-browser.ts): absent until
+   *  `--browser` has run */
+  browser?: BrowserFigures;
   buildings: BuildingFigures;
   /** the bytes and requests of each set */
   bytes: Record<LedgerSet, SetLedger>;
@@ -705,6 +709,8 @@ export interface Ledger {
   rasters: RasterLedger;
   site: string;
   tiles: number;
+  /** the browser's timings, recorded, never compared */
+  timings?: Timings;
   version: typeof LEDGER_VERSION;
   wire: string;
 }
@@ -712,7 +718,12 @@ export interface Ledger {
 /** The paths `--check` never compares, each with everything under it
  *  (`dated`; a section's recorded part joins by its path, as
  *  `browser.readWith`). */
-export const UNCOMPARED: readonly string[] = ["dated", DRESSING_UNCOMPARED];
+export const UNCOMPARED: readonly string[] = [
+  "dated",
+  DRESSING_UNCOMPARED,
+  "timings",
+  "browser.readWith",
+];
 
 /** Leaf paths with their values (`bytes.fine.spawn.bytes`). */
 function leaves(
