@@ -147,6 +147,13 @@ One list, kept by the coordinating session; a plan's own *Findings*
 holds the detail. A row leaves when its answer is written into the plan
 it belongs to. "Default" is what the series does if nothing is said.
 
+A question reaches the maintainer on its own, never inside a status
+report, and only with figures an independent review has read. It names
+the options, the recommendation and what happens if nothing is said.
+An answer closes it: a figure corrected later is written into the
+record, and the question comes back only if the correction would turn
+the trade around.
+
 | # | What | Default or recommendation | Needed before | Detail |
 |---|---|---|---|---|
 | 1 | The store the tiles are published to; whether the browser reads it through the site's own host or a second one; who publishes (three decisions) — and an account with a write credential for a ten-file trial | No default: R2 or Bunny are left after the table, the trial decides between them; publishing by a CI job | Milestone 4 (088); 092's phase 4 if its format is binary | [088](./088-rewrite-tiles-as-a-data-product.md), *Findings*, decisions 1–3 |
