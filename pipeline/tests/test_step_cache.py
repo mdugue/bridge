@@ -244,7 +244,7 @@ def test_quiet_files_are_not_recorded(tmp_path):
 
 def test_code_hash_follows_imports(tmp_path, monkeypatch):
     """A step's hash covers the modules it imports, not every bake module."""
-    seen = step_cache._closure("bake.walls")
+    seen = step_cache.closure("bake.walls")
     assert "bake.osm" in seen
     assert "bake.roof_colour" not in seen
     real = step_cache._module_path
@@ -357,7 +357,7 @@ def test_the_repo_lockfile_keys_the_bake_s_imports():
 def test_code_hash_leaves_the_cache_s_own_module_out(tmp_path, monkeypatch):
     """This module is in nearly every step's imports; its edits bake
     nothing again (`VERSION` says when they should)."""
-    assert "bake.step_cache" in step_cache._closure("bake.walls")
+    assert "bake.step_cache" in step_cache.closure("bake.walls")
     real = step_cache._module_path
 
     def edited(module):
