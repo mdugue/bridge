@@ -118,6 +118,28 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
 
+  # TEMPORARY (removed before this PR is final): a cold bake of Dresden on
+  # this runner and what it wrote for the buildings, layer by layer.
+  diag:
+    name: Diagnostic (building bytes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - run: lscpu | grep -E '^(Model name|CPU\(s\)|Flags):'
+      - run: ldd --version | head -1
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      - run: bun scripts/prepare-sites.ts dresden > bake.log 2>&1 || (tail -50 bake.log; exit 1)
+      - run: bun scripts/diag-city-bytes.ts dresden --full | tee diag.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: diag
+          path: diag.txt
+          retention-days: 7
+
   # Build and e2e share a job: its build step is the build check, and the
   # Playwright step serves the artifact it just produced instead of
   # rebuilding inside `webServer`. The suite is split over four runners that
