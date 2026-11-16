@@ -137,6 +137,29 @@ types too, the rest of 095 last; 096 runs beside everything.
 - **Who does what.** Fable 5.2 coordinates, reviews, and builds the
   plans that are hard (088 from phase 1, 090, 092, 093, 094's
   register, the plates); Opus 5.5 builds the rest.
+- **Every milestone PR opens with two lists**: what it holds, with the
+  ledger's figures before and after; and the table below as it stands
+  that day.
+
+## What waits for the maintainer
+
+One list, kept by the coordinating session; a plan's own *Findings*
+holds the detail. A row leaves when its answer is written into the plan
+it belongs to. "Default" is what the series does if nothing is said.
+
+| # | What | Default or recommendation | Needed before | Detail |
+|---|---|---|---|---|
+| 1 | The store the tiles are published to; whether the browser reads it through the site's own host or a second one; who publishes (three decisions) — and an account with a write credential for a ten-file trial | No default: R2 or Bunny are left after the table, the trial decides between them; publishing by a CI job | Milestone 4 (088); 092's phase 4 if its format is binary | [088](./088-rewrite-tiles-as-a-data-product.md), *Findings*, decisions 1–3 |
+| 2 | A machine with a GPU that renders the plates (tier 2) | The maintainer's Mac, once a visible milestone; until then a visible PR is judged on CI's software renderer, which only says "changed" | Milestone 2 (the first that changes the picture) | [087](./087-rewrite-measuring-stick.md), "Two tiers" |
+| 3 | When the bake modules may be edited for their types (decision B): it re-runs every step on every tile | With 092's re-bake, so nothing is baked twice | 089's phases 3–4 | [089](./089-rewrite-python-types.md), "Decision B" |
+| 4 | The format of the bake store, if 092's phase 0 recommends one that needs a new dependency | None until the spike reports; GeoJSON under the schema stays possible | 092's phase 4 | [092](./092-rewrite-bake-store.md), phase 0 |
+| 5 | A full re-bake of every site on the maintainer's machine (an action, not a decision) | — | Milestone 5 (092) | [092](./092-rewrite-bake-store.md), *Status* |
+| 6 | How far the frame types go (095's part B2) | The narrower scope its spike recommends | Milestone 6 | [095](./095-rewrite-packages-and-frames.md), *Findings* |
+| 7 | The lines at which a phone's figures still ask for the quadtree (093's gate) | None: put to the maintainer with the figures after 090 and 091 | Milestone 6 | [093](./093-rewrite-streaming-quadtree.md) |
+
+Answered so far: the rails as a segment table (2026-11-16;
+[090](./090-rewrite-dressing-gpu-ready.md), "What the maintainer has
+granted").
 
 ## What each plan may assume of the others
 
