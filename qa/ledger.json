@@ -7,16 +7,16 @@
   "published": {
     "files": 700,
     "boot": {
-      "bytes": 18554,
-      "files": 2
+      "bytes": 39818,
+      "files": 3
     },
     "tiles": {
       "bytes": 193620659,
       "files": 641
     },
     "site": {
-      "bytes": 3536018,
-      "files": 40
+      "bytes": 3514754,
+      "files": 39
     },
     "server": {
       "bytes": 3859068,
@@ -49,7 +49,7 @@
         "files": 1
       },
       "plate": {
-        "class": "site",
+        "class": "boot",
         "bytes": 21264,
         "files": 1
       },
@@ -268,6 +268,27 @@
         "bytes": 193620659,
         "files": 641
       }
+    },
+    "unvisited": {
+      "spawn": {
+        "tile": "33412_5656_2_sn",
+        "bytes": 153059,
+        "files": 1
+      },
+      "median": {
+        "tile": "33414_5656_2_sn",
+        "bytes": 133590,
+        "files": 1
+      },
+      "largest": {
+        "tile": "33414_5654_2_sn",
+        "bytes": 207054,
+        "files": 1
+      },
+      "site": {
+        "bytes": 1961592,
+        "files": 15
+      }
     }
   },
   "buildings": {
@@ -464,7 +485,7 @@
     },
     "upstreamWorkarounds": {
       "entries": 10,
-      "sites": 9
+      "sites": 8
     }
   },
   "rasters": {

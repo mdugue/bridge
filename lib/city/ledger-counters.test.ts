@@ -1,14 +1,13 @@
 import { expect, test } from "bun:test";
 import {
-  codeLines,
   layerModules,
-  lexPy,
-  lexTs,
   longestFunction,
   seamModules,
   topFunctions,
   upstreamWorkarounds,
 } from "./ledger-counters";
+import { codeLines, lexPy } from "./source-lexer";
+import { BEFORE_REGEX, lexTs } from "./ts-lexer";
 
 const ts = (...lines: string[]) => lines.join("\n");
 /** A template's hole, opened (written so that no line here reads as one). */
@@ -302,13 +301,15 @@ test("the bake modules that handle a tile's edge, by the calls that do", () => {
     py("k.py", "REG_MARGIN = 0.12\nbest = alias + REG_MARGIN"),
     py("l.py", "roof_seams = seamark(neighbourhood)\ncls = tile.classes()"),
     py("m.py", "pad = style.margin\ndisowns(x)\nmemoize(f)"),
+    py("n.py", "margins = 3\nx = spread_osm(a) + bread_ways(b)\nmemo = {}"),
+    py("o.py", "y = (memo, 1)\nz = swgs84_bbox(t)\nw = rdom_paths(t)"),
     // not a bake module
     { path: "pipeline/tests/test_a.py", text: "owns(b, 1, 2)" },
     { path: "pipeline/bake/tree_allometry.json", text: "owns(" },
   ]);
   expect(counted).toEqual({
     matching: 8,
-    of: 13,
+    of: 15,
     ways: {
       osmMargin: 3,
       readMargin: 3,
@@ -658,4 +659,184 @@ test("the lexers' ends, one character at a time", () => {
   expect(readPy('f("""x""",owns(b))').bare).toContain(",owns(b))");
   // the statement before a function is not the function's
   expect(names("\nconst x = 1;\nfunction a() {\n}\n")).toEqual(["a 2"]);
+});
+
+test("a value may start after each of the words, an arrow or a brace", () => {
+  for (const word of BEFORE_REGEX) {
+    expect(read(`${word} /'/.test(s); // c`).comments).toEqual(["c"]);
+  }
+  expect(BEFORE_REGEX.size).toBe(13);
+  expect(read("f((s) => /'/.test(s)); // c").comments).toEqual(["c"]);
+  expect(read("if (a) {\n}\n/'/.test(s); // c").comments).toEqual(["c"]);
+  // a word that only ends like one is a name: a division follows it
+  expect(read("a = preturn / 2; b = 'x'; // c").comments).toEqual(["c"]);
+  // after `>` and `<` a slash divides or closes a tag, never opens
+  expect(read("a = b > c / 2; d = '/'; // c").comments).toEqual(["c"]);
+});
+
+const jsx = (text: string) => {
+  const { bare, comments } = lexTs(text, true);
+  expect(bare.length).toBe(text.length);
+  return { bare, comments };
+};
+
+test("JSX text is text: no string, no bracket, no comment in it", () => {
+  const line = jsx("return <div>{a ? <B x={1} /> : null}</div>; // c");
+  expect(line.comments).toEqual(["c"]);
+  expect(line.bare.trimEnd()).toBe(
+    "return <div>{a ? <B x={1} /> : null}</div>;"
+  );
+  const text = jsx(
+    ts(
+      "const a = (",
+      '  <p title="it\'s (" on={() => f(1)}>',
+      "    It's {n} ( see https://example.org // no",
+      "    <b>:-)</b> {/* a comment */}",
+      "  </p>",
+      "); // c"
+    )
+  );
+  expect(text.comments).toEqual(["a comment", "c"]);
+  expect(text.bare.split("\n").map((l) => l.trim())).toEqual([
+    "const a = (",
+    '<p title="      " on={() => f(1)}>',
+    "{n}",
+    "<b>   </b> {               }",
+    "</p>",
+    ");",
+  ]);
+  // a fragment, a self-closing tag, a member's name
+  expect(jsx("x = <>don't</>; // c").comments).toEqual(["c"]);
+  expect(jsx("x = <A.B c='d' />; y = 'e'; // c").comments).toEqual(["c"]);
+  expect(jsx("x = <a>{b}</a> / 2; // c").comments).toEqual(["c"]);
+});
+
+test("an angle bracket that opens no tag", () => {
+  // a comparison, a generic call, a generic's parameter, a signature
+  for (const code of [
+    "if (a < b) { c = 'it'; }",
+    "const r = useRef<HTMLElement | null>(null); const s = 'it';",
+    "const f = <T,>(a: T) => a; const s = 'it';",
+    "const f = <T extends U>(a: T) => a; const s = 'it';",
+    "const f = <T = U>(a: T) => a; const s = 'it';",
+    "type F = { g: <T>(a: T) => T }; const s = 'it';",
+    "const m = new Map<string, () => void>(); const s = 'it';",
+  ]) {
+    expect(jsx(`${code} // c`).comments).toEqual(["c"]);
+    expect(jsx(`${code} // c`).bare).toContain("'  '");
+  }
+  // a component called like a signature is one: its closing tag follows
+  expect(jsx("x = <T>(don't)</T>; // c").comments).toEqual(["c"]);
+  // without JSX none of it is read: a .ts file's `<` is an operator
+  expect(lexTs("x = <T>(a)</T>; // c").comments).toEqual(["c"]);
+  expect(lexTs("x = <p>it's</p>; // c").comments).toEqual([]);
+});
+
+test("a .tsx file's functions are measured through its JSX", () => {
+  const text = ts(
+    "export function Card({ n }: { n: number }) {",
+    "  return (",
+    "    <div>",
+    "      It's {n} (",
+    "      {n > 1 ? <B x={1} /> : null}",
+    "    </div>",
+    "  );",
+    "}",
+    "export const small = () => <i>)</i>;"
+  );
+  expect(topFunctions({ path: "card.tsx", text })).toEqual([
+    { name: "Card", lines: 8 },
+    { name: "small", lines: 1 },
+  ]);
+  expect(() => topFunctions({ path: "card.ts", text })).toThrow();
+  expect(layerModules([{ path: "a/card-layer.tsx", text }])).toEqual({
+    files: 1,
+    codeLines: 9,
+  });
+});
+
+const BODY = ["  a();", "  b();", "  c();", "  d();"];
+
+test("the boot's lines, however it is written or wrapped", () => {
+  const forms: [string, string[]][] = [
+    ["bootApp", ["export async function bootApp(o: O): Promise<A> {"]],
+    ["bootApp", ["export const bootApp = async (o: O): Promise<A> => {"]],
+    ["bootApp", ["const bootApp = async function (o: O) {"]],
+    ["bootApp", ["const bootApp = traced(async function bootApp(o: O) {"]],
+    ["bootApp", ["export const bootApp = traced('boot', async (o) => {"]],
+    ["register", ["register(async function bootApp(o: O) {"]],
+    ["bootApp", ["export default class bootApp {"]],
+    // a return type printed as the formatter prints a union
+    [
+      "bootApp",
+      [
+        "export async function bootApp(",
+        "  o: O",
+        "):",
+        "  | { never: true }",
+        "  | Promise<A> {",
+      ],
+    ],
+  ];
+  for (const [name, head] of forms) {
+    const close =
+      head[0]?.includes("(async") || head[0]?.endsWith("(o) => {")
+        ? "});"
+        : "}";
+    const text = ts("const x = 1;", ...head, ...BODY, close, "const y = 2;");
+    expect(topFunctions({ path: "a.ts", text })).toEqual([
+      { name, lines: head.length + BODY.length + 1 },
+    ]);
+  }
+  // held in a table, it is the table's
+  expect(
+    names(ts("const table = {", "  boot: () => {", ...BODY, "  },", "};"))
+  ).toEqual([]);
+  expect(names(ts("const list = [", "  function a() {", "  },", "];"))).toEqual(
+    []
+  );
+  // a type, an interface and an import hold no function
+  expect(
+    names(
+      ts(
+        "type F = (a: number) => void;",
+        "export interface G {",
+        "  f: () => void;",
+        "}",
+        "import { functions } from './f';",
+        "export { classy } from './c';",
+        "declare module 'x' {",
+        "}",
+        "const classes = 3;",
+        "const fn = functionOf;",
+        "export default x;"
+      )
+    )
+  ).toEqual([]);
+  expect(names("export default traced(() => {\n});\n")).toEqual(["traced 2"]);
+});
+
+test("a closing brace ends a statement only before code at a line's start", () => {
+  // an object as a default, a brace that ends its line inside a head
+  expect(
+    names(
+      ts(
+        "function a(",
+        "  o = {}",
+        ") {",
+        "  return o;",
+        "}",
+        "",
+        "// a comment, then",
+        "function b():",
+        "  | { a: 1 }",
+        "  | {",
+        "      b: 2;",
+        "    } {",
+        "  return 1;",
+        "}"
+      )
+    )
+  ).toEqual(["a 5", "b 7"]);
+  expect(names("function a() {\n}\n\n\n  \n")).toEqual(["a 2"]);
 });

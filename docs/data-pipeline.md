@@ -1252,10 +1252,10 @@ The script lists the site's directory, not the manifest alone:
 
 - **tiles** — every file a tile of the tileset names (the set *all*
   below, over the site);
-- **boot** — `manifest.json` and the tileset JSON, which every visit of a
-  city fetches before its first frame;
+- **boot** — `manifest.json`, the tileset JSON and the ground plate, which
+  every visit of a city fetches before its first frame;
 - **site** — the site-wide files a visit fetches when it asks for them:
-  the lite profile's tileset, the plate, the provenance, the landmark
+  the lite profile's tileset, the provenance, the landmark
   facts, the trams' timetable, the murals and their drawings, the walks
   and their photos, the minimap, the start page's site map;
 - **server** — what no visitor fetches: the inquiry's knowledge
@@ -1266,7 +1266,12 @@ The site-wide rows are one table, `SITE_FILES`; `published.kinds` has each
 row's bytes. A published file that no tile and no row names is an
 **error**: whoever publishes a new file adds its row and says who fetches
 it. So bytes cannot leave the gate by moving — a side file inlined into
-the tileset shows as the boot growing by what the file held.
+the tileset shows as the boot growing by what the file held — nor by a
+name the ledger does not read: a tile that names a file the set *all*
+does not hold (a new extras key, a third content, a path out of the
+site's directory) is an error too. Beside the sites' directories lies
+`public/data/sites.json`, the build's index of its sites, which the
+server reads and no visitor fetches: it is in no class.
 
 The rule for a file's bytes on the wire: `.png`, `.webp` and `.gz` at face
 value; `.json` and `.geojson` gzipped at level 6; any other extension is an
@@ -1274,7 +1279,7 @@ error, never a guess. The text figures are the pinned Bun's zlib's, not
 what a host sends (zlib 1.3 gives 0.6–2.2 % other bytes at the same level,
 and the host sends brotli): a stand-in kept constant, so the figure moves
 with the files and with Bun's version only. A request is a file. Per tile,
-the ledger reads the tileset's names in six sets:
+the ledger reads the tileset's names in seven sets:
 
 - **far** — what a tile in view costs from afar: the far buildings with
   their side files (the facade reading, the sky view), the coarse terrain,
@@ -1294,7 +1299,11 @@ the ledger reads the tileset's names in six sets:
   ones);
 - **ask** — the inquiry card's files (ADR 0042);
 - **all** — every file the tile names: both levels' twins, the minimap's
-  footprints and bridges, the card's.
+  footprints and bridges, the card's;
+- **unvisited** — the files of *all* that none of the sets above fetches
+  on either tier: on Dresden exactly the fifteen footprint files, which
+  the build reads for the minimap. A fetch the viewer drops or adds moves
+  it.
 
 Which rasters a level reads is the viewer's own rule: `rasterFiles`
 (`app/_components/tile-rasters.ts`) over the kinds a level acquires, with
@@ -1328,10 +1337,12 @@ files in brackets):
 | near | 3.04 (1) | 2.45 | 4.25 | 37.1 (15) |
 | ask | 0.04 (1) | 0.02 | 0.04 | 0.35 (15) |
 | all | 13.8 (43) | 13.8 | 17.5 | 193.6 (641) |
+| unvisited | 0.15 (1) | 0.13 | 0.21 | 1.96 (15) |
 
 The published directory holds 700 files: the tiles' 641 (193.6 MB), the
-boot's two (18.6 kB: the manifest 9.2, the tileset 9.4), 40 site-wide
-(3.54 MB, of which the walks' photos 2.35 and the murals' drawings 0.80)
+boot's three (39.8 kB: the manifest 9.2, the tileset 9.4, the plate
+21.3), 39 site-wide (3.51 MB, of which the walks' photos 2.35 and the
+murals' drawings 0.80)
 and the server's 17 (3.86 MB on disk). The last count by hand, 2026-09-25
 with the same rule over every file named after a tile (the set *all*
 today), gave a tile 4.0–9.7 MB and the site ≈ 98.9 MB. A visit fetches
@@ -1343,16 +1354,21 @@ are never served: the DGM GeoTIFF (12.9–15.6 MB a tile) and the CityJSON
 **The complexity counters** (`counters`; each rule and what it cannot see
 is at its function in `lib/city/ledger-counters.ts`) count code, never
 where a file lies or how its text is wrapped — a move, a comment, a blank
-line or a wrapper function moves none:
+line or a wrapper function moves no count (`longestFunction.path` names
+the module, and follows a move). They read the working tree: an untracked
+source file counts, as it would once committed. The sources are read by
+two small lexers (`lib/city/ts-lexer.ts`, which reads a `.tsx` file's JSX
+as text, and `lib/city/source-lexer.ts` for the bakes' Python), and a file
+whose brackets do not close as read is an error, not a figure:
 
 | Counter | Counts | Dresden's tree, 2026-11-16 |
 |---|---|---|
 | `dressingKinds`, `coarseDressingKinds`, `askKinds` | the artifact table's kinds | 17, 3, 1 |
 | `publishedExtensions` | the distinct extensions among the published files | 9 |
 | `layerModules` | the modules named `*-layer.ts` anywhere under `app/`, `lib/` or `packages/`, and their lines of code (no comment, no blank line) | 27 with 14 420 |
-| `longestFunction` | the longest top-level function, arrow constant or class of the sources, in lines of code: the boot, wherever its code goes | `bootApp`, 2 354 |
+| `longestFunction` | the longest top-level function of the sources in lines of code — declared, an arrow or a function expression, alone or as a call's argument — or class: the boot, however it is written or wrapped | `bootApp`, 2 354 |
 | `bakeSeamModules` | the modules under `pipeline/bake/` whose code handles a tile's edge — plan 092's five ways by their calls, and any other read with a `margin` | 57 of 83 |
-| `upstreamWorkarounds` | the entries of `docs/rendering.md`, "Workarounds for upstream bugs", and the comments that say *upstream workaround* | 10 entries, 9 sites |
+| `upstreamWorkarounds` | the entries of `docs/rendering.md`, "Workarounds for upstream bugs", and the comments that say *upstream workaround* | 10 entries, 8 sites |
 
 ### The rasters, every site
 

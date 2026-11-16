@@ -3,353 +3,18 @@
  * "Less complexity"): each a pure function of source texts the caller reads
  * (scripts/ledger.ts). A counter counts code, never where a file lies or
  * how its text is wrapped: a move, a comment, a blank line or a wrapper
- * function moves none of them. Each says below what it counts and what it
+ * function moves no count (`longestFunction.path` says where the function
+ * lies, and follows it). Each says below what it counts and what it
  * cannot see.
  *
- * They read sources through two small lexers, not parsers: `lexTs` and
- * `lexPy` tell code from comments and from the text of strings, which is
- * all the counters need. What the TypeScript one gets wrong is named at it.
+ * They read sources through two small lexers, not parsers (ts-lexer.ts,
+ * source-lexer.ts): code told from comments and from the text of strings,
+ * which is all the counters need. What the TypeScript one gets wrong is
+ * named at it.
  */
-
-/** A source file as the counters read it. */
-export interface SourceText {
-  path: string;
-  text: string;
-}
-
-/** A source with its comments apart. */
-export interface Lexed {
-  /** the text with every comment and every string's contents blanked */
-  bare: string;
-  /** the text with every comment blanked (spaces; line breaks kept) */
-  code: string;
-  /** each comment's words, its markers and line breaks taken out; `//`
-   *  comments on consecutive lines are one comment */
-  comments: string[];
-}
-
-const blank = (text: string): string => text.replaceAll(/[^\n]/gu, " ");
-
-/** A comment's words on one line: `//`, the block's ends and a JSDoc's
- *  leading stars gone, white space collapsed. */
-const commentWords = (raw: string): string => {
-  let inner = raw;
-  if (raw.startsWith("/*")) {
-    inner = raw.slice(
-      2,
-      raw.length >= 4 && raw.endsWith("*/") ? -2 : undefined
-    );
-  }
-  return inner
-    .split("\n")
-    .map((line) => line.replace(/^\s*(?:\/\/+|\*+|#+)?/u, ""))
-    .join(" ")
-    .replaceAll(/\s+/gu, " ")
-    .trim();
-};
-
-/** What a lexer collects. */
-class Lexing {
-  readonly text: string;
-  private readonly bare: string[] = [];
-  private readonly code: string[] = [];
-  private readonly comments: string[] = [];
-  /** where the last comment ended, and whether it was a line comment */
-  private lastLine: { end: number } | null = null;
-  /** the last code character that is not white space */
-  last = "";
-  /** the word the code last ended on, if it ended on one */
-  word = "";
-
-  constructor(text: string) {
-    this.text = text;
-  }
-
-  /** `text[from, to)` as code. */
-  plain(from: number, to: number): void {
-    const piece = this.text.slice(from, to);
-    this.code.push(piece);
-    this.bare.push(piece);
-    const trimmed = piece.trimEnd();
-    if (trimmed !== "") {
-      this.last = trimmed.at(-1) ?? "";
-      this.word = /[\w$]+$/u.exec(trimmed)?.[0] ?? "";
-    }
-  }
-
-  /** `text[from, to)` as a string's (or a regular expression's) text: code,
-   *  but nothing a counter matches a call or a brace in. */
-  quoted(from: number, to: number): void {
-    const piece = this.text.slice(from, to);
-    this.code.push(piece);
-    this.bare.push(blank(piece));
-    this.last = '"';
-    this.word = "";
-  }
-
-  /** `text[from, to)` as a comment; `line`: one that runs to its line's
-   *  end, joined to such a comment on the line before. */
-  comment(from: number, to: number, line: boolean): void {
-    const piece = this.text.slice(from, to);
-    this.code.push(blank(piece));
-    this.bare.push(blank(piece));
-    const words = commentWords(piece);
-    const joins =
-      line &&
-      this.lastLine !== null &&
-      /^[ \t]*\r?\n[ \t]*$/u.test(this.text.slice(this.lastLine.end, from));
-    if (joins) {
-      this.comments[this.comments.length - 1] =
-        `${this.comments.at(-1) ?? ""} ${words}`.trim();
-    } else {
-      this.comments.push(words);
-    }
-    this.lastLine = line ? { end: to } : null;
-  }
-
-  done(): Lexed {
-    return {
-      code: this.code.join(""),
-      bare: this.bare.join(""),
-      comments: this.comments,
-    };
-  }
-}
-
-/** The index after a quoted string that opens at `at` (its quote is
- *  `text[at]`): its closing quote, or its line's end where it has none. */
-function stringEnd(text: string, at: number): number {
-  const quote = text[at];
-  let i = at + 1;
-  while (i < text.length && text[i] !== "\n") {
-    if (text[i] === "\\") {
-      i += 2;
-    } else if (text[i] === quote) {
-      return i + 1;
-    } else {
-      i += 1;
-    }
-  }
-  return Math.min(i, text.length);
-}
-
-/** After these words a slash opens a regular expression, not a division. */
-const BEFORE_REGEX = new Set([
-  "return",
-  "typeof",
-  "case",
-  "in",
-  "of",
-  "void",
-  "delete",
-  "throw",
-  "new",
-  "else",
-  "do",
-  "yield",
-  "await",
-]);
-
-/** The index after a regular expression that opens at `at`, or -1 where
- *  the line holds none (a division after all). */
-function regexEnd(text: string, at: number): number {
-  let i = at + 1;
-  let inClass = false;
-  while (i < text.length && text[i] !== "\n") {
-    const c = text[i];
-    if (c === "\\") {
-      i += 2;
-    } else if (c === "[") {
-      inClass = true;
-      i += 1;
-    } else if (c === "]") {
-      inClass = false;
-      i += 1;
-    } else if (c === "/" && !inClass) {
-      i += 1;
-      while (/[a-z]/u.test(text[i] ?? "")) {
-        i += 1;
-      }
-      return i;
-    } else {
-      i += 1;
-    }
-  }
-  return -1;
-}
-
-/** The index after a template's text that starts at `at`: at its closing
- *  backtick (`closed`) or after a `${`. */
-function templateText(
-  text: string,
-  at: number
-): { closed: boolean; end: number } {
-  let i = at;
-  while (i < text.length) {
-    if (text[i] === "\\") {
-      i += 2;
-    } else if (text[i] === "`") {
-      return { closed: true, end: i };
-    } else if (text[i] === "$" && text[i + 1] === "{") {
-      return { closed: false, end: i };
-    } else {
-      i += 1;
-    }
-  }
-  return { closed: true, end: text.length };
-}
-
-/**
- * A TypeScript source's code, comments and strings told apart.
- *
- * Not a parser. A slash is read as a regular expression after an operator,
- * an opening bracket or one of `BEFORE_REGEX`, and as a division elsewhere
- * (so `if (x) /re/.test(y)` is misread); JSX text is read as code, so an
- * apostrophe or `//` in it runs to its line's end as a string or comment.
- * Both cost a line or a brace on that line at most, and `longestFunction`
- * refuses a file whose brackets do not close.
- */
-export function lexTs(text: string): Lexed {
-  const out = new Lexing(text);
-  /** the brace depths at which a template's `${` closes again */
-  const templates: number[] = [];
-  let depth = 0;
-  let i = 0;
-  /** where the code not yet handed over starts */
-  let from = 0;
-  const flush = (to: number) => {
-    if (to > from) {
-      out.plain(from, to);
-    }
-    from = to;
-  };
-  /** a template's text from `at` (after its backtick or a `}`): the index
-   *  to read on from */
-  const template = (at: number): number => {
-    flush(at);
-    const { closed, end } = templateText(text, at);
-    out.quoted(at, end);
-    from = end;
-    if (closed) {
-      return Math.min(end + 1, text.length);
-    }
-    templates.push(depth);
-    depth += 1;
-    return end + 2;
-  };
-  /** a comment or a regular expression that opens at `i`: its end, or -1 */
-  const apart = (): number => {
-    if (text[i + 1] === "/" || text[i + 1] === "*") {
-      const line = text[i + 1] === "/";
-      const stop = text.indexOf(line ? "\n" : "*/", i + 2);
-      let end = text.length;
-      if (stop !== -1) {
-        end = line ? stop : stop + 2;
-      }
-      flush(i);
-      out.comment(i, end, line);
-      return end;
-    }
-    flush(i);
-    const opens =
-      out.last === "" ||
-      "(,=:[!&|?{};+-*%<>~^".includes(out.last) ||
-      BEFORE_REGEX.has(out.word);
-    const end = opens ? regexEnd(text, i) : -1;
-    if (end !== -1) {
-      out.quoted(i, end);
-    }
-    return end;
-  };
-  while (i < text.length) {
-    const c = text[i];
-    if (c === "/") {
-      const end = apart();
-      if (end === -1) {
-        i += 1;
-      } else {
-        from = end;
-        i = end;
-      }
-    } else if (c === '"' || c === "'") {
-      flush(i + 1);
-      const end = stringEnd(text, i);
-      const inner = end - 1 > i && text[end - 1] === c ? end - 1 : end;
-      out.quoted(i + 1, inner);
-      from = inner;
-      i = end;
-    } else if (c === "`") {
-      i = template(i + 1);
-    } else if (c === "}" && templates.at(-1) === depth - 1) {
-      templates.pop();
-      depth -= 1;
-      i = template(i + 1);
-    } else {
-      if (c === "{") {
-        depth += 1;
-      } else if (c === "}") {
-        depth -= 1;
-      }
-      i += 1;
-    }
-  }
-  flush(text.length);
-  return out.done();
-}
-
-/** The index after a Python string that opens at `at` (after any prefix). */
-function pyStringEnd(text: string, at: number): number {
-  const quote = text[at] ?? "";
-  const triple = quote.repeat(3);
-  if (text.startsWith(triple, at)) {
-    let i = at + 3;
-    while (i < text.length) {
-      if (text[i] === "\\") {
-        i += 2;
-      } else if (text.startsWith(triple, i)) {
-        return i + 3;
-      } else {
-        i += 1;
-      }
-    }
-    return text.length;
-  }
-  return stringEnd(text, at);
-}
-
-/** A Python source's code, comments and strings told apart (a docstring is
- *  a string: nothing a counter matches a call in). */
-export function lexPy(text: string): Lexed {
-  const out = new Lexing(text);
-  let i = 0;
-  let from = 0;
-  while (i < text.length) {
-    const c = text[i];
-    if (c === "#") {
-      out.plain(from, i);
-      const stop = text.indexOf("\n", i);
-      const end = stop === -1 ? text.length : stop;
-      out.comment(i, end, true);
-      from = end;
-      i = end;
-    } else if (c === '"' || c === "'") {
-      out.plain(from, i);
-      const end = pyStringEnd(text, i);
-      out.quoted(i, end);
-      from = end;
-      i = end;
-    } else {
-      i += 1;
-    }
-  }
-  out.plain(from, text.length);
-  return out.done();
-}
-
-/** The lines that hold code: not blank, not comment alone. */
-export function codeLines(lexed: Lexed): number {
-  return lexed.code.split("\n").filter((line) => line.trim() !== "").length;
-}
+import { codeLines, lexPy } from "./source-lexer";
+import type { SourceText } from "./source-lexer";
+import { lexSource } from "./ts-lexer";
 
 const isTest = (path: string): boolean => /\.test\.tsx?$/u.test(path);
 const baseName = (path: string): string =>
@@ -375,7 +40,7 @@ export function layerModules(files: readonly SourceText[]): {
   return {
     files: layers.length,
     codeLines: layers.reduce(
-      (sum, { text }) => sum + codeLines(lexTs(text)),
+      (sum, file) => sum + codeLines(lexSource(file)),
       0
     ),
   };
@@ -383,68 +48,127 @@ export function layerModules(files: readonly SourceText[]): {
 
 /* ------------------------------------------------------ longest function */
 
-/** A module's top-level function, arrow constant or class. */
+/** A module's top-level function: declared, assigned or handed to a call;
+ *  or a class. */
 export interface TopFunction {
   /** its lines of code, head and body */
   lines: number;
   name: string;
 }
 
-const FUNCTION_HEAD =
+const DECLARED =
   /^\s*(?:export\s+)?(?:default\s+)?(?:(?:async\s+)?function\b\s*\*?\s*(?<fn>[\w$]*)|(?:abstract\s+)?class\b\s*(?<cls>[\w$]*))/u;
-const CONST_HEAD = /^\s*(?:export\s+)?(?:const|let|var)\s+(?<name>[\w$]+)/u;
+const ASSIGNED = /^\s*(?:export\s+)?(?:const|let|var)\s+(?<name>[\w$]+)/u;
+/** Statements that hold no function of their own. */
+const NO_VALUE =
+  /^\s*(?:import\b|export\s*[{*]|(?:export\s+)?(?:declare\s+)?(?:type|interface|enum|namespace|module)\b)/u;
+const CALLED = /^\s*(?:export\s+default\s+)?(?:await\s+)?(?<name>[\w$.]+)/u;
 
-/** A top-level statement's name where it is a function: a `function`, a
- *  `class`, or a constant whose value (after its `=`: a type's arrows are
- *  not the value's) has an `=>` outside every bracket. */
-function functionName(bare: string): string | null {
-  const head = FUNCTION_HEAD.exec(bare);
-  if (head) {
-    const { fn, cls } = head.groups ?? {};
-    return [fn, cls].find(Boolean) ?? "(anonymous)";
-  }
-  const name = CONST_HEAD.exec(bare)?.groups?.name;
-  if (name === undefined) {
-    return null;
-  }
-  // an arrow outside every bracket: a typed parameter's braces and a
-  // return type's are skipped, an object's or a call's arrows are inside
-  let depth = 0;
-  let assigned = false;
-  for (let i = 0; i < bare.length; i += 1) {
+/**
+ * Whether a statement's value holds a function: an `=>`, a `function` or a
+ * `class` outside every brace and square bracket — at the top, or as a
+ * call's argument (`traced(async function boot() {…})`), which is the
+ * same body wrapped. One inside an object or an array is a table's entry.
+ * `from`: where the value starts (after a constant's `=`, so that its
+ * type's arrows are not the value's).
+ */
+function holdsFunction(bare: string, from: number): boolean {
+  let tables = 0;
+  for (let i = from; i < bare.length; i += 1) {
     const c = bare[i] ?? "";
-    if ("([{".includes(c)) {
-      depth += 1;
-    } else if (")]}".includes(c)) {
-      depth -= 1;
-    } else if (depth === 0 && c === "=") {
-      if (assigned && bare[i + 1] === ">") {
-        return name;
+    if (c === "{" || c === "[") {
+      tables += 1;
+    } else if (c === "}" || c === "]") {
+      tables -= 1;
+    } else if (tables === 0) {
+      if (c === "=" && bare[i + 1] === ">") {
+        return true;
       }
-      assigned ||= bare[i + 1] !== ">";
+      const word =
+        (c === "f" && /^function\b/u.test(bare.slice(i, i + 9))) ||
+        (c === "c" && /^class\b/u.test(bare.slice(i, i + 6)));
+      if (word && !/[\w$.]/u.test(bare[i - 1] ?? "")) {
+        return true;
+      }
     }
   }
-  return null;
+  return false;
+}
+
+/** Where a constant's value starts: after its first `=` outside every
+ *  bracket that is no arrow's and no comparison's (-1: it has none). */
+function valueStart(bare: string): number {
+  let depth = 0;
+  for (let i = 0; i < bare.length; i += 1) {
+    const c = bare[i] ?? "";
+    if ("([{<".includes(c)) {
+      depth += 1;
+    } else if (")]}".includes(c) || (c === ">" && bare[i - 1] !== "=")) {
+      depth -= 1;
+    } else if (depth === 0 && c === "=" && !"=>".includes(bare[i + 1] ?? "")) {
+      return i + 1;
+    }
+  }
+  return -1;
+}
+
+/**
+ * A top-level statement's name where it is a function: a `function` or a
+ * `class` declared; a constant whose value holds one (an arrow, a function
+ * expression, either wrapped in a call); or a call that is handed one
+ * (`register(function big() {…})`, named after what is called).
+ */
+function functionName(bare: string): string | null {
+  if (NO_VALUE.test(bare)) {
+    return null;
+  }
+  const declared = DECLARED.exec(bare);
+  if (declared) {
+    const { fn, cls } = declared.groups ?? {};
+    return [fn, cls].find(Boolean) ?? "(anonymous)";
+  }
+  const assigned = ASSIGNED.exec(bare)?.groups?.name;
+  if (assigned !== undefined) {
+    const from = valueStart(bare);
+    return from !== -1 && holdsFunction(bare, from) ? assigned : null;
+  }
+  const called = CALLED.exec(bare)?.groups?.name;
+  return called !== undefined && holdsFunction(bare, 0) ? called : null;
+}
+
+/** Whether the code goes on at a line's start after `at`: the next line
+ *  that has any (none: the source's end) begins in its first column. */
+function nextCodeAtLineStart(bare: string, at: number): boolean {
+  const rest = /^[ \t]*(?:\r?\n|$)(?<rest>[^]*)$/u.exec(bare.slice(at));
+  if (!rest) {
+    return false;
+  }
+  const next = /^(?:[ \t]*\r?\n)*(?<lead>[ \t]*)\S/u.exec(
+    rest.groups?.rest ?? ""
+  );
+  return !next || next.groups?.lead === "";
 }
 
 /**
  * A module's top-level functions with their lines of code. A statement
  * ends at a `;` outside every bracket, or at a `}` that closes the last
- * brace and ends its line. Throws where the brackets do not close: the
- * lexer misread the file (see `lexTs`), and a wrong figure must not pass
- * as one.
+ * brace and ends its line where the code goes on in the first column (a
+ * return type's `}` before an indented `| Promise<…> {` ends nothing).
+ * Throws where the brackets do not close: the lexer misread the file (see
+ * `lexTs`), and a wrong figure must not pass as one.
  */
 export function topFunctions(source: SourceText): TopFunction[] {
-  const { bare, code } = lexTs(source.text);
+  const { bare, code } = lexSource(source);
   const codeRows = code.split("\n");
   const out: TopFunction[] = [];
   let round = 0;
   let curly = 0;
   let start = 0;
   const close = (end: number) => {
-    const name = functionName(bare.slice(start, end));
+    const statement = bare.slice(start, end);
+    const name = functionName(statement);
     if (name !== null) {
-      const lead = /^\s*/u.exec(bare.slice(start, end))?.[0].length ?? 0;
+      const lead = /^\s*/u.exec(statement)?.[0].length ?? 0;
       const first = bare.slice(0, start + lead).split("\n").length - 1;
       const last = bare.slice(0, end).split("\n").length - 1;
       const lines = codeRows
@@ -464,11 +188,7 @@ export function topFunctions(source: SourceText): TopFunction[] {
       curly += 1;
     } else if (c === "}") {
       curly -= 1;
-      if (
-        curly === 0 &&
-        round === 0 &&
-        /^[ \t]*(?:\r?\n|$)/u.test(bare.slice(i + 1))
-      ) {
+      if (curly === 0 && round === 0 && nextCodeAtLineStart(bare, i + 1)) {
         close(i + 1);
       }
     } else if (c === ";" && curly === 0 && round === 0) {
@@ -491,13 +211,17 @@ export function topFunctions(source: SourceText): TopFunction[] {
  * The longest top-level function among the sources (tests left out): its
  * lines of code, its name and its module. Today that is the boot,
  * `bootApp` in create-app.ts (plan 095: "owners, not one function"), and
- * the figure follows the boot's code wherever it goes: behind a wrapper,
- * the wrapped function is the longest; split in two, the larger half.
+ * the figure follows the boot's code however it is written or wrapped: as
+ * a declaration, an arrow or a function expression, as a call's argument
+ * (`traced(async function …)`), behind a wrapper function (the wrapped one
+ * is the longest then), in another module (`path` says which), split in
+ * two (the larger half).
  *
  * Counts a class whole and a function with everything nested in it.
- * Cannot see: a body cut into top-level functions of the same module (each
- * shorter — which is the cut plan 095 asks for, or its imitation: the
- * reviewer reads which). A tie goes to the path, then the name.
+ * Cannot see: a body cut into top-level functions (each shorter — which is
+ * the cut plan 095 asks for, or its imitation: the reviewer reads which),
+ * nor one held in a table (an object's method, an array's entry). A tie
+ * goes to the path, then to the first in its module.
  */
 export function longestFunction(files: readonly SourceText[]): {
   lines: number;
@@ -592,9 +316,9 @@ export const WORKAROUND_HEADING = "Workarounds for upstream bugs";
  *
  * - `entries`: the register's entries — the paragraphs that open in bold
  *   under `WORKAROUND_HEADING` in docs/rendering.md, one a bug;
- * - `sites`: the comments in the sources (tests left out) that say
- *   *upstream workaround*, however their lines are wrapped (a comment
- *   that says it twice is one).
+ * - `sites`: the comments in the sources (tests left out) that match
+ *   `WORKAROUND_PATTERN`, however their lines are wrapped (a comment that
+ *   says it twice is one).
  *
  * Cannot see: a workaround that is neither registered nor marked — the
  * register is the rule (AGENTS.md), these count what follows it. Throws
@@ -625,9 +349,9 @@ export function upstreamWorkarounds(
   const sites = files
     .filter(({ path }) => !isTest(path))
     .reduce(
-      (sum, { text }) =>
+      (sum, file) =>
         sum +
-        lexTs(text).comments.filter((comment) =>
+        lexSource(file).comments.filter((comment) =>
           WORKAROUND_PATTERN.test(comment)
         ).length,
       0

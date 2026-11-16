@@ -47,7 +47,8 @@ import {
   seamModules,
   upstreamWorkarounds,
 } from "../lib/city/ledger-counters";
-import type { Counters, SourceText } from "../lib/city/ledger-counters";
+import type { Counters } from "../lib/city/ledger-counters";
+import type { SourceText } from "../lib/city/source-lexer";
 import {
   ASK_KINDS,
   COARSE_DRESSING_KINDS,
@@ -242,14 +243,11 @@ export function measure(
   };
 }
 
-/** Every built site's rasters (plan 091 phase 0): by default the sites a
- *  build serves, each of which must be built. */
-export async function measureRasters(
-  root = ROOT,
-  sites: readonly string[] = readySites()
-): Promise<Ledger["rasters"]> {
+/** Every built site's rasters (plan 091 phase 0): the sites a build
+ *  serves from `root`'s data, each of which must be built. */
+export async function measureRasters(root = ROOT): Promise<Ledger["rasters"]> {
   return await rasterLedger(
-    sites,
+    readySites(root),
     (site) => publishedFiles(site, root),
     sources(root, "app", (name) => /(?<!\.test)\.tsx?$/u.test(name))
   );
@@ -278,8 +276,6 @@ export interface RunOptions {
   /** the repository: its sources, `public/data/` and `qa/ledger.json` */
   root?: string;
   site?: string;
-  /** the sites whose rasters are measured (default: every built one) */
-  sites?: readonly string[];
   today?: string;
 }
 
@@ -315,7 +311,7 @@ export async function run(
   // one key a section: the reference site's, then every site's rasters
   const fresh = {
     ...measure(site, root),
-    rasters: await measureRasters(root, opts.sites),
+    rasters: await measureRasters(root),
   };
   if (!argv.includes("--check")) {
     const ledger = datedLedger(fresh, committed, today);
@@ -341,6 +337,24 @@ export async function run(
   return 1;
 }
 
+/**
+ * The script as the shell starts it: `run`, with what it throws — a site
+ * not built, a published file in no class, an extension the wire rule does
+ * not know — printed as its message. Exit 1: the ledger does not hold.
+ */
+export async function main(
+  argv: readonly string[],
+  opts: RunOptions = {}
+): Promise<number> {
+  try {
+    return await run(argv, opts);
+  } catch (error) {
+    const out = opts.out ?? ((text: string) => process.stdout.write(text));
+    out(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
+  }
+}
+
 if (import.meta.main) {
-  process.exitCode = await run(process.argv.slice(2));
+  process.exitCode = await main(process.argv.slice(2));
 }

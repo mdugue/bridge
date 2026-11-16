@@ -12,6 +12,7 @@ import {
   publishedLedger,
   SITE_FILES,
   setFigures,
+  UNCOMPARED,
   tileSet,
   weigh,
   wireBytes,
@@ -463,8 +464,10 @@ test("every published file is in exactly one class", () => {
   );
   expect(ledger.files).toBe(19);
   expect(ledger.tiles).toEqual({ bytes: 20, files: 2 });
-  expect(ledger.boot).toEqual({ bytes: 20, files: 2 });
-  expect(ledger.site).toEqual({ bytes: 120, files: 12 });
+  // the boot: the manifest, the tileset and the ground plate
+  expect(ledger.boot).toEqual({ bytes: 30, files: 3 });
+  expect(ledger.kinds.plate?.class).toBe("boot");
+  expect(ledger.site).toEqual({ bytes: 110, files: 11 });
   // the server's files in bytes on disk: they never travel
   expect(ledger.server).toEqual({ bytes: 3000, files: 3 });
   expect(
@@ -519,6 +522,11 @@ test("a published file no tile and no row names is an error", () => {
     "old-manifest.json",
     "tileset.json5",
     "walk-photo.webp",
+    "walk-photo_.webp",
+    "walk-photo_elbhang.webp.bak",
+    "walk-photo_elbhang.png",
+    "mural-n59.lines.webp.bak",
+    "plate.bin.gz.old",
     "stadtwissen.geojson",
   ]) {
     expect(() => classesOf([name])).toThrow(/in no class/u);
@@ -676,6 +684,7 @@ const LEDGER = {
     near: FIGURES,
     ask: FIGURES,
     all: FIGURES,
+    unvisited: FIGURES,
   },
   buildings: { near: { a: MESH }, far: { a: MESH } },
   counters: {
@@ -823,6 +832,7 @@ test("the date holds while the figures do", () => {
   ).toBe(today);
   expect(datedLedger(fresh, null, today).dated).toBe(today);
   expect(datedLedger(fresh, { ...LEDGER, dated: 5 }, today).dated).toBe(today);
+  expect(datedLedger(fresh, { ...LEDGER, dated: "" }, today).dated).toBe(today);
 });
 
 test("the written ledger is the fresh figures, the heading first", () => {
@@ -846,4 +856,90 @@ test("the written ledger is the fresh figures, the heading first", () => {
   expect(Object.keys(datedLedger(more, null, "x")).at(-1)).toBe("browser");
   expect(datedLedger(more, null, "x").browser).toEqual({ scripts: 1 });
   expect(ledgerDiff(LEDGER, more)).toEqual(["browser.scripts: (none) → 1"]);
+});
+
+test("a tile that names a file no set counts is refused", () => {
+  const withKey = structuredClone(TILESET) as {
+    extras: { tiles: Record<string, unknown>[] };
+    root: {
+      children: {
+        children: { children: unknown[]; extras: Record<string, unknown> }[];
+      }[];
+    };
+  };
+  const fine = withKey.root.children[0]?.children[1]?.children[0] as
+    | { extras: Record<string, unknown> }
+    | undefined;
+  if (!fine) {
+    throw new Error("no fine level");
+  }
+  // a new key on a level, naming a file outside the site's directory
+  fine.extras.more = "../common/huge.png";
+  expect(() => ledgerTiles(withKey)).toThrow(
+    /tile a names 1 files that no set counts.*: \.\.\/common\/huge\.png /u
+  );
+  fine.extras.more = undefined;
+  expect(() => ledgerTiles(withKey)).not.toThrow();
+  // a third content beside the buildings and the terrain
+  withKey.root.children[0]?.children.push({
+    children: [],
+    extras: { nested: { deep: ["extra_a.glb.gz", "city_a.glb.gz"] } },
+  });
+  expect(() => ledgerTiles(withKey)).toThrow(/tile a names 1 files.*extra_a/u);
+  withKey.root.children[0]?.children.pop();
+  // a key of the tile's entry in the site's list
+  const [info] = withKey.extras.tiles;
+  if (info) {
+    info.preview = "preview_a.webp";
+  }
+  expect(() => ledgerTiles(withKey)).toThrow(/preview_a\.webp/u);
+  // what has neither dot nor slash is no file: an id, a kind, a mode
+  if (info) {
+    info.preview = "none";
+  }
+  expect(() => ledgerTiles(withKey)).not.toThrow();
+});
+
+test("the files a tile names that no visit fetches", () => {
+  const a = tileA();
+  expect(tileSet(a, "unvisited", reads, false)).toEqual([
+    "footprints_a.fpr.gz",
+  ]);
+  expect(tileSet(a, "unvisited", reads, true)).toEqual(["footprints_a.fpr.gz"]);
+  // a raster the viewer stops reading on every tier is one more
+  const noSky: RasterReads = (extras, tier, phone, reach) =>
+    reads(extras, tier, phone, reach).filter((f) => !f.startsWith("svf_"));
+  expect(tileSet(a, "unvisited", noSky, false)).toEqual([
+    "footprints_a.fpr.gz",
+  ]);
+  const noTwin: RasterReads = (extras, tier, phone, reach) =>
+    reads(extras, tier, phone, reach).filter((f) => !f.includes(".r2048."));
+  expect(tileSet(a, "unvisited", noTwin, false)).toEqual([
+    "footprints_a.fpr.gz",
+    "landcover_a.r2048.png",
+  ]);
+  const ledger = bytesLedger(ledgerTiles(TILESET), reads, () => 1);
+  expect(ledger.unvisited.site).toEqual({ bytes: 2, files: 2 });
+  expect(ledger.unvisited.phone).toBeUndefined();
+});
+
+test("a path the check does not compare, with everything under it", () => {
+  const was = { dated: "a", browser: { readWith: { v: 1 }, scripts: 1 } };
+  const now = { dated: "b", browser: { readWith: { v: 2 }, scripts: 2 } };
+  expect(ledgerDiff(was, now)).toEqual([
+    "browser.readWith.v: 1 → 2",
+    "browser.scripts: 1 → 2",
+  ]);
+  expect(ledgerDiff(was, now, ["dated", "browser.readWith"])).toEqual([
+    "browser.scripts: 1 → 2",
+  ]);
+  // by its whole path: the same key elsewhere is compared
+  expect(
+    ledgerDiff({ a: { readWith: 1 } }, { a: { readWith: 2 } }, [
+      "browser.readWith",
+      "readWith",
+    ])
+  ).toEqual(["a.readWith: 1 → 2"]);
+  expect(ledgerDiff(was, now, [])).toContain('dated: "a" → "b"');
+  expect([...UNCOMPARED]).toEqual(["dated"]);
 });

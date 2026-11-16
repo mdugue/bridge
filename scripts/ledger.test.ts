@@ -29,6 +29,7 @@ import {
   FLAGS,
   LEDGER_FILE,
   LEDGER_PATH,
+  main,
   measure,
   measureRasters,
   publishedFiles,
@@ -260,7 +261,7 @@ const level = (t: string, n: 0 | 1): TerrainFiles => ({
         surfaceFar: `surface_${t}.r1024.png`,
         dressing: { lamps: `lamps_${t}.geojson` },
       }
-    : { coarse: { crowns: `crowns_${t}.crw.gz` } }),
+    : { coarse: { crowns: `crowns_${t}.json` } }),
 });
 
 const baked = (t: string, x: number): BakedTile => ({
@@ -290,6 +291,10 @@ const noise = (bytes: number, seed: number): Uint8Array => {
   }
   return out;
 };
+
+/** The fixture's boot: its longest function. */
+const BOOT =
+  "// boots\nexport function bootApp() {\n  a();\n  b();\n  c();\n  return 1;\n}\n";
 
 const roots: string[] = [];
 afterAll(() => {
@@ -322,7 +327,7 @@ function fixture(): { data: string; root: string } {
       tiles: TILES.map((id, i) => ({
         id,
         bounds: [i * 2000, 0, i * 2000 + 2000, 2000],
-        footprints: `footprints_${id}.fpr.gz`,
+        footprints: `footprints_${id}.json`,
       })),
     }
   );
@@ -346,8 +351,8 @@ function fixture(): { data: string; root: string } {
       [`surface_${t}.png`]: noise(3000, 9),
       [`surface_${t}.r1024.png`]: noise(700, 10),
       [`lamps_${t}.geojson`]: noise(600 * big, 11),
-      [`crowns_${t}.crw.gz`]: noise(80, 12),
-      [`footprints_${t}.fpr.gz`]: noise(60, 13),
+      [`crowns_${t}.json`]: noise(80, 12),
+      [`footprints_${t}.json`]: noise(60, 13),
     });
   }
   const manifest = { version: 1, files: {} as Record<string, string> };
@@ -364,13 +369,22 @@ function fixture(): { data: string; root: string } {
     `${JSON.stringify(manifest, null, 2)}\n`
   );
   writeFileSync(nodePath.join(data, "site-stats.json"), "{}");
-  writeFileSync(
-    nodePath.join(root, "app/_components/create-app.ts"),
-    "// boots\nexport function bootApp() {\n  return 1;\n}\n"
-  );
+  writeFileSync(nodePath.join(root, "app/_components/create-app.ts"), BOOT);
   writeFileSync(
     nodePath.join(root, "app/_components/tree-layer.ts"),
     "// An upstream workaround\nexport const tree = 1;\n"
+  );
+  // a layer in a package, as JSX; and one in a dependency, which is none
+  mkdirSync(nodePath.join(root, "packages/viewer/node_modules/dep"), {
+    recursive: true,
+  });
+  writeFileSync(
+    nodePath.join(root, "packages/viewer/sky-layer.tsx"),
+    "export const Sky = () => (\n  <p>\n    It's {1} (\n  </p>\n);\n"
+  );
+  writeFileSync(
+    nodePath.join(root, "packages/viewer/node_modules/dep/dep-layer.ts"),
+    "export function huge() {\n  a();\n  b();\n  c();\n  d();\n  e();\n  f();\n}\n"
   );
   writeFileSync(
     nodePath.join(root, "pipeline/bake/trees.py"),
@@ -389,8 +403,6 @@ const runOn = async (root: string, argv: string[], today = "2026-11-16") => {
   const code = await run(argv, {
     root,
     site: SITE,
-    // (the raster table reads real rasters: none of this fixture's)
-    sites: [],
     today,
     out: (text) => {
       report += text;
@@ -433,7 +445,7 @@ test("the figures of a fixture site, each from the files it names", () => {
   // wire gzipped), the coarse terrain, its class raster, sky view, crowns
   expect(ledger.bytes.far.spawn).toEqual({
     tile: "a",
-    bytes: far + gz("facades_a.json") + 100 + 500 + 200 + 80,
+    bytes: far + gz("facades_a.json") + 100 + 500 + 200 + gz("crowns_a.json"),
     files: 6,
   });
   expect(ledger.bytes.far.phone).toBeUndefined();
@@ -485,17 +497,10 @@ test("the figures of a fixture site, each from the files it names", () => {
     dressingKinds: DRESSING_KINDS.length,
     coarseDressingKinds: COARSE_DRESSING_KINDS.length,
     askKinds: 1,
-    publishedExtensions: [
-      ".crw.gz",
-      ".fpr.gz",
-      ".geojson",
-      ".glb.gz",
-      ".json",
-      ".png",
-    ],
-    layerModules: { files: 1, codeLines: 1 },
+    publishedExtensions: [".geojson", ".glb.gz", ".json", ".png"],
+    layerModules: { files: 2, codeLines: 6 },
     longestFunction: {
-      lines: 3,
+      lines: 6,
       name: "bootApp",
       path: "app/_components/create-app.ts",
     },
@@ -528,7 +533,7 @@ test("a write, then a check that holds; a second write is the same file", async 
   expect(ledger.dated).toBe("2026-11-16");
   expect(ledger).toEqual({
     ...measure(SITE, root),
-    rasters: await measureRasters(root, []),
+    rasters: await measureRasters(root),
     dated: "2026-11-16",
   });
   expect(Object.keys(ledger).slice(0, 5)).toEqual([
@@ -539,6 +544,17 @@ test("a write, then a check that holds; a second write is the same file", async 
     "tiles",
   ]);
   expect(written.endsWith("}\n")).toBe(true);
+  // written as the formatter leaves it: the lint's check finds nothing
+  const formatted = Bun.spawnSync(
+    [
+      nodePath.join(import.meta.dir, "../node_modules/.bin/oxfmt"),
+      "--check",
+      nodePath.join(root, LEDGER_PATH),
+    ],
+    { cwd: nodePath.join(import.meta.dir, "..") }
+  );
+  expect(formatted.exitCode).toBe(0);
+  expect(written).not.toBe(`${JSON.stringify(ledger, null, 2)}\n`);
   expect(await runOn(root, ["--check"], "2027-01-01")).toEqual({
     code: 0,
     report: "qa/ledger.json holds\n",
@@ -555,7 +571,6 @@ test("a ledger written without a day given is dated today", async () => {
   const code = await run([], {
     root,
     site: SITE,
-    sites: [],
     out: (text) => {
       report += text;
     },
@@ -790,7 +805,7 @@ test("a file fewer or more is a figure, with the bytes the same", async () => {
       tilesetPath,
       tileset.replace(
         '"surface":"surface_b.png"',
-        '"surface":"surface_b.png","horizon":"crowns_a.crw.gz"'
+        '"surface":"surface_b.png","horizon":"crowns_a.json"'
       )
     );
     expect(readFileSync(tilesetPath, "utf-8")).not.toBe(tileset);
@@ -818,7 +833,7 @@ test("the counters are gated: code moves them, a comment does not", async () => 
     mkdirSync(nodePath.join(root, "app/_components/boot"));
     writeFileSync(
       nodePath.join(root, "app/_components/boot/create-app.ts"),
-      "// boots\nexport function bootApp() {\n  return 1;\n}\n"
+      BOOT
     );
     rmSync(nodePath.join(root, "app/_components/create-app.ts"));
   });
@@ -840,6 +855,45 @@ test("the counters are gated: code moves them, a comment does not", async () => 
     "counters.bakeSeamModules.ways.readMargin",
     "counters.upstreamWorkarounds.entries",
   ]);
+});
+
+test("an error is the script's report, and its exit code 1", async () => {
+  const { root, data } = fixture();
+  let report = "";
+  const out = (text: string) => {
+    report += text;
+  };
+  expect(await main([], { root, site: "nowhere", out })).toBe(1);
+  expect(report).toMatch(/^ledger: no .*nowhere.*build first.*\n$/u);
+  writeFileSync(nodePath.join(data, "stray.bin.gz"), "x");
+  report = "";
+  expect(await main(["--check"], { root, site: SITE, out })).toBe(1);
+  expect(report).toContain("in no class");
+  expect(report).toContain("stray.bin.gz");
+  // and what holds, holds through it
+  rmSync(nodePath.join(data, "stray.bin.gz"));
+  expect(await main([], { root, site: SITE, out })).toBe(0);
+  expect(await main(["--check"], { root, site: SITE, out })).toBe(0);
+  expect(await main(["--chek"], { root, site: SITE, out })).toBe(2);
+});
+
+test("a tile that names a file outside the sets is refused", async () => {
+  const { root, data } = fixture();
+  const { files } = publishedFiles(SITE, root);
+  const tilesetPath = nodePath.join(data, files["tileset.json"] ?? "");
+  const tileset = readFileSync(tilesetPath, "utf-8");
+  // a new key on a fine level, naming a file outside the site's directory
+  writeFileSync(
+    tilesetPath,
+    tileset.replace(
+      '"surface":"surface_b.png"',
+      '"surface":"surface_b.png","more":"../common/huge.png"'
+    )
+  );
+  expect(readFileSync(tilesetPath, "utf-8")).not.toBe(tileset);
+  await expect(runOn(root, [])).rejects.toThrow(
+    /tile b names 1 files that no set counts.*\.\.\/common\/huge\.png/u
+  );
 });
 
 test("a site that is not built says so", () => {

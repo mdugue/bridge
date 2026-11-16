@@ -144,7 +144,7 @@ export function distinctExtensions(names: Iterable<string>): string[] {
   return [...new Set([...names].map(extensionOf))].toSorted();
 }
 
-export type { SourceText } from "./ledger-counters";
+export type { SourceText } from "./source-lexer";
 
 /* ------------------------------------------------------------------ sets */
 
@@ -183,8 +183,16 @@ const uriOf = (node: Node | undefined, what: string): string => {
   return uri;
 };
 
-/** The site tiles of a tileset JSON, spawn first: its root's children (as
- *  `tileNode` writes them) beside the extras' tile list, in one order. */
+/**
+ * The site tiles of a tileset JSON, spawn first: its root's children (as
+ * `tileNode` writes them) beside the extras' tile list, in one order.
+ * Throws on a tile that names a file the set `all` does not hold — a new
+ * extras key, a third content — wherever that file lies: bytes must not
+ * leave the gate by a name the ledger does not read. (Cannot see: a file
+ * the tileset's root names outside the tiles and outside the site's
+ * directory; what lies in the directory is counted or refused by
+ * `publishedLedger`.)
+ */
 export function ledgerTiles(tileset: unknown): LedgerTile[] {
   const json = tileset as {
     extras?: { tiles?: Named[] };
@@ -198,7 +206,7 @@ export function ledgerTiles(tileset: unknown): LedgerTile[] {
   return infos.map((info, i) => {
     const [cityFar, terrainCoarse] = nodes[i]?.children ?? [];
     const id = String(info.id);
-    return {
+    const tile: LedgerTile = {
       id,
       cityFar: uriOf(cityFar, `${id} far buildings`),
       city: uriOf(cityFar?.children?.[0], `${id} buildings`),
@@ -217,7 +225,30 @@ export function ledgerTiles(tileset: unknown): LedgerTile[] {
       ...(typeof info.bridges === "string" ? { bridges: info.bridges } : {}),
       ask: (info.ask as Named | undefined) ?? {},
     };
+    const counted = new Set(tileSet(tile, "all", () => [], false));
+    const uncounted = [...fileNames(nodes[i]), ...fileNames(info)].filter(
+      (name) => !counted.has(name)
+    );
+    if (uncounted.length > 0) {
+      throw new Error(
+        `ledger: tile ${id} names ${uncounted.length} files that no set counts (a new key, a further content): ${unique(uncounted).join(", ")} — name them in tileSet (lib/city/ledger.ts)`
+      );
+    }
+    return tile;
   });
+}
+
+/** Every string under `value` that reads as a file's name or path: one
+ *  with a dot or a slash (a tile's id, a kind and a refine mode have
+ *  neither). */
+function fileNames(value: unknown): string[] {
+  if (typeof value === "string") {
+    return /[./]/u.test(value) ? [value] : [];
+  }
+  if (typeof value !== "object" || value === null) {
+    return [];
+  }
+  return Object.values(value).flatMap(fileNames);
 }
 
 /** Where a level lies for the ground detail (lib/city/ground-reach.ts):
@@ -253,7 +284,11 @@ export type RasterReads = (
  *   below this figure; a visit that flies in pays it);
  * - `near`: the buildings as baked;
  * - `ask`: the inquiry card's files;
- * - `all`: every file the tile names.
+ * - `all`: every file the tile names;
+ * - `unvisited`: the files of `all` that none of the sets above fetches on
+ *   either tier — the minimap's footprints and bridges, read by the build
+ *   alone, and whatever a level names but no tier reads. A fetch that the
+ *   viewer drops or adds moves it.
  */
 export const LEDGER_SETS = [
   "far",
@@ -262,7 +297,10 @@ export const LEDGER_SETS = [
   "near",
   "ask",
   "all",
+  "unvisited",
 ] as const;
+/** The sets a visit fetches. */
+const VISIT_SETS = ["far", "fine", "approached", "near", "ask"] as const;
 export type LedgerSet = (typeof LEDGER_SETS)[number];
 
 const names = (record: unknown): string[] =>
@@ -337,6 +375,15 @@ export function tileSet(
         ...(tile.bridges ? [tile.bridges] : []),
         ...names(tile.ask),
       ]);
+    }
+    case "unvisited": {
+      const visited = new Set(
+        VISIT_SETS.flatMap((visit) => [
+          ...tileSet(tile, visit, reads, false),
+          ...tileSet(tile, visit, reads, true),
+        ])
+      );
+      return tileSet(tile, "all", reads, phone).filter((f) => !visited.has(f));
     }
     default: {
       throw new Error(`ledger: no set ${String(set)}`);
@@ -457,14 +504,21 @@ export interface SiteFileRule {
  * Every published file that no tile of the tileset names, by its logical
  * name. A file that matches no row (and that no tile names) is an error:
  * whoever publishes a new one adds its row here and says who fetches it.
+ *
+ * Not a site's file, and in no class: `public/data/sites.json`, the
+ * build's index of the sites it serves. The server reads it to render the
+ * start page and the routes; no visitor fetches it, and it lies beside the
+ * sites' directories, which is where this ledger reads.
  */
 export const SITE_FILES: readonly SiteFileRule[] = [
-  // the walker's first two requests (city-walk-client.tsx)
+  // the walker's first requests (city-walk-client.tsx)
   { kind: "manifest", class: "boot", match: /^manifest\.json$/u },
   { kind: "tileset", class: "boot", match: /^tileset\.json$/u },
+  // the ground plate, fetched beside the boot's first tiles (create-app.ts)
+  { kind: "plate", class: "boot", match: /^plate\.bin\.gz$/u },
   // the lite profile's stand-in for the tileset: the spawn tile alone
   { kind: "tileset-spawn", class: "site", match: /^tileset-spawn\.json$/u },
-  { kind: "plate", class: "site", match: /^plate\.bin\.gz$/u },
+
   { kind: "provenance", class: "site", match: /^provenance\.json$/u },
   { kind: "landmark-facts", class: "site", match: /^landmark-facts\.json$/u },
   { kind: "trams", class: "site", match: /^trams\.json$/u },
@@ -498,7 +552,8 @@ export interface PublishedName {
 
 /** Every published file in exactly one class. */
 export interface PublishedLedger {
-  /** the manifest and the tileset: what every visit fetches first */
+  /** the manifest, the tileset and the ground plate: what every visit of
+   *  a city fetches first */
   boot: Weight;
   /** every file of the published directory */
   files: number;
@@ -614,18 +669,25 @@ export interface Ledger {
   wire: string;
 }
 
-/** The parts `--check` never compares. */
-const UNCOMPARED = new Set(["dated"]);
+/** The paths `--check` never compares, each with everything under it
+ *  (`dated`; a section's recorded part joins by its path, as
+ *  `browser.readWith`). */
+export const UNCOMPARED: readonly string[] = ["dated"];
 
 /** Leaf paths with their values (`bytes.fine.spawn.bytes`). */
-function leaves(value: unknown, path = ""): Map<string, string> {
+function leaves(
+  value: unknown,
+  uncompared: readonly string[],
+  path = ""
+): Map<string, string> {
   const out = new Map<string, string>();
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
     for (const [key, inner] of Object.entries(value)) {
-      if (path === "" && UNCOMPARED.has(key)) {
+      const at = path ? `${path}.${key}` : key;
+      if (uncompared.includes(at)) {
         continue;
       }
-      for (const [p, v] of leaves(inner, path ? `${path}.${key}` : key)) {
+      for (const [p, v] of leaves(inner, uncompared, at)) {
         out.set(p, v);
       }
     }
@@ -638,9 +700,13 @@ function leaves(value: unknown, path = ""): Map<string, string> {
 /** Each gated figure that differs between the committed ledger and a fresh
  *  one, as `path: was → now` (`dated` is none): one that grew, one that
  *  shrank, one that is new and one that is gone. */
-export function ledgerDiff(was: unknown, now: unknown): string[] {
-  const a = leaves(was);
-  const b = leaves(now);
+export function ledgerDiff(
+  was: unknown,
+  now: unknown,
+  uncompared: readonly string[] = UNCOMPARED
+): string[] {
+  const a = leaves(was, uncompared);
+  const b = leaves(now, uncompared);
   const paths = [...new Set([...a.keys(), ...b.keys()])].toSorted(codeOrder);
   return paths.flatMap((p) =>
     a.get(p) === b.get(p)
