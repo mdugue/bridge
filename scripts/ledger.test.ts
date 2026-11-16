@@ -36,6 +36,7 @@ import {
   run,
   viewerReads,
 } from "./ledger";
+import { measureBakeStore } from "./ledger-bake-store";
 import { measureDressing } from "./ledger-dressing";
 
 /* -------------------------------------------- the viewer's rule, and ours */
@@ -539,6 +540,7 @@ test("a write, then a check that holds; a second write is the same file", async 
       committed: null,
       today: "2026-11-16",
     }),
+    bakeStore: measureBakeStore(root),
     dated: "2026-11-16",
   });
   expect(Object.keys(ledger).slice(0, 5)).toEqual([
