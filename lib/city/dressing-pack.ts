@@ -203,6 +203,11 @@ function checked(name: SectionName, section: PackSection): number {
       throw new Error(`dressing pack: a run of ${name} leaves its records`);
     }
   }
+  if (!runsCover(section.runs, count)) {
+    throw new Error(
+      `dressing pack: the runs of ${name} are not its records in order, each once`
+    );
+  }
   return count;
 }
 
@@ -318,11 +323,27 @@ function sectionName(view: DataView, entry: number): string {
 const isSection = (name: string): name is SectionName =>
   Object.hasOwn(DRESSING_SECTIONS, name);
 
+/** Whether `runs` are a section's records in order, each once: the first
+ *  at record 0, each where the one before ended, the last at the section's
+ *  end (a section without runs is not cut into any). */
+export function runsCover(runs: readonly PackRun[], count: number): boolean {
+  let at = 0;
+  for (const run of runs) {
+    if (run.start !== at) {
+      return false;
+    }
+    at += run.count;
+  }
+  return runs.length === 0 || at === count;
+}
+
 /**
  * The pack of a file's bytes, or null for anything that is not one: a
  * wrong magic, a section this table does not know or one whose record is
  * of another size (a file of another build), records or runs that leave
- * the buffer, records that start inside the directory or the runs. A section the file lacks is empty.
+ * the buffer, records that start inside the directory, the runs or
+ * another section's records, runs that are not the section's records in
+ * order, each once. A section the file lacks is empty.
  */
 export function unpackDressing(buffer: ArrayBuffer): DressingPack | null {
   if (buffer.byteLength < HEADER_BYTES) {
@@ -353,6 +374,8 @@ export function unpackDressing(buffer: ArrayBuffer): DressingPack | null {
     view.getFloat64(16, true),
     view.getFloat64(24, true),
   ]);
+  // where the section before ended: no two sections share a record
+  let recordsEnd = recordsFrom;
   for (let index = 0; index < sections; index += 1) {
     const entry = HEADER_BYTES + index * ENTRY_BYTES;
     const name = sectionName(view, entry);
@@ -364,20 +387,20 @@ export function unpackDressing(buffer: ArrayBuffer): DressingPack | null {
       !isSection(name) ||
       DRESSING_SECTIONS[name].words !== words ||
       offset % 4 !== 0 ||
-      offset < recordsFrom ||
+      offset < recordsEnd ||
       offset + count * words * 2 > buffer.byteLength ||
       runAt + runCount * RUN_BYTES > buffer.byteLength
     ) {
       return null;
     }
+    recordsEnd = offset + count * words * 2;
     const runs: PackRun[] = [];
     for (let r = 0; r < runCount; r += 1) {
-      const run = readRun(view, runAt);
-      if (run.start + run.count > count) {
-        return null;
-      }
-      runs.push(run);
+      runs.push(readRun(view, runAt));
       runAt += RUN_BYTES;
+    }
+    if (!runsCover(runs, count)) {
+      return null;
     }
     pack.sections[name] = {
       runs,

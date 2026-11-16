@@ -12,7 +12,7 @@ import { tileArtifacts } from "../../lib/city/tile";
 import { BAKE_ENTRIES } from "../bake-entries";
 import { bakeDressing } from "../bake-dressing";
 import { treeSourcePaths } from "../dressing-sources";
-import { SITE, TILES, cacheKey, cached, gz, publish } from "./context";
+import { SITE, TILES, cacheKey, cached, gz, log, publish } from "./context";
 import { offset } from "./frame";
 
 /** The fine level's ground of a tile, shaped (prepare/terrain.ts). */
@@ -66,12 +66,18 @@ async function bake(
   const baked = async () => {
     baking ??= (async () => {
       const ground = await fine();
-      return await bakeDressing(SITE, tile, process.cwd(), {
+      const files = await bakeDressing(SITE, tile, process.cwd(), {
         bounds: ground.bounds,
         heightAt: ground.heightAt,
         offset,
         origin: [minX, minY],
       });
+      if (files.steep > 0) {
+        log(
+          `dressing ${tile}: ${files.steep} foot slopes steeper than a record holds, kept at its steepest step`
+        );
+      }
+      return files;
     })();
     return await baking;
   };

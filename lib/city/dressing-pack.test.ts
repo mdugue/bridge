@@ -148,6 +148,110 @@ test("records or runs that leave the file are refused", () => {
   ).toBeNull();
 });
 
+/** `pack`'s file with run `r` (counted over every section) rewritten. */
+function withRun(
+  pack: DressingPack,
+  r: number,
+  edit: (view: DataView, at: number) => void
+): ArrayBuffer {
+  const file = buffer(packDressing(pack));
+  edit(new DataView(file), 32 + SECTION_NAMES.length * 24 + r * 48);
+  return file;
+}
+
+/** Where a directory entry holds its records' offset; a run its start and
+ *  its count. */
+const ENTRY_OFFSET = 16;
+const RUN_START = 8;
+const RUN_COUNT = 12;
+
+test("records that start inside the directory or the runs are refused", () => {
+  const pack = filled(2);
+  const runsFrom = 32 + SECTION_NAMES.length * 24;
+  const recordsFrom = runsFrom + SECTION_NAMES.length * 2 * 48;
+  // sanity: the first section's records start right after the runs
+  const whole = new DataView(buffer(packDressing(pack)));
+  expect(whole.getUint32(32 + ENTRY_OFFSET, true)).toBe(recordsFrom);
+  for (const at of [
+    // inside the header, the directory, the first run, the last run
+    0,
+    32,
+    runsFrom,
+    recordsFrom - 48,
+    recordsFrom - 4,
+  ]) {
+    expect([
+      at,
+      unpackDressing(
+        withEntry(pack, 0, (view, entry) =>
+          view.setUint32(entry + ENTRY_OFFSET, at, true)
+        )
+      ),
+    ]).toEqual([at, null]);
+  }
+});
+
+test("records off a four-byte boundary are refused", () => {
+  // a section alone, with room behind it, so only the boundary is wrong
+  const pack = emptyPack([0, 0, 0]);
+  pack.sections.trees = { runs: [], words: new Uint16Array(12) };
+  const file = packDressing(pack);
+  const grown = new Uint8Array(file.length + 4);
+  grown.set(file);
+  const index = SECTION_NAMES.indexOf("trees");
+  const entry = 32 + index * 24 + ENTRY_OFFSET;
+  const view = new DataView(grown.buffer);
+  const at = view.getUint32(entry, true);
+  // every later section is empty: move them along
+  for (let i = index + 1; i < SECTION_NAMES.length; i += 1) {
+    view.setUint32(32 + i * 24 + ENTRY_OFFSET, at + 28, true);
+  }
+  expect(unpackDressing(grown.buffer)).not.toBeNull();
+  view.setUint32(entry, at + 2, true);
+  expect(unpackDressing(grown.buffer)).toBeNull();
+});
+
+test("a section's records that lie in another's are refused", () => {
+  const pack = filled(2);
+  const whole = new DataView(buffer(packDressing(pack)));
+  const first = whole.getUint32(32 + ENTRY_OFFSET, true);
+  // the second section at the first one's records, whole and aligned
+  expect(
+    unpackDressing(
+      withEntry(pack, 1, (view, entry) =>
+        view.setUint32(entry + ENTRY_OFFSET, first, true)
+      )
+    )
+  ).toBeNull();
+});
+
+test("runs that are not the section's records in order, each once, are refused", () => {
+  const pack = filled(3);
+  // as packed: [0, 1) and [1, 3)
+  expect(unpackDressing(buffer(packDressing(pack)))).not.toBeNull();
+  const edits: [string, (view: DataView, at: number) => void, number][] = [
+    // the second run starts at the section's end, past every record
+    ["past", (v, at) => v.setUint32(at + RUN_START, 3, true), 1],
+    ["overlap", (v, at) => v.setUint32(at + RUN_START, 0, true), 1],
+    ["gap", (v, at) => v.setUint32(at + RUN_START, 2, true), 1],
+    ["late", (v, at) => v.setUint32(at + RUN_START, 1, true), 0],
+    ["short", (v, at) => v.setUint32(at + RUN_COUNT, 1, true), 1],
+    ["long", (v, at) => v.setUint32(at + RUN_COUNT, 5, true), 1],
+  ];
+  for (const [what, edit, r] of edits) {
+    expect([what, unpackDressing(withRun(pack, r, edit))]).toEqual([
+      what,
+      null,
+    ]);
+  }
+  const twice = emptyPack([0, 0, 0]);
+  twice.sections.trees = {
+    runs: [run(0, 1), run(0, 1)],
+    words: new Uint16Array(12),
+  };
+  expect(() => packDressing(twice)).toThrow("in order, each once");
+});
+
 test("a section whose words are no whole records, or a run past them, does not pack", () => {
   const odd = emptyPack([0, 0, 0]);
   odd.sections.trees = { runs: [], words: new Uint16Array(7) };

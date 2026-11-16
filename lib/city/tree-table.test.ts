@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 import { SITES } from "../../sites/index";
+import { emptyPack } from "./dressing-pack";
 import type { TreeFeature } from "./features";
 import { sideFileSource, siteDataDir, tileArtifacts, tileIds } from "./tile";
 import { inventoryTree } from "./tree-inventory";
@@ -15,6 +16,7 @@ import {
   TREE_STEP_Y_M,
   TREE_WORDS,
   treeAt,
+  treeJoins,
   writeRegister,
   writeTree,
 } from "./tree-table";
@@ -102,6 +104,42 @@ describe("a canopy tree's record", () => {
       steepest,
       -steepest,
     ]);
+  });
+
+  test('the lushest crown keeps its NDVI: the top step, never "none"', () => {
+    const top = (254 - (254 % TREE_NDVI_STEP)) / 254;
+    for (const ndvi of [0.99, 0.995, 1, 1.2]) {
+      expect([ndvi, oneTree({ ...fact, ndvi }).p.ndvi]).toEqual([ndvi, top]);
+    }
+    expect(oneTree({ ...fact, ndvi: undefined }).p.ndvi).toBeUndefined();
+  });
+
+  test("a mapped row's tree keeps its turn to a 255th of a half circle", () => {
+    for (const rot of [0, 1, 3.1, Math.PI]) {
+      const back = oneTree({
+        e: 412_010,
+        n: 5_656_010,
+        ground: 110,
+        h: 0,
+        slope: [0, 0],
+        row: { rot, s: 1.2 },
+      });
+      expect(back.row).toBe(true);
+      expect(Math.abs(back.p.rot - rot)).toBeLessThanOrEqual(Math.PI / 510);
+    }
+  });
+
+  test("a foot's join is where the record stands it: on the file's own level", () => {
+    const pack = emptyPack(origin);
+    const words = new Uint16Array(TREE_WORDS);
+    writeTree(words, 0, fact, origin, { clamped: 0 });
+    pack.sections.trees = { runs: [], words };
+    const [foot] = treeJoins([pack]);
+    expect(foot.kind).toBe("foot");
+    expect(foot.z).toBeLessThanOrEqual(fact.ground);
+    expect(fact.ground - foot.z).toBeLessThan(TREE_STEP_Y_M);
+    expect(Math.abs(foot.x - fact.e)).toBeLessThan(0.06);
+    expect(Math.abs(foot.y - fact.n)).toBeLessThan(0.06);
   });
 
   test("a measured height under half a decimetre stays measured", () => {

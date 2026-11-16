@@ -798,7 +798,10 @@ the answer to "win it back inside the level and say how":
    bit** in turn, scale, crown width and crown base for the spawn tile's
    8 483 canopy and 6 455 surveyed trees (`scripts/bake-dressing.test.ts`:
    the float32 offsets the packed canopy held are kept, so every hash
-   is seeded as it was).
+   is seeded as it was). That is as far as the proof goes: those four
+   values, on that tile, over the test's synthetic ground; the slope is
+   not compared with the runtime's, and the record the GPU draws from is
+   quantised after it (the stand record's steps).
 2. **A tree is shipped once, not twice.** Until now the coarse level's
    third of a tile's trees travelled in `crowns` *and again* in the fine
    level's files. Now that third is in the coarse level's file alone
@@ -899,7 +902,8 @@ stay behind `?rails=table` for phase 3.
 0.976 or more overflowed its byte and decoded with its sign flipped —
 on banks steeper than 44° the feet draped the wrong way (304 slopes on
 Dresden's tiles, 239 on Grimma's): the step count is held to ± 15 (a
-slope of 0.945) and counted, tested at the limit and beyond. A dressing
+slope of 0.945), tested at the limit and beyond, and the build's log
+says how many a tile has (`scripts/prepare/dressing.ts`). A dressing
 file that does not come or is not one is said through the dressing's
 failure hook (the trail's `dressing failed`, the HUD's hole) instead of
 a tile silently without trees. A measured height under half a decimetre
@@ -953,6 +957,14 @@ tree files and two requests a fine level; the site 193.62 → 192.37 MB,
   rounded to a tenth of a day there.
 
 **Open, and what binds phase 2.**
+
+- "The viewer places nothing" and "near zero" stay unmet for trees until
+  the vertex stage derives turn and scale from a record's bytes — which
+  re-rolls the seeds once more. Phase 2 measures each kind's record
+  against its source before choosing a layout.
+- A pack's runs are the section's records in order, each once, and no
+  two sections share a record: the reader refuses anything else
+  (`runsCover`), so phase 2 can cull by run without checking again.
 
 - The container is ready for the kinds that stand (`stand`: the layout a
   set draws with, its views derived from the table). The lesson for

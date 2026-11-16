@@ -891,7 +891,7 @@ function* tileVegetationSteps(
  *  the level names none. A file the level names that does not come or is
  *  not one (another build's, cut short) is none too, and said (`lost`):
  *  the tile's trees are a hole, never a silence. */
-async function fetchPack(
+export async function fetchPack(
   file: string | undefined,
   url: (file: string) => string,
   lost: () => void,
@@ -910,8 +910,10 @@ async function fetchPack(
 
 /** Says a tile's tree table is missing through the dressing's failure hook
  *  (the trail's `dressing failed`, the HUD's hole); the rest is built. */
-const treesLost = (ctx: TileStreamContext, tile: string) => (): void =>
-  ctx.onDressingFailed?.(new Error("Bäume: Tabelle nicht lesbar"), tile);
+export const treesLost =
+  (ctx: Pick<TileStreamContext, "onDressingFailed">, tile: string) =>
+  (): void =>
+    ctx.onDressingFailed?.(new Error("Bäume: Tabelle nicht lesbar"), tile);
 
 /** A tree of the tile's table as its card knows it (lib/city/ask-items.ts). */
 function askedTree(t: ReturnType<typeof placedTrees>[number]): AskedTree {

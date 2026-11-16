@@ -2791,7 +2791,8 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   for a tree: it makes each one's twenty-byte stand record
   (`lib/city/tree-stands.ts`) with the arithmetic it placed trees by
   before (`canopyPlacement`, `inventoryTree`; the build's records give
-  the old placement back to the bit, `scripts/bake-dressing.test.ts`)
+  the old placement back to the bit in turn, size, crown width and
+  base on the spawn tile, `scripts/bake-dressing.test.ts`)
   and draws sets of records (`Instances.ofStands`). What moved: a tree's
   foot is up to 3.1 cm under the fine ground, never over it (was: on it;
   each tree reports the join, `scripts/ground-joins.ts` `trees`), its

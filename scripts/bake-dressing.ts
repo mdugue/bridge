@@ -337,12 +337,14 @@ function treePack(
 /**
  * The tile's two dressing files from its trees: the coarse level's holds
  * the third it draws, the fine level's the rest. A tree a record cannot
- * hold (outside the file's box, taller than its bits) fails the build.
+ * hold (outside the file's box, taller than its bits) fails the build;
+ * `steep` counts the slopes past a record's steepest step, kept at it (a
+ * bank steeper than 43°: prepare/dressing.ts says how many a tile has).
  */
 export function packTrees(
   trees: TileTrees,
   corner: readonly [number, number]
-): { coarse: Uint8Array; fine: Uint8Array } {
+): { coarse: Uint8Array; fine: Uint8Array; steep: number } {
   let lowest = Number.POSITIVE_INFINITY;
   for (const t of [...trees.trees, ...trees.register]) {
     lowest = Math.min(lowest, t.y);
@@ -364,15 +366,15 @@ export function packTrees(
       `dressing: ${report.clamped} fields of the trees' records do not fit (a tree outside the tile's box, a height or a width past 102 m, a step between two rows past 65 535)`
     );
   }
-  return { coarse, fine };
+  return { coarse, fine, steep: report.steep ?? 0 };
 }
 
-/** The tile's two dressing files. */
+/** The tile's two dressing files, and its count of steep slopes. */
 export async function bakeDressing(
   site: Site,
   tile: string,
   root: string,
   ground: DressingGround
-): Promise<{ coarse: Uint8Array; fine: Uint8Array }> {
+): Promise<{ coarse: Uint8Array; fine: Uint8Array; steep: number }> {
   return packTrees(await standTrees(site, tile, root, ground), ground.origin);
 }

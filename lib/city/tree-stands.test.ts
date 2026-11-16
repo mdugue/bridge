@@ -6,7 +6,18 @@
 import { expect, test } from "bun:test";
 import { STAND_RECORD_WORDS, STAND_WORD, writeStand } from "./stand-record";
 import type { Placement } from "./tree-placement";
-import { placementRecords, placementStand } from "./tree-stands";
+import {
+  crownFrame,
+  placementRecords,
+  placementStand,
+  registerTrunkStand,
+} from "./tree-stands";
+import {
+  REGISTER_WORDS,
+  registerAt,
+  registerTree,
+  writeRegister,
+} from "./tree-table";
 
 const tree: Placement = {
   base: 4,
@@ -35,4 +46,42 @@ test("the table of many is the records of each, word for word", () => {
     writeStand(one, 1, placementStand(other, widen), origin);
     expect([...words]).toEqual([...one]);
   }
+});
+
+test("the table's origin is under the lowest crown, not the lowest foot", () => {
+  // a crown starts where its base lifts it to: the heights' sixteen bits
+  // are spent from there
+  const { lift } = crownFrame(tree);
+  expect(lift).toBeGreaterThan(1);
+  const { origin } = placementRecords([tree]);
+  expect(origin[1]).toBe(Math.floor(tree.y + lift));
+  expect(origin[1]).toBeGreaterThan(Math.floor(tree.y));
+});
+
+test("a surveyed tree's own trunk carries the slope at its foot", () => {
+  const origin = [412_000, 5_656_000, 104] as const;
+  const words = new Uint16Array(REGISTER_WORDS);
+  writeRegister(
+    words,
+    0,
+    {
+      e: 412_000.7,
+      n: 5_657_966.2,
+      ground: 118.42,
+      index: 3,
+      slope: [0.5, -0.25],
+      props: { a: 0, d: 4.5, h: 15.5, l: "d" },
+    },
+    origin,
+    { clamped: 0 }
+  );
+  const trunk = registerTrunkStand(
+    registerTree(
+      registerAt(words, 0, origin),
+      { cx: 411_000, cy: 5_657_000 },
+      2026
+    )
+  );
+  // steps of eight of 127, x then z, round 128
+  expect(trunk.more).toEqual([128 + 64, 128 - 32]);
 });

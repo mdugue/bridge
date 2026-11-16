@@ -295,13 +295,15 @@ test("a tree on a bank at the slope's limit keeps the way the ground falls", () 
     reach: [10, 2] as const,
     fact: { e: minX + 600 + dx, n: minY + 5, ground: 100, h: 10, slope },
   });
-  const { fine, coarse } = packTrees(
+  const { fine, coarse, steep } = packTrees(
     {
       trees: [onBank([1, -1], 0), onBank([-1, 1], 7), onBank([0.98, 0], 14)],
       register: [],
     },
     [minX, minY]
   );
+  // five slopes past the steepest step, each said to the build's log
+  expect(steep).toBe(5);
   const slopes = placedTrees([unpack(coarse), unpack(fine)], offset)
     .toSorted((a, b) => a.p.x - b.p.x)
     .map((t) => t.p.slope);
