@@ -326,18 +326,26 @@ exact bytes, and whether it loaded). After the review of 2026-11-16:
   memory; `held` (three's `info.memory`) is recorded, since two reads of
   one build differed (attributes 332 against 325).
 
+After the second review: the phone's two reads are 4 s apart, more than
+a late part's 3 s compile wait, and need no compile queued; a worker
+whose resource timing is full (250) fails the read, and so does a script
+outside the counted workers when no BVH worker ran; `--browser` refuses a
+build environment that inlines what CI does not set (the crash reports'
+DSN, release, environment) and a running server that does not serve
+`.next`'s current build.
+
 `longtask` has no row: the scene counts long tasks only with `?trace=1`.
 Figures: `docs/data-pipeline.md`, "What a browser reads".
 
-Gated: 1 and 2, with a tolerance each figure names (bytes of JavaScript
-±0.5 %, a tile's bytes exact). **Recorded only**: 3. On SwiftShader a
+Gated: 1 and 2, exactly (as built: the ±0.5 % first planned for the
+JavaScript went with the gzip into the pinned Bun). **Recorded only**: 3. On SwiftShader a
 timing depends on the runner drawn (`ci.yml` documents a factor of two
 between runners), so the ledger keeps timings in a section of their own
 that `--check` never compares, each with the machine and date it was
 read on.
 
-**Verify**: `LEDGER=1 bun run ledger -- --browser` twice → figures 1
-and 2 equal within their tolerance. **STOP** if the first-load set
+**Verify**: `bun run ledger -- --browser` twice → figures 1 and 2
+equal. **STOP** if the first-load set
 differs between two runs of the same build: find out why before gating
 it. **Ledger**: JavaScript, a phone's tile bytes, the first timings.
 

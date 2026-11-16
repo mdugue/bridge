@@ -60,6 +60,16 @@ export interface BrowserReading {
  *  (`timings.elsewhere`), not counted. */
 export const FIRST_LOAD_WORKERS = ["ground", "niches", "scene"] as const;
 
+/** How far apart the two reads of the phone's cache are (ms): longer than
+ *  a late part waits for its compile (late-parts.ts `COMPILE_WAIT_MS`, 3 s;
+ *  scripts/ledger-browser.test.ts holds it so), as a part reweighs the
+ *  cache when it lands. */
+export const CACHE_SETTLE_GAP_MS = 4000;
+
+/** A worker's resource timing keeps this many entries unless widened: a
+ *  worker at it has dropped some. */
+export const RESOURCE_BUFFER_DEFAULT = 250;
+
 /** How long no new script may arrive before the first load's set is cut,
  *  and again after it before the second read that must equal it (ms). */
 export const FIRST_LOAD_QUIET_MS = 5000;
@@ -67,7 +77,7 @@ export const FIRST_LOAD_QUIET_MS = 5000;
 export const FIRST_LOAD_NOTE = `Every /_next/static/*.js the page or the workers ${FIRST_LOAD_WORKERS.join(", ")} fetched themselves (each one's resource timing) at /dresden?scene=lite (a NEXT_PUBLIC_POC_DEBUG=1 production build), cut at: ready, those workers running, then ${FIRST_LOAD_QUIET_MS / 1000} s without a new script; a second read ${FIRST_LOAD_QUIET_MS / 1000} s later must equal it. The BVH worker's own scripts are left out: it starts only if the spawn's buildings have no BVH yet. Each raw body gzipped at level 9 by the pinned Bun, exact. workerOnly: the files those workers fetched and the page did not — not the scene's JavaScript, which the page shares.`;
 
 export const PHONE_NOTE =
-  "The tile cache's own accounting (calculateBytesUsed, as its budget counts it) on an emulated phone (isMobile, hasTouch; the scene's tier asserted mobile) at /dresden?scene=lite once ready and two reads 2 s apart agree, loaded contents only: the spawn tile alone, one of fifteen, under the lite profile. It is not the phone's memory: what a tile holds on the GPU that never reaches calculateBytesUsed moves nothing here, and three's info.memory is recorded only (timings.phoneHeld), since two reads of one build differ.";
+  "The tile cache's own accounting (calculateBytesUsed, as its budget counts it) on an emulated phone (isMobile, hasTouch; the scene's tier asserted mobile) at /dresden?scene=lite once ready and two reads 4 s apart (more than a late part's 3 s compile wait) agree with no compile queued, loaded contents only: the spawn tile alone, one of fifteen, under the lite profile. It is not the phone's memory: what a tile holds on the GPU that never reaches calculateBytesUsed moves nothing here, and three's info.memory is recorded only (timings.phoneHeld), since two reads of one build differ.";
 
 /** The first load's JavaScript: files and their gzip -9 bytes. */
 export interface JsWeight {

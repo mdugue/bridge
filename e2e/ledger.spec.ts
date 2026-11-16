@@ -12,7 +12,8 @@
  *   network quiet (`FIRST_LOAD_NOTE`), and which only a worker fetched;
  * - a phone's tile cache: `getGpuDebug().tileCache.tiles` in a context
  *   with `isMobile` and `hasTouch`, the scene's own tier asserted mobile,
- *   read until two reads agree;
+ *   read until two reads further apart than a late part's compile wait
+ *   agree, no compile queued;
  * - the timings: `getTimings()` at `ready`, on both.
  *
  * Never retried: a first read that differs is the finding. Both pages run
@@ -23,8 +24,10 @@ import nodePath from "node:path";
 import { expect, test } from "@playwright/test";
 import type { BrowserContext, Page, Response, Worker } from "@playwright/test";
 import {
+  CACHE_SETTLE_GAP_MS,
   FIRST_LOAD_QUIET_MS,
   FIRST_LOAD_WORKERS,
+  RESOURCE_BUFFER_DEFAULT,
 } from "../lib/city/ledger-browser";
 import type {
   BrowserReading,
@@ -77,14 +80,30 @@ const resourcePaths = () =>
     .getEntriesByType("resource")
     .map((entry) => new URL(entry.name).pathname);
 
+/** In a worker: its resource timing kept past the first 250 entries. */
+const widenBuffer = () => {
+  performance.setResourceTimingBufferSize(10_000);
+};
+
 /** The scripts a page or worker fetched itself, by path: its own
- *  resource timing (a worker's `importScripts` are in the worker's). */
-async function ownScripts(at: Page | Worker): Promise<Set<string>> {
-  return new Set(
+ *  resource timing (a worker's `importScripts` are in the worker's). A
+ *  worker whose buffer is full has dropped entries: that fails the read,
+ *  not the count. */
+async function ownScripts(
+  at: Page | Worker,
+  name = "the page"
+): Promise<Set<string>> {
+  const paths =
     "mainFrame" in at
       ? await at.evaluate(resourcePaths)
-      : await at.evaluate(resourcePaths)
-  );
+      : await at.evaluate(resourcePaths);
+  if (!("mainFrame" in at)) {
+    expect(
+      paths.length,
+      `${name}'s resource timing is full: entries were dropped`
+    ).toBeLessThan(RESOURCE_BUFFER_DEFAULT);
+  }
+  return new Set(paths);
 }
 
 /** The named workers the page runs, by their `name` (ADR 0061's scene
@@ -93,6 +112,8 @@ function watchWorkers(page: Page): () => Map<string, Worker> {
   const named = new Map<string, Worker>();
   const see = async (worker: Worker) => {
     try {
+      // as early as a worker can be reached: no entry dropped at 250
+      await worker.evaluate(widenBuffer);
       const name = await worker.evaluate(
         () => (self as { name?: string }).name ?? ""
       );
@@ -173,7 +194,7 @@ async function firstLoadSet(
   for (const name of FIRST_LOAD_WORKERS) {
     const worker = workers.get(name);
     expect(worker, `the ${name} worker`).toBeDefined();
-    for (const path of worker ? await ownScripts(worker) : []) {
+    for (const path of worker ? await ownScripts(worker, name) : []) {
       theirs.add(path);
     }
   }
@@ -218,6 +239,13 @@ test("the first load's JavaScript, and the desktop's timings", async ({
     [...first.files.keys()].toSorted()
   );
   expect([...first.files.values()].some((f) => f.worker)).toBe(true);
+  // a script outside the set is the BVH worker's, or the read is wrong
+  if (second.elsewhere.length > 0) {
+    expect(
+      workers().has("bvh"),
+      `scripts no counted worker fetched, and no BVH worker: ${second.elsewhere.join(", ")}`
+    ).toBe(true);
+  }
   reading.workers = [...FIRST_LOAD_WORKERS];
   reading.elsewhere = second.elsewhere;
   reading.firstLoad = [...first.files.values()]
@@ -257,12 +285,18 @@ test("a phone's tile cache, and its timings", async ({ browser }) => {
   // must not be recorded as a phone's
   let gpu = await debug();
   expect(gpu?.tier).toBe("mobile");
-  // read until two reads, 2 s apart, agree
+  // read until two reads agree, further apart than a late part may wait
+  // for its compile, with no compile queued
+  const compiling = async () =>
+    await page.evaluate(async () => {
+      const info = await window.__poc?.handle?.getRenderInfo();
+      return info?.compilesQueued ?? 0;
+    });
   let was = "";
   const settleBy = Date.now() + CACHE_SETTLE_MS;
   for (;;) {
     const now = JSON.stringify(loadedEntries(gpu?.tileCache.tiles ?? []));
-    if (now === was) {
+    if (now === was && (await compiling()) === 0) {
       break;
     }
     expect(
@@ -270,7 +304,7 @@ test("a phone's tile cache, and its timings", async ({ browser }) => {
       "the phone's tile cache never read the same twice"
     ).toBeLessThan(settleBy);
     was = now;
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(CACHE_SETTLE_GAP_MS);
     gpu = await debug();
   }
   expect(loadedEntries(gpu?.tileCache.tiles ?? []).length).toBeGreaterThan(0);

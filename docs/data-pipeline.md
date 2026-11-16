@@ -1559,7 +1559,10 @@ browser can say, read by `e2e/ledger.spec.ts` (ignored unless `LEDGER=1`,
 never retried) at `/dresden?scene=lite` from a `NEXT_PUBLIC_POC_DEBUG=1`
 production build on SwiftShader — a running `next start` is reused, else
 Playwright builds and starts one. The spec hands what it read to
-`scripts/ledger-browser.ts`, which weighs it with the pinned Bun; the
+`scripts/ledger-browser.ts`, which weighs it with the pinned Bun — and
+refuses a build environment that inlines what CI does not set
+(`NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_RELEASE`, `VERCEL_GIT_COMMIT_SHA`, …)
+or a running server that does not serve `.next`'s current build; the
 shapes are `lib/city/ledger-browser.ts`, and each gated figure carries a
 `note` saying what it is. Both are gated exactly. CI's build-check shard
 runs the check with `--browser` wherever its e2e half runs; without the
@@ -1581,7 +1584,8 @@ compared.
   with `isMobile` and `hasTouch`, the scene's own tier asserted `mobile`;
   the cache's own accounting (`calculateBytesUsed`, as its budget counts
   it) of its loaded contents, each by the manifest's logical name, once
-  two reads two seconds apart agree. Under the lite profile that is the
+  two reads four seconds apart (more than a late part's compile wait)
+  agree with no compile queued. Under the lite profile that is the
   spawn tile alone, one of fifteen. It is not the phone's memory: what a
   tile holds on the GPU that never reaches `calculateBytesUsed` moves
   nothing here, and three's `info.memory` at `ready`

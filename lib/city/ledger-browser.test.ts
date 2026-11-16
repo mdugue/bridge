@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
+import { gzipSync } from "node:zlib";
 import {
   browserLedger,
   firstLoadFigures,
   jsGzip,
+  PHONE_NOTE,
   phoneCache,
   servedName,
   timingRows,
@@ -10,8 +12,13 @@ import {
 import type { BrowserReading } from "./ledger-browser";
 
 test("a script weighs its gzip -9 bytes, the same body the same figure", () => {
-  const body = new TextEncoder().encode("x".repeat(10_000));
-  expect(jsGzip(body)).toBeLessThan(200);
+  const body = new TextEncoder().encode(
+    Array.from({ length: 4000 }, (_, i) => `v${(i * 7919) % 1013};`).join("")
+  );
+  expect(jsGzip(body)).toBe(gzipSync(body, { level: 9 }).length);
+  // level 9, not the wire rule's 6, and not the raw length
+  expect(jsGzip(body)).not.toBe(gzipSync(body, { level: 6 }).length);
+  expect(jsGzip(body)).toBeLessThan(body.length);
   expect(jsGzip(body)).toBe(jsGzip(new Uint8Array(body)));
 });
 
@@ -46,17 +53,20 @@ test("a phone's cache: the loaded contents only, by logical name", () => {
       [
         { uri: "./terrain_t_l1.abc.glb.gz", bytes: 300, loaded: true },
         { uri: "city_t.def.glb.gz", bytes: 9000, loaded: true },
-        // requested, not yet loaded: listed at 0 bytes, left out
-        { uri: "terrain_t_l0.0f0.glb.gz", bytes: 0, loaded: false },
+        // requested, not yet loaded: left out, whatever it lists
+        { uri: "terrain_t_l0.0f0.glb.gz", bytes: 7, loaded: false },
         { uri: "odd.bin", bytes: 5, loaded: true },
+        // the same content twice is summed, not the last one kept
+        { uri: "odd.bin", bytes: 6, loaded: true },
       ],
       (served) => logical.get(served)
     )
-  ).toMatchObject({
-    bytes: 9305,
+  ).toEqual({
+    note: PHONE_NOTE,
+    bytes: 9311,
     contents: {
       "city_t.glb.gz": 9000,
-      "odd.bin": 5,
+      "odd.bin": 11,
       "terrain_t_l1.glb.gz": 300,
     },
   });

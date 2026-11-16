@@ -311,14 +311,18 @@ export interface RunOptions {
 /** The browser's sections (lib/city/ledger-browser.ts): read now with
  *  `--browser`, else the committed ones, which `--check` then does not
  *  compare. */
-function browserPart(
+async function browserPart(
   read: boolean,
   site: string,
   root: string,
   committed: Partial<Ledger> | null
-): Pick<Ledger, "browser" | "timings"> {
+): Promise<Pick<Ledger, "browser" | "timings">> {
   if (read) {
-    return browserSections(publishedFiles(site, root).files, platform());
+    return await browserSections(
+      publishedFiles(site, root).files,
+      platform(),
+      root
+    );
   }
   return {
     ...(committed?.browser ? { browser: committed.browser } : {}),
@@ -369,7 +373,12 @@ export async function run(
       publishedFiles,
       check ? undefined : { committed, today }
     ),
-    ...browserPart(browser, site, root, committed as Partial<Ledger> | null),
+    ...(await browserPart(
+      browser,
+      site,
+      root,
+      committed as Partial<Ledger> | null
+    )),
   };
   if (!check) {
     const ledger = datedLedger(fresh, committed, today);

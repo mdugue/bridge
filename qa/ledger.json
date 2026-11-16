@@ -5354,7 +5354,7 @@
       }
     },
     "phoneLiteSpawnCache": {
-      "note": "The tile cache's own accounting (calculateBytesUsed, as its budget counts it) on an emulated phone (isMobile, hasTouch; the scene's tier asserted mobile) at /dresden?scene=lite once ready and two reads 2 s apart agree, loaded contents only: the spawn tile alone, one of fifteen, under the lite profile. It is not the phone's memory: what a tile holds on the GPU that never reaches calculateBytesUsed moves nothing here, and three's info.memory is recorded only (timings.phoneHeld), since two reads of one build differ.",
+      "note": "The tile cache's own accounting (calculateBytesUsed, as its budget counts it) on an emulated phone (isMobile, hasTouch; the scene's tier asserted mobile) at /dresden?scene=lite once ready and two reads 4 s apart (more than a late part's 3 s compile wait) agree with no compile queued, loaded contents only: the spawn tile alone, one of fifteen, under the lite profile. It is not the phone's memory: what a tile holds on the GPU that never reaches calculateBytesUsed moves nothing here, and three's info.memory is recorded only (timings.phoneHeld), since two reads of one build differ.",
       "bytes": 158979087,
       "contents": {
         "city_33412_5656_2_sn_far.glb.gz": 12632382,
@@ -5371,110 +5371,38 @@
     "desktop": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 5.6,
-        "maxMs": 5.6
+        "totalMs": 7,
+        "maxMs": 7
       },
       "boot:frame": {
-        "count": 8,
-        "totalMs": 887.7,
-        "maxMs": 771.4
+        "count": 9,
+        "totalMs": 632,
+        "maxMs": 596.6
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 607.4,
-        "maxMs": 607.4
+        "totalMs": 611,
+        "maxMs": 611
       },
       "boot:light-wait": {
         "count": 1,
-        "totalMs": 2747.7,
-        "maxMs": 2747.7
+        "totalMs": 2246.2,
+        "maxMs": 2246.2
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 1612.5,
-        "maxMs": 1612.5
+        "totalMs": 1619.3,
+        "maxMs": 1619.3
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 400.6,
-        "maxMs": 400.6
+        "totalMs": 375.5,
+        "maxMs": 375.5
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 518.9,
-        "maxMs": 518.9
-      },
-      "boot:scene-compile": {
-        "count": 1,
-        "totalMs": 3000.6,
-        "maxMs": 3000.6
-      },
-      "boot:setup": {
-        "count": 1,
-        "totalMs": 128,
-        "maxMs": 128
-      },
-      "boot:spawn-wait": {
-        "count": 1,
-        "totalMs": 4580.8,
-        "maxMs": 4580.8
-      },
-      "boot:tileset": {
-        "count": 1,
-        "totalMs": 0.1,
-        "maxMs": 0.1
-      },
-      "boot:veil-to-loaded": {
-        "count": 1,
-        "totalMs": 4168.9,
-        "maxMs": 4168.9
-      },
-      "dressing:build": {
-        "count": 2,
-        "totalMs": 893.3,
-        "maxMs": 694.3
-      },
-      "tile:compile": {
-        "count": 4,
-        "totalMs": 12001.6,
-        "maxMs": 3000.5
-      }
-    },
-    "phone": {
-      "boot:first-shadow-frame": {
-        "count": 1,
-        "totalMs": 125,
-        "maxMs": 125
-      },
-      "boot:frame": {
-        "count": 8,
-        "totalMs": 657.2,
-        "maxMs": 395.7
-      },
-      "boot:light-to-veil": {
-        "count": 1,
-        "totalMs": 605.1,
-        "maxMs": 605.1
-      },
-      "boot:light-wait": {
-        "count": 1,
-        "totalMs": 3000.4,
-        "maxMs": 3000.4
-      },
-      "boot:page-to-viewer": {
-        "count": 1,
-        "totalMs": 1644.1,
-        "maxMs": 1644.1
-      },
-      "boot:place": {
-        "count": 1,
-        "totalMs": 364.4,
-        "maxMs": 364.4
-      },
-      "boot:renderer-init": {
-        "count": 1,
-        "totalMs": 119,
-        "maxMs": 119
+        "totalMs": 339.6,
+        "maxMs": 339.6
       },
       "boot:scene-compile": {
         "count": 1,
@@ -5483,13 +5411,13 @@
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 77.7,
-        "maxMs": 77.7
+        "totalMs": 125.5,
+        "maxMs": 125.5
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 4462.2,
-        "maxMs": 4462.2
+        "totalMs": 5293.2,
+        "maxMs": 5293.2
       },
       "boot:tileset": {
         "count": 1,
@@ -5498,40 +5426,112 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4262.7,
-        "maxMs": 4262.7
+        "totalMs": 4364,
+        "maxMs": 4364
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 993,
-        "maxMs": 760.5
+        "totalMs": 1082.3,
+        "maxMs": 853.8
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 11202.8,
-        "maxMs": 3028.6
+        "totalMs": 12003.6,
+        "maxMs": 3001.9
+      }
+    },
+    "phone": {
+      "boot:first-shadow-frame": {
+        "count": 1,
+        "totalMs": 124.1,
+        "maxMs": 124.1
+      },
+      "boot:frame": {
+        "count": 8,
+        "totalMs": 716.7,
+        "maxMs": 454.8
+      },
+      "boot:light-to-veil": {
+        "count": 1,
+        "totalMs": 605.4,
+        "maxMs": 605.4
+      },
+      "boot:light-wait": {
+        "count": 1,
+        "totalMs": 3000.3,
+        "maxMs": 3000.3
+      },
+      "boot:page-to-viewer": {
+        "count": 1,
+        "totalMs": 1617.1,
+        "maxMs": 1617.1
+      },
+      "boot:place": {
+        "count": 1,
+        "totalMs": 452.3,
+        "maxMs": 452.3
+      },
+      "boot:renderer-init": {
+        "count": 1,
+        "totalMs": 360.9,
+        "maxMs": 360.9
+      },
+      "boot:scene-compile": {
+        "count": 1,
+        "totalMs": 3000.2,
+        "maxMs": 3000.2
+      },
+      "boot:setup": {
+        "count": 1,
+        "totalMs": 125.5,
+        "maxMs": 125.5
+      },
+      "boot:spawn-wait": {
+        "count": 1,
+        "totalMs": 4614.5,
+        "maxMs": 4614.5
+      },
+      "boot:tileset": {
+        "count": 1,
+        "totalMs": 0,
+        "maxMs": 0
+      },
+      "boot:veil-to-loaded": {
+        "count": 1,
+        "totalMs": 4236.9,
+        "maxMs": 4236.9
+      },
+      "dressing:build": {
+        "count": 2,
+        "totalMs": 949.2,
+        "maxMs": 689.3
+      },
+      "tile:compile": {
+        "count": 4,
+        "totalMs": 10209.2,
+        "maxMs": 3046.9
       }
     },
     "phoneHeld": {
-      "attributes": 764,
-      "attributesSize": 45846437,
-      "geometries": 297,
-      "indexAttributes": 64,
-      "indexAttributesSize": 33939318,
+      "attributes": 1322,
+      "attributesSize": 47523814,
+      "geometries": 519,
+      "indexAttributes": 133,
+      "indexAttributesSize": 33979704,
       "indirectStorageAttributes": 0,
       "indirectStorageAttributesSize": 0,
-      "programs": 127,
-      "programsSize": 1665348,
+      "programs": 166,
+      "programsSize": 1995990,
       "readbackBuffers": 0,
       "readbackBuffersSize": 0,
-      "renderTargets": 8,
+      "renderTargets": 10,
       "storageAttributes": 0,
       "storageAttributesSize": 0,
-      "textures": 35,
-      "texturesSize": 71405161,
-      "uniformBuffers": 364,
-      "uniformBuffersSize": 87584,
-      "total": 152943848
+      "textures": 63,
+      "texturesSize": 71615312,
+      "uniformBuffers": 617,
+      "uniformBuffersSize": 153312,
+      "total": 155268132
     },
     "firstLoad": [
       {
