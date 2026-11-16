@@ -27,7 +27,7 @@
   less code in the viewer
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: TODO
+- **Status**: IN PROGRESS — phase 0 built 2026-11-16 (Findings)
 
 ## Why this matters
 
@@ -444,5 +444,167 @@ compressed, the container is pre-gzipped like the packs it replaces.
 
 ## Findings
 
-(Phase 0 writes the chosen record, the rails' home and the baseline
-here.)
+### Phase 0 (2026-11-16) — the baseline, the stand record, the rails' home
+
+Every figure is in `qa/ledger.json`: `dressing` (gated) and
+`dressingRecorded` (the browser's, München's and the spikes', never
+compared). The tools: `e2e/dressing-ledger.spec.ts`,
+`scripts/eval/stand-record-probe.ts`, `stand-record-bytes.ts`,
+`lines-three-ways.ts`. The yards' tile is `33410_5656_2_sn` (Bahnhof
+Neustadt; the largest tram file of the site and its third-largest rail
+file).
+
+**Baseline — the wire** (gzip as the ledger's rule says; a fine level's
+dressing files and the sports table):
+
+| Tile | Fine: bytes | requests | the heaviest kinds | Coarse: bytes | requests |
+|---|---|---|---|---|---|
+| spawn `33412_5656` | 249 125 | 18 | trees 84 150, canopyx 43 036, canopy 40 495, furniture 25 898, tram 16 963 | 84 944 | 3 |
+| forest `33416_5658` | 496 855 | 18 | canopy 468 887, canopyx 22 869 | 398 235 | 3 |
+| yards `33410_5656` | 275 994 | 18 | canopy 56 529, trees 49 947, tram 35 801, furniture 29 202, canopyx 25 106, monuments 14 864, rail 12 840 | 78 626 | 3 |
+| München `32690_5334` | 183 505 | 17 | canopyx 43 276, furniture 39 243, tram 27 448, canopy 22 034 | 51 303 | 2 |
+
+The dressing is 3–7 % of a fine level's bytes (the spawn level is
+6.94 MB) and 18 of its 29 requests. **So this plan's wire win is
+requests, not bytes**: the byte gate of the Done criteria ("≤ baseline")
+is a ceiling to hold, and there is little under it to gain.
+
+**Baseline — the scene's thread and the tile cache** (recorded only:
+headless Chromium, WebGPU on SwiftShader, a four-core cloud container,
+`?scene=lite&block=1`; the milliseconds are the time inside each
+builder's own slices, the pauses left out; the bytes are
+`dressingPart`'s, what `calculateBytesUsed` adds for the dressing):
+
+| Tile | Builders, ms | the heaviest | Cache bytes | the heaviest |
+|---|---|---|---|---|
+| spawn | 646 | trees 231, tram 108, rail 95, asks 78, furniture 61 | 12.8 MB | vegetation 5.5, tram 3.2, furniture 1.8 |
+| forest | 752 | trees 541, asks 207 | 12.3 MB | vegetation 12.1 |
+| yards | 1 348 | rail 840, tram 185, trees 123 | 22.0 MB | rail 7.2, tram 6.3, vegetation 4.9 |
+| München | 889 | rail 315, trees 149, tram 148, monuments 97 | 16.7 MB | monuments 4.6, tram 4.6, vegetation 3.2 |
+
+The phone profile (an emulated phone's viewport and touch, no CPU
+throttle) reads the same within the noise (spawn 913 ms, the others
+±5 %) and the same bytes. A second run moves a builder by tens of per
+cent: the table says which builder is heavy on which tile, nothing more.
+Not measured: **the longest task of a flight** — the scene draws in a
+worker, where the browser reports no long tasks, and with `?thread=main`
+on a software renderer the long task is the frame itself. It wants a
+phone (plan 019's two).
+
+**The stand record — chosen, and three's public API takes it.**
+`lib/city/stand-record.ts`: ten unsigned 16-bit words, twenty bytes —
+`x, y, z` in steps of 1/32 m from the table's origin (a tile's box:
+2 048 m), the turn; three scales × 1/1024 and a spare; two words holding
+the four bytes (`code`, `ndvi`, `genus`, `jitter`). It differs from the
+plan's target in three points, each forced by what was found:
+
+- **All words, no byte fields.** three (r187,
+  `WebGPUAttributeUtils`) keeps one typed array per interleaved buffer
+  and takes every view's vertex format from it, so 16-bit and 8-bit
+  fields share a buffer only as 16-bit words; a shader takes a byte out
+  of its word (`standByte`, exact: the words arrive as integers). Two
+  typed-array views of one `ArrayBuffer` work but are two GPU buffers.
+- **Not normalized, interleaved.** What reaches TSL as what (the probe
+  drew each and read the value back):
+
+  | Attribute | WGSL type | Uploaded as |
+  |---|---|---|
+  | interleaved `Uint16Array`, not normalized, 4 an item | `vec4<u32>` (`uint16x4`) | as it is |
+  | … 2 an item | `vec2<u32>` | as it is |
+  | interleaved `Uint16Array` or `Uint8Array`, normalized, 4 | `vec4<f32>` | as it is |
+  | interleaved `Uint8Array`, not normalized, 4 | `vec4<u32>` | as it is |
+  | plain `InstancedBufferAttribute`, `Uint16Array`/`Uint8Array`, **not** normalized | `vec4<u32>` | **widened to `Uint32Array`**: 2× / 4× the bytes |
+  | plain, normalized, 4 or 3 an item | `vec4<f32>` / `vec3<f32>` | as it is (3 an item padded to 4) |
+  | any 8- or 16-bit array, **1 an item** | — | no vertex format: the pipeline is not made |
+
+- **The origin is the drawn object's, by a uniform — not the set's
+  matrix.** The crown shaders seed a tree's form, sway and winter
+  stipple from its instance's place in the tile's frame
+  (`instanceColumn(3)`); a set matrix would move that frame and reshape
+  every crown. One uniform node for all materials
+  (`instancing.ts` `tableOrigin`, TSL's `onObjectUpdate`, as
+  `material-slots.ts` does) reads `object.userData.standOrigin`, and
+  lands in the object's bind group. No material and no build a tile:
+  a second set of a material and layout built **0** node builders; a
+  tile's 102 crown sets built 3 (the lobed crown, the cone and the
+  pine are three geometries).
+
+Counted on the scene's crown material (PR #314's method,
+`renderer.debug.getShaderAsync`): from records **4 vertex buffers**
+(position, normal, the records, `iColor`), 5 attributes, **3 inter-stage
+variables** — from matrices 4, 7 and 3. No STOP.
+
+What it buys and costs, on the coarse crowns (`?stands=record`; the
+default path is untouched):
+
+- GPU: a crown's placement 64 → 20 bytes (spawn 321 → 100 kB, the
+  forest 1.78 → 0.55 MB); nothing is written on the scene's thread, each
+  set is a view of the file's bytes.
+- Wire: the same file size (spawn 73.1 against 75.9 kB today, yards
+  65.2 / 65.6, München 49.8 / 51.1; the forest 407.6 / 397.5, +2.6 % —
+  the baked height is information the old file lacks).
+- Picture: a record stands within 2.4 cm and 0.16 % of scale of today's
+  matrix. The probe's close view (1 m a pixel) differs in 291 of 8 412
+  lit pixels at 24/255, crown edges; a `SHOTS_SMALL` plate of
+  `qa/views/coarse-300.json` in 147 of 400 000.
+
+Open for Phase 1: the height in the spike is read at runtime and packed
+in the viewer (the build has the fine ground only: baking the coarse
+level's needs its height function in `scripts/coarse-crowns.ts`); the
+tint is still three floats painted on the CPU (the season's); nothing
+has been looked at on a real GPU.
+
+**The rails' home: lines — a table of segments, simplified by the
+build.** The three arms on the yards' tile (337 runs, 47.7 km of track,
+19 721 segments at today's 2 m / 4 m samples; a build that drops every
+sample its neighbours stand in for within 1 cm across and 5 mm in
+height keeps 7 676). Milliseconds under Bun on the container, not in a
+browser:
+
+| | wire, gz | scene thread | GPU bytes | street rail over the road, less its 2 cm (5th / 50th / 95th pct), buried |
+|---|---|---|---|---|
+| today: runtime builders | 34.7 kB (the rail file 12.7, the tram file's tracks 22.0) | ≈ 280–340 ms of the builders' 1 280 | 7.08 MB | +0.9 / +2.8 / +4.4 cm, 0.14 % |
+| PR #156's triangles, every sample | 364.4 kB | 8 ms (parse) | 6.09 MB | +0.5 / +2.8 / +5.2 cm, 0.17 % |
+| … simplified | 288.1 kB | 4 ms | 2.41 MB | +0.5 / +2.8 / +5.3 cm, 0.15 % |
+| segment table, every sample | 164.2 kB | 4 ms | 0.40 MB | +0.9 / +2.8 / +4.4 cm, 0.14 % |
+| **… simplified** | **72.5 kB** | **2–3 ms** | **0.15 MB** | +0.9 / +2.8 / +4.4 cm, 0.14 % |
+
+- The table (`lib/city/rail-table.ts`, drawn by
+  `app/_components/rail-segments.ts` behind `?rails=table`): twenty
+  bytes a segment of track — both ends, the track's bearing at each, its
+  offset across the line — expanded into the pair of rails by an
+  instanced profile that is the builder's own two ribbons over a unit
+  length. Cut into 250 m chunks with their own origin, sixteen bits step
+  **4 mm in height** (8 mm in plan), so it stands where today's rails
+  stand; the baked nodes' one step over a tile is 3.05 cm, which widens
+  the spread and is what PR #156 left open. 3 vertex buffers, 5
+  attributes, 1 inter-stage variable; one build a look.
+- In the browser (the same container, `?rails=table`, every sample kept
+  and the table still made at runtime from the builders' runs): the
+  yards' dressing weighs 15.6 MB in the tile cache where it weighed
+  22.0 (rail 7.2 → 5.6, tram 6.3 → 1.5), and the tram's builder takes
+  47 ms where it took 185, the table's sets 23 ms.
+- **Against it, and it binds Phase 3:** the table is 38 kB *more* on the
+  wire than the GeoJSON it replaces on this tile (a line's samples carry
+  the ground's height; the GeoJSON carries only the plan and the
+  browser reads the ground). The level is 7.1 MB and its dressing
+  276 kB, but the STOP on a level's bytes counts every byte: Phase 3
+  must win them back inside the level (written as points, a run's
+  neighbours being a segment, it is ≈ 55 kB — which needs a second
+  view of the buffer or a storage buffer, not built), or the maintainer
+  rules the 38 kB slight (ruling 3) for 7 MB less on the GPU and the
+  rails off the scene's thread.
+- Not carried by the spike's material: the press under a planner's
+  design (`lineUnderDesign`). The wires, hedges and vine rows were not
+  tried; the wires already expand on the GPU and take the same table.
+  A chunk is a draw call: 86 sets on the yards' tile where today's
+  builders make 3 meshes.
+- Seen beside it: today's street rails stand a median 4.8 cm over the
+  drawn ground, not the 2 cm the builder adds — the line's baked profile
+  (`lz`, on the DGM) against the fine level's triangles.
+
+PR #156's own builders (`rail-mesh.ts` …) were not copied: today's
+builders run under Bun as they are (`mesh-kit.ts`), so the measurement
+feeds their ribbons through the spike's writer (`weld`, 16-bit
+positions, meshopt — `scripts/tile-glb.ts`), which is what
+`bake-lines.ts` did.

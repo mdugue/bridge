@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest==9.2.0", "ruff==0.17.3"]
+dev = ["pyright[nodejs]==1.1.414", "pytest==9.2.0", "ruff==0.17.3"]
 
 [tool.uv]
 package = false
@@ -30,6 +30,20 @@ pythonpath = ["."]
 # A glob that finds nothing fails the run instead of skipping it, silently
 # green (the committed-markings test once globbed a moved folder for a week).
 empty_parameter_set_mark = "fail_at_collect"
+
+# The type checker over the bakes (plan 089). Its findings are held to
+# typecheck-baseline.json by typecheck.py, which only lets them shrink and
+# fails on any other setting here (SETTINGS there). The tests are not checked
+# yet: the bakes first. The platform is pinned: on Windows the count differs. Not under bake/, and in the dev
+# group, so neither the settings nor the pin re-key a step
+# (step_cache.code_hash, step_cache.locked_runtime).
+[tool.pyright]
+include = ["bake"]
+pythonVersion = "3.12"
+pythonPlatform = "Linux"
+venvPath = "."
+venv = ".venv"
+stubPath = "typings"
 
 [tool.ruff]
 line-length = 100

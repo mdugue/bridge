@@ -41,7 +41,7 @@ bun run site <site>     # where a site stands (--all: every site)
 bun run fetch <site>    # downloads → data/_raw/<provider>/, sources → data/<site>/
 bun run bake <site>     # offline bakes [tile…] [--step X] [--jobs N] [--force]
 bun run osm-coverage <site>  # OSM's built things no bake decided about
-bun run test:pipeline   # pytest + ruff for pipeline/
+bun run test:pipeline   # pytest + ruff + types for pipeline/
 bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
 bun run docs:matrix     # regenerate the guide's sources-by-city pages
 bun scripts/stadtwissen.ts <site> such|nah|…  # search what the twin knows
@@ -86,10 +86,13 @@ a spec that writes then reads awaits `handle.sync()` (ADR 0061).
 **Frame.** Data stays in the provider's UTM (25833 Saxony and Berlin,
 25832 Hamburg, Bavaria, NRW). `x = E − cx`, `z = −(N − cy)`, `y` = height;
 a −90° X-rotated `world` group turns data-Z up, and tile content is Y-up.
-Dressing lives in the Y-up frame, **never inside the rotated group**. glTF
-positions are quantised: shaders derive data-frame coordinates from world
-space (`shader-chunks.ts`). The glTF extras key is `tileId`, never `tile`
-(the renderer writes `userData.tile` itself). See ADR 0005.
+Dressing lives in the Y-up frame, **never inside the rotated group**.
+New code converts between frames through `lib/city/frames.ts`; the
+older hand arithmetic on the offset is counted in plan 095's Findings and
+goes with its phase B2. glTF positions are quantised: shaders derive
+data-frame coordinates from world space (`shader-chunks.ts`). The glTF
+extras key is `tileId`, never `tile` (the renderer writes `userData.tile`
+itself). See ADR 0005.
 
 **Rendering** (ADR 0027; details in the `city-walker` skill):
 
@@ -149,6 +152,12 @@ ADR 0041).
   `prepare-data.ts` imports to being in some bake's key or excused; which
   artifact needs it is yours to get right). `prepare-data.ts` is in no
   key: a bake lives in its step's module in `scripts/prepare/`, never there.
+- A bake's bytes do not depend on the machine: a module `prepare-data.ts`
+  reaches calls `PMath` (`lib/city/portable-math.ts`), never `Math`'s
+  `hypot`, trigonometric, exponential or power functions, and `**` only
+  to a whole literal — those are the C library's and differ in the last
+  bit (ADR 0024; `bake-entries.test.ts`; `docs/data-pipeline.md`, "Cache
+  and publish").
 - A JSON file a bake writes and TypeScript reads has one zod schema in
   `lib/city/<name>-file.ts` (ADR 0059): readers take its types and
   `parseBakeFile`, never `readJson(…) as T`; the build fails on a

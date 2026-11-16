@@ -2,31 +2,31 @@
   "version": 1,
   "site": "dresden",
   "dated": "2026-11-16",
-  "wire": ".png, .webp and .gz at face value; every other file gzipped at level 6 (Bun's zlib) — a stand-in for what a host sends (Vercel sends text as brotli), kept constant so the figures compare over time, exact once plan 088 stores files in their transport encoding. The gated figures are those of CI's platform (linux-x64, the pinned Bun): regenerate the ledger there or in a cloud session. The gated byte figures leave out the buildings' glTF (city_*.glb.gz, near and far) and the tileset JSONs that name them by hash, but count them as files; `recorded` keeps the full wire bytes, never compared.",
+  "wire": ".png, .webp and .gz at face value; every other file gzipped at level 6 (Bun's zlib) — a stand-in for what a host sends (Vercel sends text as brotli), kept constant so the figures compare over time, exact once plan 088 stores files in their transport encoding. The gated figures are those of CI's platform (linux-x64, the pinned Bun): regenerate the ledger there or in a cloud session.",
   "tiles": 15,
   "published": {
-    "bytes": 135484210,
+    "bytes": 197755226,
     "files": 698
   },
   "bytes": {
     "far": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 2641549,
+        "bytes": 4685390,
         "files": 10
       },
       "median": {
-        "tile": "33412_5654_2_sn",
-        "bytes": 2837953,
+        "tile": "33410_5654_2_sn",
+        "bytes": 4593643,
         "files": 10
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 3247451,
+        "bytes": 5828229,
         "files": 10
       },
       "site": {
-        "bytes": 41867212,
+        "bytes": 67041172,
         "files": 150
       }
     },
@@ -75,21 +75,21 @@
     "near": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 0,
+        "bytes": 3039000,
         "files": 1
       },
       "median": {
-        "tile": "33412_5656_2_sn",
-        "bytes": 0,
+        "tile": "33414_5656_2_sn",
+        "bytes": 2454878,
         "files": 1
       },
       "largest": {
-        "tile": "33416_5658_2_sn",
-        "bytes": 0,
+        "tile": "33414_5654_2_sn",
+        "bytes": 4252759,
         "files": 1
       },
       "site": {
-        "bytes": 0,
+        "bytes": 37085658,
         "files": 15
       }
     },
@@ -117,21 +117,21 @@
     "all": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 8704029,
+        "bytes": 13786870,
         "files": 43
       },
       "median": {
         "tile": "33410_5658_2_sn",
-        "bytes": 8944297,
+        "bytes": 13766237,
         "files": 43
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 11096307,
+        "bytes": 17452843,
         "files": 43
       },
       "site": {
-        "bytes": 131361041,
+        "bytes": 193620659,
         "files": 641
       }
     }
@@ -139,96 +139,156 @@
   "buildings": {
     "near": {
       "33412_5656_2_sn": {
-        "triangles": 429975
+        "vertices": 706615,
+        "triangles": 429975,
+        "accessorBytes": 19998615
       },
       "33410_5656_2_sn": {
-        "triangles": 321074
+        "vertices": 536089,
+        "triangles": 321074,
+        "accessorBytes": 15110757
       },
       "33410_5658_2_sn": {
-        "triangles": 401951
+        "vertices": 671792,
+        "triangles": 401951,
+        "accessorBytes": 18931044
       },
       "33412_5658_2_sn": {
-        "triangles": 504905
+        "vertices": 825881,
+        "triangles": 504905,
+        "accessorBytes": 23402361
       },
       "33410_5654_2_sn": {
-        "triangles": 323100
+        "vertices": 534366,
+        "triangles": 323100,
+        "accessorBytes": 15098886
       },
       "33412_5654_2_sn": {
-        "triangles": 191374
+        "vertices": 319190,
+        "triangles": 191374,
+        "accessorBytes": 8999478
       },
       "33414_5654_2_sn": {
-        "triangles": 632589
+        "vertices": 1031677,
+        "triangles": 632589,
+        "accessorBytes": 29256285
       },
       "33414_5656_2_sn": {
-        "triangles": 356699
+        "vertices": 584271,
+        "triangles": 356699,
+        "accessorBytes": 16550079
       },
       "33414_5658_2_sn": {
-        "triangles": 110432
+        "vertices": 182985,
+        "triangles": 110432,
+        "accessorBytes": 5167869
       },
       "33416_5656_2_sn": {
-        "triangles": 510907
+        "vertices": 836551,
+        "triangles": 510907,
+        "accessorBytes": 23698455
       },
       "33416_5654_2_sn": {
-        "triangles": 528934
+        "vertices": 855783,
+        "triangles": 528934,
+        "accessorBytes": 24318651
       },
       "33416_5658_2_sn": {
-        "triangles": 108
+        "vertices": 168,
+        "triangles": 108,
+        "accessorBytes": 4176
       },
       "33408_5654_2_sn": {
-        "triangles": 531765
+        "vertices": 873846,
+        "triangles": 531765,
+        "accessorBytes": 24731946
       },
       "33408_5656_2_sn": {
-        "triangles": 228357
+        "vertices": 380672,
+        "triangles": 228357,
+        "accessorBytes": 10734396
       },
       "33408_5658_2_sn": {
-        "triangles": 213078
+        "vertices": 360615,
+        "triangles": 213078,
+        "accessorBytes": 10129851
       }
     },
     "far": {
       "33412_5656_2_sn": {
-        "triangles": 176186
+        "vertices": 342699,
+        "triangles": 176186,
+        "accessorBytes": 9310911
       },
       "33410_5656_2_sn": {
-        "triangles": 165544
+        "vertices": 313386,
+        "triangles": 165544,
+        "accessorBytes": 8567634
       },
       "33410_5658_2_sn": {
-        "triangles": 168008
+        "vertices": 332746,
+        "triangles": 168008,
+        "accessorBytes": 9003762
       },
       "33412_5658_2_sn": {
-        "triangles": 192144
+        "vertices": 377560,
+        "triangles": 192144,
+        "accessorBytes": 10234488
       },
       "33410_5654_2_sn": {
-        "triangles": 153053
+        "vertices": 292638,
+        "triangles": 153053,
+        "accessorBytes": 7982034
       },
       "33412_5654_2_sn": {
-        "triangles": 87559
+        "vertices": 170165,
+        "triangles": 87559,
+        "accessorBytes": 4624173
       },
       "33414_5654_2_sn": {
-        "triangles": 226089
+        "vertices": 449185,
+        "triangles": 226089,
+        "accessorBytes": 12145953
       },
       "33414_5656_2_sn": {
-        "triangles": 144995
+        "vertices": 280681,
+        "triangles": 144995,
+        "accessorBytes": 7634241
       },
       "33414_5658_2_sn": {
-        "triangles": 47585
+        "vertices": 92776,
+        "triangles": 47585,
+        "accessorBytes": 2519316
       },
       "33416_5656_2_sn": {
-        "triangles": 214085
+        "vertices": 419960,
+        "triangles": 214085,
+        "accessorBytes": 11388180
       },
       "33416_5654_2_sn": {
-        "triangles": 196630
+        "vertices": 389591,
+        "triangles": 196630,
+        "accessorBytes": 10540971
       },
       "33416_5658_2_sn": {
-        "triangles": 28
+        "vertices": 58,
+        "triangles": 28,
+        "accessorBytes": 1386
       },
       "33408_5654_2_sn": {
-        "triangles": 191707
+        "vertices": 378837,
+        "triangles": 191707,
+        "accessorBytes": 10256061
       },
       "33408_5656_2_sn": {
-        "triangles": 103699
+        "vertices": 203413,
+        "triangles": 103699,
+        "accessorBytes": 5516061
       },
       "33408_5658_2_sn": {
-        "triangles": 97941
+        "vertices": 192732,
+        "triangles": 97941,
+        "accessorBytes": 5222664
       }
     }
   },
@@ -249,7 +309,7 @@
     ],
     "layerModules": {
       "files": 27,
-      "lines": 18877
+      "lines": 18878
     },
     "bootAppLines": 3092,
     "bakeSeamModules": {
@@ -371,299 +431,6 @@
       }
     }
   ],
-  "recorded": {
-    "note": "Recorded, never compared: the buildings' vertices and decoded bytes, and the full wire bytes with the buildings' glTF and the tileset JSONs in them; the near buildings' weld differs by machine until PR #310.",
-    "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, linux-x64, Bun 1.4.4",
-    "read": "2026-11-16",
-    "published": {
-      "bytes": 197758698,
-      "files": 698
-    },
-    "bytes": {
-      "far": {
-        "spawn": {
-          "tile": "33412_5656_2_sn",
-          "bytes": 4685390,
-          "files": 10
-        },
-        "median": {
-          "tile": "33410_5654_2_sn",
-          "bytes": 4593643,
-          "files": 10
-        },
-        "largest": {
-          "tile": "33416_5656_2_sn",
-          "bytes": 5828229,
-          "files": 10
-        },
-        "site": {
-          "bytes": 67041184,
-          "files": 150
-        }
-      },
-      "fine": {
-        "spawn": {
-          "tile": "33412_5656_2_sn",
-          "bytes": 6943789,
-          "files": 29
-        },
-        "median": {
-          "tile": "33410_5658_2_sn",
-          "bytes": 7135639,
-          "files": 29
-        },
-        "largest": {
-          "tile": "33416_5656_2_sn",
-          "bytes": 9012221,
-          "files": 29
-        },
-        "site": {
-          "bytes": 105047288,
-          "files": 433
-        },
-        "phone": {
-          "spawn": {
-            "tile": "33412_5656_2_sn",
-            "bytes": 6636926,
-            "files": 28
-          },
-          "median": {
-            "tile": "33410_5656_2_sn",
-            "bytes": 6738130,
-            "files": 28
-          },
-          "largest": {
-            "tile": "33416_5656_2_sn",
-            "bytes": 8723602,
-            "files": 28
-          },
-          "site": {
-            "bytes": 100368124,
-            "files": 418
-          }
-        }
-      },
-      "near": {
-        "spawn": {
-          "tile": "33412_5656_2_sn",
-          "bytes": 3040770,
-          "files": 1
-        },
-        "median": {
-          "tile": "33414_5656_2_sn",
-          "bytes": 2454881,
-          "files": 1
-        },
-        "largest": {
-          "tile": "33414_5654_2_sn",
-          "bytes": 4252759,
-          "files": 1
-        },
-        "site": {
-          "bytes": 37089115,
-          "files": 15
-        }
-      },
-      "ask": {
-        "spawn": {
-          "tile": "33412_5656_2_sn",
-          "bytes": 38461,
-          "files": 1
-        },
-        "median": {
-          "tile": "33410_5658_2_sn",
-          "bytes": 23697,
-          "files": 1
-        },
-        "largest": {
-          "tile": "33410_5654_2_sn",
-          "bytes": 41092,
-          "files": 1
-        },
-        "site": {
-          "bytes": 347613,
-          "files": 15
-        }
-      },
-      "all": {
-        "spawn": {
-          "tile": "33412_5656_2_sn",
-          "bytes": 13788640,
-          "files": 43
-        },
-        "median": {
-          "tile": "33410_5658_2_sn",
-          "bytes": 13767066,
-          "files": 43
-        },
-        "largest": {
-          "tile": "33416_5656_2_sn",
-          "bytes": 17452843,
-          "files": 43
-        },
-        "site": {
-          "bytes": 193624128,
-          "files": 641
-        }
-      }
-    },
-    "buildings": {
-      "near": {
-        "33412_5656_2_sn": {
-          "vertices": 706618,
-          "triangles": 429975,
-          "accessorBytes": 19998678
-        },
-        "33410_5656_2_sn": {
-          "vertices": 536087,
-          "triangles": 321074,
-          "accessorBytes": 15110715
-        },
-        "33410_5658_2_sn": {
-          "vertices": 671792,
-          "triangles": 401951,
-          "accessorBytes": 18931044
-        },
-        "33412_5658_2_sn": {
-          "vertices": 825880,
-          "triangles": 504905,
-          "accessorBytes": 23402340
-        },
-        "33410_5654_2_sn": {
-          "vertices": 534365,
-          "triangles": 323100,
-          "accessorBytes": 15098865
-        },
-        "33412_5654_2_sn": {
-          "vertices": 319190,
-          "triangles": 191374,
-          "accessorBytes": 8999478
-        },
-        "33414_5654_2_sn": {
-          "vertices": 1031677,
-          "triangles": 632589,
-          "accessorBytes": 29256285
-        },
-        "33414_5656_2_sn": {
-          "vertices": 584271,
-          "triangles": 356699,
-          "accessorBytes": 16550079
-        },
-        "33414_5658_2_sn": {
-          "vertices": 182985,
-          "triangles": 110432,
-          "accessorBytes": 5167869
-        },
-        "33416_5656_2_sn": {
-          "vertices": 836551,
-          "triangles": 510907,
-          "accessorBytes": 23698455
-        },
-        "33416_5654_2_sn": {
-          "vertices": 855783,
-          "triangles": 528934,
-          "accessorBytes": 24318651
-        },
-        "33416_5658_2_sn": {
-          "vertices": 168,
-          "triangles": 108,
-          "accessorBytes": 4176
-        },
-        "33408_5654_2_sn": {
-          "vertices": 873847,
-          "triangles": 531765,
-          "accessorBytes": 24731967
-        },
-        "33408_5656_2_sn": {
-          "vertices": 380672,
-          "triangles": 228357,
-          "accessorBytes": 10734396
-        },
-        "33408_5658_2_sn": {
-          "vertices": 360615,
-          "triangles": 213078,
-          "accessorBytes": 10129851
-        }
-      },
-      "far": {
-        "33412_5656_2_sn": {
-          "vertices": 342699,
-          "triangles": 176186,
-          "accessorBytes": 9310911
-        },
-        "33410_5656_2_sn": {
-          "vertices": 313386,
-          "triangles": 165544,
-          "accessorBytes": 8567634
-        },
-        "33410_5658_2_sn": {
-          "vertices": 332746,
-          "triangles": 168008,
-          "accessorBytes": 9003762
-        },
-        "33412_5658_2_sn": {
-          "vertices": 377560,
-          "triangles": 192144,
-          "accessorBytes": 10234488
-        },
-        "33410_5654_2_sn": {
-          "vertices": 292638,
-          "triangles": 153053,
-          "accessorBytes": 7982034
-        },
-        "33412_5654_2_sn": {
-          "vertices": 170165,
-          "triangles": 87559,
-          "accessorBytes": 4624173
-        },
-        "33414_5654_2_sn": {
-          "vertices": 449185,
-          "triangles": 226089,
-          "accessorBytes": 12145953
-        },
-        "33414_5656_2_sn": {
-          "vertices": 280681,
-          "triangles": 144995,
-          "accessorBytes": 7634241
-        },
-        "33414_5658_2_sn": {
-          "vertices": 92776,
-          "triangles": 47585,
-          "accessorBytes": 2519316
-        },
-        "33416_5656_2_sn": {
-          "vertices": 419960,
-          "triangles": 214085,
-          "accessorBytes": 11388180
-        },
-        "33416_5654_2_sn": {
-          "vertices": 389591,
-          "triangles": 196630,
-          "accessorBytes": 10540971
-        },
-        "33416_5658_2_sn": {
-          "vertices": 58,
-          "triangles": 28,
-          "accessorBytes": 1386
-        },
-        "33408_5654_2_sn": {
-          "vertices": 378837,
-          "triangles": 191707,
-          "accessorBytes": 10256061
-        },
-        "33408_5656_2_sn": {
-          "vertices": 203413,
-          "triangles": 103699,
-          "accessorBytes": 5516061
-        },
-        "33408_5658_2_sn": {
-          "vertices": 192732,
-          "triangles": 97941,
-          "accessorBytes": 5222664
-        }
-      }
-    }
-  },
   "dressingRecorded": {
     "note": "Recorded, never compared (plan 090, phase 0): a browser's timings and cache bytes on a software renderer say which builder is heavy, not what a phone pays; the spikes' figures are those of the day and machine named in each.",
     "muenchen": {
@@ -1089,6 +856,61 @@
               "count": 2,
               "maxMs": 9805.8,
               "totalMs": 16816.1
+            }
+          }
+        }
+      },
+      "spikes": {
+        "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, linux-x64, headless Chromium, WebGPU on SwiftShader",
+        "read": "2026-11-16",
+        "dresden/33410_5656_2_sn/desktop": {
+          "what": "yards",
+          "builderMs": {
+            "asks": 75.8,
+            "furniture": 53.7,
+            "hedges": 1.7,
+            "lamps": 16.9,
+            "monuments": 38.5,
+            "rail": 807.2,
+            "rail-table": 22.6,
+            "riverside": 3.3,
+            "sport": 8.7,
+            "tram": 46.7,
+            "trees": 132.1
+          },
+          "builderMsTotal": 1207.2,
+          "cacheBytes": {
+            "vegetation": 4933762,
+            "lowVegetation": 32440,
+            "lamps": 406292,
+            "monuments": 988504,
+            "furniture": 1829904,
+            "rail": 5593855,
+            "tram": 1543118,
+            "riverside": 71622,
+            "sport": 190512
+          },
+          "cacheBytesTotal": 15590009,
+          "marks": {
+            "dressing:asks": {
+              "count": 6,
+              "maxMs": 104.4,
+              "totalMs": 566.5
+            },
+            "dressing:build": {
+              "count": 8,
+              "maxMs": 4007.6,
+              "totalMs": 9608.2
+            },
+            "dressing:compile": {
+              "count": 8,
+              "maxMs": 7424.5,
+              "totalMs": 34150.1
+            },
+            "dressing:queue-wait": {
+              "count": 8,
+              "maxMs": 20787.6,
+              "totalMs": 109888.9
             }
           }
         }

@@ -3,6 +3,7 @@
  * terrain (walls, the wall→terrain conflation, rails, tree rows). No THREE,
  * no DOM.
  */
+import * as PMath from "./portable-math";
 
 export type Point2 = [number, number];
 
@@ -24,7 +25,7 @@ export function subdividePolyline(coords: Point2[], spacing: number): Point2[] {
   for (let i = 0; i < coords.length - 1; i += 1) {
     const [x0, y0] = coords[i];
     const [x1, y1] = coords[i + 1];
-    const len = Math.hypot(x1 - x0, y1 - y0);
+    const len = PMath.hypot(x1 - x0, y1 - y0);
     if (len === 0) {
       continue; // a repeated vertex would otherwise become a duplicate point
     }
@@ -56,7 +57,7 @@ export function samplePolyline(coords: Point2[], spacing: number): Point2[] {
     const [x1, y1] = coords[i + 1];
     const dx = x1 - x0;
     const dy = y1 - y0;
-    const len = Math.hypot(dx, dy);
+    const len = PMath.hypot(dx, dy);
     if (len === 0) {
       continue;
     }

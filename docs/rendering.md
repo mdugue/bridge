@@ -88,7 +88,10 @@ thing whatever their `renderOrder`.
 `x = epsgX − cx`, `z = −(epsgY − cy)`, `y = elevation`, with `(cx, cy)` the
 recenter offset captured from the spawn tile's CityJSON at bake time, carried
 in the tileset's root `extras` (`lib/city/tileset.ts`) and shared by every
-tile (`lib/city/recenter.ts`, `lib/city/ground-clamp.ts`).
+tile (`lib/city/recenter.ts`). The conversions between the projected, the
+data and the scene frame live in `lib/city/frames.ts`, whose types brand each
+coordinate with its frame (`EpsgX`, `DataY`, `SceneZ`, …; erased at runtime);
+`lib/city/ground-clamp.ts` re-exports the two older ones.
 
 **Materials derive data-frame positions from world space.** The streamed
 glTF positions are quantised (the dequantisation sits on the node), so

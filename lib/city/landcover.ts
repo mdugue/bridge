@@ -6,6 +6,7 @@
  * (scripts/bake-wissen-hero.ts). Changing a colour here is a look change,
  * not a re-bake. No THREE, no DOM.
  */
+import * as PMath from "./portable-math";
 
 export interface LandcoverClass {
   id: number;
@@ -190,7 +191,7 @@ export function landcoverSrgb(id: number): readonly [number, number, number] {
 /** One sRGB byte (0..255) to linear light (0..1), the IEC 61966-2-1 curve. */
 export function srgbToLinear(byte: number): number {
   const c = byte / 255;
-  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  return c <= 0.04045 ? c / 12.92 : PMath.pow((c + 0.055) / 1.055, 2.4);
 }
 
 /**
