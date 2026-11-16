@@ -111,6 +111,7 @@ const ASKED = [
   "getDressingFigures",
   "getFocusDebug",
   "getGpuDebug",
+  "getPipelineBudget",
   "getRenderInfo",
   "inquireAt",
   "releaseGpu",

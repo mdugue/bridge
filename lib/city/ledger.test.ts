@@ -18,6 +18,7 @@ import {
   wireBytes,
 } from "./ledger";
 import type { Ledger, RasterReads } from "./ledger";
+import { SORT_OF } from "./ledger-rasters";
 import { buildTileset } from "./tileset";
 import type { BakedTile, TerrainFiles } from "./tileset";
 
@@ -286,6 +287,7 @@ const LEDGER = {
     upstreamWorkarounds: 2,
   },
   dressing: [],
+  rasters: { rule: "rasters", cpuDecodes: [], sites: {}, sorts: SORT_OF },
 } satisfies Ledger;
 
 test("the check names each figure that moved, never the date", () => {
