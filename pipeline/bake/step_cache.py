@@ -382,7 +382,7 @@ def _module_path(module: str) -> Path | None:
     return PACKAGE / "__init__.py" if module == "bake" else None
 
 
-def _closure(module: str) -> set[str]:
+def closure(module: str) -> set[str]:
     """`module` and every bake module it reaches through its imports."""
     seen: set[str] = set()
     todo = [module]
@@ -434,7 +434,7 @@ def code_hash(module: str) -> str:
     memos, and `VERSION` says when its meaning changes."""
     if module not in _CODE:
         h = hashlib.sha256(f"{VERSION}:{sys.version_info[:2]}".encode())
-        for m in sorted(_closure(module) - {__name__}):
+        for m in sorted(closure(module) - {__name__}):
             p = _module_path(m)
             if p is not None:
                 h.update(m.encode() + b"\0" + p.read_bytes() + b"\0")
@@ -446,7 +446,7 @@ def code_hash(module: str) -> str:
 def dated(module: str) -> bool:
     """Whether the step reads the clock (the cadastre's young trees are
     young by today's year): its key then carries the year."""
-    return any(_reads_clock(p) for m in _closure(module) if (p := _module_path(m)) is not None)
+    return any(_reads_clock(p) for m in closure(module) if (p := _module_path(m)) is not None)
 
 
 def _reads_clock(path: Path) -> bool:

@@ -40,6 +40,7 @@ from . import (
     murals,
     ndvi,
     osm_buildings,
+    osm_source,
     passages,
     plinths,
     rail,
@@ -275,8 +276,11 @@ class Bake:
         self.mode = mode
         self.ledger = step_cache.Ledger(spec.raw, spec.site, list(STEPS))
         self.tiles = {t.id: t for t in spec.tiles}
+        # the steps that ran in this bake (not skipped as unchanged)
+        self.ran: set[str] = set()
 
     def _run(self, step: str, tiles) -> None:
+        self.ran.add(step)
         started = time.perf_counter()
         try:
             self._run_tiles(step, tiles)
@@ -336,6 +340,11 @@ class Bake:
             self.step(s, [self.tiles[tid]])
 
 
+def reads_osm(step: str) -> bool:
+    """Whether a step's code reaches the OSM reader (`osm.py`)."""
+    return "bake.osm" in step_cache.closure(STEPS[step].__module__)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="bake")
     parser.add_argument("command", choices=["fetch", "bake", "coverage"])
@@ -359,19 +368,31 @@ def main() -> None:
         help="lowveg: also write every candidate (scan-only hedges, shrubs) under the raw folder",
     )
     parser.add_argument(
+        "--osm-fallback",
+        default=None,
+        help="the BBBike extract's URL (Site.bbbike): fetched where Geofabrik's cannot be, "
+        "read where it is the one there",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="bake: run every step, even one whose inputs and code are unchanged",
     )
     args = parser.parse_args()
-    spec = parse(args.spec)
+    spec = osm_source.resolve(parse(args.spec), args.osm_fallback)
     unknown = set(args.tile) - {t.id for t in spec.tiles}
     if unknown:
         parser.error(f"not a tile of {spec.site}: {', '.join(sorted(unknown))}")
     tiles = [t for t in spec.tiles if not args.tile or t.id in args.tile]
     if args.command == "fetch":
-        fetch.run(spec, tiles, lsc=args.lsc)
+        fetch.run(spec, tiles, lsc=args.lsc, fallback=args.osm_fallback)
         return
+    print(
+        f"OSM extract: {osm_source.describe(spec.osm)}"
+        if spec.osm.exists()
+        else "OSM extract: none at "
+        + ", ".join(str(p) for p in osm_source.candidates(spec, args.osm_fallback))
+    )
     if args.command == "coverage":
         raise SystemExit(coverage.run(tiles[0].osm_extract() if tiles else None, tiles, spec.site))
     if args.step in SITE_STEPS:
@@ -387,6 +408,14 @@ def main() -> None:
     # its one flight), which the steps before them must have baked first.
     for step in steps:
         bake.step(step, tiles)
+    if spec.osm.exists():
+        # which extract the steps that read OSM were baked from, for the
+        # site's provenance (the Open-Data-Wächter reads its age there)
+        osm_source.record_bake(
+            spec.data / "provenance.json",
+            spec.osm,
+            [s for s in bake.ran if reads_osm(s)],
+        )
     if args.step == "all" and not args.tile:
         for step in SITE_STEPS:
             run_site_step(spec, step)

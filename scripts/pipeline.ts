@@ -6,7 +6,10 @@
  *                                     provider's DGM1 + LoD2 (→ data/<site>/)
  *                                     and DOM, DOP, Basis-DLM, OSM
  *                                     (→ data/_raw/<provider>/); skips what
- *                                     is already there
+ *                                     is already there; the OSM extract
+ *                                     from BBBike where Geofabrik cannot
+ *                                     be reached and BBBike's covers the
+ *                                     site (`Site.bbbike`)
  *   bun run bake <site> [tile…]       bake the derived artifacts
  *                                     (→ data/<site>/dlm, dop)
  *   bun run fetch <site> --lsc        ... and the laser scan, where the
@@ -55,12 +58,22 @@
  * data/<site>/ into its tileset (prepare-sites.ts → prepare-data.ts).
  */
 import { spawnSync } from "node:child_process";
-import { osmExtractUrl, tileExtentOf, tileIdOf } from "../lib/city/site";
+import {
+  osmExtractUrl,
+  osmFallbackUrl,
+  tileExtentOf,
+  tileIdOf,
+} from "../lib/city/site";
 import type { Site } from "../lib/city/site";
 import { providerRawDir, siteDataDir } from "../lib/city/tile";
 import { siteFromArgs } from "../sites";
 
-/** The spec pipeline/bake/spec.py parses. */
+/**
+ * The spec pipeline/bake/spec.py parses. Every bake's cache is keyed on its
+ * text (step_cache.py), so what does not change a bake's output stays out
+ * of it: the BBBike fallback is handed over beside it (`fallbackArgs`) —
+ * which file the bake then reads is in each step's record anyway.
+ */
 export function siteSpec(site: Site) {
   return {
     site: site.id,
@@ -81,6 +94,13 @@ export function siteSpec(site: Site) {
       bounds: tileExtentOf(cell),
     })),
   };
+}
+
+/** Where the fetch may fall back for the OSM extract, and where the
+ *  bakes look for it after Geofabrik's (`Site.bbbike`). */
+export function fallbackArgs(site: Site): string[] {
+  const url = osmFallbackUrl(site);
+  return url === null ? [] : ["--osm-fallback", url];
 }
 
 /** The options each command takes (`--step` and `--jobs` need a value). */
@@ -139,6 +159,7 @@ if (import.meta.main) {
       command,
       "--spec",
       JSON.stringify(siteSpec(site)),
+      ...fallbackArgs(site),
       ...(step === -1 ? [] : ["--step", args[step + 1] ?? ""]),
       ...(jobs === -1 ? [] : ["--jobs", args[jobs + 1] ?? ""]),
       ...(tiles.length > 0 ? ["--tile", ...tiles] : []),

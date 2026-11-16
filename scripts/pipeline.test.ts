@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { SITES } from "../sites";
-import { siteSpec } from "./pipeline";
+import { fallbackArgs, siteSpec } from "./pipeline";
 
 const PYTHON = path.join(import.meta.dir, "../pipeline/bake");
 
@@ -41,4 +41,12 @@ test("every provider's products are fields pipeline/bake/common.py takes", () =>
     expect(keys.filter((k) => !all.has(k))).toEqual([]);
     expect(required.filter((k) => !keys.includes(k))).toEqual([]);
   }
+});
+
+test("the BBBike fallback travels beside the spec, which keys every bake's cache", () => {
+  expect(JSON.stringify(siteSpec(SITES.dresden))).not.toContain("bbbike");
+  expect(fallbackArgs(SITES.dresden)).toEqual([
+    "--osm-fallback",
+    "https://download.bbbike.org/osm/bbbike/Dresden/Dresden.osm.pbf",
+  ]);
 });

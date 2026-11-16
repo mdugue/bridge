@@ -20,6 +20,10 @@ export const MEISSEN: Site = {
     },
   },
   mapillary: { objects: true },
+  // BBBike's Dresden rectangle ends 1.7 km west of the tile (13.43° E),
+  // short of the widest margin a bake reads (0.05°): the fetch refuses it
+  // and says so, until BBBike widens it (docs/data-pipeline.md)
+  bbbike: "Dresden",
   spawn: "elbufer",
   tiles: [{ e: 392, n: 5668 }],
   fallbackLatLng: { lat: 51.16, lng: 13.47 },

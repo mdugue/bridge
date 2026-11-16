@@ -3,6 +3,7 @@ provider-grid helper, the XYZ gridding, the OSM class mapping, the flight
 dates and the spec."""
 
 import json
+import urllib.error
 from datetime import date
 from pathlib import Path
 
@@ -349,14 +350,32 @@ def test_nrw_lod2_reads_the_ring_and_skips_neighbours_the_listing_lacks(tmp_path
         nw.lod2(Ctx(tmp_path, tmp_path, 25832), tile)
 
 
-def _fetch_run(tmp_path, monkeypatch, fail: str, dlm: bool = False):
+BBBIKE = "https://download.bbbike.org/osm/bbbike/Dresden/Dresden.osm.pbf"
+# BBBike's Dresden boundary as published (Dresden.poly, 2026-11-16)
+DRESDEN_POLY = """Dresden
+1
+   13.43  50.88
+   14.18  50.88
+   14.18  51.23
+   13.43  51.23
+END
+END
+"""
+
+
+def _fetch_run(
+    tmp_path, monkeypatch, fail: str, dlm: bool = False, fallback: str | None = None, cell=None
+):
     """`fetch.run` over one tile with a fake adapter whose `fail` product
-    raises ("osm": the OSM extract's download; "dlm": the Basis-DLM, which
-    the spec asks for with `dlm`); nothing touches the network."""
+    raises ("osm": the OSM extract's download from Geofabrik, "osm-404":
+    the same as a 404; "dlm": the Basis-DLM, which the spec asks for with
+    `dlm`); `fallback` the BBBike extract's URL; `cell` the tile's
+    south-west corner (km). Nothing touches the network."""
     from types import SimpleNamespace
 
     from bake import fetch
 
+    e, n = cell or (412, 5656)
     spec = parse(
         json.dumps(
             {
@@ -368,7 +387,9 @@ def _fetch_run(tmp_path, monkeypatch, fail: str, dlm: bool = False):
                 "raw": str(tmp_path / "raw"),
                 "data": str(tmp_path / "data"),
                 "osm": "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf",
-                "tiles": [{"id": "t_sn", "bounds": [412000, 5656000, 414000, 5658000]}],
+                "tiles": [
+                    {"id": "t_sn", "bounds": [e * 1000, n * 1000, e * 1000 + 2000, n * 1000 + 2000]}
+                ],
             }
         )
     )
@@ -393,9 +414,18 @@ def _fetch_run(tmp_path, monkeypatch, fail: str, dlm: bool = False):
     fake.dlm = fake_dlm
 
     def fake_download(url, dest, md5_url=None):
-        tried.append("osm")
-        if fail == "osm":
+        geofabrik = "geofabrik" in url
+        tried.append("osm" if geofabrik else "bbbike")
+        if geofabrik and fail == "osm":
             raise OSError("osm unavailable")
+        if geofabrik and fail == "osm-404":
+            raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+        assert md5_url == f"{url}.md5"
+        touch(dest)
+
+    monkeypatch.setattr(fetch, "fetch_text", lambda url: DRESDEN_POLY)
+    monkeypatch.setattr(fetch, "OSM_PAUSE_S", 0.0)
+    monkeypatch.setattr(fetch.osm_source, "last_modified", lambda url: "2026-11-14T16:51:10+00:00")
 
     def touch(dest):
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -420,8 +450,41 @@ def _fetch_run(tmp_path, monkeypatch, fail: str, dlm: bool = False):
     monkeypatch.setattr(
         fetch.glo30, "fetch", lambda *a: extras.append("glo30") or Path("glo30.tif")
     )
-    fetch.run(spec, spec.tiles)
-    return tried, extras
+    fetch.run(spec, spec.tiles, fallback=fallback)
+    return tried, extras, fetch.osm_source.resolve(spec, fallback)
+
+
+def test_an_unreachable_geofabrik_falls_back_on_a_bbbike_extract_that_covers_the_site(
+    tmp_path, monkeypatch, capsys
+):
+    tried, _, spec = _fetch_run(tmp_path, monkeypatch, "osm", dlm=True, fallback=BBBIKE)
+    # Geofabrik three times, then BBBike's, under its own name
+    assert tried.count("osm") == fetch.OSM_TRIES and tried.count("bbbike") == 1
+    assert spec.osm == tmp_path / "raw" / "osm" / "Dresden.osm.pbf"
+    record = json.loads((tmp_path / "raw" / "osm" / "Dresden.osm.pbf.source.json").read_text())
+    assert record["source"] == "BBBike" and record["url"] == BBBIKE
+    assert record["lastModified"].startswith("2026-11-14")
+    out = capsys.readouterr().out
+    assert "Dresden.osm.pbf from BBBike" in out and "data as of 2026-11-14" in out
+
+
+def test_a_bbbike_extract_short_of_the_site_is_not_taken(tmp_path, monkeypatch, capsys):
+    # Meißen: BBBike's Dresden rectangle ends 0.025° west of its tile, the
+    # monorail's chain is read 0.05° around it
+    with pytest.raises(SystemExit):
+        _fetch_run(tmp_path, monkeypatch, "osm", dlm=True, fallback=BBBIKE, cell=(392, 5668))
+    out = capsys.readouterr().out
+    assert "does not cover x" in out and "west by 0.02" in out
+    assert not (tmp_path / "raw" / "osm" / "Dresden.osm.pbf").exists()
+    # a provider with a Basis-DLM still bakes: the OSM steps skip
+    assert "its OSM steps skip" in out
+
+
+def test_a_geofabrik_404_is_a_wrong_config_not_an_outage(tmp_path, monkeypatch, capsys):
+    with pytest.raises(SystemExit):
+        tried, _, _ = _fetch_run(tmp_path, monkeypatch, "osm-404", dlm=True, fallback=BBBIKE)
+    assert "Geofabrik has no such file" in capsys.readouterr().out
+    assert not (tmp_path / "raw" / "osm" / "Dresden.osm.pbf").exists()
 
 
 def test_a_failed_required_product_fails_the_fetch_after_the_rest(tmp_path, monkeypatch):
@@ -438,7 +501,7 @@ def test_a_failed_required_product_fails_the_fetch_after_the_rest(tmp_path, monk
 def test_a_failed_optional_product_or_extra_is_a_note(tmp_path, monkeypatch):
     # the orthophoto fails, and the bridges' Wikidata answer is not JSON:
     # both are a printed line, and the landmarks after it are still fetched
-    tried, extras = _fetch_run(tmp_path, monkeypatch, "dop")
+    tried, extras, _ = _fetch_run(tmp_path, monkeypatch, "dop")
     assert set(tried) == {"osm", "dgm", "lod2", "dom", "dop"}
     assert extras == ["glo30", "trees", "traffic", "bridges", "landmarks", "monuments"]
 
@@ -458,7 +521,7 @@ def test_a_failed_basis_dlm_or_osm_extract_fails_the_fetch_after_the_tiles(tmp_p
 
 
 def test_a_fetched_basis_dlm_and_osm_extract_pass(tmp_path, monkeypatch):
-    tried, _ = _fetch_run(tmp_path, monkeypatch, "none", dlm=True)
+    tried, _, _ = _fetch_run(tmp_path, monkeypatch, "none", dlm=True)
     assert {"dlm", "osm"} <= set(tried)
 
 

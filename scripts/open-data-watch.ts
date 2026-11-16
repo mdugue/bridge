@@ -25,7 +25,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { siteExtentOf } from "../lib/city/site-extent";
-import { tileIdOf } from "../lib/city/site";
+import { osmFallbackUrl, tileIdOf } from "../lib/city/site";
 import { isSiteId, SITES } from "../sites";
 import type { SiteId } from "../sites";
 
@@ -79,15 +79,6 @@ export const SERVICES: Record<string, { name: string; url: string }[]> = {
     },
   ],
   be: [{ name: "GDI Berlin (Atom)", url: "https://gdi.berlin.de/data/" }],
-};
-
-/** BBBike's city extract per site, where there is one. */
-export const BBBIKE: Partial<Record<SiteId, string>> = {
-  berlin: "Berlin",
-  dresden: "Dresden",
-  hamburg: "Hamburg",
-  leipzig: "Leipzig",
-  muenchen: "Muenchen",
 };
 
 /** A GeoSN `Kachel` ("4125656": easting and northing km) for a tile cell. */
@@ -375,12 +366,10 @@ async function osmFindings(site: SiteId, now: Date): Promise<Finding[]> {
       text: "OSM-Stand: in provenance.json kein dataAsOf",
     });
   }
-  const city = BBBIKE[site];
-  if (city) {
-    const r = await request(
-      `https://download.bbbike.org/osm/bbbike/${city}/${city}.osm.pbf`,
-      { method: "HEAD" }
-    );
+  const city = SITES[site].bbbike;
+  const url = osmFallbackUrl(SITES[site]);
+  if (city !== undefined && url !== null) {
+    const r = await request(url, { method: "HEAD" });
     const down = r instanceof Error || r.status >= 400;
     out.push({
       site,

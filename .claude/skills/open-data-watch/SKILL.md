@@ -46,8 +46,11 @@ current ones into the tiles that record none, right after a fetch.
    tile of every site of that Land (hours, gigabytes). Do not start it:
    report it with what it would touch, for the maintainer to schedule.
    The maintainer's rule: bake from fresh OSM extracts (BBBike works from
-   the container, Geofabrik does not), never dodge a re-bake — so say
-   plainly when one is due.
+   the container, Geofabrik does not: the fetch falls back on the site's
+   `bbbike` extract by itself where it covers the site — not Meißen's,
+   docs/data-pipeline.md), never dodge a re-bake — so say plainly when one
+   is due. The age is read from every `dataAsOf` under `openstreetmap`,
+   the bake's own `baked.<step>` records included.
 5. **Editions no record holds:** list them once (they stay until someone
    records them); recording them (`--record`) is the maintainer's, after
    a fetch.

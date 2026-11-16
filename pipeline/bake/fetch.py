@@ -11,7 +11,9 @@ already there, so a rerun only fetches what is missing:
     data/_raw/<provider>/dop/<tile>.tif                  orthophoto, 20 cm
     data/_raw/<provider>/dop/<tile>.flight.json          the days it was flown
     data/_raw/<provider>/dlm/*.shp                       Basis-DLM (AdV Shape)
-    data/_raw/<provider>/osm/<extract>.osm.pbf           the OSM extract
+    data/_raw/<provider>/osm/<extract>.osm.pbf           the OSM extract (Geofabrik's, else
+                                                         BBBike's that covers the site)
+    data/_raw/<provider>/osm/<extract>.source.json       where it came from, as of which day
     data/_raw/<provider>/trees/<tile>.geojson            the site's tree cadastre
     data/_raw/<provider>/traffic/<tile>.geojson          the site's traffic counts
     data/_raw/gtfs/nv_free.zip                           Germany's timetable (sites with trams)
@@ -36,10 +38,12 @@ or the OSM extract — after it has tried everything else.
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 import re
 import shutil
+import time
 import urllib.error
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -59,15 +63,16 @@ from . import (
     mapillary,
     monuments,
     murals,
+    osm_source,
     traffic_sources,
     transit,
 )
 from .citygml import write_cityjson
 from .common import Tile, dlm_complete
 from .dop_light import flight_file
-from .net import download
+from .net import download, fetch_text
 from .rasters import write_tile_raster
-from .spec import Spec
+from .spec import Spec, osm_path
 
 
 @dataclass(frozen=True)
@@ -290,20 +295,88 @@ def fetch_tile(spec: Spec, tile: Tile, source: Adapter, lsc: bool = False) -> li
     return failed
 
 
-def fetch_osm(spec: Spec) -> bool:
-    """The site's OSM extract; False when it could not be downloaded. The
-    tiles are still fetched, but the bakes need it (every OSM layer, and
-    the land cover where the provider has no Basis-DLM), so `run` fails at
-    the end."""
-    if spec.osm.exists():
-        return True
-    try:
-        # Geofabrik publishes an md5 beside every extract.
-        download(spec.osm_url, spec.osm, md5_url=f"{spec.osm_url}.md5")
-        return True
-    except Exception as err:  # noqa: BLE001 — report, then fetch the tiles
-        print(f"OSM extract not downloaded ({err}); put {spec.osm_url} at {spec.osm}")
+# Tries at the OSM extract before it counts as unreachable, and the pause
+# before each next one (s): Geofabrik's resets come in runs.
+OSM_TRIES = 3
+OSM_PAUSE_S = 10.0
+
+
+def _download_extract(url: str, dest: Path) -> None:
+    """An extract with its published md5 (both Geofabrik and BBBike publish
+    `<extract>.md5`), and its record (osm_source.py). A server that has no
+    such file (404, 410) raises at once; anything else is tried again."""
+    for attempt in range(1, OSM_TRIES + 1):
+        try:
+            download(url, dest, md5_url=f"{url}.md5")
+            break
+        except Exception as err:
+            if not_published(err) or attempt == OSM_TRIES:
+                raise
+            print(f"OSM extract: {url} failed ({type(err).__name__}: {err}) — try {attempt + 1}")
+            time.sleep(OSM_PAUSE_S * attempt)
+    md5 = hashlib.md5()
+    with open(dest, "rb") as f:
+        while chunk := f.read(1 << 20):
+            md5.update(chunk)
+    osm_source.write_record(dest, url, osm_source.last_modified(url), md5.hexdigest())
+
+
+def _fetch_bbbike(spec: Spec, url: str | None) -> bool:
+    """BBBike's city extract the site names, if its published boundary
+    covers the site's tiles with the bakes' widest margin; else a line on
+    by how much it falls short, and nothing is taken."""
+    if url is None:
+        print(f"OSM extract: {spec.site} names no BBBike extract to fall back on (Site.bbbike)")
         return False
+    poly = url.removesuffix(".osm.pbf") + ".poly"
+    try:
+        boundary = osm_source.parse_poly(fetch_text(poly))
+    except Exception as err:  # noqa: BLE001 — no boundary, no coverage to vouch for
+        print(f"OSM extract: BBBike's boundary {poly} not read ({type(err).__name__}: {err})")
+        return False
+    short = osm_source.shortfall(boundary, spec.tiles)
+    if short is not None:
+        print(
+            f"OSM extract: BBBike's {url.rsplit('/', 1)[-1]} does not cover {spec.site} "
+            f"with the bakes' {osm_source.MAX_MARGIN_DEG}° margin ({poly}: short {short}) — "
+            "not taken; the OSM steps skip until an extract that covers it is there"
+        )
+        return False
+    dest = osm_path(spec.raw, url)
+    try:
+        _download_extract(url, dest)
+    except Exception as err:  # noqa: BLE001 — report, then fetch the tiles
+        print(f"OSM extract: {url} not downloaded either ({type(err).__name__}: {err})")
+        return False
+    print(f"OSM extract: {osm_source.describe(dest)} — Geofabrik's could not be had")
+    return True
+
+
+def fetch_osm(spec: Spec, fallback: str | None = None) -> bool:
+    """The site's OSM extract; False when none could be had. Geofabrik's
+    first; where it cannot be reached (after `OSM_TRIES`; a 404 is a wrong
+    config, not an outage) BBBike's city extract the site names, if it
+    covers the site (osm_source.py). The tiles are still fetched, but the
+    bakes need it (every OSM layer, and the land cover where the provider
+    has no Basis-DLM), so `run` fails at the end."""
+    for path in osm_source.candidates(spec, fallback):
+        if path.exists():
+            print(f"OSM extract: {osm_source.describe(path)}")
+            return True
+    primary = osm_path(spec.raw, spec.osm_url)
+    try:
+        _download_extract(spec.osm_url, primary)
+        print(f"OSM extract: {osm_source.describe(primary)}")
+        return True
+    except Exception as err:  # noqa: BLE001 — report, then try the fallback
+        print(f"OSM extract: {spec.osm_url} not downloaded ({type(err).__name__}: {err})")
+        if not_published(err):
+            print("OSM extract: Geofabrik has no such file — check the site's `osm` (no fallback)")
+            return False
+    if _fetch_bbbike(spec, fallback):
+        return True
+    print(f"OSM extract: none for {spec.site}; put one at {primary}")
+    return False
 
 
 def fetch_dlm(spec: Spec, source: Adapter) -> bool:
@@ -343,15 +416,22 @@ def fetch_murals(spec: Spec) -> None:
         print(f"{spec.site}: murals not fetched ({type(err).__name__}: {err})")
 
 
-def run(spec: Spec, tiles: list[Tile], lsc: bool = False) -> None:
+def run(spec: Spec, tiles: list[Tile], lsc: bool = False, fallback: str | None = None) -> None:
+    """The site's fetch; `fallback` is the BBBike extract's URL
+    (`Site.bbbike`), taken where Geofabrik's cannot be had."""
     spec.raw.mkdir(parents=True, exist_ok=True)
     source = adapter(spec.provider)
     # required, site-wide: the bakes refuse to run without either
     site_failed = [
         what
-        for what, ok in (("Basis-DLM", fetch_dlm(spec, source)), ("OSM extract", fetch_osm(spec)))
+        for what, ok in (
+            ("Basis-DLM", fetch_dlm(spec, source)),
+            ("OSM extract", fetch_osm(spec, fallback)),
+        )
         if not ok
     ]
+    # the murals read the extract that is there now
+    spec = osm_source.resolve(spec, fallback)
     if spec.trams:
         transit.fetch_gtfs(transit.gtfs_dir(spec.raw))
     fetch_glo30(spec)
@@ -367,7 +447,17 @@ def run(spec: Spec, tiles: list[Tile], lsc: bool = False) -> None:
         fetch_murals(spec)
     failures = {tid: what for tid, what in failures.items() if what}
     if site_failed:
-        print(f"fetch: {', '.join(site_failed)} not fetched — the bakes cannot run without it")
+        # the land cover needs the DLM, or without one the extract; every
+        # other OSM step skips with a note (osm.has_extract)
+        stops = "Basis-DLM" in site_failed or not spec.products.dlm
+        print(
+            f"fetch: {', '.join(site_failed)} not fetched — "
+            + (
+                "the bakes cannot run without it"
+                if stops
+                else "the bake runs, its OSM steps skip and keep their committed files"
+            )
+        )
     if failures:
         print("fetch: required products not fetched — the build cannot use these tiles:")
         for tid, what in failures.items():
