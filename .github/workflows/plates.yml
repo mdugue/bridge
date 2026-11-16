@@ -79,7 +79,9 @@ jobs:
     # Measured on this runner, 2026-11-16 (plan 087, Findings): 16 min
     # 17 s with the base's bake warm; the base bakes cold since, which
     # adds the reference site's bake. A view that will not settle fails
-    # by its name after three minutes, so the budget is not for waiting.
+    # by its name after three minutes and a side's render after ten
+    # (e2e/snapshot-shot.spec.ts), so a hung run ends with its summary
+    # inside this budget, not by being cancelled.
     timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.pairs > 0 && 180 || 30 }}
     steps:
       # A pull request's checkout is its merge with the base's tip, so the

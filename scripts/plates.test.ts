@@ -5,23 +5,31 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import sharp from "sharp";
+import { TIER1_TOLERANCE } from "../lib/city/plate-diff";
 import {
   claimedViews,
+  claimsOf,
   comparability,
   compare,
+  comparePlates,
   conclude,
   exitOf,
+  knowsPlates,
+  main,
+  parseArgs,
   reportOf,
   TIER1_VIEWS,
+  tierOf,
   unclaimed,
 } from "./plates";
-import type { ViewResult } from "./plates";
+import type { CompareSteps, ViewResult } from "./plates";
 
 const TOLERANCE = { level: 24, mean: 1000, share: 0.01 };
 const TIER = { name: "tier1" as const, tolerance: TOLERANCE };
@@ -374,6 +382,245 @@ describe("reportOf", () => {
     expect(report).toContain("0 of 1 views differ");
     expect(report).toContain("the picture is the same");
     expect(report).not.toContain("plates-report");
+  });
+});
+
+describe("tierOf", () => {
+  test("SHOTS_SMALL is tier 1: its views, its page, the pinned tolerance", () => {
+    const tier = tierOf({ SHOTS_SMALL: "1" });
+    expect(tier.name).toBe("tier1");
+    expect(tier.tolerance).toBe(TIER1_TOLERANCE);
+    expect(tier.tolerance).toEqual({ level: 3, mean: 0.1, share: 1e-5 });
+    expect(tier.views).toBe(TIER1_VIEWS);
+    expect(tier.env).toEqual({ SHOTS_SMALL: "1", SHOTS_QUERY: "scene=lite" });
+    expect(tier.args).toEqual([]);
+  });
+
+  test("without it, tier 2: headed, every view, no query", () => {
+    const tier = tierOf({});
+    expect(tier).toMatchObject({
+      name: "tier2",
+      env: {},
+      args: ["--headed"],
+      views: null,
+    });
+    // tier 1's numbers until its own floor is measured (plan 087)
+    expect(tier.tolerance).toEqual({ level: 3, mean: 0.1, share: 1e-5 });
+  });
+});
+
+/** A description written to a file of its own. */
+const file = (body: string) => {
+  const path = nodePath.join(root, `body-${body.length}.md`);
+  writeFileSync(path, body);
+  return path;
+};
+
+describe("claimsOf", () => {
+  const views = ["rooftops", "shore-eye", "across-400"];
+  test("nothing claimed: null", () => {
+    expect(claimsOf({ claims: null, claimsFile: null }, views)).toBeNull();
+    expect(
+      claimsOf({ claims: null, claimsFile: file("No section here.") }, views)
+    ).toBeNull();
+  });
+
+  test("a description names only the views under its section", () => {
+    expect(
+      claimsOf(
+        { claims: null, claimsFile: file("## Snapshots\n`rooftops` moved") },
+        views
+      )
+    ).toEqual(["rooftops"]);
+    expect(
+      claimsOf({ claims: null, claimsFile: file("## Snapshots\n") }, views)
+    ).toEqual([]);
+  });
+
+  test("--claims names its views, of the ones rendered, with the file's", () => {
+    expect(
+      claimsOf({ claims: ["shore-eye", "elsewhere"], claimsFile: null }, views)
+    ).toEqual(["shore-eye"]);
+    expect(
+      claimsOf(
+        {
+          claims: ["shore-eye"],
+          claimsFile: file("## Snapshots\nrooftops, shore-eye"),
+        },
+        views
+      )
+    ).toEqual(["shore-eye", "rooftops"]);
+  });
+});
+
+describe("knowsPlates", () => {
+  // a repository of two commits: before the plates, and with them
+  const repo = nodePath.join(root, "repo");
+  const git = (...words: string[]) => {
+    const done = Bun.spawnSync(["git", ...words], {
+      cwd: repo,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "t",
+        GIT_AUTHOR_EMAIL: "t@example.invalid",
+        GIT_COMMITTER_NAME: "t",
+        GIT_COMMITTER_EMAIL: "t@example.invalid",
+      },
+    });
+    if (done.exitCode !== 0) {
+      throw new Error(done.stderr.toString());
+    }
+    return done.stdout.toString().trim();
+  };
+  mkdirSync(nodePath.join(repo, "lib", "city"), { recursive: true });
+  git("init", "-q");
+  writeFileSync(nodePath.join(repo, "README"), "before");
+  git("add", ".");
+  git("commit", "-q", "-m", "before", "--no-gpg-sign");
+  const before = git("rev-parse", "HEAD");
+  writeFileSync(nodePath.join(repo, "lib", "city", "plate-diff.ts"), "//");
+  git("add", ".");
+  git("commit", "-q", "-m", "plates", "--no-gpg-sign");
+  const withPlates = git("rev-parse", "HEAD");
+
+  test("a commit with lib/city/plate-diff.ts has them, one before has not", () => {
+    expect(knowsPlates(withPlates, repo)).toBe(true);
+    expect(knowsPlates(before, repo)).toBe(false);
+  });
+
+  test("a commit git cannot read is an error, not 'before the plates'", () => {
+    expect(() => knowsPlates("0".repeat(40), repo)).toThrow(
+      "cannot read the base commit"
+    );
+    expect(() => knowsPlates("no-such-ref", repo)).toThrow(
+      "cannot read the base commit"
+    );
+  });
+});
+
+const TIER1 = tierOf({ SHOTS_SMALL: "1" });
+/** Steps over a fresh pair of folders: `moved` differs in the head. */
+const steps = async (over: Partial<CompareSteps> = {}) => {
+  const { base, head } = await pair();
+  const report = nodePath.join(root, `report-${base.split("-").at(-1)}`);
+  return {
+    commits: () => ({ base: "a".repeat(40), head: "bbbbbbbb" }),
+    head: async () => await Promise.resolve(head),
+    base: async () => await Promise.resolve(base),
+    knowsPlates: () => true,
+    report,
+    ...over,
+  } satisfies CompareSteps;
+};
+const read = (dir: string) =>
+  readFileSync(nodePath.join(dir, "report.md"), "utf-8");
+
+describe("comparePlates", () => {
+  test("an unnamed differing view: exit 1, the report written", async () => {
+    const s = await steps();
+    expect(await comparePlates(parseArgs([]), TIER1, s)).toBe(1);
+    expect(read(s.report)).toContain("**failed** on");
+  });
+
+  test("the differing views named: exit 0", async () => {
+    const s = await steps();
+    const claiming = parseArgs(["--claims", "moved,edge"]);
+    expect(await comparePlates(claiming, TIER1, s)).toBe(0);
+    expect(read(s.report)).toContain("reported, not failed");
+  });
+
+  test("the summary gets the report too", async () => {
+    const s = await steps();
+    const summary = nodePath.join(root, "summary.md");
+    await comparePlates(parseArgs(["--summary", summary]), TIER1, s);
+    expect(readFileSync(summary, "utf-8")).toBe(read(s.report));
+  });
+
+  test("an unheld base is asked whether it knows the plates", async () => {
+    const known: string[] = [];
+    const s = await steps({
+      knowsPlates: (sha) => {
+        known.push(sha);
+        return true;
+      },
+    });
+    const base = await s.base(TIER1, "", parseArgs([]), {
+      adapter: "",
+      held: true,
+      ms: {},
+      query: "",
+      small: true,
+    });
+    writeFileSync(
+      nodePath.join(base, "run.json"),
+      JSON.stringify({ adapter: "test adapter", held: false })
+    );
+    expect(await comparePlates(parseArgs([]), TIER1, s)).toBe(2);
+    expect(known).toEqual(["a".repeat(40)]);
+    expect(
+      await comparePlates(parseArgs([]), TIER1, {
+        ...s,
+        knowsPlates: () => false,
+      })
+    ).toBe(0);
+  });
+
+  test("a step that fails is thrown on, after the summary says why", async () => {
+    const s = await steps({
+      head: async () =>
+        await Promise.reject(new Error("plates: qa-rooftops did not settle")),
+    });
+    await expect(comparePlates(parseArgs([]), TIER1, s)).rejects.toThrow(
+      "did not settle"
+    );
+    const report = read(s.report);
+    expect(report).toContain("not compared — **failed**");
+    expect(report).toContain("qa-rooftops did not settle");
+  });
+});
+
+/** The script's commands, with `run` in place of the comparison. */
+const commands = (run: () => Promise<number>) => ({
+  compare: run,
+  diff: async () => await Promise.resolve(7),
+  pairs: async () => await Promise.resolve(8),
+});
+
+describe("main", () => {
+  test("a command's exit code is the script's", async () => {
+    const run = commands(async () => await Promise.resolve(1));
+    expect(await main([], {}, run)).toBe(1);
+    expect(await main(["diff", "a", "b"], {}, run)).toBe(7);
+    expect(await main(["pairs", "3"], {}, run)).toBe(8);
+  });
+
+  test("a command that throws is exit 2, never 0", async () => {
+    const run = commands(
+      async () => await Promise.reject(new Error("the build failed"))
+    );
+    expect(await main([], {}, run)).toBe(2);
+  });
+
+  test("an unknown option, or folders that are not there: exit 2", async () => {
+    expect(await main(["--no-such-option"], {})).toBe(2);
+    expect(await main(["diff"], { SHOTS_SMALL: "1" })).toBe(2);
+    expect(
+      await main(["diff", "/no/such/a", "/no/such/b"], { SHOTS_SMALL: "1" })
+    ).toBe(2);
+  });
+
+  test("the tier comes from the environment", async () => {
+    const seen: string[] = [];
+    const run = {
+      ...commands(async () => await Promise.resolve(0)),
+      compare: async (_: unknown, tier: { name: string }) => {
+        seen.push(tier.name);
+        return await Promise.resolve(0);
+      },
+    };
+    await main([], { SHOTS_SMALL: "1" }, run);
+    await main([], {}, run);
+    expect(seen).toEqual(["tier1", "tier2"]);
   });
 });
 

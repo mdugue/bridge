@@ -540,8 +540,10 @@ ends without a verdict, exit 2 and a summary that says why, when: a
 side was not held still (the head always; the base once it has
 `lib/city/plate-diff.ts` — only a base from before the plates is
 reported as *not compared* and passes, which was true of this plan's own
-pull request); a view does not settle within three minutes (named); the
-settled camera is not at the snapshot's pose; a plate is blank; two
+pull request; a base git cannot read is an error); a view does not
+settle within three minutes (named), or a side's whole render takes
+more than ten; the settled camera is not at the snapshot's pose
+(`lib/city/plate-pose.ts`; in Modell its pivot, scale, turn and tilt); a plate is blank; two
 views of a side have the same pixels; a view is missing on a side.
 
 **The job.** `.github/workflows/plates.yml`, on a pull request of this
@@ -556,6 +558,13 @@ building and rendering, the base's bake still warm); in the container
 views it means to change under `## Snapshots` (read when the job runs,
 so a re-run sees an edit): those are reported; a differing view not
 named there fails, with the section or without.
+
+**What the tolerance lets through** in a view tier 1 renders (the
+second review's measurement): a change of 4 pixels or fewer at any
+contrast; a step of 3 of 255 or less over less than about 3 % of the
+frame; one step over less than 10 %. And a run that flakes has no
+remedy but a re-run by hand or naming the view — nothing retries, since
+the renderer repeated to the pixel wherever it was measured.
 
 **What tier 1 does not see**, so that a green job is not taken for
 more: 42 of the 50 views; every tile but the spawn's, and so every

@@ -2070,6 +2070,12 @@ reference image is stored. Two tiers share that code:
 | Says | *changed*, as a tripwire — never *good* | *changed*, in the light a visitor sees |
 | Tolerance | `TIER1_TOLERANCE`: a pixel differs above 3 of 255; a view above 4 such pixels, or 0.1 of 255 on average. The floor: ten same-commit pairs moved no pixel, two builds of one commit 3 pixels by one step | its own floor, still to measure |
 
+In a view it renders, tier 1's numbers let through a change of 4 pixels
+or fewer at any contrast, a step of 3 of 255 or less over less than
+about 3 % of the frame, and one step over less than 10 %. A run that
+flakes is re-run by hand or answered by naming the view; nothing
+retries.
+
 Tier 1 draws at `lite`'s pixel ratio of 0.5: a plate is 400 × 250 drawn
 pixels shown twice as large. It never sees the other 42 views, any tile
 but the spawn's, the full profile's shadows, AO and resolution, the data

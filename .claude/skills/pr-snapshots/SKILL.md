@@ -29,6 +29,12 @@ both by the same runner's software renderer, and diffed.
   After editing the description, re-run the job.
 - It does not run on a draft, nor on a PR that touches nothing that can
   move a pixel (the workflow's `paths`).
+- **What its numbers let through** in a view it does render: a change
+  of 4 pixels or fewer at any contrast; a step of 3 of 255 or less over
+  less than about 3 % of the frame; one step over less than 10 %.
+- **A run that flakes** has two remedies only: re-run the job by hand,
+  or name the view. There is no retry; tell the maintainer, because
+  the renderer is meant to repeat to the pixel.
 - **What it does not see.** It renders 8 of the 50 QA views
   (`TIER1_VIEWS` in `scripts/plates.ts`), all standing on the spawn
   tile, in the `lite` profile at 400 × 250 drawn pixels. Never seen:

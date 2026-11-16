@@ -103,7 +103,8 @@ interface Tier {
   views: readonly string[] | null;
 }
 
-function tierOf(env: NodeJS.ProcessEnv): Tier {
+/** The tier an environment asks for: `SHOTS_SMALL` is tier 1. */
+export function tierOf(env: Partial<Record<string, string>>): Tier {
   return env.SHOTS_SMALL
     ? {
         name: "tier1",
@@ -596,7 +597,7 @@ export function reportOf(
   return lines.join("\n");
 }
 
-interface Args {
+export interface Args {
   base: string | null;
   /** the views meant to differ; null: none is claimed */
   claims: string[] | null;
@@ -609,7 +610,7 @@ interface Args {
   views: string[] | null;
 }
 
-function parseArgs(argv: string[]): Args {
+export function parseArgs(argv: string[]): Args {
   const args: Args = {
     base: null,
     claims: null,
@@ -689,17 +690,36 @@ async function basePlates(
   return out;
 }
 
-/** Whether a commit has the plates: the marker `comparability` asks for. */
-function knowsPlates(sha: string): boolean {
-  return (
-    spawnSync("git", ["cat-file", "-e", `${sha}:lib/city/plate-diff.ts`], {
-      cwd: ROOT,
-    }).status === 0
+/**
+ * Whether a commit has the plates (`lib/city/plate-diff.ts` in its
+ * tree): the marker `comparability` asks for. A commit git cannot read —
+ * unknown, or not fetched into a shallow clone — is an error, never
+ * "from before the plates": that answer is the one way an uncompared
+ * run passes.
+ */
+export function knowsPlates(sha: string, cwd = ROOT): boolean {
+  const tree = spawnSync(
+    "git",
+    ["ls-tree", "--name-only", sha, "--", "lib/city/plate-diff.ts"],
+    { cwd, encoding: "utf-8" }
   );
+  if (tree.status !== 0) {
+    throw new Error(
+      `cannot read the base commit ${sha}: ${tree.stderr.trim() || "git ls-tree failed"}`
+    );
+  }
+  return tree.stdout.trim() === "lib/city/plate-diff.ts";
 }
 
-/** The views a run's claims name, of the ones it rendered. */
-function claimsOf(args: Args, views: readonly string[]): string[] | null {
+/**
+ * The views a run's claims name, of the ones it rendered: those of
+ * `--claims`, and those a description names under its `## Snapshots`
+ * (`--claims-file`). Null when neither claims anything.
+ */
+export function claimsOf(
+  args: Pick<Args, "claims" | "claimsFile">,
+  views: readonly string[]
+): string[] | null {
   const named = args.claims
     ? views.filter((v) => args.claims?.includes(v))
     : [];
@@ -758,8 +778,7 @@ export async function conclude(opts: {
 }
 
 /** A report where a run's readers look: the folder, stdout, the summary. */
-function say(markdown: string, summary: string | null): void {
-  const report = nodePath.join(PLATES_DIR, "report");
+function say(markdown: string, summary: string | null, report: string): void {
   mkdirSync(report, { recursive: true });
   writeFileSync(nodePath.join(report, "report.md"), markdown);
   process.stdout.write(markdown);
@@ -768,50 +787,86 @@ function say(markdown: string, summary: string | null): void {
   }
 }
 
-async function comparePlates(args: Args, tier: Tier): Promise<number> {
-  const started = Date.now();
-  const views = args.views ?? tier.views;
-  const headSha = sh("git", ["rev-parse", "HEAD"]);
-  const baseSha = sh("git", [
-    "rev-parse",
-    args.base ?? sh("git", ["merge-base", "HEAD", "origin/main"]),
-  ]);
-  const dirty = sh("git", ["status", "--porcelain", "--untracked-files=no"]);
-  const headName = `${headSha.slice(0, 8)}${dirty ? "+changes" : ""}`;
-  const report = nodePath.join(PLATES_DIR, "report");
-  rmSync(report, { recursive: true, force: true });
-  try {
+/** What a comparison renders and reads: the real ones build and serve. */
+export interface CompareSteps {
+  /** the base's and the head's commit, and the head's name in a report */
+  commits: (args: Args) => { base: string; head: string };
+  /** the head rendered: its folder */
+  head: (args: Args, tier: Tier) => Promise<string>;
+  /** the base rendered, or its kept plates: its folder */
+  base: (tier: Tier, sha: string, args: Args, head: RunInfo) => Promise<string>;
+  knowsPlates: (sha: string) => boolean;
+  /** where the report goes */
+  report: string;
+}
+
+const realSteps: CompareSteps = {
+  commits: (args) => {
+    const head = sh("git", ["rev-parse", "HEAD"]);
+    const dirty = sh("git", ["status", "--porcelain", "--untracked-files=no"]);
+    return {
+      base: sh("git", [
+        "rev-parse",
+        args.base ?? sh("git", ["merge-base", "HEAD", "origin/main"]),
+      ]),
+      head: `${head.slice(0, 8)}${dirty ? "+changes" : ""}`,
+    };
+  },
+  head: async (args, tier) => {
     if (!args.noBuild) {
-      log(`head ${headName}: building`);
+      log("head: building");
       await build(ROOT);
     }
-    const head = nodePath.join(PLATES_DIR, tier.name, "head");
-    const headRun = await served(
+    const out = nodePath.join(PLATES_DIR, tier.name, "head");
+    await served(
       ROOT,
-      async (port) => await render(tier, port, head, views)
+      async (port) => await render(tier, port, out, args.views ?? tier.views)
     );
-    const base = await basePlates(tier, baseSha, views, headRun);
+    return out;
+  },
+  base: async (tier, sha, args, head) =>
+    await basePlates(tier, sha, args.views ?? tier.views, head),
+  knowsPlates,
+  report: nodePath.join(PLATES_DIR, "report"),
+};
+
+/**
+ * The base against the head: its exit code. A run that ends without a
+ * verdict — a build that failed, a view that did not settle (the harness
+ * names it), a blank plate — says so where the verdict would stand, and
+ * still fails: the error goes on to `main`.
+ */
+export async function comparePlates(
+  args: Args,
+  tier: Tier,
+  steps: CompareSteps = realSteps
+): Promise<number> {
+  const started = Date.now();
+  const seconds = () => (Date.now() - started) / 1000;
+  const commits = steps.commits(args);
+  rmSync(steps.report, { recursive: true, force: true });
+  try {
+    const head = await steps.head(args, tier);
+    const base = await steps.base(tier, commits.base, args, readRun(head));
     const { exit, markdown } = await conclude({
       base,
       head,
-      baseName: baseSha.slice(0, 8),
-      headName,
-      baseKnowsPlates: knowsPlates(baseSha),
+      baseName: commits.base.slice(0, 8),
+      headName: commits.head,
+      baseKnowsPlates: steps.knowsPlates(commits.base),
       tier,
       claims: (rendered) => claimsOf(args, rendered),
-      report,
-      seconds: (Date.now() - started) / 1000,
+      report: steps.report,
+      seconds: seconds(),
     });
-    say(markdown, args.summary);
+    say(markdown, args.summary, steps.report);
     return exit;
   } catch (error) {
-    // A run that ends without a verdict says so where the verdict would
-    // stand: a build that failed, a view that did not settle (the
-    // harness names it above), a blank plate.
     const why = error instanceof Error ? error.message : String(error);
     say(
-      `## Plates, ${tier.name}: not compared — **failed**\n\n\`${baseSha.slice(0, 8)}\` against \`${headName}\` after ${Math.round((Date.now() - started) / 1000)} s: ${why}. The step's log names the view.\n`,
-      args.summary
+      `## Plates, ${tier.name}: not compared — **failed**\n\n\`${commits.base.slice(0, 8)}\` against \`${commits.head}\` after ${Math.round(seconds())} s: ${why}. The step's log names the view.\n`,
+      args.summary,
+      steps.report
     );
     throw error;
   }
@@ -905,14 +960,35 @@ async function diffFolders(args: Args, tier: Tier): Promise<number> {
   return exit;
 }
 
-if (import.meta.main) {
+/** The commands by name; a test puts its own in their place. */
+type Commands = Record<
+  Args["command"],
+  (args: Args, tier: Tier) => Promise<number>
+>;
+
+/**
+ * The script: its exit code. Whatever a command throws is a run that
+ * could not be compared — 2, never 0.
+ */
+export async function main(
+  argv: string[],
+  env: Partial<Record<string, string>>,
+  commands?: Commands
+): Promise<number> {
   try {
-    const args = parseArgs(process.argv.slice(2));
-    const tier = tierOf(process.env);
-    const commands = { compare: comparePlates, diff: diffFolders, pairs };
-    process.exitCode = await commands[args.command](args, tier);
+    const args = parseArgs(argv);
+    const table = commands ?? {
+      compare: comparePlates,
+      diff: diffFolders,
+      pairs,
+    };
+    return await table[args.command](args, tierOf(env));
   } catch (error) {
     log(error instanceof Error ? error.message : String(error));
-    process.exitCode = 2;
+    return 2;
   }
+}
+
+if (import.meta.main) {
+  process.exitCode = await main(process.argv.slice(2), process.env);
 }

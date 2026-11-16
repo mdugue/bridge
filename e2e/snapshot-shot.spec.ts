@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { utmToLatLng } from "../lib/city/crs";
 import { arrivalHref } from "../lib/city/geolocation";
+import { poseFault } from "../lib/city/plate-pose";
 import {
   decodeLook,
   parseSnapshot,
@@ -154,6 +155,14 @@ const PLATES_STILL = process.env.PLATES_STILL !== "0";
  */
 const PLATE_VIEW_MS = SHOTS_SMALL ? 180_000 : 60_000;
 /**
+ * How long one side's whole render may take on SwiftShader: ten minutes,
+ * where the tier's eight views took 5½ in the container and about 6½ on
+ * a hosted runner. Two sides and two builds then stay under the job's 30
+ * (.github/workflows/plates.yml). A GPU's run of all 50 views has no cap
+ * but its views'.
+ */
+const PLATE_RUN_MS = SHOTS_SMALL ? 600_000 : Number.POSITIVE_INFINITY;
+/**
  * Frames a plate waits at the least (the stream has seen the view), and
  * for a shadow map by night, when none is drawn. And the loop's step a
  * frame while it waits (ms): the largest the loop takes (it clamps a step
@@ -196,45 +205,6 @@ function snapshotFiles(): { path: string; name: string }[] {
 const SETTLE_QUIET_FRAMES = 3;
 /** How long a single shot's view may take to settle. */
 const SHOT_SETTLE_MS = READY_MS + 60_000;
-
-/** Where a settled camera may stand off its snapshot (m, degrees): the
- *  walker's eye settles onto the ground, the rest is rounding. */
-const POSE_SLACK = { m: 0.5, eyeM: 3, deg: 0.5 };
-
-/** The angle between two headings (degrees, 0–180). */
-const turn = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
-
-/**
- * What of the scene's camera is not the snapshot's, or null: a plate of
- * a pose that was not applied is a picture of something else, and base
- * and head, driven by one harness, would agree on it.
- */
-function poseFault(
-  want: Snapshot["camera"],
-  got: Snapshot["camera"]
-): string | null {
-  if (got.mode !== want.mode) {
-    return `mode ${got.mode}, not ${want.mode}`;
-  }
-  if ((got.model?.preset ?? null) !== (want.model?.preset ?? null)) {
-    return `Modell ${got.model?.preset ?? "off"}, not ${want.model?.preset ?? "off"}`;
-  }
-  if (want.model) {
-    // Modell frames by its pivot and scale: the eye is the rig's
-    return null;
-  }
-  const off = [
-    Math.abs(got.pos.x - want.pos.x) > POSE_SLACK.m,
-    Math.abs(got.pos.z - want.pos.z) > POSE_SLACK.m,
-    Math.abs(got.pos.y - want.pos.y) >
-      (want.mode === "walk" ? POSE_SLACK.eyeM : POSE_SLACK.m),
-    turn(got.headingDeg, want.headingDeg) > POSE_SLACK.deg,
-    Math.abs(got.pitchDeg - want.pitchDeg) > POSE_SLACK.deg,
-  ];
-  return off.some(Boolean)
-    ? `camera at ${JSON.stringify(got.pos)} heading ${got.headingDeg} pitch ${got.pitchDeg}, not ${JSON.stringify(want.pos)} heading ${want.headingDeg} pitch ${want.pitchDeg}`
-    : null;
-}
 
 /** A snapshot file, validated: a broken one fails loudly instead of
  *  silently rendering the defaults. */
@@ -367,8 +337,12 @@ if (PLATES_DIR) {
   // page, in the table's order, on the held clock.
   test("plates", async ({ page }) => {
     const views = plateViews();
-    // (each view its budget and its screenshot; the boot before them)
-    test.setTimeout(READY_MS + views.length * (PLATE_VIEW_MS + 30_000));
+    // Each view its budget and its screenshot, the boot before them —
+    // but no longer than a run may take, so that a run that hangs ends
+    // here, with its summary, and not by the job's cancellation.
+    test.setTimeout(
+      Math.min(PLATE_RUN_MS, READY_MS + views.length * (PLATE_VIEW_MS + 30_000))
+    );
     mkdirSync(PLATES_DIR, { recursive: true });
     const times: Record<string, number> = {};
     const started = Date.now();
@@ -454,10 +428,10 @@ if (PLATES_DIR) {
       // A shot is for looking at: one that never went quiet is still
       // written, and says so.
       if (!settled) {
-        test.info().annotations.push({
-          type: "unsettled",
-          description: `${name} was still busy after ${SHOT_SETTLE_MS / 1000} s`,
-        });
+        const description = `${name} was still busy after ${SHOT_SETTLE_MS / 1000} s`;
+        test.info().annotations.push({ type: "unsettled", description });
+        // (the line reporter shows no annotation)
+        process.stderr.write(`shots: unsettled: ${description}\n`);
       }
       const canvas = page.locator("canvas[data-engine]");
       await expect(canvas).toBeVisible();
