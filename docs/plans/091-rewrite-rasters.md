@@ -1,0 +1,415 @@
+# Plan 091 [rewrite]: A tile's rasters arrive as the GPU reads them — plain arrays for ids, blocks for soft fields, a few files and bindings
+
+> **Executor instructions**: Read
+> [086-rewrite-programme.md](./086-rewrite-programme.md) and AGENTS.md
+> first, then the `city-walker` skill's parts on tiles and rasters. Work
+> phase by phase; each phase is one PR and ends in a **Verify** you run.
+> Phase 0 measures and decides which later phases are built at all: a
+> phase its numbers do not carry is closed as rejected, with the numbers.
+> On a STOP condition, stop and report. When a phase lands, update this
+> plan's row in `docs/plans/README.md`.
+>
+> **Drift check (run first)**:
+> `git diff --stat 5dfa300d..HEAD -- lib/city/tile.ts lib/city/tileset.ts lib/city/png-raster.ts app/_components/tile-rasters.ts app/_components/raster-upload.ts app/_components/shared-rasters.ts app/_components/raster-shares.ts app/_components/terrain-layer.ts app/_components/sky-light.ts app/_components/landcover-splat.ts scripts/downsample-raster.ts scripts/crop-raster.ts scripts/prepare/side-files.ts`
+> If an in-scope file changed, compare *Current state* with the code
+> before you go on; a mismatch is a STOP condition.
+
+## Status
+
+- **Priority**: P2
+- **Effort**: S (phases 0 and 2, the trial), M (phase 1), M–L (phases
+  3–5, only those phase 0 and 2 carry)
+- **Risk**: MED — a class id that changes paints the wrong ground on
+  every tile; a soft field that changes shifts the light
+- **Depends on**: [087](./087-rewrite-measuring-stick.md) (plates and
+  ledger); [088](./088-rewrite-tiles-as-a-data-product.md) for phase 1
+  and phase 4 (transport compression); phase 3's NDVI waits for
+  [090](./090-rewrite-dressing-gpu-ready.md)
+- **Category**: rewrite — fewer bytes on the wire, a phone's GPU bytes
+  (ADR 0047), less complexity (no PNG decoder in the viewer, fewer
+  files, fewer shader variants)
+- **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
+- **Planned at**: commit `5dfa300d`, 2026-11-16
+- **Status**: TODO
+
+## Why this matters
+
+A fine terrain level reads its ground from nine raster files and two
+tables and binds twelve textures. Every raster is a greyscale PNG the
+viewer inflates and unfilters itself (`lib/city/png-raster.ts`),
+because a browser's image decoder colour-manages what it decodes and on
+iPhones rewrote class ids. PNG is a picture format carrying data: hence
+a decoder of our own, a rule in AGENTS.md against image tools, channels
+interleaved into a picture four times as wide, and twins of the same
+raster at two or three sizes, each a file.
+
+This plan sends each raster in the layout its texture has, and
+compresses on the GPU only what tolerates it. The table below corrects
+the expectation the series started from: **block compression is the
+small lever here**. The rasters that tolerate it are 4.7 MiB of the
+40–60 MiB a phone holds for a fine level; the weight is in the id
+rasters, which must stay exact, and in the colour splat painted from
+the classes. So the order is: exact rasters as plain arrays, a trial of
+block compression on one soft raster, then fewer files and bindings.
+
+## Current state
+
+**The table of a tile's files** — `lib/city/tile.ts`, `ARTIFACTS`: one
+row a file, `terrain` naming the extras keys a level reads it under,
+`bakedFrom` a twin the build cuts from a committed raster. The viewer's
+side is `app/_components/tile-rasters.ts`, `RASTER_KINDS`: one row a
+kind with its `look`, its `phone` and `far` twins and its table.
+
+Every raster of Dresden's spawn tile `33412_5656_2_sn`, read on
+2026-11-16 from the committed PNG headers and from each kind's `look`.
+GPU bytes are width × height × channels, × 4/3 with a mip chain
+(`three-utils.ts` `textureBytes`).
+
+| Kind (`RasterKind`) | Texels, channels | Sampled | What the bytes are | Sort | GPU, desktop | GPU, phone |
+|---|---|---|---|---|---|---|
+| `class` | 4096², 1 (phone 2048², coarse level 1024²) | nearest | land-cover class ids | **exact** | 16 MiB | 4 MiB |
+| — its colour splat | painted on the GPU from the classes, RGBA8, mips (`landcover-splat.ts`) | linear | palette colour and water coverage | derived at runtime | 21 MiB | 21 MiB |
+| `surface` | 2048², 4 (far twin 1024²) | nearest | R packed road, walk and parking ids; G bearing; BA a 13-bit offset along the street (`surface.py`) | **exact** | 16 / 4 MiB | 16 / 4 MiB |
+| `sport` | 2048², 4 (far twin 1024²) | nearest | rows of the sports table, a bit | **exact** | 16 / 4 MiB | not read |
+| `markings` | 2048², 4 (phone and far twin 1024²) | nearest | rows of the markings table, lane bits, an offset | **exact** | 16 / 4 MiB | 4 MiB |
+| `edges` | 2048², 2 (far twin 1024²) | linear | signed distance to the road edge and the meadow edge, 5 cm a step (`EDGE_SCALE` 20) | **measured field** | 8 / 2 MiB | 8 / 2 MiB |
+| `colonies` | a crop of 2048², 2 (phone half) | linear | R signed distance to the garden land's edge, G an axis code 0–126 | **measured field** | ≤ 8 MiB | ≤ 2 MiB |
+| `ndvi` | 1024², 1 | linear, mips, anisotropy | the orthophoto's greenness | **soft field** | 1.3 MiB | 1.3 MiB |
+| `svf` | 1024², 1 | linear, mips | the share of the sky a point sees | **soft field** | 1.3 MiB | 1.3 MiB |
+| `horizon` | 8 layers of 256², 4 | linear | skyline angles, four azimuths a texel (0–45° and 0–90° over a byte) | **soft field** | 2.0 MiB | 2.0 MiB |
+
+The sorts, each checked in its reader: an **exact** raster is read
+texel by texel and compared (`idLook`); a **measured field** is read
+with its neighbours and a line is drawn where it crosses a value
+(`ground-detail.ts` `edgeAt`, `bakedDistances`: a kerb band 0.12 m
+wide, `WALK_EDGE_M`); a **soft field** is light or tint
+(`sky-light.ts`: `mix(1, svf, SKY_VIEW)`, `hzSunVisible` with a soft
+band of 0.8°, `HORIZON_SOFT_DEG`). The murals' pictures
+(`data/<site>/murals/*.webp`, `mural-layer.ts`) are pictures and go
+through `createImageBitmap`; they are not a tile's raster and not in
+this plan.
+
+The NDVI is also read **on the CPU**: `vegetation-layer.ts` fetches the
+PNG again and samples it for the crowns (`maxWindowSampler`,
+`lib/city/raster-sampler.ts`). That and `raster-upload.ts` are the
+viewer's two calls of `decodeGreyPng`.
+
+**How a raster loads** — `app/_components/raster-upload.ts`,
+`loadDataRaster`: fetch (six at once, nearest tile first), then in its
+turn `decodeGreyPng`, `textureOf` (the PNG's bytes are already the
+RG8 / RGBA8 layout, a layered one layer-major, handed to a
+`DataTexture` or `DataArrayTexture` as they are), `applyLook`,
+`uploadNow` on a phone. A one-channel PNG the decoder rejects goes to
+the browser's (`browserFallback`, `loadBitmapTexture`); a class raster
+loaded that way has no water mask.
+
+**What the build does** — `scripts/prepare/side-files.ts` publishes the
+committed PNGs and makes the twins: `scripts/downsample-raster.ts`
+(`downsampleClassRaster` through sharp with a nearest kernel,
+`downsampleInterleaved` by copying texels) and `scripts/crop-raster.ts`
+(`colonyCrop`: only the texels that carry a colony, the crop named in
+the extras as `cultivatedCrop`). The bakes write the PNGs
+(`pipeline/bake/common.py`, `skyview.py` `save_png`).
+
+**What a level binds** — `terrain-layer.ts` `splatNodes`: `class`,
+`color`, `ndvi`, `surface`, `edges`, `sportRaster`, `sportTable`,
+`markingsRaster`, `markingsTable`, `colonies`, and from `sky-light.ts`
+`lightSvf` and `lightHorizon`: twelve. A term whose raster is absent is
+left out of the graph, so the rasters a tile has pick its shader:
+
+```ts
+// terrain-layer.ts, splatVariant: eight optional rasters, one build each way
+[splat.ndviTexture ? "ndvi" : "", splat.surfaceTexture ? "surface" : "", …]
+```
+
+**On the wire**, the same tile, measured 2026-11-16 (kB; gzip level 9;
+xz preset 6 stands in for a stronger transport codec, it is not one a
+browser has; *up* = each row minus the row above, then gzip):
+
+| Raster | PNG today | raw, gzip | up, gzip | raw, xz |
+|---|---|---|---|---|
+| `class` 4096² | 218 | 200 | 213 | 207 |
+| `surface` | 787 | 556 | 731 | 376 |
+| `markings` | 217 | 196 | 210 | 152 |
+| `sport` | 26 | 23 | 24 | 8 |
+| `colonies` | 19 | 20 | 18 | 9 |
+| `edges` | 1 426 | 2 027 | 1 414 | 1 243 |
+| `ndvi` | 376 | 391 | 400 | 342 |
+| `svf` | 580 | 780 | 628 | 614 |
+| `horizon` | 1 164 | 1 212 | 1 172 | 982 |
+
+Plain arrays are smaller than PNG for the exact rasters and larger for
+the fields unless a row predictor comes first: PNG's filters are a
+predictor.
+
+**What three r187 offers** (read in `node_modules/three`, to be read
+again by the executor):
+
+- `WebGPUBackend` asks the adapter for every feature it has
+  (`requiredFeatures: supportedFeatures`), and
+  `renderer.hasFeature("texture-compression-bc" | "-etc2" | "-astc")`
+  answers after `await renderer.init()`.
+- `WebGPUTextureUtils` maps `RED_RGTC1_Format` and
+  `RED_GREEN_RGTC2_Format` to BC4 and BC5, `R11_EAC_Format` and
+  `RG11_EAC_Format` to EAC, and takes `CompressedTexture` and
+  `CompressedArrayTexture` with their mip levels as given.
+- `KTX2Loader` (`examples/jsm/loaders/KTX2Loader.js`) transcodes Basis
+  only to colour formats — ASTC 4×4, BC7, DXT, ETC2 RGBA — which are
+  eight bits a texel: **no saving for a one-channel raster**. It reads
+  a KTX2 file that already holds BC4, BC5 or EAC blocks without the
+  transcoder. Its transcoder is 527 kB of WebAssembly and 57 kB of
+  script, and it starts workers of its own.
+
+**Earlier decisions**: plan 076 and
+[077](./077-one-rasters-module.md) rejected KTX2 for the rasters
+("data, not colour: block compression would change class ids") — that
+stands for every exact raster. [070](./070-raster-diet.md) shrank the
+coarse class raster, took the sports grounds off phones and halved the
+desktop's splat. [074](./074-architecture-deepening.md)'s backlog names
+"one raster stack per tile": nine loads to two, twelve bindings to
+about four.
+
+## Commands you will need
+
+| Purpose | Command | Expected |
+|---|---|---|
+| Format, then gate | `bun run fix && bun run verify` | exit 0 |
+| Build the data and the app | `bun run build` | exit 0 |
+| Headless e2e | `bun run test:e2e` | all pass |
+| Plates on a GPU | `bun run shots` (and plan 087's `bun run plates`) | plates written, compared |
+| The ledger | plan 087's `bun run ledger` | `qa/ledger.json` as committed |
+
+## Scope
+
+**In scope**: `lib/city/tile.ts`, `lib/city/tileset.ts` (the raster
+keys), a new `lib/city/raster-pack.ts` with its test,
+`app/_components/tile-rasters.ts`, `raster-upload.ts`,
+`shared-rasters.ts`, `raster-shares.ts`, `terrain-layer.ts` (the splat's
+slots and variant), `sky-light.ts` (the horizon's read),
+`scripts/prepare/side-files.ts`, `scripts/downsample-raster.ts`,
+`scripts/crop-raster.ts`, `scripts/bake-entries.ts`, their tests,
+`docs/rendering.md`, `docs/data-pipeline.md`, AGENTS.md's data rule,
+ADRs 0024 and 0047.
+
+**Out of scope**:
+- The bakes' own files. Python keeps writing what it writes; what a
+  bake hands over is [092](./092-rewrite-bake-store.md)'s.
+- The colour splat's painting and its palette (ADR 0010: a colour
+  change is not a re-bake). See *Maintenance notes* for its weight.
+- The murals' pictures, the minimap's picture, the ground plate.
+- Tile sizes and levels: [093](./093-rewrite-streaming-quadtree.md).
+- Any lossy step on an exact raster, in any phase.
+
+## Phases
+
+### Phase 0 — The table, for every site, in the ledger
+
+Extend plan 087's ledger with, per site and raster kind: files, wire
+bytes, GPU bytes a tier (the table above, computed from the published
+files, not typed in), the share of texels that carry anything and their
+bounding box for `sport`, `markings`, `colonies` and `surface`, and the
+number of distinct `splatVariant` keys the site's tiles produce. Add
+the CPU reads: which rasters the viewer decodes without uploading.
+
+**Verify**: `bun run ledger` writes the figures; `bun run verify` → exit
+0. **Decides**: phase 3 by the soft fields' share of a phone's fine
+level; phase 5 by the variant count and the sparse rasters' cover.
+
+### Phase 1 — Exact rasters as plain arrays (needs 088)
+
+1. `lib/city/raster-pack.ts`: a file is a 16-byte header (magic, width,
+   height, channels, layers, a predictor flag) and then the texture's
+   bytes exactly as `textureOf` lays them out today. Writer and reader
+   in one module, a round-trip test, no THREE, no DOM — as
+   `lib/city/point-pack.ts` is. If 090 has landed a container for a
+   tile's tables, the bytes go in it and the header is its entry.
+2. The build writes them: `side-files.ts` decodes each committed PNG
+   with `decodeGreyPng` (it runs in Bun already, `scripts/prepare/`
+   uses it) and writes the array. The twins become slices of the array:
+   every n-th texel (`downsampleInterleaved`'s rule, and for the class
+   raster the same rule with one channel). **No image tool resizes a
+   raster any more**; sharp leaves this path.
+3. The viewer reads them: `loadDataRaster` wraps the fetched bytes in
+   the texture, and the crowns' NDVI sampler (`vegetation-layer.ts`,
+   the viewer's only other `decodeGreyPng` call) reads the same array.
+   `browserFallback`, `loadBitmapTexture` and the undefined water mask
+   go. `png-raster.ts` stays for the build (`scripts/prepare/plate.ts`,
+   `scripts/coarse-crowns.ts`, and `decodeLift` in
+   `lib/city/water-bodies.ts`, which only the build calls). The viewer
+   imports `water-bodies.ts` for other things: if the bundle still
+   carries the decoder, move `decodeLift` into a module of its own.
+4. Transport: the files carry no compression of their own. They are
+   served compressed by 088's CDN. Until 088 has landed this phase does
+   not merge: a static host sends an unknown binary type as it is.
+5. A test reads every published exact raster of every committed site
+   both ways (PNG and array) and compares every byte.
+
+**Verify**: `bun run test` → the byte-equality test passes for all
+sites; `bun run test:e2e` → all pass; the plates show no view above
+087's noise floor. **Ledger**: wire bytes of each exact raster (gate:
+none grows), the viewer chunk's bytes without the decoder.
+
+### Phase 2 — The trial: `svf` as blocks
+
+`svf` is the trial: one channel, soft, mipmapped, read by the ground
+and the clay, never on the CPU, and the largest soft raster on the
+wire.
+
+1. Read the installed three: `WebGPUTextureUtils.js` (compressed
+   uploads, mip levels), `CompressedTexture`, and its docs. Confirm
+   that `renderer.hasFeature` answers for BC and ETC2 inside the
+   scene's worker. Record which features the reference phone, the
+   reference desktop and SwiftShader report.
+2. **Route A (the default)**: the build encodes `svf` and its mip chain
+   (a box filter; a compressed texture gets no mips from the GPU) as
+   BC4 and as EAC R11 — two published twins, picked by feature as the
+   phone twins are picked by tier, the plain array as the fallback for
+   a device with neither. Both encoders are small and deterministic and
+   are written in TypeScript in `scripts/`: no dependency. A decoder of
+   each, for the test only.
+3. **Route B (compare, do not build out)**: KTX2 through three's
+   `KTX2Loader`. It needs an encoder (a native CLI or an npm package: a
+   new dependency — name its size, licence and whether it is
+   deterministic, and ask the maintainer) and, for Basis, the
+   transcoder fetched from our own origin. For a one-channel raster it
+   saves no GPU bytes (see *Current state*); it is in the comparison
+   only so that the choice is recorded.
+4. Judge: the error of the value the shader reads, in byte steps (mean,
+   p99, max) over every committed site; 087's plates on the views that
+   show ground light (`ao-wall-foot`, `seam-eye`, `low-sun`,
+   `oblique-400`); GPU bytes a tile on a phone; wire bytes.
+
+**Verify**: a unit test decodes each encoder's output and holds the
+error to the figure the trial recorded; plates within the noise floor.
+**Ledger**: the four figures above for `svf`, both routes.
+
+### Phase 3 — The other soft fields (only on phase 2's numbers)
+
+- `horizon`: its texels hold four unrelated angles, which a colour
+  codec handles badly. Offer it as thirty-two one-channel layers in the
+  phase 2 format (`sky-light.ts` `hzAngle` then reads a layer's `.r`);
+  judge the angle's error against `HORIZON_SOFT_DEG`.
+- `ndvi`: only once 090 has baked the crowns' greenness into their
+  table, so that nothing reads it on the CPU; until then it stays a
+  plain array.
+- `edges` and `colonies` are **not** candidates without a trial of
+  their own: a 4 × 4 block spans about four metres of a field whose
+  line is 0.12 m wide. Try `edges` last, and expect to reject it.
+
+**Verify** and **Ledger** as phase 2, a raster at a time.
+
+### Phase 4 — The fields that stay plain (needs 088)
+
+`edges`, `colonies`, and every soft field phase 3 did not convert,
+as plain arrays with the *up* predictor flag: the reader adds each row
+to the one above, in the raster's turn. Gate: no raster's wire bytes
+grow against its PNG under the codec 088 serves — measured, since gzip
+alone was level with PNG and no better.
+
+**Verify**: byte-equality after the predictor's inverse, every site.
+**Ledger**: wire bytes a kind.
+
+### Phase 5 — Fewer files, fewer bindings
+
+Spike first, on the spawn tile and one tile without sports grounds:
+
+1. **Files.** One file for what both levels and the buildings share
+   (the coarse class raster, `ndvi`, `svf`, `horizon`) and one for a
+   fine level's own, per reach and tier that reads a different list
+   today (near, far, a phone's). `shared-rasters.ts` keeps sharing by
+   file name; a level must never download what it does not read today.
+2. **Bindings.** Group by sampler where the sizes agree: `surface`,
+   `sport` and `markings` as layers of one array texture, the two
+   tables as one, `ndvi` and `svf` as two layers. A layer that is
+   absent must cost no memory — the array holds only the layers a tile
+   has, and a slot uniform says which layer is which.
+3. **Variants.** With layers and a presence uniform the ground needs
+   fewer builds than `splatVariant`'s. Per-pixel graphs use `mix` and
+   `step`, never `select` (AGENTS.md); measure the frame.
+
+**Verify**: requests and bindings of a fine level, counted by a test
+and in the ledger; `bun run test:e2e` → all pass; plates within noise;
+the frame's GPU time on the reference phone not above its figure
+before. **Ledger**: files, bindings, distinct ground variants, frame
+time.
+
+## Test plan
+
+- `lib/city/raster-pack.test.ts`: round trip, a truncated file, a wrong
+  magic, the predictor's inverse; modelled on
+  `lib/city/point-pack.test.ts`.
+- Byte equality of every published exact raster against its committed
+  PNG, every committed site (beside `lib/city/tile-data.test.ts`).
+- The twins: the texels `scripts/downsample-raster.test.ts` holds
+  today, now from arrays. The block encoders: decode and compare.
+- `app/_components/tile-rasters.test.ts`: which file a level, a tier
+  and a reach read — unchanged rows keep their tests.
+
+## Done criteria
+
+- [ ] `grep -rn "decodeGreyPng\|loadBitmapTexture\|browserFallback" app/`
+      returns nothing, and the ledger's viewer chunk no longer holds
+      the decoder
+- [ ] `grep -rn "sharp" scripts/downsample-raster.ts scripts/crop-raster.ts`
+      returns nothing
+- [ ] The byte-equality test passes for every committed site
+- [ ] `qa/ledger.json` shows no exact raster larger on the wire than at
+      `5dfa300d`, and a phone's fine level no larger on the GPU
+- [ ] Phases 2–3 are built or closed as rejected, the figures in this
+      file's *Findings*
+- [ ] AGENTS.md's rule on data rasters says what holds now; ADRs 0024
+      and 0047 rewritten where they name the files; `docs/rendering.md`
+      and `docs/data-pipeline.md` current
+- [ ] `bun run verify` and `bun run test:e2e` pass
+
+## STOP conditions
+
+- A published exact raster differs from its committed PNG in any byte.
+- Phase 0 shows the soft fields under a twentieth of a phone's fine
+  level and the maintainer has not asked for the trial regardless:
+  report the table and stop before phase 2.
+- The reference phone reports neither BC nor ETC2, or three's upload of
+  a compressed mip chain needs a `_` member.
+- Route A's encoders are not byte-stable between two runs (the bake's
+  cache and the content hashes need them to be).
+- A phase would need an encoder or loader dependency: ask first.
+- Phase 5's unified ground costs the reference phone frame time, or an
+  absent layer costs memory.
+- A phone's GPU bytes grow in any phase (ADR 0047).
+
+## Maintenance notes
+
+- A new raster is still a row in `ARTIFACTS` and a row in
+  `RASTER_KINDS`; its sort — exact, measured field, soft field — is now
+  part of the row, and only a soft field may be lossy.
+- The heaviest raster a phone holds is none of the files: the colour
+  splat, 21 MiB a fine level, painted at runtime so that a colour is
+  not a re-bake. Halving it on a phone, or reading the classes without
+  a splat, is plan 070's kind of question and needs a GPU look; it is
+  named here so the next audit does not rediscover it.
+- `sport`, `markings` and `surface` are sixteen MiB each for a few
+  dozen to a few hundred kB of content. If phase 0 shows them mostly
+  empty, cropping them as `colonyCrop` crops the colonies is the next
+  plan, larger than anything block compression offers here.
+- The cache keys: every new build module is a row in
+  `scripts/bake-entries.ts` or imported from one.
+
+## What the series changes about this plan
+
+- **With 088** the arrays carry no compression of their own. Built
+  alone, phase 1 would pre-gzip them as the glTF is, and phase 4 would
+  not pay (joint 10 of 086).
+- **With 090** nothing reads the NDVI on the CPU, so it may become
+  blocks; alone it stays plain.
+- **With 093** a tile's raster is its level's: the phone and far twins
+  and `lib/city/ground-reach.ts` go, and phase 5's files are one a
+  tile. Without 093 the twins stay, as rows and as files.
+- **With 094** phase 5's fewer ground variants are what makes the set
+  of pipelines small enough to list at boot.
+- Against 086's table: the trial is kept, but its expected gain is
+  about three MiB a fine level on a phone, not a large one; the plan's
+  weight has moved to phases 1 and 5.
+
+## Findings
+
+(Empty. Each phase writes its figures and its verdict here.)
