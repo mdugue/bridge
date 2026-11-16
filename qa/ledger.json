@@ -5366,7 +5366,7 @@
     "neighboursModules": 14
   },
   "census": {
-    "note": "Recorded, never compared (plan 094 phase 2): what lands when depends on the machine's frame rate. Each built site in the whole-site profile (?scene=lite&block=1, 400×300) with its data layers on (Dresden's bike counts answered by the spec, a design block loaded there): ready, then an overview from 2.5 km and low oblique stops over up to four tiles spread over the site, each held until the stream and the compiles fall quiet (or its cap). At each stop getPipelineBudget reads every build the scene holds, which holds them to WebGPU's limits too (interStage excludes the clay, held by the limits test). framedBuilds are in-frame node builds, programs three's info.memory.programs, compileWaits the compile timings' measures over the flight. modell: Dresden once more, entered with M after its flight.",
+    "note": "Recorded, never compared (plan 094 phase 2): what lands when depends on the machine's frame rate. Each built site in the whole-site profile (?scene=lite&block=1, 400×300) with its data layers on (Dresden's bike counts answered by the spec, a design block loaded there): ready, then an overview from 2.5 km and low oblique stops over up to four tiles spread over the site, each held until the stream and the compiles fall quiet (or its cap). ready is read at ready, dressed once the layers and the design are on and the spawn has settled again; the flight's window is dressed → end. At each stop getPipelineBudget reads every build the scene holds, which holds them to WebGPU's limits too (builds.rows, each build by name; unread per stop: what had no text; tightest.interStage excludes the clay, held by the limits test). SwiftShader's WGSL and limits only, no real GPU. framedBuilds are in-frame node builds, programs three's info.memory.programs, compileWaits the compile timings' measures over the window — compile:turn-wait is a compile's place in the queue (the probe's own reads take turns too), a landing tile's wait is tile:compile, capped at 3 s. modell: Dresden once more, entered with M after its flight, its window from the moment before M.",
     "machine": "linux-x64, Bun 1.4.4",
     "read": "2026-11-16",
     "sites": {
@@ -5382,51 +5382,585 @@
           {
             "name": "overview",
             "settled": true,
-            "waitedMs": 6317,
+            "waitedMs": 6233,
             "rows": 35,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "33412_5656_2_sn",
             "settled": true,
-            "waitedMs": 10144,
+            "waitedMs": 2073,
             "rows": 87,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "33416_5654_2_sn",
             "settled": true,
-            "waitedMs": 10578,
+            "waitedMs": 8099,
             "rows": 63,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "33408_5654_2_sn",
             "settled": true,
-            "waitedMs": 6108,
+            "waitedMs": 6074,
             "rows": 75,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "33410_5658_2_sn",
             "settled": true,
-            "waitedMs": 6290,
-            "rows": 92,
+            "waitedMs": 6155,
+            "rows": 82,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           }
         ],
         "builds": {
-          "distinct": 90,
-          "keys": 79,
+          "rows": {
+            "bike-glass [Mesh: bikeRate,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 5,
+              "spare": 11
+            },
+            "bike-pool [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 5,
+              "spare": 11
+            },
+            "bridge-deck:path:e0cda8 [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:rail:b2a9a0 [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:rail:b2a9a0 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "bridge-deck:road:c8c8ce [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-stone:d9d5cc [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "clay [Mesh: facade,featureId,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 13,
+              "spare": 2
+            },
+            "design-white [Mesh: normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 11
+            },
+            "fences|svf|horizon|2000|2000 [Mesh: normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-flag-cloth [Mesh: color,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 7,
+              "spare": 8
+            },
+            "furniture-flush [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-glow [Mesh: color,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-hands [Mesh: faceSide,handKind,handPivot,iMat0,iMat1,iMat2,iMat3,position] perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 2,
+              "spare": 13
+            },
+            "furniture-matte [Mesh: color,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "ground-plate [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "kerbs|svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-glow [Mesh: iMat0,iMat1,iMat2,iMat3,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 3,
+              "spare": 13
+            },
+            "lamp-head [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-mirror [Mesh: iMat0,iMat1,iMat2,iMat3,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-pool [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-post [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "low-vegetation-hedge [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 6,
+              "spare": 10
+            },
+            "MeshBasicNodeMaterial [Mesh: normal,position] perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 2,
+              "spare": 14
+            },
+            "MeshBasicNodeMaterial [Mesh: position] perspective": {
+              "vertexBuffers": 1,
+              "attributes": 1,
+              "interStage": 1,
+              "spare": 14
+            },
+            "MeshStandardNodeMaterial [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "monument-clay [Mesh: iColor,iFinish,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 7,
+              "spare": 9
+            },
+            "monument-clay [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 5,
+              "spare": 11
+            },
+            "monument-clay [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "monument-lit-clay [Mesh: aLift,aTint,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 7,
+              "spare": 9
+            },
+            "monument-spray [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 10
+            },
+            "monument-water [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "NodeMaterial [Mesh: normal,position,uv] perspective": {
+              "vertexBuffers": 1,
+              "attributes": 1,
+              "interStage": 5,
+              "spare": 11
+            },
+            "rail-sleepers [Mesh: aSleeper,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "rail:4a4a50:0.5:-1:true [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:9a8f85:0.9:-1:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:9a8f85:1:-2:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:9ca3ae:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9aab4:0.9:-1:true [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9aab4:0.9:-2:true [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9ada6:0.7:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9b0bb:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:bdbec7:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:c5d3aa:0.9:-1:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:c8c8ce:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:c9b59a:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:cfc9bd:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:d9d5cc:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:d9dde0:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:e4ded2:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:ece7df:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "riverside-wake [Mesh: position,wakeAlong] perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 3,
+              "spare": 13
+            },
+            "sport-frame [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "sport-net [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 11
+            },
+            "stairs|svf|horizon|2000|2000 [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 10
+            },
+            "terrain|ndvi||||||svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "terrain|ndvi||||||svf|horizon|2000|2000|design-cut [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "terrain|ndvi|surface|edges|sport|markings|colonies|svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "terrain|ndvi|surface|edges|sport|markings|colonies|svf|horizon|2000|2000|design-cut [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "traffic-glass [Mesh: normal,position,trafficAcross,trafficCount,trafficLane] perspective": {
+              "vertexBuffers": 5,
+              "attributes": 5,
+              "interStage": 5,
+              "spare": 11
+            },
+            "tram-car:5a6370 [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tram-car:dcd8d0 [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tram-car:livery [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "tram-mast [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tram-trail [Mesh: position,trailAcross,trailFade] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 3,
+              "spare": 13
+            },
+            "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-guard|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 7,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-guard|2000x2000|edges [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 6,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 5,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-plan [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 3,
+              "spare": 13
+            },
+            "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 8,
+              "spare": 8
+            },
+            "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 8,
+              "spare": 8
+            },
+            "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-stake [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 6,
+              "spare": 10
+            },
+            "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "trunk|earth|2000x2000|edges [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 8,
+              "spare": 8
+            },
+            "trunk|earth|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 7,
+              "spare": 9
+            },
+            "vegetation-crown-bare [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "vegetation-crown-leafy [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "vine-rows [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "walls||horizon|2000|2000 [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 10
+            },
+            "window-niche [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 12,
+              "spare": 4
+            },
+            "wire-3816000-0.9 [Mesh: position,wireDir,wireHalf,wireSide] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 3,
+              "spare": 13
+            },
+            "wire-8422800-0.6 [Mesh: position,wireDir,wireHalf,wireSide] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 3,
+              "spare": 13
+            }
+          },
+          "distinct": 88,
+          "keys": 77,
           "families": {
             "bridge-deck": 3,
             "rail": 17,
-            "riverside-column": 2,
             "terrain": 4,
             "tram-car": 3,
             "wire": 2
@@ -5434,60 +5968,65 @@
         },
         "framedBuilds": {
           "ready": {
-            "other": 83,
+            "other": 86,
+            "shadow": 30
+          },
+          "dressed": {
+            "other": 87,
             "shadow": 34
           },
           "end": {
-            "other": 87,
-            "shadow": 52
+            "other": 92,
+            "shadow": 50
           }
         },
         "programs": {
-          "ready": 161,
+          "ready": 164,
+          "dressed": 206,
           "end": 216
         },
         "compileWaits": {
           "compile:call": {
-            "count": 531,
-            "totalMs": 173269.1,
-            "meanMs": 326.3,
-            "maxMs": 12093.6
+            "count": 250,
+            "totalMs": 19172.3,
+            "meanMs": 76.7,
+            "maxMs": 13990.7
           },
           "compile:turn-wait": {
-            "count": 530,
-            "totalMs": 26801202.8,
-            "meanMs": 50568.3,
-            "maxMs": 164028.4
+            "count": 250,
+            "totalMs": 177366.5,
+            "meanMs": 709.5,
+            "maxMs": 143509.9
           },
           "dressing:compile": {
             "count": 11,
-            "totalMs": 11563,
-            "meanMs": 1051.2,
-            "maxMs": 3559.4
+            "totalMs": 13806.6,
+            "meanMs": 1255.1,
+            "maxMs": 3734.7
           },
           "dressing:queue-wait": {
             "count": 11,
-            "totalMs": 3731.2,
-            "meanMs": 339.2,
-            "maxMs": 14441.6
+            "totalMs": 299.5,
+            "meanMs": 27.2,
+            "maxMs": 14324.9
           },
           "tile:compile": {
             "count": 19,
-            "totalMs": 12573.9,
-            "meanMs": 661.8,
-            "maxMs": 3435.2
+            "totalMs": 14777.5,
+            "meanMs": 777.8,
+            "maxMs": 3371.4
           },
           "traffic:compile": {
-            "count": 19,
-            "totalMs": 34815.6,
-            "meanMs": 1832.4,
-            "maxMs": 3416.2
+            "count": 11,
+            "totalMs": 7605.2,
+            "meanMs": 691.4,
+            "maxMs": 3001.1
           },
           "traffic:queue-wait": {
-            "count": 19,
-            "totalMs": 89247.7,
-            "meanMs": 4697.2,
-            "maxMs": 21919.1
+            "count": 11,
+            "totalMs": 2301.4,
+            "meanMs": 209.2,
+            "maxMs": 21800.2
           }
         },
         "limits": {
@@ -5542,29 +6081,376 @@
           {
             "name": "overview",
             "settled": true,
-            "waitedMs": 34258,
+            "waitedMs": 2027,
             "rows": 19,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "33340_5678_2_sn",
             "settled": true,
-            "waitedMs": 2027,
+            "waitedMs": 2035,
             "rows": 60,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "33342_5678_2_sn",
             "settled": true,
-            "waitedMs": 2026,
+            "waitedMs": 2028,
             "rows": 48,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           }
         ],
         "builds": {
+          "rows": {
+            "bridge-deck:path:e0cda8 [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:rail:b2a9a0 [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:road:c8c8ce [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-stone:d9d5cc [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "clay [Mesh: facade,featureId,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 13,
+              "spare": 2
+            },
+            "fences|svf|horizon|2000|2000 [Mesh: normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-flush [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-matte [Mesh: color,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "ground-plate [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "kerbs|svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-glow [Mesh: iMat0,iMat1,iMat2,iMat3,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 3,
+              "spare": 13
+            },
+            "lamp-head [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-mirror [Mesh: iMat0,iMat1,iMat2,iMat3,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-pool [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-post [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "low-vegetation-hedge [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 6,
+              "spare": 10
+            },
+            "MeshBasicNodeMaterial [Mesh: normal,position] perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 2,
+              "spare": 14
+            },
+            "MeshBasicNodeMaterial [Mesh: position] perspective": {
+              "vertexBuffers": 1,
+              "attributes": 1,
+              "interStage": 1,
+              "spare": 14
+            },
+            "MeshStandardNodeMaterial [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "monument-clay [Mesh: iColor,iFinish,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 7,
+              "spare": 9
+            },
+            "monument-clay [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 5,
+              "spare": 11
+            },
+            "monument-clay [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "monument-lit-clay [Mesh: aLift,aTint,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 7,
+              "spare": 9
+            },
+            "monument-spray [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 10
+            },
+            "monument-water [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "NodeMaterial [Mesh: normal,position,uv] perspective": {
+              "vertexBuffers": 1,
+              "attributes": 1,
+              "interStage": 5,
+              "spare": 11
+            },
+            "rail-sleepers [Mesh: aSleeper,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "rail:4a4a50:0.5:-1:true [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:9a8f85:1:-2:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:d9dde0:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "sport-frame [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "stairs|svf|horizon|2000|2000 [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 10
+            },
+            "terrain|ndvi||||||svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "terrain|ndvi|surface|edges|sport|markings|colonies|svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "traffic-glass [Mesh: normal,position,trafficAcross,trafficCount,trafficLane] perspective": {
+              "vertexBuffers": 5,
+              "attributes": 5,
+              "interStage": 5,
+              "spare": 11
+            },
+            "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-guard|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 7,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-guard|2000x2000|edges [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 6,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 5,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-plan [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 3,
+              "spare": 13
+            },
+            "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 8,
+              "spare": 8
+            },
+            "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 8,
+              "spare": 8
+            },
+            "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-shade|evergreen|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 6,
+              "spare": 10
+            },
+            "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "trunk|earth|2000x2000|edges [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 8,
+              "spare": 8
+            },
+            "trunk|earth|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 7,
+              "spare": 9
+            },
+            "trunk|evergreen|earth|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 7,
+              "spare": 9
+            },
+            "vegetation-crown-bare [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "vegetation-crown-leafy [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "walls||horizon|2000|2000 [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 10
+            },
+            "window-niche [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 12,
+              "spare": 4
+            },
+            "wire-3816000-0.9 [Mesh: position,wireDir,wireHalf,wireSide] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 3,
+              "spare": 13
+            }
+          },
           "distinct": 57,
           "keys": 47,
           "families": {
@@ -5577,42 +6463,35 @@
         },
         "framedBuilds": {
           "ready": {
-            "other": 73,
-            "shadow": 23
+            "other": 72,
+            "shadow": 19
+          },
+          "dressed": {
+            "other": 72,
+            "shadow": 27
           },
           "end": {
-            "other": 73,
-            "shadow": 27
+            "other": 72,
+            "shadow": 28
           }
         },
         "programs": {
-          "ready": 151,
-          "end": 182
+          "ready": 147,
+          "dressed": 186,
+          "end": 186
         },
         "compileWaits": {
           "compile:call": {
-            "count": 132,
-            "totalMs": 46223.5,
-            "meanMs": 350.2,
-            "maxMs": 17275.4
+            "count": 1,
+            "totalMs": 53.8,
+            "meanMs": 53.8,
+            "maxMs": 17248.9
           },
           "compile:turn-wait": {
-            "count": 131,
-            "totalMs": 4228970.8,
-            "meanMs": 32282.2,
-            "maxMs": 49852.9
-          },
-          "traffic:compile": {
-            "count": 4,
-            "totalMs": 12000.9,
-            "meanMs": 3000.2,
-            "maxMs": 3000.3
-          },
-          "traffic:queue-wait": {
-            "count": 4,
-            "totalMs": 18232.8,
-            "meanMs": 4558.2,
-            "maxMs": 9142.8
+            "count": 1,
+            "totalMs": 81.4,
+            "meanMs": 81.4,
+            "maxMs": 83997.6
           }
         },
         "limits": {
@@ -5663,45 +6542,514 @@
           {
             "name": "overview",
             "settled": true,
-            "waitedMs": 38388,
+            "waitedMs": 6078,
             "rows": 21,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "32564_5934_2_hh",
             "settled": true,
-            "waitedMs": 2032,
+            "waitedMs": 2027,
             "rows": 78,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "32566_5932_2_hh",
             "settled": true,
-            "waitedMs": 6065,
+            "waitedMs": 8940,
             "rows": 79,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "32564_5932_2_hh",
             "settled": true,
-            "waitedMs": 8078,
+            "waitedMs": 8141,
             "rows": 73,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "32566_5934_2_hh",
             "settled": true,
-            "waitedMs": 2031,
+            "waitedMs": 2025,
             "rows": 77,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           }
         ],
         "builds": {
+          "rows": {
+            "bike-glass [Mesh: bikeRate,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 5,
+              "spare": 11
+            },
+            "bike-pool [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 5,
+              "spare": 11
+            },
+            "bridge-deck:path:e0cda8 [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:rail:b2a9a0 [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:rail:b2a9a0 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "bridge-deck:road:c8c8ce [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-stone:d9d5cc [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "clay [Mesh: facade,featureId,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 13,
+              "spare": 2
+            },
+            "clay|niches [Mesh: facade,featureId,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 13,
+              "spare": 2
+            },
+            "fences|svf|horizon|2000|2000 [Mesh: normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-flag-cloth [Mesh: color,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 7,
+              "spare": 8
+            },
+            "furniture-flush [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-glow [Mesh: color,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-hands [Mesh: faceSide,handKind,handPivot,iMat0,iMat1,iMat2,iMat3,position] perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 2,
+              "spare": 13
+            },
+            "furniture-matte [Mesh: color,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "ground-plate [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "kerbs|svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-glow [Mesh: iMat0,iMat1,iMat2,iMat3,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 3,
+              "spare": 13
+            },
+            "lamp-head [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-mirror [Mesh: iMat0,iMat1,iMat2,iMat3,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-pool [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-post [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "low-vegetation-hedge [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 6,
+              "spare": 10
+            },
+            "MeshBasicNodeMaterial [Mesh: normal,position] perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 2,
+              "spare": 14
+            },
+            "MeshBasicNodeMaterial [Mesh: position] perspective": {
+              "vertexBuffers": 1,
+              "attributes": 1,
+              "interStage": 1,
+              "spare": 14
+            },
+            "MeshStandardNodeMaterial [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "monument-clay [Mesh: iColor,iFinish,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 7,
+              "spare": 9
+            },
+            "monument-clay [Mesh: iFinish,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "monument-clay [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 5,
+              "spare": 11
+            },
+            "monument-clay [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "monument-spray [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 10
+            },
+            "monument-water [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "NodeMaterial [Mesh: normal,position,uv] perspective": {
+              "vertexBuffers": 1,
+              "attributes": 1,
+              "interStage": 5,
+              "spare": 11
+            },
+            "rail-sleepers [Mesh: aSleeper,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "rail:4a4a50:0.5:-1:true [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:9a8f85:1:-2:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:9ca3ae:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9ada6:0.7:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9b0bb:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:bdbec7:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:c9b59a:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:cfc9bd:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:d9dde0:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:e4ded2:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:ece7df:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "riverside-column:b5ac9f [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "riverside-column:bdbec7 [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "riverside-wake [Mesh: position,wakeAlong] perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 3,
+              "spare": 13
+            },
+            "sport-frame [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "sport-net [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 11
+            },
+            "stairs|svf|horizon|2000|2000 [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 10
+            },
+            "terrain|ndvi||||||svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "terrain|ndvi|surface|edges|sport|markings||svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "traffic-glass [Mesh: normal,position,trafficAcross,trafficCount,trafficLane] perspective": {
+              "vertexBuffers": 5,
+              "attributes": 5,
+              "interStage": 5,
+              "spare": 11
+            },
+            "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-guard|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 7,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-guard|2000x2000|edges [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 6,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 5,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-plan [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 3,
+              "spare": 13
+            },
+            "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 8,
+              "spare": 8
+            },
+            "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 8,
+              "spare": 8
+            },
+            "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-stake [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 6,
+              "spare": 10
+            },
+            "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "trunk|earth|2000x2000|edges [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 8,
+              "spare": 8
+            },
+            "trunk|earth|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 7,
+              "spare": 9
+            },
+            "vegetation-crown-bare [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "vegetation-crown-leafy [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "vine-rows [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "walls||horizon|2000|2000 [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 10
+            },
+            "window-niche [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 12,
+              "spare": 4
+            },
+            "wire-3816000-0.9 [Mesh: position,wireDir,wireHalf,wireSide] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 3,
+              "spare": 13
+            },
+            "wire-8422800-0.6 [Mesh: position,wireDir,wireHalf,wireSide] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 3,
+              "spare": 13
+            }
+          },
           "distinct": 77,
           "keys": 65,
           "families": {
@@ -5715,60 +7063,65 @@
         },
         "framedBuilds": {
           "ready": {
-            "other": 77,
-            "shadow": 27
+            "other": 78,
+            "shadow": 29
+          },
+          "dressed": {
+            "other": 78,
+            "shadow": 31
           },
           "end": {
-            "other": 82,
+            "other": 80,
             "shadow": 40
           }
         },
         "programs": {
-          "ready": 154,
+          "ready": 158,
+          "dressed": 198,
           "end": 206
         },
         "compileWaits": {
           "compile:call": {
-            "count": 355,
-            "totalMs": 50006.9,
-            "meanMs": 140.9,
-            "maxMs": 11879.5
+            "count": 155,
+            "totalMs": 21186.6,
+            "meanMs": 136.7,
+            "maxMs": 12347.8
           },
           "compile:turn-wait": {
-            "count": 354,
-            "totalMs": 4983282.1,
-            "meanMs": 14077.1,
-            "maxMs": 33997
+            "count": 155,
+            "totalMs": 238207.1,
+            "meanMs": 1536.8,
+            "maxMs": 107693.2
           },
           "dressing:compile": {
             "count": 4,
-            "totalMs": 12001.6,
-            "meanMs": 3000.4,
-            "maxMs": 3793.6
+            "totalMs": 6951.2,
+            "meanMs": 1737.8,
+            "maxMs": 4102.6
           },
           "dressing:queue-wait": {
             "count": 4,
-            "totalMs": 25.7,
-            "meanMs": 6.4,
-            "maxMs": 11639.9
+            "totalMs": 41.8,
+            "meanMs": 10.4,
+            "maxMs": 11465.8
           },
           "tile:compile": {
             "count": 6,
-            "totalMs": 16232.3,
-            "meanMs": 2705.4,
-            "maxMs": 3361.5
+            "totalMs": 7393.4,
+            "meanMs": 1232.2,
+            "maxMs": 3278.7
           },
           "traffic:compile": {
-            "count": 8,
-            "totalMs": 21840.6,
-            "meanMs": 2730.1,
-            "maxMs": 3000.4
+            "count": 4,
+            "totalMs": 5697.9,
+            "meanMs": 1424.5,
+            "maxMs": 3000.3
           },
           "traffic:queue-wait": {
-            "count": 8,
-            "totalMs": 21169.5,
-            "meanMs": 2646.2,
-            "maxMs": 9333.3
+            "count": 4,
+            "totalMs": 0.2,
+            "meanMs": 0,
+            "maxMs": 9240.4
           }
         },
         "limits": {
@@ -5823,45 +7176,532 @@
           {
             "name": "overview",
             "settled": true,
-            "waitedMs": 38346,
+            "waitedMs": 2024,
             "rows": 19,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "33316_5690_2_sn",
             "settled": true,
-            "waitedMs": 2047,
+            "waitedMs": 2052,
             "rows": 80,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "33318_5688_2_sn",
             "settled": true,
-            "waitedMs": 8092,
+            "waitedMs": 6097,
             "rows": 69,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "33318_5690_2_sn",
             "settled": true,
-            "waitedMs": 4063,
+            "waitedMs": 2118,
             "rows": 69,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "33316_5688_2_sn",
             "settled": true,
-            "waitedMs": 6066,
+            "waitedMs": 8085,
             "rows": 71,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           }
         ],
         "builds": {
+          "rows": {
+            "bridge-deck:other:d9d5cc [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:path:e0cda8 [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:rail:b2a9a0 [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:road:c8c8ce [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-stone:d9d5cc [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "clay [Mesh: facade,featureId,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 13,
+              "spare": 2
+            },
+            "fences|svf|horizon|2000|2000 [Mesh: normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-flag-cloth [Mesh: color,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 7,
+              "spare": 8
+            },
+            "furniture-flush [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-hands [Mesh: faceSide,handKind,handPivot,iMat0,iMat1,iMat2,iMat3,position] perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 2,
+              "spare": 13
+            },
+            "furniture-matte [Mesh: color,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "ground-plate [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "kerbs|svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-glow [Mesh: iMat0,iMat1,iMat2,iMat3,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 3,
+              "spare": 13
+            },
+            "lamp-head [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-mirror [Mesh: iMat0,iMat1,iMat2,iMat3,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-pool [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-post [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "low-vegetation-hedge [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 6,
+              "spare": 10
+            },
+            "MeshBasicNodeMaterial [Mesh: normal,position] perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 2,
+              "spare": 14
+            },
+            "MeshBasicNodeMaterial [Mesh: position] perspective": {
+              "vertexBuffers": 1,
+              "attributes": 1,
+              "interStage": 1,
+              "spare": 14
+            },
+            "MeshStandardNodeMaterial [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "monument-clay [Mesh: iColor,iFinish,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 7,
+              "spare": 9
+            },
+            "monument-clay [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 5,
+              "spare": 11
+            },
+            "monument-clay [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "monument-lit-clay [Mesh: aLift,aTint,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 7,
+              "spare": 9
+            },
+            "monument-spray [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 10
+            },
+            "monument-water [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "NodeMaterial [Mesh: normal,position,uv] perspective": {
+              "vertexBuffers": 1,
+              "attributes": 1,
+              "interStage": 5,
+              "spare": 11
+            },
+            "rail-sleepers [Mesh: aSleeper,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "rail:4a4a50:0.5:-1:true [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:9a8f85:1:-2:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:9ca3ae:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9aab4:0.9:-1:true [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9aab4:0.9:-2:true [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9ada6:0.7:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9b0bb:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:bdbec7:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:c5d3aa:0.9:-1:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:c8c8ce:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:c9b59a:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:cfc9bd:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:d9d5cc:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:d9dde0:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:e4ded2:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:ece7df:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "riverside-column:b5ac9f [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "riverside-column:bdbec7 [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "sport-frame [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "sport-net [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 11
+            },
+            "stairs|svf|horizon|2000|2000 [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 10
+            },
+            "terrain|ndvi||||||svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "terrain|ndvi|surface|edges|sport|markings|colonies|svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tram-car:5a6370 [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tram-car:dcd8d0 [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tram-car:livery [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "tram-mast [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tram-trail [Mesh: position,trailAcross,trailFade] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 3,
+              "spare": 13
+            },
+            "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-guard|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 7,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-guard|2000x2000|edges [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 6,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 5,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-plan [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 3,
+              "spare": 13
+            },
+            "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 8,
+              "spare": 8
+            },
+            "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 8,
+              "spare": 8
+            },
+            "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-stake [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 6,
+              "spare": 10
+            },
+            "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "trunk|earth|2000x2000|edges [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 8,
+              "spare": 8
+            },
+            "trunk|earth|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 7,
+              "spare": 9
+            },
+            "vegetation-crown-bare [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "vegetation-crown-leafy [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "walls||horizon|2000|2000 [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 10
+            },
+            "window-niche [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 12,
+              "spare": 4
+            },
+            "wire-3816000-0.9 [Mesh: position,wireDir,wireHalf,wireSide] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 3,
+              "spare": 13
+            },
+            "wire-8422800-0.6 [Mesh: position,wireDir,wireHalf,wireSide] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 3,
+              "spare": 13
+            }
+          },
           "distinct": 80,
           "keys": 70,
           "families": {
@@ -5875,48 +7715,53 @@
         },
         "framedBuilds": {
           "ready": {
-            "other": 73,
-            "shadow": 27
+            "other": 74,
+            "shadow": 28
+          },
+          "dressed": {
+            "other": 74,
+            "shadow": 31
           },
           "end": {
-            "other": 74,
-            "shadow": 36
+            "other": 76,
+            "shadow": 38
           }
         },
         "programs": {
           "ready": 156,
+          "dressed": 191,
           "end": 195
         },
         "compileWaits": {
           "compile:call": {
-            "count": 314,
-            "totalMs": 61162.8,
-            "meanMs": 194.8,
-            "maxMs": 15056.6
+            "count": 167,
+            "totalMs": 16574.6,
+            "meanMs": 99.2,
+            "maxMs": 19451.8
           },
           "compile:turn-wait": {
-            "count": 313,
-            "totalMs": 3759617.7,
-            "meanMs": 12011.6,
-            "maxMs": 46317.7
+            "count": 167,
+            "totalMs": 270569.9,
+            "meanMs": 1620.2,
+            "maxMs": 99308.3
           },
           "dressing:compile": {
             "count": 3,
-            "totalMs": 6726.2,
-            "meanMs": 2242.1,
-            "maxMs": 3009
+            "totalMs": 6751.3,
+            "meanMs": 2250.4,
+            "maxMs": 3030.1
           },
           "dressing:queue-wait": {
             "count": 3,
-            "totalMs": 45.1,
-            "meanMs": 15,
-            "maxMs": 13542
+            "totalMs": 37.4,
+            "meanMs": 12.5,
+            "maxMs": 13122.4
           },
           "tile:compile": {
             "count": 3,
-            "totalMs": 3256.7,
-            "meanMs": 1085.6,
-            "maxMs": 3499.6
+            "totalMs": 6130.6,
+            "meanMs": 2043.5,
+            "maxMs": 3009.8
           }
         },
         "limits": {
@@ -5966,21 +7811,433 @@
           {
             "name": "overview",
             "settled": true,
-            "waitedMs": 26257,
+            "waitedMs": 2021,
             "rows": 17,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "33392_5668_2_sn",
             "settled": true,
-            "waitedMs": 2045,
+            "waitedMs": 2035,
             "rows": 68,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           }
         ],
         "builds": {
+          "rows": {
+            "bridge-deck:path:e0cda8 [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:rail:b2a9a0 [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:rail:b2a9a0 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "bridge-deck:road:c8c8ce [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-stone:d9d5cc [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "clay [Mesh: facade,featureId,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 13,
+              "spare": 2
+            },
+            "fences|svf|horizon|2000|2000 [Mesh: normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-flush [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-matte [Mesh: color,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "ground-plate [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "kerbs|svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-glow [Mesh: iMat0,iMat1,iMat2,iMat3,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 3,
+              "spare": 13
+            },
+            "lamp-head [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-mirror [Mesh: iMat0,iMat1,iMat2,iMat3,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-pool [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-post [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "low-vegetation-hedge [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 6,
+              "spare": 10
+            },
+            "MeshBasicNodeMaterial [Mesh: normal,position] perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 2,
+              "spare": 14
+            },
+            "MeshBasicNodeMaterial [Mesh: position] perspective": {
+              "vertexBuffers": 1,
+              "attributes": 1,
+              "interStage": 1,
+              "spare": 14
+            },
+            "MeshStandardNodeMaterial [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "monument-clay [Mesh: iColor,iFinish,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 7,
+              "spare": 9
+            },
+            "monument-clay [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "monument-spray [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 10
+            },
+            "monument-water [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "NodeMaterial [Mesh: normal,position,uv] perspective": {
+              "vertexBuffers": 1,
+              "attributes": 1,
+              "interStage": 5,
+              "spare": 11
+            },
+            "rail-sleepers [Mesh: aSleeper,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "rail:4a4a50:0.5:-1:true [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:9a8f85:1:-2:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:9ca3ae:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9ada6:0.7:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:bdbec7:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:c9b59a:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:cfc9bd:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:d9dde0:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:e4ded2:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "riverside-column:b5ac9f [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "riverside-column:bdbec7 [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "riverside-wake [Mesh: position,wakeAlong] perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 3,
+              "spare": 13
+            },
+            "sport-frame [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "sport-net [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 11
+            },
+            "stairs|svf|horizon|2000|2000 [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 10
+            },
+            "terrain|ndvi||||||svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "terrain|ndvi|surface|edges|sport|markings|colonies|svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "traffic-glass [Mesh: normal,position,trafficAcross,trafficCount,trafficLane] perspective": {
+              "vertexBuffers": 5,
+              "attributes": 5,
+              "interStage": 5,
+              "spare": 11
+            },
+            "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-guard|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 7,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-guard|2000x2000|edges [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 6,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 5,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-plan [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 3,
+              "spare": 13
+            },
+            "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 8,
+              "spare": 8
+            },
+            "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 8,
+              "spare": 8
+            },
+            "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-shade|evergreen|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 6,
+              "spare": 10
+            },
+            "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "trunk|earth|2000x2000|edges [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 8,
+              "spare": 8
+            },
+            "trunk|earth|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 7,
+              "spare": 9
+            },
+            "trunk|evergreen|earth|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 7,
+              "spare": 9
+            },
+            "vegetation-crown-bare [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "vegetation-crown-leafy [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "vine-rows [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "walls||horizon|2000|2000 [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 10
+            },
+            "window-niche [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 12,
+              "spare": 4
+            },
+            "wire-3816000-0.9 [Mesh: position,wireDir,wireHalf,wireSide] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 3,
+              "spare": 13
+            },
+            "wire-8422800-0.6 [Mesh: position,wireDir,wireHalf,wireSide] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 3,
+              "spare": 13
+            }
+          },
           "distinct": 68,
           "keys": 58,
           "families": {
@@ -5998,39 +8255,32 @@
             "other": 67,
             "shadow": 20
           },
+          "dressed": {
+            "other": 67,
+            "shadow": 24
+          },
           "end": {
-            "other": 74,
+            "other": 67,
             "shadow": 27
           }
         },
         "programs": {
           "ready": 152,
-          "end": 189
+          "dressed": 189,
+          "end": 191
         },
         "compileWaits": {
           "compile:call": {
-            "count": 126,
-            "totalMs": 32553.2,
-            "meanMs": 258.4,
-            "maxMs": 14452
+            "count": 1,
+            "totalMs": 123.5,
+            "meanMs": 123.5,
+            "maxMs": 15148.8
           },
           "compile:turn-wait": {
-            "count": 125,
-            "totalMs": 2752808.3,
-            "meanMs": 22022.5,
-            "maxMs": 37700.4
-          },
-          "traffic:compile": {
-            "count": 2,
-            "totalMs": 6000.7,
-            "meanMs": 3000.4,
-            "maxMs": 3000.5
-          },
-          "traffic:queue-wait": {
-            "count": 2,
-            "totalMs": 3094.6,
-            "meanMs": 1547.3,
-            "maxMs": 3094.3
+            "count": 1,
+            "totalMs": 45,
+            "meanMs": 45,
+            "maxMs": 98069.7
           }
         },
         "limits": {
@@ -6081,9 +8331,10 @@
           {
             "name": "overview",
             "settled": true,
-            "waitedMs": 52489,
+            "waitedMs": 6055,
             "rows": 22,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
@@ -6092,34 +8343,478 @@
             "waitedMs": 2035,
             "rows": 70,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "32692_5332_2_by",
             "settled": true,
-            "waitedMs": 6061,
+            "waitedMs": 8085,
             "rows": 77,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "32692_5334_2_by",
             "settled": true,
-            "waitedMs": 2044,
+            "waitedMs": 2029,
             "rows": 65,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "32690_5332_2_by",
             "settled": true,
-            "waitedMs": 2062,
+            "waitedMs": 2110,
             "rows": 64,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           }
         ],
         "builds": {
+          "rows": {
+            "bridge-deck:path:e0cda8 [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:rail:b2a9a0 [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:rail:b2a9a0 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "bridge-deck:road:c8c8ce [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-stone:d9d5cc [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "clay [Mesh: facade,featureId,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 13,
+              "spare": 2
+            },
+            "fences|svf|horizon|2000|2000 [Mesh: normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-flag-cloth [Mesh: color,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 7,
+              "spare": 8
+            },
+            "furniture-flush [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-glow [Mesh: color,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-hands [Mesh: faceSide,handKind,handPivot,iMat0,iMat1,iMat2,iMat3,position] perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 2,
+              "spare": 13
+            },
+            "furniture-matte [Mesh: color,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "ground-plate [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "kerbs|svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-glow [Mesh: iMat0,iMat1,iMat2,iMat3,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 3,
+              "spare": 13
+            },
+            "lamp-head [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-mirror [Mesh: iMat0,iMat1,iMat2,iMat3,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-pool [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-post [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "low-vegetation-hedge [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 6,
+              "spare": 10
+            },
+            "MeshBasicNodeMaterial [Mesh: normal,position] perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 2,
+              "spare": 14
+            },
+            "MeshBasicNodeMaterial [Mesh: position] perspective": {
+              "vertexBuffers": 1,
+              "attributes": 1,
+              "interStage": 1,
+              "spare": 14
+            },
+            "MeshStandardNodeMaterial [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "monument-clay [Mesh: iColor,iFinish,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 7,
+              "spare": 9
+            },
+            "monument-clay [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 5,
+              "spare": 11
+            },
+            "monument-clay [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "monument-lit-clay [Mesh: aLift,aTint,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 7,
+              "spare": 9
+            },
+            "monument-spray [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 10
+            },
+            "monument-water [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "NodeMaterial [Mesh: normal,position,uv] perspective": {
+              "vertexBuffers": 1,
+              "attributes": 1,
+              "interStage": 5,
+              "spare": 11
+            },
+            "rail-sleepers [Mesh: aSleeper,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "rail:4a4a50:0.5:-1:true [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:9a8f85:1:-2:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9aab4:0.9:-1:true [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9aab4:0.9:-2:true [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9ada6:0.7:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:c5d3aa:0.9:-1:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:c8c8ce:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:cfc9bd:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:d9d5cc:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:d9dde0:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "sport-frame [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "sport-net [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 11
+            },
+            "stairs|svf|horizon|2000|2000 [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 10
+            },
+            "terrain|ndvi||||||svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "terrain|ndvi|surface|edges|sport|markings||svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "terrain|ndvi|surface|edges|sport|markings|colonies|svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tram-car:5a6370 [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tram-car:dcd8d0 [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tram-car:livery [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "tram-mast [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tram-trail [Mesh: position,trailAcross,trailFade] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 3,
+              "spare": 13
+            },
+            "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-guard|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 7,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-guard|2000x2000|edges [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 6,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 5,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-plan [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 3,
+              "spare": 13
+            },
+            "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 8,
+              "spare": 8
+            },
+            "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 8,
+              "spare": 8
+            },
+            "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 6,
+              "spare": 10
+            },
+            "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "trunk|earth|2000x2000|edges [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 8,
+              "spare": 8
+            },
+            "trunk|earth|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 7,
+              "spare": 9
+            },
+            "vegetation-crown-bare [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "vegetation-crown-leafy [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "walls||horizon|2000|2000 [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 10
+            },
+            "window-niche [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 12,
+              "spare": 4
+            },
+            "wire-3816000-0.9 [Mesh: position,wireDir,wireHalf,wireSide] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 3,
+              "spare": 13
+            },
+            "wire-8422800-0.6 [Mesh: position,wireDir,wireHalf,wireSide] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 3,
+              "spare": 13
+            }
+          },
           "distinct": 73,
           "keys": 62,
           "families": {
@@ -6132,48 +8827,53 @@
         },
         "framedBuilds": {
           "ready": {
-            "other": 69,
-            "shadow": 24
+            "other": 70,
+            "shadow": 26
+          },
+          "dressed": {
+            "other": 70,
+            "shadow": 28
           },
           "end": {
-            "other": 79,
-            "shadow": 34
+            "other": 73,
+            "shadow": 36
           }
         },
         "programs": {
-          "ready": 150,
-          "end": 199
+          "ready": 152,
+          "dressed": 197,
+          "end": 201
         },
         "compileWaits": {
           "compile:call": {
-            "count": 292,
-            "totalMs": 62260.9,
-            "meanMs": 213.2,
-            "maxMs": 14393.3
+            "count": 138,
+            "totalMs": 13075.7,
+            "meanMs": 94.8,
+            "maxMs": 17703
           },
           "compile:turn-wait": {
-            "count": 291,
-            "totalMs": 6241323.9,
-            "meanMs": 21447.8,
-            "maxMs": 50841.4
+            "count": 138,
+            "totalMs": 442281,
+            "meanMs": 3204.9,
+            "maxMs": 109270.8
           },
           "dressing:compile": {
-            "count": 3,
-            "totalMs": 6446.9,
-            "meanMs": 2149,
-            "maxMs": 3326.2
+            "count": 4,
+            "totalMs": 8879.8,
+            "meanMs": 2219.9,
+            "maxMs": 3683.2
           },
           "dressing:queue-wait": {
-            "count": 3,
-            "totalMs": 44.1,
-            "meanMs": 14.7,
-            "maxMs": 14298.3
+            "count": 4,
+            "totalMs": 92.3,
+            "meanMs": 23.1,
+            "maxMs": 13665
           },
           "tile:compile": {
-            "count": 4,
-            "totalMs": 10559.8,
-            "meanMs": 2640,
-            "maxMs": 3300.8
+            "count": 6,
+            "totalMs": 7869.1,
+            "meanMs": 1311.5,
+            "maxMs": 3034.8
           }
         },
         "limits": {
@@ -6223,29 +8923,418 @@
           {
             "name": "overview",
             "settled": true,
-            "waitedMs": 30253,
+            "waitedMs": 2031,
             "rows": 16,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "32408_5710_2_nw",
             "settled": true,
-            "waitedMs": 2032,
+            "waitedMs": 2028,
             "rows": 62,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           },
           {
             "name": "32408_5708_2_nw",
             "settled": true,
-            "waitedMs": 2026,
+            "waitedMs": 2071,
             "rows": 55,
             "left": 0,
+            "unread": 0,
             "probeBuilt": 0
           }
         ],
         "builds": {
+          "rows": {
+            "bridge-deck:path:e0cda8 [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:rail:b2a9a0 [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-deck:rail:b2a9a0 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "bridge-deck:road:c8c8ce [Mesh: aDeck,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 6,
+              "spare": 10
+            },
+            "bridge-stone:d9d5cc [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "clay [Mesh: facade,featureId,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 13,
+              "spare": 2
+            },
+            "fences|svf|horizon|2000|2000 [Mesh: normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-flush [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "furniture-matte [Mesh: color,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 11
+            },
+            "ground-plate [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "kerbs|svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-glow [Mesh: iMat0,iMat1,iMat2,iMat3,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 3,
+              "spare": 13
+            },
+            "lamp-head [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-mirror [Mesh: iMat0,iMat1,iMat2,iMat3,position,uv] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-pool [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 4,
+              "spare": 12
+            },
+            "lamp-post [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "low-vegetation-hedge [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 6,
+              "spare": 10
+            },
+            "MeshBasicNodeMaterial [Mesh: normal,position] perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 2,
+              "spare": 14
+            },
+            "MeshBasicNodeMaterial [Mesh: position] perspective": {
+              "vertexBuffers": 1,
+              "attributes": 1,
+              "interStage": 1,
+              "spare": 14
+            },
+            "MeshStandardNodeMaterial [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "monument-clay [Mesh: iColor,iFinish,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 7,
+              "spare": 9
+            },
+            "monument-clay [Mesh: iFinish,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "monument-clay [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 5,
+              "spare": 11
+            },
+            "monument-clay [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 5,
+              "spare": 11
+            },
+            "monument-lit-clay [Mesh: aLift,aTint,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 7,
+              "spare": 9
+            },
+            "monument-spray [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 5,
+              "spare": 10
+            },
+            "monument-water [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "NodeMaterial [Mesh: normal,position,uv] perspective": {
+              "vertexBuffers": 1,
+              "attributes": 1,
+              "interStage": 5,
+              "spare": 11
+            },
+            "rail-sleepers [Mesh: aSleeper,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 11
+            },
+            "rail:4a4a50:0.5:-1:true [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:9a8f85:1:-2:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:a9ada6:0.7:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:cfc9bd:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "rail:d9dde0:0.95:0:false [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "sport-frame [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "sport-net [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 11
+            },
+            "stairs|svf|horizon|2000|2000 [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 10
+            },
+            "terrain|ndvi||||||svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "terrain|ndvi|surface|edges|sport|markings||svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "terrain|ndvi|surface|edges|sport|markings|colonies|svf|horizon|2000|2000 [Mesh: normal,position] shadowed perspective": {
+              "vertexBuffers": 2,
+              "attributes": 2,
+              "interStage": 4,
+              "spare": 12
+            },
+            "traffic-glass [Mesh: normal,position,trafficAcross,trafficCount,trafficLane] perspective": {
+              "vertexBuffers": 5,
+              "attributes": 5,
+              "interStage": 5,
+              "spare": 11
+            },
+            "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-earth|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-guard|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 7,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-guard|2000x2000|edges [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 6,
+              "interStage": 4,
+              "spare": 12
+            },
+            "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 6,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-litter|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 5,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-plan [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position] perspective": {
+              "vertexBuffers": 3,
+              "attributes": 6,
+              "interStage": 3,
+              "spare": 13
+            },
+            "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 8,
+              "spare": 8
+            },
+            "tree-ring|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 8,
+              "spare": 8
+            },
+            "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-shade|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-shade|evergreen|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 6,
+              "spare": 10
+            },
+            "tree-tuft|2000x2000|edges|svf|horizon|2000|2000 [Mesh: iMat0,iMat1,iMat2,iMat3,iSlope,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "trunk|earth|2000x2000|edges [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 8,
+              "spare": 8
+            },
+            "trunk|earth|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 7,
+              "spare": 9
+            },
+            "trunk|evergreen|earth|2000x2000|edges [Mesh: iDrop,iMat0,iMat1,iMat2,iMat3,normal,position,uv] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 7,
+              "spare": 9
+            },
+            "vegetation-crown-bare [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 5,
+              "attributes": 8,
+              "interStage": 9,
+              "spare": 7
+            },
+            "vegetation-crown-leafy [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 6,
+              "spare": 10
+            },
+            "walls||horizon|2000|2000 [Mesh: color,normal,position] shadowed perspective": {
+              "vertexBuffers": 3,
+              "attributes": 3,
+              "interStage": 5,
+              "spare": 10
+            },
+            "window-niche [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed perspective": {
+              "vertexBuffers": 4,
+              "attributes": 7,
+              "interStage": 12,
+              "spare": 4
+            },
+            "wire-3816000-0.9 [Mesh: position,wireDir,wireHalf,wireSide] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 3,
+              "spare": 13
+            },
+            "wire-8422800-0.6 [Mesh: position,wireDir,wireHalf,wireSide] perspective": {
+              "vertexBuffers": 4,
+              "attributes": 4,
+              "interStage": 3,
+              "spare": 13
+            }
+          },
           "distinct": 64,
           "keys": 52,
           "families": {
@@ -6260,41 +9349,34 @@
         "framedBuilds": {
           "ready": {
             "other": 66,
-            "shadow": 24
+            "shadow": 22
+          },
+          "dressed": {
+            "other": 66,
+            "shadow": 28
           },
           "end": {
-            "other": 74,
+            "other": 66,
             "shadow": 29
           }
         },
         "programs": {
-          "ready": 150,
-          "end": 196
+          "ready": 146,
+          "dressed": 198,
+          "end": 198
         },
         "compileWaits": {
           "compile:call": {
-            "count": 169,
-            "totalMs": 42145.3,
-            "meanMs": 249.4,
-            "maxMs": 11594.9
+            "count": 1,
+            "totalMs": 113.7,
+            "meanMs": 113.7,
+            "maxMs": 17056.7
           },
           "compile:turn-wait": {
-            "count": 168,
-            "totalMs": 4846872.6,
-            "meanMs": 28850.4,
-            "maxMs": 44025.3
-          },
-          "traffic:compile": {
-            "count": 4,
-            "totalMs": 12001.4,
-            "meanMs": 3000.4,
-            "maxMs": 3000.5
-          },
-          "traffic:queue-wait": {
-            "count": 4,
-            "totalMs": 18422.5,
-            "meanMs": 4605.6,
-            "maxMs": 9219.7
+            "count": 1,
+            "totalMs": 107.8,
+            "meanMs": 107.8,
+            "maxMs": 130513.4
           }
         },
         "limits": {
@@ -6346,13 +9428,160 @@
         {
           "name": "modell",
           "settled": true,
-          "waitedMs": 14134,
+          "waitedMs": 12172,
           "rows": 37,
           "left": 0,
+          "unread": 0,
           "probeBuilt": 0
         }
       ],
       "builds": {
+        "rows": {
+          "bike-glass [Mesh: bikeRate,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] parallel": {
+            "vertexBuffers": 5,
+            "attributes": 8,
+            "interStage": 5,
+            "spare": 11
+          },
+          "bike-pool [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] parallel": {
+            "vertexBuffers": 5,
+            "attributes": 8,
+            "interStage": 5,
+            "spare": 11
+          },
+          "bridge-deck:path:e0cda8 [Mesh: aDeck,normal,position] shadowed parallel": {
+            "vertexBuffers": 3,
+            "attributes": 3,
+            "interStage": 5,
+            "spare": 11
+          },
+          "bridge-deck:rail:b2a9a0 [Mesh: aDeck,normal,position] shadowed parallel": {
+            "vertexBuffers": 3,
+            "attributes": 3,
+            "interStage": 5,
+            "spare": 11
+          },
+          "bridge-deck:road:c8c8ce [Mesh: aDeck,normal,position] shadowed parallel": {
+            "vertexBuffers": 3,
+            "attributes": 3,
+            "interStage": 5,
+            "spare": 11
+          },
+          "bridge-stone:d9d5cc [Mesh: normal,position] shadowed parallel": {
+            "vertexBuffers": 2,
+            "attributes": 2,
+            "interStage": 4,
+            "spare": 12
+          },
+          "clay [Mesh: facade,featureId,normal,position] shadowed parallel": {
+            "vertexBuffers": 4,
+            "attributes": 4,
+            "interStage": 12,
+            "spare": 3
+          },
+          "design-white [Mesh: normal,position,uv] shadowed parallel": {
+            "vertexBuffers": 2,
+            "attributes": 2,
+            "interStage": 3,
+            "spare": 12
+          },
+          "ground-plate [Mesh: color,normal,position] shadowed parallel": {
+            "vertexBuffers": 3,
+            "attributes": 3,
+            "interStage": 4,
+            "spare": 12
+          },
+          "MeshBasicNodeMaterial [Mesh: normal,position] parallel": {
+            "vertexBuffers": 2,
+            "attributes": 2,
+            "interStage": 2,
+            "spare": 14
+          },
+          "MeshBasicNodeMaterial [Mesh: position] parallel": {
+            "vertexBuffers": 1,
+            "attributes": 1,
+            "interStage": 1,
+            "spare": 14
+          },
+          "MeshStandardNodeMaterial [Mesh: normal,position] shadowed parallel": {
+            "vertexBuffers": 2,
+            "attributes": 2,
+            "interStage": 3,
+            "spare": 13
+          },
+          "NodeMaterial [Mesh: normal,position,uv] parallel": {
+            "vertexBuffers": 1,
+            "attributes": 1,
+            "interStage": 5,
+            "spare": 11
+          },
+          "rail:d9dde0:0.95:0:false [Mesh: normal,position] shadowed parallel": {
+            "vertexBuffers": 2,
+            "attributes": 2,
+            "interStage": 3,
+            "spare": 13
+          },
+          "terrain|ndvi||||||svf|horizon|2000|2000 [Mesh: normal,position] shadowed parallel": {
+            "vertexBuffers": 2,
+            "attributes": 2,
+            "interStage": 3,
+            "spare": 13
+          },
+          "terrain|ndvi||||||svf|horizon|2000|2000|design-cut [Mesh: normal,position] shadowed parallel": {
+            "vertexBuffers": 2,
+            "attributes": 2,
+            "interStage": 3,
+            "spare": 13
+          },
+          "traffic-glass [Mesh: normal,position,trafficAcross,trafficCount,trafficLane] parallel": {
+            "vertexBuffers": 5,
+            "attributes": 5,
+            "interStage": 5,
+            "spare": 11
+          },
+          "tram-car:5a6370 [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed parallel": {
+            "vertexBuffers": 3,
+            "attributes": 6,
+            "interStage": 3,
+            "spare": 13
+          },
+          "tram-car:dcd8d0 [Mesh: iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed parallel": {
+            "vertexBuffers": 3,
+            "attributes": 6,
+            "interStage": 3,
+            "spare": 13
+          },
+          "tram-car:livery [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed parallel": {
+            "vertexBuffers": 4,
+            "attributes": 7,
+            "interStage": 4,
+            "spare": 12
+          },
+          "tram-trail [Mesh: position,trailAcross,trailFade] parallel": {
+            "vertexBuffers": 3,
+            "attributes": 3,
+            "interStage": 3,
+            "spare": 13
+          },
+          "vegetation-crown-bare [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed parallel": {
+            "vertexBuffers": 5,
+            "attributes": 8,
+            "interStage": 8,
+            "spare": 8
+          },
+          "vegetation-crown-leafy [Mesh: aBare,iColor,iMat0,iMat1,iMat2,iMat3,normal,position,uv] shadowed parallel": {
+            "vertexBuffers": 4,
+            "attributes": 7,
+            "interStage": 5,
+            "spare": 11
+          },
+          "window-niche [Mesh: iColor,iMat0,iMat1,iMat2,iMat3,normal,position] shadowed parallel": {
+            "vertexBuffers": 4,
+            "attributes": 7,
+            "interStage": 11,
+            "spare": 5
+          }
+        },
         "distinct": 24,
         "keys": 23,
         "families": {
@@ -6363,12 +9592,12 @@
       },
       "framedBuilds": {
         "ready": {
-          "other": 87,
-          "shadow": 53
+          "other": 92,
+          "shadow": 51
         },
         "end": {
-          "other": 92,
-          "shadow": 56
+          "other": 97,
+          "shadow": 53
         }
       },
       "programs": {
@@ -6377,46 +9606,46 @@
       },
       "compileWaits": {
         "compile:call": {
-          "count": 67,
-          "totalMs": 84398.7,
-          "meanMs": 1259.7,
-          "maxMs": 57885.4
+          "count": 66,
+          "totalMs": 84290.8,
+          "meanMs": 1277.1,
+          "maxMs": 56640.7
         },
         "compile:turn-wait": {
-          "count": 67,
-          "totalMs": 2755319.9,
-          "meanMs": 41124.2,
-          "maxMs": 164028.4
+          "count": 66,
+          "totalMs": 2817539.5,
+          "meanMs": 42690,
+          "maxMs": 143509.9
         },
         "dressing:compile": {
           "count": 1,
-          "totalMs": 3000.2,
-          "meanMs": 3000.2,
-          "maxMs": 3559.4
+          "totalMs": 3000.7,
+          "meanMs": 3000.7,
+          "maxMs": 3734.7
         },
         "dressing:queue-wait": {
           "count": 1,
           "totalMs": 0.2,
           "meanMs": 0.2,
-          "maxMs": 14441.6
+          "maxMs": 14324.9
         },
         "tile:compile": {
-          "count": 2,
-          "totalMs": 6000.6,
+          "count": 1,
+          "totalMs": 3000.3,
           "meanMs": 3000.3,
-          "maxMs": 3435.2
+          "maxMs": 3371.4
         },
         "traffic:compile": {
           "count": 1,
-          "totalMs": 3000.2,
-          "meanMs": 3000.2,
-          "maxMs": 3416.2
+          "totalMs": 3000.3,
+          "meanMs": 3000.3,
+          "maxMs": 3001.1
         },
         "traffic:queue-wait": {
           "count": 1,
           "totalMs": 0.1,
           "meanMs": 0.1,
-          "maxMs": 21919.1
+          "maxMs": 21800.2
         }
       },
       "limits": {
@@ -6896,53 +10125,53 @@
     "desktop": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 5.6,
-        "maxMs": 5.6
+        "totalMs": 5.1,
+        "maxMs": 5.1
       },
       "boot:frame": {
         "count": 8,
-        "totalMs": 675.3,
-        "maxMs": 508.1
+        "totalMs": 564.6,
+        "maxMs": 501.1
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 605,
-        "maxMs": 605
+        "totalMs": 620.7,
+        "maxMs": 620.7
       },
       "boot:light-wait": {
         "count": 1,
-        "totalMs": 2379.2,
-        "maxMs": 2379.2
+        "totalMs": 1005.9,
+        "maxMs": 1005.9
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 1592,
-        "maxMs": 1592
+        "totalMs": 1594.1,
+        "maxMs": 1594.1
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 405.3,
-        "maxMs": 405.3
+        "totalMs": 367.5,
+        "maxMs": 367.5
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 620.3,
-        "maxMs": 620.3
+        "totalMs": 835.1,
+        "maxMs": 835.1
       },
       "boot:scene-compile": {
         "count": 1,
-        "totalMs": 3000.8,
-        "maxMs": 3000.8
+        "totalMs": 3000.5,
+        "maxMs": 3000.5
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 129.1,
-        "maxMs": 129.1
+        "totalMs": 110,
+        "maxMs": 110
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 5591.6,
-        "maxMs": 5591.6
+        "totalMs": 7502.9,
+        "maxMs": 7502.9
       },
       "boot:tileset": {
         "count": 1,
@@ -6951,70 +10180,70 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4272.9,
-        "maxMs": 4272.9
+        "totalMs": 4379.6,
+        "maxMs": 4379.6
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 1000.2,
-        "maxMs": 732.3
+        "totalMs": 1114.5,
+        "maxMs": 891.7
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 12002.5,
-        "maxMs": 3000.9
+        "totalMs": 12001.6,
+        "maxMs": 3000.5
       }
     },
     "phone": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 128.7,
-        "maxMs": 128.7
+        "totalMs": 137.6,
+        "maxMs": 137.6
       },
       "boot:frame": {
-        "count": 7,
-        "totalMs": 682.9,
-        "maxMs": 456.4
+        "count": 8,
+        "totalMs": 759.5,
+        "maxMs": 525.6
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 605,
-        "maxMs": 605
+        "totalMs": 606,
+        "maxMs": 606
       },
       "boot:light-wait": {
         "count": 1,
-        "totalMs": 1191.8,
-        "maxMs": 1191.8
+        "totalMs": 3000.4,
+        "maxMs": 3000.4
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 1780.3,
-        "maxMs": 1780.3
+        "totalMs": 1520.3,
+        "maxMs": 1520.3
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 411.2,
-        "maxMs": 411.2
+        "totalMs": 377.8,
+        "maxMs": 377.8
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 130.9,
-        "maxMs": 130.9
+        "totalMs": 98.2,
+        "maxMs": 98.2
       },
       "boot:scene-compile": {
         "count": 1,
-        "totalMs": 3000.8,
-        "maxMs": 3000.8
+        "totalMs": 3000.5,
+        "maxMs": 3000.5
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 97.8,
-        "maxMs": 97.8
+        "totalMs": 85.6,
+        "maxMs": 85.6
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 4459.8,
-        "maxMs": 4459.8
+        "totalMs": 4578,
+        "maxMs": 4578
       },
       "boot:tileset": {
         "count": 1,
@@ -7023,24 +10252,24 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4268.1,
-        "maxMs": 4268.1
+        "totalMs": 4268.8,
+        "maxMs": 4268.8
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 994.9,
-        "maxMs": 745.9
+        "totalMs": 983,
+        "maxMs": 751.9
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 11051,
-        "maxMs": 3016.9
+        "totalMs": 10308,
+        "maxMs": 3000.4
       }
     },
     "phoneHeld": {
-      "attributes": 1211,
-      "attributesSize": 47381554,
-      "geometries": 479,
+      "attributes": 1119,
+      "attributesSize": 47231494,
+      "geometries": 448,
       "indexAttributes": 133,
       "indexAttributesSize": 33979704,
       "indirectStorageAttributes": 0,
@@ -7054,9 +10283,9 @@
       "storageAttributesSize": 0,
       "textures": 63,
       "texturesSize": 71615312,
-      "uniformBuffers": 576,
-      "uniformBuffersSize": 146096,
-      "total": 155118656
+      "uniformBuffers": 543,
+      "uniformBuffersSize": 140288,
+      "total": 154962788
     },
     "firstLoad": [
       {

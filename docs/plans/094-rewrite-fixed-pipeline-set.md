@@ -558,49 +558,61 @@ ledger, `FLAGS`; it implies `--browser`) runs a test of
 `e2e/ledger.spec.ts` for every built site (`LEDGER_CENSUS`), beside the
 browser figures, through the same read (`scripts/ledger-browser.ts`): no
 second mechanism. Each site at `?scene=lite&block=1` (the whole site,
-lite's render cost; 400×300), every data layer it has switched on
-(Dresden: traffic, bikes — their counts answered by the spec,
-`e2e/scene-fixtures.ts` —, trams and a design block by the
-Albertplatz; Hamburg: traffic and bikes, the bike counts fetched live
-from the city's feed; Leipzig and München: trams; Grimma, Meißen, Unna:
-traffic). The counters at `ready`, then `censusFlight`
-(`lib/city/ledger-census.ts`): an overview from 2.5 km over the site's
-middle (the far building level) and low oblique stops over up to four
-tiles — the spawn, then the tile farthest from those seen. A stop waits
-four frames, then for two reads two seconds apart that find the view at
-rest, the stream quiet and no compile queued (capped at four minutes;
-every stop of every site settled, the longest in 52 s), and reads
-`getPipelineBudget` — the rows are `compileRepresentatives` of the
-scene, so their union over the stops is the flight's set of builds. The
-counters for the flight's end are read before its last budget read; the
-reads themselves built no program (`probeBuilt` 0 at every stop) and
-met no tile leaving. Dresden was then put back at its spawn and entered
-in Modell with `M`, and read once settled. The whole run took 24 min
-(Dresden 6 min with Modell, Meißen 1 min). The figures are the ledger's
-`census` section: recorded, in `UNCOMPARED` whole, since what lands when
-is the frame rate's.
+lite's render cost; 400×300):
+
+1. `ready`: the counters are read (`ready`).
+2. Every data layer the site has is switched on — Dresden: traffic,
+   bikes (their counts answered by the spec, `e2e/scene-fixtures.ts`),
+   trams and a design block by the Albertplatz; Hamburg: traffic and
+   bikes, the bike counts fetched live from the city's feed; Leipzig
+   and München: trams; Grimma, Meißen, Unna: traffic — and the spawn
+   settles again (`dressed`). **The flight's window is `dressed` → end**:
+   the layers' and the design's own builds land before it opens.
+3. `censusFlight` (`lib/city/ledger-census.ts`): an overview from 2.5 km
+   over the site's middle (the far building level) and low oblique
+   stops over up to four tiles — the spawn, then the tile farthest from
+   those seen. A stop waits four frames, then for two reads two seconds
+   apart that find the view at rest, the stream quiet and no compile
+   queued (capped at four minutes; every stop of every site settled,
+   the longest in 9 s), then reads its counters and `getPipelineBudget`
+   — every representative of a build in the scene, held to the limits.
+   The reads built no program (`probeBuilt` 0), met no tile leaving
+   (`left` 0) and had a text for every representative (`unread` 0) at
+   every stop.
+4. Dresden is then put back at its spawn, entered in Modell with `M`
+   and read once settled (its window: the moment before `M` → after).
+
+The run took 30 min. The figures are the ledger's `census` section:
+recorded, in `UNCOMPARED` whole, since what lands when is the frame
+rate's — every build met by name with its four counts
+(`builds.rows`), the stops, the window's counters and compile timings.
+Two rows of one name (two per-tile materials that share a name and a
+layout) keep the one that asks most of the limits, in whatever order
+they came (`distinctBuilds`).
 
 The gated half is phase 1's step 4: `browser.pipelines`, a row a build
 of the lite spawn (68), each with its vertex buffers, attributes,
 variables written and variables spare, read on the phone page of
-`--browser` once its cache has settled with no compile queued. Two
-reads gave the same rows (the write, then `--check --browser`: "holds").
-Read on the desktop page instead it had to wait for the compile queue to
-drain after `ready`, which made that test 41 s → 1.7 min; on the phone
-page that wait is already paid.
+`--browser` once its cache has settled with no compile queued (`unread`
+and `left` 0 asserted). Two reads here gave the same rows (the write,
+then `--check --browser`: "holds"), and CI's Ledger step on a hosted
+runner held them too (run 43932631424, `--check --browser`, "holds").
+Read on the desktop page instead it had to wait for the compile queue
+to drain after `ready`, which made that test 41 s → 1.7 min; on the
+phone page that wait is already paid.
 
-**The figures** (end of the flight; `ready` → end where two):
+**The figures** (`ready` → `dressed` → end of the flight):
 
 | Site | tiles | builds | keys | in-frame other | in-frame shadow | programs |
 |---|---|---|---|---|---|---|
-| Dresden | 15 | 90 | 79 | 83 → 87 | 34 → 52 | 161 → 216 |
-| Grimma | 2 | 57 | 47 | 73 → 73 | 23 → 27 | 151 → 182 |
-| Hamburg | 4 | 77 | 65 | 77 → 82 | 27 → 40 | 154 → 206 |
-| Leipzig | 4 | 80 | 70 | 73 → 74 | 27 → 36 | 156 → 195 |
-| Meißen | 1 | 68 | 58 | 67 → 74 | 20 → 27 | 152 → 189 |
-| München | 4 | 73 | 62 | 69 → 79 | 24 → 34 | 150 → 199 |
-| Unna | 2 | 64 | 52 | 66 → 74 | 24 → 29 | 150 → 196 |
-| Dresden, Modell | — | 24 | 23 | 87 → 92 | 53 → 56 | 216 → 316 |
+| Dresden | 15 | 88 | 77 | 86 → 87 → 92 | 30 → 34 → 50 | 164 → 206 → 216 |
+| Grimma | 2 | 57 | 47 | 72 → 72 → 72 | 19 → 27 → 28 | 147 → 186 → 186 |
+| Hamburg | 4 | 77 | 65 | 78 → 78 → 80 | 29 → 31 → 40 | 158 → 198 → 206 |
+| Leipzig | 4 | 80 | 70 | 74 → 74 → 76 | 28 → 31 → 38 | 156 → 191 → 195 |
+| Meißen | 1 | 68 | 58 | 67 → 67 → 67 | 20 → 24 → 27 | 152 → 189 → 191 |
+| München | 4 | 73 | 62 | 70 → 70 → 73 | 26 → 28 → 36 | 152 → 197 → 201 |
+| Unna | 2 | 64 | 52 | 66 → 66 → 66 | 22 → 28 → 29 | 146 → 198 → 198 |
+| Dresden, Modell | — | 24 | 23 | 92 → 97 | 51 → 53 | 216 → 316 |
 
 A build is key × draw × layout × shadow receipt × camera; Modell's row
 counts the builds at its one stop, all under the parallel camera. The
@@ -614,74 +626,82 @@ frames, the shadow pass's casters).
   Meißen 9, Unna 5, Grimma 3), the largest open set and the one the
   plan's list named only as "mesh-kit's `key`"; `bridge-deck:<kind>:<colour>`
   3–4; `tram-car:` 3 (Dresden, Leipzig, München); `wire-<ink>` 2;
-  `riverside-column:<colour>` 2; `bridge-stone:` 1 a site. The rest
-  that come in more than one are graph variants of a tile's rasters,
-  not colours: `terrain|…` 2–4 (and `|design-cut` under a design), the
-  tree feet's `tree-shade|…` and `trunk|…` 2, Hamburg's `clay` and
-  `clay|niches`. Three per-tile materials have no key and are named by
-  their type (`MeshBasicNodeMaterial`, `MeshStandardNodeMaterial`,
-  `NodeMaterial`).
-- **In-frame builds over a flight**: `other` +0 to +10 (Grimma 0,
-  Leipzig 1, Dresden 4, Hamburg 5, Meißen 7, Unna 8, München 10),
-  `shadow` +4 to +18 (ADR 0027's accepted gap); entering Modell +5 and
-  +3.
-- **Programs**: +31 to +55 over a flight; Modell's camera +100 on top.
-- **The compiles a landing waited for** (counts over the flight; mean
-  and the session's maximum): `tile:compile` Dresden 19× 0.66 s,
-  Hamburg 6× 2.7 s, Leipzig 3× 1.1 s, München 4× 2.6 s — the maximum
-  3.3–3.5 s, i.e. at `COMPILE_WAIT_MS` (3 s), where a tile shows with
-  its compile still running; Grimma, Meißen and Unna landed nothing
-  after `ready`. `traffic:compile` (the traffic bodies, a late part)
-  3.0 s a body on four sites (the cap), Dresden 19× 1.8 s;
-  `dressing:compile` 1.1–3.0 s. Behind them the queue: `compile:call`
-  0.14–0.35 s mean, 11.6–17.3 s at most; `compile:turn-wait` (from
-  queued to its turn) **12–51 s mean, 34–164 s at most** — one compile
-  at a time (`compileInTurn`) on a CPU that shades every pixel. In
-  Modell `compile:call` 67× 1.26 s mean, 58 s at most.
-- **The limits**, over every build of every flight and Modell — the
-  traffic bodies (`traffic-glass`: 5 buffers, 5 attributes, 5 variables
-  out, 11 spare), the tram cars (`tram-car:*`: 3–4 buffers, 6–7
-  attributes), the bike columns (`bike-glass`, `bike-pool`: 5, 8), the
-  wires (4, 4), the bridges' decks (3, 3) and steel, the design
-  (`design-white`: 2, 2): **no breach, no attribute without a buffer**.
-  The tightest: 5 of 8 vertex buffers (9–12 builds a site: the bikes,
-  the traffic bodies, `furniture-hands`, `monument-clay`, the tree
-  feet's sets, `vegetation-crown-bare`), 8 of 16 attributes, and after
-  the clay (2 spare, its own test) `window-niche` with 4 spare variables
-  (5 under Modell's camera). `traffic-layer.test.ts`'s own count can
-  stay as the unit-level guard; the census is the whole-site one, by
-  hand.
+  `riverside-column:<colour>` 2 where the stops met two (Hamburg,
+  Leipzig, Meißen; Dresden's first run met two, this one none);
+  `bridge-stone:` 1 a site. The rest that come in more than one are
+  graph variants of a tile's rasters, not colours: `terrain|…` 2–4 (and
+  `|design-cut` under a design), the tree feet's `tree-shade|…` and
+  `trunk|…` 2, Hamburg's `clay` and `clay|niches`. Three per-tile
+  materials have no key and are named by their type
+  (`MeshBasicNodeMaterial`, `MeshStandardNodeMaterial`, `NodeMaterial`).
+- **In-frame builds over the flight** (`dressed` → end): `other` +0 on
+  Grimma, Meißen and Unna, +2 Hamburg and Leipzig, +3 München, +5
+  Dresden; `shadow` +1 to +16 (ADR 0027's accepted gap). Switching the
+  layers on and loading the design (`ready` → `dressed`) made `other`
+  +1 on Dresden only, `shadow` +2 to +8, and 35–52 programs — compiled
+  before they show, as a late part should. Entering Modell: `other` +5,
+  `shadow` +2, programs +100.
+- **Programs over the flight**: +0 to +10.
+- **What a landing tile waited for** is `tile:compile` — its compile, in
+  turn, capped at `COMPILE_WAIT_MS` (3 s), after which the tile shows
+  with its compile still running: Dresden 19× 0.78 s mean, Hamburg 6×
+  1.23 s, Leipzig 3× 2.04 s, München 6× 1.31 s, each site's longest
+  3.0–3.4 s, i.e. at the cap (Grimma, Meißen and Unna landed nothing in
+  the window). A late part's: `traffic:compile` (the traffic bodies)
+  Dresden 11× 0.69 s, Hamburg 4× 1.42 s; `dressing:compile` 1.3–2.3 s
+  mean. `compile:call`, a compile's own call, 77–137 ms mean.
+  `compile:turn-wait` is not a landing's wait: it is a compile's place
+  in the queue of a burst — compiles queued before `ready` among them,
+  and the probe's own reads take turns too (`PostStack.shadersOf`) —
+  and is recorded, not read here. In Modell `compile:call` 66× 1.28 s
+  mean, 57 s at most (the warm-up of the parallel camera's builds).
+- **The limits**, over every build of every flight and Modell, by name
+  in `builds.rows` — the traffic bodies (`traffic-glass`: 5 buffers, 5
+  attributes, 5 variables written, 11 spare), the tram cars
+  (`tram-car:*`: 3–4 buffers, 6–7 attributes), the bike columns
+  (`bike-glass`, `bike-pool`: 5, 8), the wires (4, 4), the bridges'
+  decks (3, 3) and stone (2, 2), the steel (`rail:*`: 2, 2), the design
+  (`design-white`: 2, 2): **no breach, no attribute without a buffer,
+  nothing unread**. The tightest: 5 of 8 vertex buffers (9–12 builds a
+  site: the bikes, the traffic bodies, `furniture-hands`,
+  `monument-clay`, the tree feet's sets, `vegetation-crown-bare`), 8 of
+  16 attributes, and after the clay (2 spare, its own test)
+  `window-niche` with 4 spare variables (5 under Modell's camera).
+  These are SwiftShader's WGSL and limits: no real GPU read them.
+  `traffic-layer.test.ts`'s own count stays the unit-level guard; the
+  census is the whole-site one, by hand.
 - **Modell before any inquiry** (phase 1's note): the census met it —
   the `nameplate-shadow` pipeline fails ("fewer output components (2)
-  than the color format") on entering, and once with it
+  than the color format") on entering, and with it
   `copyFramebufferToTexture: Source and destination formats do not
   match. rgba8unorm rgba16float`, not seen in phase 1 (data layers on
   here). Neither moves the rows: the nameplate draws outside the scene
   the probe walks; its build is one of Modell's +5 in-frame `other`.
   Recorded, not fixed (out of this phase).
 
-**Not covered**: the shadow pass's builds (counted only as in-frame
-`shadow`, never read), a picture style's swap, the Ausschnitt's clip
-distances, a phone's tier over a flight, the designs other than a glTF
-block (IFC, OBJ, a landscape plan), Berlin (not committed), and Modell
-on other sites than Dresden. The stops are four tiles at most: on
-Dresden's fifteen the low stops saw four, the overview all at the far
-level; a build only a tile off the route has is not in the census.
+**Not covered**: a real GPU (every figure is SwiftShader's), the shadow
+pass's builds (counted only as in-frame `shadow`, never read), a
+picture style's swap, the Ausschnitt's clip distances, a phone's tier
+over a flight, the designs other than a glTF block (IFC, OBJ, a
+landscape plan), Berlin (not committed), and Modell on other sites than
+Dresden. Hamburg's bike counts came live from the city's feed, not from
+a fixture. The stops are four tiles at most: on Dresden's fifteen the
+low stops saw four, the overview all at the far level; a build only a
+tile off the route has is not in the census.
 
 **What it decides for phase 3**: the condition for closing it is not
-met. Every flight makes builds inside frames — the shadow pass's on
-every site, and 0–10 `other` beyond the boot's on six of seven — and
-the compile waits are not small: on SwiftShader a landing tile waits up
-to the 3 s cap, and a compile waits tens of seconds for its turn. So
-phase 3 stays, and goes before 093 as the plan says (with 093 tiles
-land many times as often, and each waits in that queue). The census
-sizes it: 47–79 keys a site under the walk/fly camera, 24 more
-builds under Modell's, of which the open sets to close in step 1 are,
-by size, mesh-kit's `rail:` (up to 17, the rails' and bridges' steel
-colours — 090's rails are where they close), `bridge-deck:` (4),
-`tram-car:` (3), `wire-` (2) and `riverside-column:` (2); the ground's
-and the tree feet's raster variants are 091 phase 5's. What phase 3's
-flight test must hold to 0 is the `other` column above (with its
+met. The flights build inside frames — the shadow pass's on every site,
+and `other` beyond the boot's on four of seven flights (+2 to +5) and on
+entering Modell (+5) — and a landing tile's compile reaches the 3 s cap
+on every site that landed one, so it shows before its compile is done.
+So phase 3 stays, and goes before 093 as the plan says (with 093 tiles
+land many times as often, and each waits for its compile). The census
+sizes it: 47–77 keys a site under the walk/fly camera, 24 more builds
+under Modell's, of which the open sets to close in step 1 are, by size,
+mesh-kit's `rail:` (up to 17, the rails' and bridges' steel colours —
+090's rails are where they close), `bridge-deck:` (4), `tram-car:` (3),
+`wire-` (2) and `riverside-column:` (2); the ground's and the tree
+feet's raster variants are 091 phase 5's. What phase 3's flight test
+must hold to 0 is the `other` column's growth over the window (with its
 composition read first: the census counts it, it does not name it), and
 `programs` not rising past what the register built at boot.
-

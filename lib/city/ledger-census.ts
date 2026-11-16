@@ -305,7 +305,7 @@ export function pipelineFigures(rows: readonly CensusBuild[]): {
   };
 }
 
-/** The timing categories of a landing's compiles. */
+/** The timing categories of the compiles: a landing tile's and a late part's (`tile:compile`, `*:compile`), their queue (`*:queue-wait`), and a compile's own call and its place in the queue (`compile:call`, `compile:turn-wait`). */
 export const COMPILE_TIMINGS = /(?:^compile:|:compile$|:queue-wait$)/u;
 
 const tenth = (ms: number) => Math.round(ms * 10) / 10;

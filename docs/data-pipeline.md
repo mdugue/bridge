@@ -1637,27 +1637,31 @@ also flies every built site, one test of `e2e/ledger.spec.ts` each
 (`LEDGER_CENSUS`), and writes the `census` section — recorded, never
 compared (it is in `UNCOMPARED` whole): what lands when is the machine's
 frame rate's. Each site in the whole-site profile
-(`?scene=lite&block=1`, 400×300) with every data layer it has switched
-on — Dresden's bicycle counts answered by the spec
-(`e2e/scene-fixtures.ts`), a design block loaded there — reads its
-counters at `ready`, then flies `censusFlight`: an overview from 2.5 km
-over the site's middle (the far building level), and low oblique stops
-over up to four tiles, the spawn and those farthest from the ones seen.
-A stop waits for the view to rest, the stream to be quiet and no compile
-queued in two reads two seconds apart (at most four minutes; `settled`
-says whether it got there) and reads `getPipelineBudget` — every build
-the scene holds, so the whole site's builds are held to the limits too
-(the probe's `probeBuilt`: programs the read itself made). Dresden is
-then entered in Modell (`M`) from its spawn and read once more. Per
-site: the distinct builds (key × draw × layout × shadow receipt ×
-camera), the distinct keys and each key family with more than one key
+(`?scene=lite&block=1`, 400×300) reads its counters at `ready`, switches
+on every data layer it has — Dresden's bicycle counts answered by the
+spec (`e2e/scene-fixtures.ts`), a design block loaded there — and reads
+them again once the spawn has settled (`dressed`); the flight's window
+is `dressed` → end. It then flies `censusFlight`: an overview from
+2.5 km over the site's middle (the far building level), and low oblique
+stops over up to four tiles, the spawn and those farthest from the ones
+seen. A stop waits for the view to rest, the stream to be quiet and no
+compile queued in two reads two seconds apart (at most four minutes;
+`settled` says whether it got there) and reads `getPipelineBudget` —
+every build the scene holds, so the whole site's builds are held to the
+limits too (`probeBuilt`: programs the read itself made; `left`, `unread`:
+what it could not read). Dresden is then entered in Modell (`M`) from
+its spawn and read once more. Per site: every build met by name with
+what it takes of the limits (`builds.rows`; two rows of one name keep
+the tighter), the distinct builds (key × draw × layout × shadow receipt
+× camera), the distinct keys and each key family with more than one key
 (`keyFamily`: what comes before the first value — the sets made from
-data), `framedBuilds` and `programs` at `ready` and at the flight's end,
-the compile timings over the flight (`compile:*`, `*:compile`,
-`*:queue-wait`: counts and totals subtracted, the larger maximum kept),
-the tightest builds by each limit, and the errors met. Tens of minutes
-on SwiftShader, so never on CI; run it on linux-x64 after building every
-site.
+data), `framedBuilds` and `programs` at `ready`, `dressed` and the
+flight's end, the compile timings over the window (`tile:compile` is
+what a landing tile waited for, capped at 3 s; `compile:turn-wait` is a
+compile's place in a burst's queue, not a landing's wait), the tightest
+builds by each limit, and the errors met. SwiftShader's WGSL and limits
+only. Tens of minutes on SwiftShader, so never on CI; run it on
+linux-x64 after building every site.
 
 Baseline, 2026-11-16 (linux-x64 cloud container, Bun 1.4.4, Chromium 153
 on SwiftShader): the first load fetches 42 scripts, 1 103 124 bytes gzip
