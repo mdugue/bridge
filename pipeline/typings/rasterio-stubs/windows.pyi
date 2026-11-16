@@ -11,7 +11,9 @@ frozen. The fields are floats (the class's docstring); `round_offsets` and
 deprecated there), and the window's `Affine`.
 
 This file replaces `windows.py` for the checker, so it holds only what the
-bakes use; rasterio's own modules that import more from it (`io.py`'s
+bakes use: a bake that imports another name from `rasterio.windows` gets
+"unknown import symbol" until that name is added here, typed from
+`windows.py`. rasterio's own modules that import more from it (`io.py`'s
 `WindowMethodsMixin`, `features.py`'s `union`) read those names as unknown,
 which changes no finding: the checker reports on `bake/` alone.
 

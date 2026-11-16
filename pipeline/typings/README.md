@@ -31,6 +31,9 @@ The rules:
 - Only what the bakes use: a bake that calls more of a stubbed module adds it
   here, from the source.
 - A bump of scipy, rasterio, pyogrio or laspy: check the stubs against the
-  new source, then run `uv run python typecheck.py`.
+  new source, then run `uv run python typecheck.py`. Should the library
+  start shipping its own types (a `py.typed`), `tests/test_typings.py`
+  fails: a stub here would shadow them, so check it against them and drop
+  what they cover.
 - A stub that would raise a count in `typecheck-baseline.json` — a finding
   where none was, or one re-worded — waits for the phase 4 fix it reveals.

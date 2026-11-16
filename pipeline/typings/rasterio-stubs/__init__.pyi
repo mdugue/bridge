@@ -17,15 +17,19 @@ The names `__init__.py` itself defines and the bakes call are declared from
 its source: `open`, whose parameters rasterio annotates nowhere and this stub
 leaves as they are (creation options pass to GDAL as keywords, and what GDAL
 accepts is GDAL's to say), its return the dataset classes of
-`rasterio/io.py` by mode; `band` and `Band`. `pad` is not declared: no bake
-calls it.
+`rasterio/io.py` by mode; `band`, `Band` and `pad` (whose `mode` is
+numpy's: a name or a function). Every other name the package has at run
+time is re-exported from where `__init__.py` takes it.
 
 Check against the source on a bump of rasterio (plan 089, maintenance notes).
 """
 
+from collections.abc import Sequence
 from typing import Literal, NamedTuple, overload
 
+import numpy as np
 from rasterio import (
+    control,
     coords,
     crs,
     drivers,
@@ -35,9 +39,18 @@ from rasterio import (
     errors,
     io,
     profiles,
+    rpc,
+    sample,
+    serde,
+    session,
     transform,
+    vrt,
     windows,
 )
+from rasterio._base import DatasetBase
+from rasterio._io import Statistics
+from rasterio._show_versions import show_versions
+from rasterio._version import gdal_version, get_geos_version, get_proj_version
 from rasterio.crs import CRS
 from rasterio.drivers import driver_from_extension, is_blacklisted
 from rasterio.dtypes import (
@@ -65,6 +78,7 @@ from rasterio.io import (
     BufferedDatasetWriter,
     DatasetReader,
     DatasetWriter,
+    FilePath,
     MemoryFile,
     get_writer_for_driver,
     get_writer_for_path,
@@ -76,6 +90,7 @@ __version__: str
 __gdal_version__: str
 __proj_version__: str
 __geos_version__: str
+have_vsi_plugin: bool
 
 # `open` on a path: "r" builds a DatasetReader; "r+", "w" and "w+" the writer
 # `get_writer_for_path` (or `get_writer_for_driver`) picks — a DatasetWriter,
@@ -123,25 +138,30 @@ class Band(NamedTuple):
     index or indexes, `set(ds.dtypes).pop()` (a dtype's name), `ds.shape`."""
 
     ds: _Dataset
-    bidx: int | list[int]
+    bidx: int | Sequence[int]
     dtype: str
     shape: tuple[int, int]
 
-def band(ds: _Dataset, bidx: int | list[int]) -> Band: ...
+def band(ds: _Dataset, bidx: int | Sequence[int]) -> Band: ...
+def pad(
+    array: np.ndarray, transform: Affine, pad_width: int, mode: object = None, **kwargs: object
+) -> tuple[np.ndarray, Affine]: ...
 
 # The module's public names: in a stub, an imported name is public only when
 # it is named here.
 __all__ = [
     "Affine",
-    "Band",
     "band",
+    "Band",
     "bool_",
     "check_dtype",
     "complex_",
     "complex_int16",
+    "control",
     "coords",
     "CRS",
     "crs",
+    "DatasetBase",
     "DatasetReader",
     "default_gtiff_profile",
     "driver_from_extension",
@@ -150,12 +170,16 @@ __all__ = [
     "dtypes",
     "ensure_env_with_credentials",
     "enums",
-    "env",
     "Env",
+    "env",
     "errors",
+    "FilePath",
     "float16",
     "float32",
     "float64",
+    "gdal_version",
+    "get_geos_version",
+    "get_proj_version",
     "get_writer_for_driver",
     "get_writer_for_path",
     "guard_transform",
@@ -167,15 +191,23 @@ __all__ = [
     "is_blacklisted",
     "MemoryFile",
     "open",
+    "pad",
     "profiles",
     "RasterioDeprecationWarning",
     "RasterioIOError",
+    "rpc",
+    "sample",
     "sbyte",
+    "serde",
+    "session",
+    "show_versions",
+    "Statistics",
     "transform",
     "ubyte",
     "uint16",
     "uint32",
     "uint64",
     "uint8",
+    "vrt",
     "windows",
 ]

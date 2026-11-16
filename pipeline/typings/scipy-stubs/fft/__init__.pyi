@@ -4,8 +4,9 @@ scipy ships no types for fft, and its transforms are dispatched through
 uarray (`_basic.py`'s `_dispatch`), so pyright infers a `Dispatchable` tuple
 where an array returns. The two real 2-D transforms the bakes call are typed
 here from scipy 1.18.1's `fft/_basic.py` and what they return at run time:
-single precision stays single (float32 and float16 in, complex64 out; any other
-real input, complex128) and `irfft2` gives back the matching real type. So is
+precision is kept (float32 and float16 in, complex64 out; longdouble in,
+clongdouble out; any other real input, complex128) and `irfft2` gives back
+the matching real type. So is
 `next_fast_len` (`_helper.py`): its `def` has a docstring and `pass` and is
 then replaced by the compiled `good_size`, so pyright infers it as returning
 None; it returns an int.
@@ -61,6 +62,17 @@ def rfft2(
 ) -> NDArray[np.complex64]: ...
 @overload
 def rfft2(
+    x: NDArray[np.longdouble],
+    s: Sequence[int] | None = None,
+    axes: Sequence[int] = (-2, -1),
+    norm: _Norm = None,
+    overwrite_x: bool = False,
+    workers: int | None = None,
+    *,
+    plan: None = None,
+) -> NDArray[np.clongdouble]: ...
+@overload
+def rfft2(
     x: ArrayLike,
     s: Sequence[int] | None = None,
     axes: Sequence[int] = (-2, -1),
@@ -81,6 +93,17 @@ def irfft2(
     *,
     plan: None = None,
 ) -> NDArray[np.float32]: ...
+@overload
+def irfft2(
+    x: NDArray[np.clongdouble],
+    s: Sequence[int] | None = None,
+    axes: Sequence[int] = (-2, -1),
+    norm: _Norm = None,
+    overwrite_x: bool = False,
+    workers: int | None = None,
+    *,
+    plan: None = None,
+) -> NDArray[np.longdouble]: ...
 @overload
 def irfft2(
     x: ArrayLike,

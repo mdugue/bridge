@@ -16,10 +16,12 @@ gate reads as a new key, so it waits for phase 4 and that finding's fix.
 Check against the source on a bump of scipy (plan 089, maintenance notes).
 """
 
+from collections.abc import Sequence
 from typing import Literal, overload
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
+from scipy.ndimage import filters, fourier, interpolation, measurements, morphology
 from scipy.ndimage._filters import (
     convolve,
     convolve1d,
@@ -103,7 +105,8 @@ from scipy.ndimage._morphology import (
 )
 
 # `_measurements.py`: the labels are int32, or intp once the input has 2**31 - 2
-# cells or more; with `output` an array, only the count is returned.
+# cells or more; with `output` an array, only the count is returned; with
+# `output` a dtype, the labels are of that dtype.
 @overload
 def label(
     input: ArrayLike, structure: ArrayLike | None = None, output: None = None
@@ -114,6 +117,13 @@ def label(input: ArrayLike, structure: ArrayLike | None, output: NDArray[np.inte
 def label(
     input: ArrayLike, *, structure: ArrayLike | None = None, output: NDArray[np.integer]
 ) -> int: ...
+@overload
+def label(
+    input: ArrayLike,
+    structure: ArrayLike | None = None,
+    *,
+    output: type[np.integer] | np.dtype[np.integer] | str,
+) -> tuple[NDArray[np.integer], int]: ...
 
 # `_morphology.py`: the distances are float64, the indices int32 of shape
 # (input.ndim, *input.shape); the in-place forms (`distances=`, `indices=`)
@@ -159,7 +169,7 @@ def binary_erosion(
     mask: ArrayLike | None = None,
     output: None = None,
     border_value: int = 0,
-    origin: int | tuple[int, ...] = 0,
+    origin: int | Sequence[int] = 0,
     brute_force: bool = False,
     *,
     axes: tuple[int, ...] | None = None,
@@ -173,7 +183,7 @@ def binary_erosion[Out: np.generic](
     *,
     output: NDArray[Out],
     border_value: int = 0,
-    origin: int | tuple[int, ...] = 0,
+    origin: int | Sequence[int] = 0,
     brute_force: bool = False,
     axes: tuple[int, ...] | None = None,
 ) -> NDArray[Out]: ...
@@ -185,7 +195,7 @@ def binary_dilation(
     mask: ArrayLike | None = None,
     output: None = None,
     border_value: int = 0,
-    origin: int | tuple[int, ...] = 0,
+    origin: int | Sequence[int] = 0,
     brute_force: bool = False,
     *,
     axes: tuple[int, ...] | None = None,
@@ -199,7 +209,7 @@ def binary_dilation[Out: np.generic](
     *,
     output: NDArray[Out],
     border_value: int = 0,
-    origin: int | tuple[int, ...] = 0,
+    origin: int | Sequence[int] = 0,
     brute_force: bool = False,
     axes: tuple[int, ...] | None = None,
 ) -> NDArray[Out]: ...
@@ -209,7 +219,7 @@ def binary_closing(
     structure: ArrayLike | None = None,
     iterations: int = 1,
     output: None = None,
-    origin: int | tuple[int, ...] = 0,
+    origin: int | Sequence[int] = 0,
     mask: ArrayLike | None = None,
     border_value: int = 0,
     brute_force: bool = False,
@@ -223,7 +233,7 @@ def binary_closing[Out: np.generic](
     iterations: int = 1,
     *,
     output: NDArray[Out],
-    origin: int | tuple[int, ...] = 0,
+    origin: int | Sequence[int] = 0,
     mask: ArrayLike | None = None,
     border_value: int = 0,
     brute_force: bool = False,
@@ -236,7 +246,7 @@ def binary_propagation(
     mask: ArrayLike | None = None,
     output: None = None,
     border_value: int = 0,
-    origin: int | tuple[int, ...] = 0,
+    origin: int | Sequence[int] = 0,
     *,
     axes: tuple[int, ...] | None = None,
 ) -> NDArray[np.bool_]: ...
@@ -248,7 +258,7 @@ def binary_propagation[Out: np.generic](
     *,
     output: NDArray[Out],
     border_value: int = 0,
-    origin: int | tuple[int, ...] = 0,
+    origin: int | Sequence[int] = 0,
     axes: tuple[int, ...] | None = None,
 ) -> NDArray[Out]: ...
 
@@ -258,7 +268,7 @@ def binary_fill_holes(
     input: ArrayLike,
     structure: ArrayLike | None = None,
     output: None = None,
-    origin: int | tuple[int, ...] = 0,
+    origin: int | Sequence[int] = 0,
     *,
     axes: tuple[int, ...] | None = None,
 ) -> NDArray[np.bool_]: ...
@@ -268,13 +278,18 @@ def binary_fill_holes(
     structure: ArrayLike | None = None,
     *,
     output: NDArray[np.generic],
-    origin: int | tuple[int, ...] = 0,
+    origin: int | Sequence[int] = 0,
     axes: tuple[int, ...] | None = None,
 ) -> None: ...
 
 # The module's public names: in a stub, an imported name is public only when
 # it is named here.
 __all__ = [
+    "filters",
+    "fourier",
+    "interpolation",
+    "measurements",
+    "morphology",
     "affine_transform",
     "binary_closing",
     "binary_dilation",
