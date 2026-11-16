@@ -37,6 +37,10 @@ export interface StreamTimings {
   /** counts a span measured elsewhere (from `start`, the clock's time, to
    *  now) */
   since: (category: string, start: number, detail?: string) => void;
+  /** counts `ms` of work under `category`, measured elsewhere and not one
+   *  span (a builder's slices, dressing-figures.ts): the count alone,
+   *  nothing on the browser's timeline */
+  spent: (category: string, ms: number) => void;
   /** a mark at most once per page (`boot:light-done`); its time */
   markOnce: (name: string) => void;
   /** when a `markOnce` mark was set, if it was */
@@ -101,6 +105,7 @@ export function createStreamTimings(now: () => number): StreamTimings {
       }
     },
     since,
+    spent: add,
     markOnce: (name) => {
       if (marks.has(name)) {
         return;

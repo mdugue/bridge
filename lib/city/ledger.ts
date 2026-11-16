@@ -15,6 +15,7 @@
  * the gate. Their triangle counts and every file count stay gated.
  */
 import { gzipSync } from "node:zlib";
+import type { DressingRecorded, DressingTile } from "./ledger-dressing";
 import { TERRAIN_RASTER_KEYS } from "./tileset";
 
 /** The extensions a static host sends as they are: compressed already. */
@@ -539,6 +540,10 @@ export const RECORDED_NOTE =
  *  of the tree. */
 export interface Ledger {
   buildings: BuildingFigures;
+  /** the watched tiles' dressing by kind (ledger-dressing.ts) */
+  dressing: DressingTile[];
+  /** the dressing's recorded figures (ledger-dressing.ts), never compared */
+  dressingRecorded?: DressingRecorded;
   /** the bytes (the machine-bound files' left out) and requests of each set */
   bytes: Record<LedgerSet, SetLedger>;
   counters: Counters;
@@ -554,7 +559,7 @@ export interface Ledger {
 }
 
 /** The parts `--check` never compares. */
-const UNCOMPARED = new Set(["dated", "recorded"]);
+const UNCOMPARED = new Set(["dated", "recorded", "dressingRecorded"]);
 
 /** Leaf paths with their values (`bytes.fine.spawn.bytes`). */
 function leaves(value: unknown, path = ""): Map<string, string> {
@@ -587,7 +592,7 @@ export function ledgerDiff(was: unknown, now: unknown): string[] {
   );
 }
 
-type Gated = Omit<Ledger, "dated" | "recorded">;
+type Gated = Omit<Ledger, "dated" | "dressingRecorded" | "recorded">;
 
 /** A record's figures, without who read them and when. */
 const recordedFigures = (r: Partial<Recorded>) => ({
@@ -638,6 +643,11 @@ export function datedLedger(
     bytes: fresh.bytes,
     buildings: fresh.buildings,
     counters: fresh.counters,
+    dressing: fresh.dressing,
     recorded: record,
+    // written by its own tools (scripts/ledger.ts folds them in)
+    ...(was?.dressingRecorded === undefined
+      ? {}
+      : { dressingRecorded: was.dressingRecorded }),
   };
 }

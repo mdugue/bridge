@@ -1196,6 +1196,25 @@ the machine and the day it was read on; `--check` prints it and never
 compares it. They return to the gate once the bake fix (PR #310) has
 merged.
 
+**The dressing** has a section of its own (`dressing`, plan 090;
+`lib/city/ledger-dressing.ts`): for three watched tiles — the spawn, a
+forest (`33416_5658_2_sn`) and the Neustadt yards (`33410_5656_2_sn`) —
+each level's side files kind by kind, bytes and requests, gated like the
+sets. On 2026-11-16 a fine level's dressing was 249 kB in 18 requests on
+the spawn tile, 497 kB on the forest (its canopy alone 469 kB) and 276 kB
+on the yards: 3–7 % of the level's bytes and eighteen of its twenty-nine
+requests. Beside it `dressingRecorded`, never compared: München's
+heaviest tile, what a browser measured (the scene thread's milliseconds
+by builder and the bytes a dressing weighs in the tile cache:
+`DRESSING_LEDGER=1 bunx playwright test e2e/dressing-ledger.spec.ts`),
+and the figures of plan 090's two spikes
+(`bun scripts/eval/stand-record-probe.ts --out
+.cache/ledger-dressing/stand-probe.json`,
+`bun scripts/eval/stand-record-bytes.ts`,
+`bun scripts/eval/lines-three-ways.ts`). Those tools leave what they read
+in `.cache/ledger-dressing/`, and `bun run ledger` folds it in; a machine
+that measured nothing writes the section back as it was.
+
 Baseline, 2026-11-16 (Dresden, fifteen tiles; MB = 10⁶ bytes on the wire,
 the buildings in them, as `recorded` holds them; files in brackets):
 

@@ -12,16 +12,58 @@ import {
 import type { BufferGeometry, Color, Material } from "three/webgpu";
 import {
   attribute,
+  cos,
   Fn,
   mat4,
   normalLocal,
   positionLocal,
+  sin,
   transformNormal,
+  uniform,
   vec3,
   vec4,
 } from "three/tsl";
+import {
+  standAt,
+  standCount,
+  standMatrix,
+  STAND_RECORD_WORDS,
+  STAND_SCALE_UNIT,
+  STAND_STEP_M,
+  STAND_TURN_UNIT,
+  STAND_WORD,
+} from "@/lib/city/stand-record";
 import { outOfDesignSite } from "./design-site";
 import type { F, V3, V4 } from "./shader-chunks";
+
+/**
+ * A table of stand records (lib/city/stand-record.ts) as an instance
+ * buffer: the records' own words — a view over a file's bytes, nothing
+ * written — and the corner their places count from. Sets given the same
+ * table share its one upload.
+ */
+export interface StandTable {
+  readonly buffer: InstancedInterleavedBuffer;
+  /** the table's origin in the frame the sets hang in (the Y-up scene
+   *  frame) */
+  readonly origin: Vector3;
+}
+
+/** `words` (ten a record) as a table whose places count from `origin`. */
+export function standTable(
+  words: Uint16Array,
+  origin: readonly [number, number, number]
+): StandTable {
+  return {
+    buffer: new InstancedInterleavedBuffer(words, STAND_RECORD_WORDS, 1),
+    origin: new Vector3(...origin),
+  };
+}
+
+const isStandTable = (
+  source: InstancedInterleavedBuffer | StandTable | undefined
+): source is StandTable =>
+  source !== undefined && !(source instanceof InstancedInterleavedBuffer);
 
 /**
  * Instanced drawing that shares one node build per material and layout.
@@ -48,6 +90,17 @@ import type { F, V3, V4 } from "./shader-chunks";
  * charges the matrix buffer once per column view and per set sharing it;
  * the memory governor's lines were measured on that count
  * (lib/city/memory-governor.ts).
+ *
+ * A set has a second way in (plan 090, phase 0): a table of stand records
+ * (`Instances.ofStands`), twenty bytes an instance in place of sixty-four.
+ * Its geometry carries the records' words as `iPlace`, `iSize` and
+ * `iKind` — three views of one interleaved buffer, one vertex buffer —
+ * and `instanceMatrix()` composes place, turn and scale from them in the
+ * vertex stage, so nothing writes a matrix. The table's origin is the
+ * drawn object's (`userData.standOrigin`), read by one uniform every
+ * material shares: sets of one layout still share one build. Such a set
+ * has no matrices to write (`setMatrixAt` throws); `getMatrixAt` gives
+ * the matrix the shader composes.
  */
 export class Instances<M extends Material = Material> extends Mesh<
   InstancedBufferGeometry,
@@ -56,7 +109,8 @@ export class Instances<M extends Material = Material> extends Mesh<
   readonly isInstances = true;
   /** the most instances the buffers hold */
   readonly capacity: number;
-  #matrices!: InstancedInterleavedBuffer;
+  #matrices: InstancedInterleavedBuffer | null = null;
+  #stands: StandTable | null = null;
   #colours: InstancedBufferAttribute | null = null;
   /** the base geometry (its sphere is cached there, shared by its views) */
   readonly #base: BufferGeometry;
@@ -65,12 +119,14 @@ export class Instances<M extends Material = Material> extends Mesh<
    * `matrices`, when given, is a buffer another set owns (at least
    * `capacity` matrices): the set shares it from the start instead of
    * allocating its own and dropping it at the first `instanceMatrix =`.
+   * A stand table in its place makes the set one of records
+   * (`Instances.ofStands`).
    */
   constructor(
     base: BufferGeometry,
     material: M,
     capacity: number,
-    matrices?: InstancedInterleavedBuffer
+    matrices?: InstancedInterleavedBuffer | StandTable
   ) {
     const view = new InstancedBufferGeometry();
     view.index = base.index;
@@ -82,6 +138,10 @@ export class Instances<M extends Material = Material> extends Mesh<
     super(view, material);
     this.#base = base;
     this.capacity = capacity;
+    if (isStandTable(matrices)) {
+      this.#wearStands(matrices);
+      return;
+    }
     if (matrices) {
       this.instanceMatrix = matrices;
       return;
@@ -97,9 +157,58 @@ export class Instances<M extends Material = Material> extends Mesh<
     this.instanceMatrix = new InstancedInterleavedBuffer(array, 16, 1);
   }
 
+  /** A set drawn from `table`'s records, all of them: no matrix is
+   *  written, the vertex stage composes each (`instanceMatrix()`). */
+  static ofStands<M extends Material>(
+    base: BufferGeometry,
+    material: M,
+    table: StandTable
+  ): Instances<M> {
+    return new Instances(
+      base,
+      material,
+      standCount(table.buffer.array as Uint16Array),
+      table
+    );
+  }
+
+  #wearStands(table: StandTable): void {
+    this.#stands = table;
+    // by reference: the uniform reads the table's corner as it is
+    this.userData.standOrigin = table.origin;
+    const { buffer } = table;
+    const g = this.geometry;
+    g.setAttribute(
+      "iPlace",
+      new InterleavedBufferAttribute(buffer, 4, STAND_WORD.place)
+    );
+    g.setAttribute(
+      "iSize",
+      new InterleavedBufferAttribute(buffer, 4, STAND_WORD.scale)
+    );
+    g.setAttribute(
+      "iKind",
+      new InterleavedBufferAttribute(buffer, 2, STAND_WORD.kind)
+    );
+  }
+
+  /** The table the set is drawn from, if it is one of records. */
+  get stands(): StandTable | null {
+    return this.#stands;
+  }
+
+  /** What places the set's instances, for a second set to share
+   *  (the constructor's last argument): its matrices or its table. */
+  get placement(): InstancedInterleavedBuffer | StandTable {
+    return this.#stands ?? this.instanceMatrix;
+  }
+
   /** The instance matrices (16 floats each, column-major). Assigning a
    *  buffer another set owns shares it: one upload for both. */
   get instanceMatrix(): InstancedInterleavedBuffer {
+    if (!this.#matrices) {
+      throw new Error("a set of stand records has no matrices");
+    }
     return this.#matrices;
   }
 
@@ -142,11 +251,24 @@ export class Instances<M extends Material = Material> extends Mesh<
   }
 
   setMatrixAt(index: number, matrix: Matrix4): void {
-    matrix.toArray(this.#matrices.array, index * 16);
+    matrix.toArray(this.instanceMatrix.array, index * 16);
   }
 
   getMatrixAt(index: number, matrix: Matrix4): Matrix4 {
-    return matrix.fromArray(this.#matrices.array, index * 16);
+    const table = this.#stands;
+    if (table) {
+      const { origin } = table;
+      return matrix.fromArray(
+        standMatrix(
+          standAt(table.buffer.array as Uint16Array, index, [
+            origin.x,
+            origin.y,
+            origin.z,
+          ])
+        )
+      );
+    }
+    return matrix.fromArray(this.instanceMatrix.array, index * 16);
   }
 
   setColorAt(index: number, colour: Color): void {
@@ -199,13 +321,65 @@ export const isInstances = (object: unknown): object is Instances =>
 
 const column = (i: number): V4 => attribute(`iMat${i}`, "vec4");
 
-/** The drawn instance's matrix (column attributes; identity off a set). */
+const NO_ORIGIN = new Vector3();
+/** The drawn set's table origin (`Instances.ofStands`; a rail table's
+ *  chunk, rail-segments.ts): one uniform for every material, its value the
+ *  drawn object's `userData.standOrigin` — in the object's bind group, so
+ *  sets of one material and layout share one build. */
+export const tableOrigin = uniform(new Vector3()).onObjectUpdate(
+  ({ object }) =>
+    (object?.userData.standOrigin as Vector3 | undefined) ?? NO_ORIGIN
+);
+
+/** A stand record's matrix (lib/city/stand-record.ts `standMatrix`):
+ *  place · turn about Y · scale, from the record's words. They arrive as
+ *  unsigned integers (an interleaved Uint16Array, not normalized: three
+ *  gives `uint16x4`, WGSL `vec4<u32>`), exact, and become floats here. */
+function standMatrixNode() {
+  const place = vec4(attribute("iPlace", "uvec4"));
+  const size = vec4(attribute("iSize", "uvec4"));
+  const angle = place.w.mul((Math.PI * 2) / STAND_TURN_UNIT);
+  const c = cos(angle);
+  const s = sin(angle);
+  const scale = size.xyz.mul(1 / STAND_SCALE_UNIT);
+  const at = tableOrigin.add(place.xyz.mul(STAND_STEP_M));
+  return mat4(
+    vec4(c.mul(scale.x), 0, s.negate().mul(scale.x), 0),
+    vec4(0, scale.y, 0, 0),
+    vec4(s.mul(scale.z), 0, c.mul(scale.z), 0),
+    vec4(at, 1)
+  );
+}
+
+/** Whether the geometry being built is a set's of stand records. */
+const hasStands = (geometry: BufferGeometry): boolean =>
+  geometry.hasAttribute("iPlace");
+
+/** The drawn instance's matrix (column attributes, or composed from a
+ *  stand record; identity off a set). */
 export const instanceMatrix = Fn((builder) => {
+  if (hasStands(builder.geometry)) {
+    return standMatrixNode();
+  }
   if (!builder.geometry.hasAttribute("iMat0")) {
     return mat4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
   }
   return mat4(column(0), column(1), column(2), column(3));
 });
+
+/** Byte `index` (0–3) of a stand record's kind and more words, as a float
+ *  0..255 (0 off a set of records). A word or a hash seed made of it
+ *  reaches the fragment as a FLAT varying. */
+export function standByte(index: 0 | 1 | 2 | 3): F {
+  return Fn((builder) => {
+    if (!hasStands(builder.geometry)) {
+      return 0;
+    }
+    const words = attribute("iKind", "uvec2");
+    const word = index < 2 ? words.x : words.y;
+    return (index % 2 === 0 ? word.bitAnd(0xff) : word.shiftRight(8)).toFloat();
+  })() as F;
+}
 
 /**
  * The position node of an instanced material: the vertex in its instance's
@@ -215,7 +389,9 @@ export const instanceMatrix = Fn((builder) => {
  */
 export function instancePosition(local: V3 = positionLocal): V3 {
   return Fn((builder) => {
-    if (!builder.geometry.hasAttribute("iMat0")) {
+    if (
+      !(builder.geometry.hasAttribute("iMat0") || hasStands(builder.geometry))
+    ) {
       return local;
     }
     const m = instanceMatrix();

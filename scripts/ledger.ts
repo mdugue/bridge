@@ -47,6 +47,12 @@ import type {
   SourceText,
 } from "../lib/city/ledger";
 import {
+  DRESSING_RECORDED_NOTE,
+  DRESSING_TILES,
+  dressingLedger,
+} from "../lib/city/ledger-dressing";
+import type { DressingRecorded } from "../lib/city/ledger-dressing";
+import {
   ASK_KINDS,
   COARSE_DRESSING_KINDS,
   DRESSING_KINDS,
@@ -214,6 +220,7 @@ export function measure(site: string): {
         far: triangles(meshes.far),
       },
       counters: counters(published.files),
+      dressing: dressingLedger(tiles, DRESSING_TILES, gated),
     },
     recorded: {
       note: RECORDED_NOTE,
@@ -222,6 +229,61 @@ export function measure(site: string): {
       buildings: meshes,
     },
   };
+}
+
+/** Where the dressing's measuring tools leave what they read
+ *  (e2e/dressing-ledger.spec.ts, scripts/eval/): gitignored scratch. */
+export const DRESSING_SCRATCH = nodePath.join(ROOT, ".cache/ledger-dressing");
+
+const scratch = (name: string): unknown => {
+  const file = nodePath.join(DRESSING_SCRATCH, `${name}.json`);
+  return existsSync(file) ? JSON.parse(readFileSync(file, "utf-8")) : undefined;
+};
+
+/** München's watched tile, where its site is built here. */
+function muenchenDressing(was: unknown, today: string): unknown {
+  if (!existsSync(nodePath.join(ROOT, "public/data/muenchen", MANIFEST_FILE))) {
+    return was;
+  }
+  const published = publishedFiles("muenchen");
+  const wire = (served: string) => wireBytes(served, published.read(served));
+  const tiles = dressingLedger(
+    ledgerTiles(published.tileset),
+    [{ tile: "32690_5334_2_by", what: "heaviest" }],
+    wire
+  );
+  const kept = was as { tiles?: unknown } | undefined;
+  return ledgerDiff(kept?.tiles ?? {}, tiles).length === 0
+    ? was
+    : { read: today, tiles };
+}
+
+/**
+ * The dressing's recorded section: the committed one, with whatever the
+ * measuring tools left in the scratch folder since folded in — so a
+ * machine that measured nothing writes it back as it was.
+ */
+function dressingRecorded(
+  was: DressingRecorded | undefined,
+  today: string
+): DressingRecorded {
+  const fold = (key: "browser" | "lines" | "stands") => {
+    const read = scratch(key);
+    return read === undefined ? was?.[key] : read;
+  };
+  const out: DressingRecorded = { note: DRESSING_RECORDED_NOTE };
+  const members = {
+    muenchen: muenchenDressing(was?.muenchen, today),
+    browser: fold("browser"),
+    stands: fold("stands"),
+    lines: fold("lines"),
+  };
+  for (const [key, value] of Object.entries(members)) {
+    if (value !== undefined) {
+      out[key as keyof typeof members] = value;
+    }
+  }
+  return out;
 }
 
 function main(check: boolean): void {
@@ -267,6 +329,7 @@ function main(check: boolean): void {
   }
   const today = new Date().toISOString().slice(0, 10);
   const ledger = datedLedger(gated, recorded, committed, today, machine());
+  ledger.dressingRecorded = dressingRecorded(ledger.dressingRecorded, today);
   writeFileSync(LEDGER_FILE, `${JSON.stringify(ledger, null, 2)}\n`);
   process.stdout.write(`qa/ledger.json (${ledger.dated})\n`);
 }

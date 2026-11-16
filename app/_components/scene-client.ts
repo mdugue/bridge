@@ -108,6 +108,7 @@ const ASKED = [
   "captureImage",
   "captureViewpoint",
   "disposeForReload",
+  "getDressingFigures",
   "getFocusDebug",
   "getGpuDebug",
   "getRenderInfo",

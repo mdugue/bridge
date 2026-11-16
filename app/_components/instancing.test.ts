@@ -6,7 +6,9 @@ import {
   MeshBasicNodeMaterial,
   Vector3,
 } from "three/webgpu";
-import { Instances } from "./instancing";
+import type { InterleavedBufferAttribute } from "three/webgpu";
+import { packStands } from "@/lib/city/stand-record";
+import { Instances, standTable } from "./instancing";
 
 const set = (n = 3) =>
   new Instances(new BoxGeometry(), new MeshBasicNodeMaterial(), n);
@@ -77,4 +79,45 @@ test("drawCount stays within the capacity", () => {
   expect(s.drawCount).toBe(4);
   s.drawCount = -1;
   expect(s.drawCount).toBe(0);
+});
+
+test("a set of stand records: one buffer, three views, no matrices", () => {
+  const origin: [number, number, number] = [-1031, 112, 2040];
+  const stands = [
+    { x: -1030.4, y: 112.4, z: 2041, turn: 1.2, scale: [2, 3, 2] as const },
+    { x: -1000, y: 113, z: 2100, turn: 0, scale: [1, 1, 1] as const },
+  ];
+  const words = packStands(stands, origin);
+  const table = standTable(words, origin);
+  const s = Instances.ofStands(
+    new BoxGeometry(),
+    new MeshBasicNodeMaterial(),
+    table
+  );
+  expect(s.drawCount).toBe(2);
+  // the file's words are the instance buffer: nothing copied
+  expect(table.buffer.array).toBe(words);
+  const views = ["iPlace", "iSize", "iKind"].map(
+    (name) => s.geometry.getAttribute(name) as InterleavedBufferAttribute
+  );
+  expect(views.map((v) => v.data === table.buffer)).toEqual([true, true, true]);
+  // not normalized: three hands them to the shader as unsigned integers
+  expect(views.map((v) => v.normalized)).toEqual([false, false, false]);
+  expect(s.geometry.hasAttribute("iMat0")).toBe(false);
+  expect(s.userData.standOrigin).toBe(table.origin);
+  expect(() => s.setMatrixAt(0, new Matrix4())).toThrow();
+  // what the vertex stage composes, for the bounds
+  const m = s.getMatrixAt(0, new Matrix4());
+  const at = new Vector3().setFromMatrixPosition(m);
+  expect(at.distanceTo(new Vector3(-1030.4, 112.4, 2041))).toBeLessThan(0.03);
+  s.computeBoundingSphere();
+  expect(s.geometry.boundingSphere?.containsPoint(at)).toBe(true);
+  // a second set shares the table through `placement`
+  const twin = new Instances(
+    new BoxGeometry(),
+    new MeshBasicNodeMaterial(),
+    2,
+    s.placement
+  );
+  expect(twin.stands).toBe(table);
 });

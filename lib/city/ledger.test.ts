@@ -307,6 +307,7 @@ const LEDGER = {
     publishedExtensions: [".png"],
     upstreamWorkarounds: 2,
   },
+  dressing: [],
   recorded: RECORDED,
 } satisfies Ledger;
 

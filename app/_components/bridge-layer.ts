@@ -7,6 +7,7 @@
  * world coordinates. The lift table these decks are also read through is
  * bridge-deck.ts; rail-layer.ts calls this and hangs the meshes.
  */
+import type { RailSink } from "@/lib/city/rail-table";
 import type { Mesh } from "three/webgpu";
 import {
   archFits,
@@ -70,6 +71,9 @@ export interface BridgeContext extends GroundContext {
    * owner draws it. Absent: every bridge is drawn.
    */
   owns?: (x: number, y: number) => boolean;
+  /** takes the rails' runs instead of their triangles (lib/city/
+   *  rail-table.ts): plan 090's phase-0 spike, behind `?rails=table` */
+  railTable?: RailSink;
 }
 
 const DECK_DEPTH = 1.1; // a line's own span deck's slab thickness (m)
