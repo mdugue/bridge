@@ -100,10 +100,11 @@ jobs:
           retention-days: 14
 
   # The offline bakes (pipeline/, Python in its own uv environment): their
-  # unit tests and ruff. The bakes themselves need the raw downloads and run
+  # unit tests, ruff and types (the job keeps its name: branch protection may
+  # require the check by it). The bakes themselves need the raw downloads and run
   # on the maintainer's machine (bun run bake), never here.
   pipeline:
-    name: Pipeline (pytest + ruff + types)
+    name: Pipeline (pytest + ruff)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
