@@ -12,6 +12,7 @@
  * runner is a file of its own so this module imports no `sites/` config
  * (the build cache keys the terrain on this module's imports).
  */
+import * as PMath from "../lib/city/portable-math";
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 import { bridgeDecks, decksAt } from "../lib/city/decks";
@@ -157,7 +158,7 @@ function distanceToSegment(x: number, y: number, a: Point2, b: Point2): number {
     l2 > 0
       ? Math.min(1, Math.max(0, ((x - a[0]) * dx + (y - a[1]) * dy) / l2))
       : 0;
-  return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
+  return PMath.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
 }
 
 const railMemo = new Map<string, Map<string, RailFeature[]>>();
@@ -406,7 +407,7 @@ export function sitePassages(site: Site, levels: SiteLevels): Passage[] {
       d.push(
         i === 0
           ? 0
-          : d[i - 1] + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1])
+          : d[i - 1] + PMath.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1])
       );
     }
     for (const [a, b, mode] of runs) {
@@ -468,7 +469,7 @@ export function siteBeds(site: Site, levels: SiteLevels): Bed[] {
       d.push(
         i === 0
           ? 0
-          : d[i - 1] + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1])
+          : d[i - 1] + PMath.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1])
       );
     }
     type Kind = "lay" | "lower" | "cut";
@@ -664,7 +665,7 @@ export async function measureJumps(
     for (let i = 0; i < pts.length; i += 1) {
       const p = pts[i];
       if (i > 0) {
-        run += Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]);
+        run += PMath.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]);
       }
       d.push(run);
       const w = epsgToWorld(p[0], p[1], OFFSET);

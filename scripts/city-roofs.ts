@@ -4,6 +4,7 @@
  * (`withMeasuredRoofs`, scripts/measured-roofs.ts), and a roof on posts
  * LoD2 draws as a block is opened (`withOpenRoofs`). No DOM.
  */
+import * as PMath from "../lib/city/portable-math";
 import { cm, triangulateXY } from "./city-bake";
 import { rootOf } from "./city-lod2";
 import { inheritedAttributes } from "../lib/city/building-tint";
@@ -181,7 +182,7 @@ function normalZ(t: readonly number[]): number {
   const nx = uy * wz - uz * wy;
   const ny = uz * wx - ux * wz;
   const nz = ux * wy - uy * wx;
-  const len = Math.hypot(nx, ny, nz);
+  const len = PMath.hypot(nx, ny, nz);
   return len > 0 ? nz / len : 0;
 }
 

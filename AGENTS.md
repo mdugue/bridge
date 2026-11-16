@@ -156,6 +156,12 @@ ADR 0041).
   `prepare-data.ts` imports to being in some bake's key or excused; which
   artifact needs it is yours to get right). `prepare-data.ts` is in no
   key: a bake lives in its step's module in `scripts/prepare/`, never there.
+- A bake's bytes do not depend on the machine: a module `prepare-data.ts`
+  reaches calls `PMath` (`lib/city/portable-math.ts`), never `Math`'s
+  `hypot`, trigonometric, exponential or power functions, and `**` only
+  to a whole literal — those are the C library's and differ in the last
+  bit (ADR 0024; `bake-entries.test.ts`; `docs/data-pipeline.md`, "Cache
+  and publish").
 - A JSON file a bake writes and TypeScript reads has one zod schema in
   `lib/city/<name>-file.ts` (ADR 0059): readers take its types and
   `parseBakeFile`, never `readJson(…) as T`; the build fails on a

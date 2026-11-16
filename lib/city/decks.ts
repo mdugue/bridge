@@ -7,6 +7,7 @@
  *
  * Coordinates are the Y-up world frame's (x, z) (lib/city/ground-clamp.ts).
  */
+import * as PMath from "./portable-math";
 import { axisFrame, BRIDGE_STEP } from "./bridge";
 import type { BridgeFeature } from "./features";
 import { epsgToWorld } from "./ground-clamp";
@@ -167,7 +168,7 @@ function ringDistance(
       l2 > 0
         ? Math.min(1, Math.max(0, ((x - a.x) * ex + (z - a.z) * ez) / l2))
         : 0;
-    best = Math.min(best, Math.hypot(a.x + ex * t - x, a.z + ez * t - z));
+    best = Math.min(best, PMath.hypot(a.x + ex * t - x, a.z + ez * t - z));
   }
   return best;
 }
@@ -246,7 +247,7 @@ export function longAxis(pts: { x: number; z: number }[]): {
   return {
     a: pts[ai],
     b: pts[bi],
-    span: Math.hypot(pts[bi].x - pts[ai].x, pts[bi].z - pts[ai].z),
+    span: PMath.hypot(pts[bi].x - pts[ai].x, pts[bi].z - pts[ai].z),
   };
 }
 

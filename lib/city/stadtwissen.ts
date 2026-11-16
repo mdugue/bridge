@@ -10,6 +10,7 @@
  * (`data/<site>/wissen/wikidata.json`, `scripts/fetch-stadtwissen.ts`).
  * No THREE, no DOM.
  */
+import * as PMath from "./portable-math";
 import type { SourceInfo } from "./provenance";
 
 /** The site-wide index under `public/data/<site>/`. */
@@ -355,7 +356,7 @@ export function nearby<T extends { x: number; y: number }>(
   radius: number
 ): (T & { d: number })[] {
   return entries
-    .map((e) => ({ ...e, d: Math.hypot(e.x - x, e.y - y) }))
+    .map((e) => ({ ...e, d: PMath.hypot(e.x - x, e.y - y) }))
     .filter((e) => e.d <= radius)
     .sort((a, b) => a.d - b.d);
 }

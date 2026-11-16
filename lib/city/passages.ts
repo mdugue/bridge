@@ -24,6 +24,7 @@
  * `deckPassages` reads them; they open to the ground they run on, no
  * lower, and end square at their last points.
  */
+import * as PMath from "./portable-math";
 import type { Point2 } from "./polyline";
 
 /** A passage: the line through the fill (its rims included) and its level
@@ -104,7 +105,7 @@ function nearest(
       continue;
     }
     const t = Math.min(1, Math.max(0, along));
-    const d = Math.hypot(ax + ex * t - x, ay + ey * t - y);
+    const d = PMath.hypot(ax + ex * t - x, ay + ey * t - y);
     if (!best || d < best.d) {
       best = { d, level: p.y[i] + (p.y[i + 1] - p.y[i]) * t };
     }

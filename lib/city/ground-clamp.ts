@@ -5,6 +5,7 @@
  * World frame: three.js Y-up scene after the -90°-about-X rotation of the
  * data group — x = easting - cx, z = -(northing - cy), y = elevation.
  */
+import * as PMath from "./portable-math";
 
 import { worldToEpsg } from "./frames";
 import type { RecenterOffset } from "./frames";
@@ -37,7 +38,7 @@ export function approachHeight(
   if (tau <= 0) {
     return target;
   }
-  return current + (target - current) * (1 - Math.exp(-dt / tau));
+  return current + (target - current) * (1 - PMath.exp(-dt / tau));
 }
 
 /** How far apart (m) `groundSlope` reads the ground across a point. */
