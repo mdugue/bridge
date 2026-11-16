@@ -64,6 +64,7 @@ import type { DataManifest } from "../lib/city/tile";
 import type { ContentExtras } from "../lib/city/tileset";
 import { TILESET_FILE, TILESET_SPAWN_FILE } from "../lib/city/tileset";
 import { REFERENCE_SITE } from "../sites";
+import { measureBakeStore } from "./ledger-bake-store";
 import { browserSections, timingReport } from "./ledger-browser";
 import { measureDressing } from "./ledger-dressing";
 import { rasterLedger, readySites } from "./ledger-rasters";
@@ -231,7 +232,7 @@ function refuseUnserved(published: PublishedFiles): void {
 export function measure(
   site: string,
   root = ROOT
-): Omit<Ledger, "dated" | "dressing" | "rasters"> {
+): Omit<Ledger, "bakeStore" | "dated" | "dressing" | "rasters"> {
   const published = publishedFiles(site, root);
   const wireOf = new Map<string, number>();
   const wire = (served: string) => {
@@ -361,7 +362,8 @@ export async function run(
     : null;
   // one key a section: the reference site's, then every site's rasters,
   // then the dressing (its recorded part only on a write: the check
-  // never compares it), then what a browser read (`--browser`)
+  // never compares it), then the bakes' hand-over (plan 092), then what a
+  // browser read (`--browser`)
   const check = argv.includes("--check");
   const browser = argv.includes("--browser");
   const fresh = {
@@ -373,6 +375,7 @@ export async function run(
       publishedFiles,
       check ? undefined : { committed, today }
     ),
+    bakeStore: measureBakeStore(root),
     ...(await browserPart(
       browser,
       site,
