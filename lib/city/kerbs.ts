@@ -21,6 +21,7 @@
  * its drop's height over the road — 3 cm, or flush — and ramps back to the
  * full height over RAMP_M either side.
  */
+import * as PMath from "./portable-math";
 import { followGround, joinsAlong, meetGround, SINK } from "./ground-join";
 import type { JoinPoint } from "./ground-join";
 import { epsgToWorld } from "./ground-clamp";
@@ -84,7 +85,7 @@ function profilePoints(line: Point2[], low: readonly KerbDrop[]): Point2[] {
   for (let i = 1; i < line.length; i += 1) {
     const [x0, y0] = line[i - 1];
     const [x1, y1] = line[i];
-    const len = Math.hypot(x1 - x0, y1 - y0);
+    const len = PMath.hypot(x1 - x0, y1 - y0);
     while (m < marks.length && marks[m] <= s) {
       m += 1;
     }
@@ -105,7 +106,7 @@ function alongOf(pts: Point2[]): number[] {
   for (let i = 1; i < pts.length; i += 1) {
     out.push(
       out[i - 1] +
-        Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
+        PMath.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
     );
   }
   return out;
@@ -189,7 +190,7 @@ function pushTri(
 /** The top's normal: up, tilted toward the pavement by the bevel. */
 function bevelNormal(c: KerbCol): [number, number, number] {
   const drop = (c.top - c.backTop) / KERB_WIDTH;
-  const l = Math.hypot(drop, 1);
+  const l = PMath.hypot(drop, 1);
   // the top falls toward the back (−n): its normal leans that way
   return [(-c.n.x * drop) / l, 1 / l, (-c.n.z * drop) / l];
 }
@@ -243,7 +244,7 @@ function towardRoad(pts: Point2[]): Point2[] {
   return pts.map((_, i) => {
     const a = pts[Math.max(0, i - 1)];
     const b = pts[Math.min(pts.length - 1, i + 1)];
-    const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const l = PMath.hypot(b[0] - a[0], b[1] - a[1]) || 1;
     return [-(b[1] - a[1]) / l, (b[0] - a[0]) / l];
   });
 }

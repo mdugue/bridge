@@ -20,6 +20,8 @@ export const GRIMMA: Site = {
     },
   },
   mapillary: { objects: true },
+  // BBBike has no Grimma; its Leipzig rectangle reaches past the Mulde
+  bbbike: "Leipzig",
   spawn: "muldeufer",
   tiles: [
     { e: 340, n: 5678 },

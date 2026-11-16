@@ -14,6 +14,7 @@
  * it, before the buildings are baked. DOM-free, THREE-free.
  */
 
+import * as PMath from "./portable-math";
 import { isOpenRoof } from "./open-roofs";
 import type { Bed } from "./track-beds";
 import type { CityJsonDocument, CityObject } from "./types";
@@ -124,8 +125,8 @@ function samplesOf(beds: readonly Bed[]): Sample[] {
       const prev = i > 0 ? bed.coords[i - 1] : bed.coords[i];
       const next = i + 1 < n ? bed.coords[i + 1] : bed.coords[i];
       const length =
-        (Math.hypot(x - prev[0], y - prev[1]) +
-          Math.hypot(next[0] - x, next[1] - y)) /
+        (PMath.hypot(x - prev[0], y - prev[1]) +
+          PMath.hypot(next[0] - x, next[1] - y)) /
         2;
       out.push({ bed: k, length, x, y, z: bed.z[i] });
     }
@@ -162,7 +163,7 @@ function onOrInside(x: number, y: number, ring: Ring2): boolean {
       len2 > 0
         ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2))
         : 0;
-    if (Math.hypot(x - ax - t * dx, y - ay - t * dy) <= ON_M) {
+    if (PMath.hypot(x - ax - t * dx, y - ay - t * dy) <= ON_M) {
       return true;
     }
   }

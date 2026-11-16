@@ -100,7 +100,8 @@ jobs:
           retention-days: 14
 
   # The offline bakes (pipeline/, Python in its own uv environment): their
-  # unit tests and ruff. The bakes themselves need the raw downloads and run
+  # unit tests, ruff and types (the job keeps its name: branch protection may
+  # require the check by it). The bakes themselves need the raw downloads and run
   # on the maintainer's machine (bun run bake), never here.
   pipeline:
     name: Pipeline (pytest + ruff)
@@ -117,6 +118,18 @@ jobs:
       - run: uv run pytest -q tests
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      # The bakes' types, against a baseline that only shrinks (plan 089); on
+      # a pull request also against the base's baseline, so that a count
+      # raised by hand fails unless the description says why
+      # (`Typecheck-baseline-raise: …`; an edited description needs a re-run).
+      - name: Types
+        run: |
+          if [ -n "$GITHUB_BASE_REF" ]; then
+            git fetch --depth=1 --no-tags origin "$GITHUB_BASE_REF"
+            uv run python typecheck.py --against FETCH_HEAD
+          else
+            uv run python typecheck.py
+          fi
 
   # Build and e2e share a job: its build step is the build check, and the
   # Playwright step serves the artifact it just produced instead of
@@ -265,6 +278,7 @@ jobs:
       # is a single inlined constant, so this still exercises the real
       # production build path; a deploy builds without it and ships no hook.
       - name: Build
+        id: build
         if: steps.scope.outputs.run == 'true' || matrix.shard.buildCheck
         run: bun run build
         env:
@@ -319,6 +333,15 @@ jobs:
           name: playwright-traces-${{ strategy.job-index }}
           path: test-results/
           retention-days: 7
+      # The ledger (plan 087): the reference site's bytes, requests and
+      # complexity counters, recomputed from the build above and compared with
+      # qa/ledger.json. A PR that moves a figure commits the new file
+      # (`bun run ledger`); the job summary names what moved. Last, and after
+      # a failed e2e too, so that neither hides the other.
+      - name: Ledger
+        if: ${{ !cancelled() && matrix.shard.buildCheck && steps.build.outcome == 'success' }}
+        shell: bash
+        run: bun scripts/ledger.ts --check | tee -a "$GITHUB_STEP_SUMMARY"
 
   # The status check PRs are gated on keeps its name and reports the shards
   # as one. It runs whenever the shards ran, so a failed (or timed-out) shard

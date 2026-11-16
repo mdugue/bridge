@@ -110,6 +110,7 @@ const ASKED = [
   "disposeForReload",
   "getFocusDebug",
   "getGpuDebug",
+  "getPipelineBudget",
   "getRenderInfo",
   "inquireAt",
   "releaseGpu",
