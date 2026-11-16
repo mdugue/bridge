@@ -1,8 +1,10 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import nodePath from "node:path";
 import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { utmToLatLng } from "../lib/city/crs";
 import { arrivalHref } from "../lib/city/geolocation";
+import { poseFault } from "../lib/city/plate-pose";
 import {
   decodeLook,
   parseSnapshot,
@@ -131,92 +133,312 @@ function jsonsIn(
   }
 }
 
+/**
+ * `PLATES_DIR=<folder>` (set by scripts/plates.ts, plan 087): the QA views
+ * as compared plates, `<folder>/qa-<name>.png` and a `run.json` with the
+ * adapter and each view's time. `PLATES_VIEWS=a,b` names the views, in
+ * that order; without it, every one.
+ */
+const PLATES_DIR = process.env.PLATES_DIR ?? "";
+const PLATES_VIEWS = (process.env.PLATES_VIEWS ?? "")
+  .split(",")
+  .filter(Boolean);
+/** `PLATES_STILL=0` lets time run: how the noise floor was read without
+ *  the hold (plan 087, Findings). */
+const PLATES_STILL = process.env.PLATES_STILL !== "0";
+/**
+ * How long a plate's view may take to settle: three minutes on
+ * SwiftShader, where the tier's slowest took 55 s (plan 087, Findings),
+ * one on a GPU. A view that takes longer fails the run by its name, well
+ * inside the job's budget, instead of being waited for until the job is
+ * cancelled without a word.
+ */
+const PLATE_VIEW_MS = SHOTS_SMALL ? 180_000 : 60_000;
+/**
+ * How long one side's whole render may take on SwiftShader: ten minutes,
+ * where the tier's eight views took 5½ in the container and about 6½ on
+ * a hosted runner. Two sides and two builds then stay under the job's 30
+ * (.github/workflows/plates.yml). A GPU's run of all 50 views has no cap
+ * but its views'.
+ */
+const PLATE_RUN_MS = SHOTS_SMALL ? 600_000 : Number.POSITIVE_INFINITY;
+/**
+ * Frames a plate waits at the least (the stream has seen the view), and
+ * for a shadow map by night, when none is drawn. And the loop's step a
+ * frame while it waits (ms): the largest the loop takes (it clamps a step
+ * to 50 ms), so that what settles by the clock (the regression's
+ * recovery, the lens's fade, the eye onto the ground) needs a third of
+ * the frames of a 60 Hz step. With `still` nothing animates by it, and a
+ * SwiftShader frame takes seconds.
+ */
+const PLATE_SETTLE = { settle: 8, shadowless: 12 };
+const PLATE_FRAME_MS = 50;
+
+/** What the adapter says of itself (`GPUAdapterInfo`). */
+interface GpuLike {
+  requestAdapter: () => Promise<{
+    info?: Record<"architecture" | "description" | "device" | "vendor", string>;
+  } | null>;
+}
+
+/** The views a plates run renders, in the order asked for. */
+function plateViews(): { path: string; name: string }[] {
+  const all = jsonsIn(QA_VIEWS_DIR, "qa-");
+  if (PLATES_VIEWS.length === 0) {
+    return all;
+  }
+  return PLATES_VIEWS.map((view) => {
+    const found = all.find((v) => v.name === `qa-${view}`);
+    if (!found) {
+      throw new Error(`no QA view named ${view}`);
+    }
+    return found;
+  });
+}
+
 /** Each snapshot to render: the dropped ones, then the QA views. */
 function snapshotFiles(): { path: string; name: string }[] {
   return [...jsonsIn(SHOTS_DIR, ""), ...jsonsIn(QA_VIEWS_DIR, "qa-")];
 }
 
-for (const { path: file, name } of snapshotFiles()) {
-  test(`snapshot: ${name}`, async ({ page }) => {
-    test.setTimeout(READY_MS + 150_000);
-    // Validate before rendering: a broken shot fails loudly instead of
-    // silently rendering the defaults.
-    const parsed = parseSnapshot(readFileSync(file, "utf-8"));
-    if (!parsed.ok) {
-      throw new Error(`${file}: ${parsed.reason}`);
+/** Frames on end the scene has to say it is settled before a plate. */
+const SETTLE_QUIET_FRAMES = 3;
+/** How long a single shot's view may take to settle. */
+const SHOT_SETTLE_MS = READY_MS + 60_000;
+
+/** A snapshot file, validated: a broken one fails loudly instead of
+ *  silently rendering the defaults. */
+function readSnapshot(file: string): Snapshot {
+  const parsed = parseSnapshot(readFileSync(file, "utf-8"));
+  if (!parsed.ok) {
+    throw new Error(`${file}: ${parsed.reason}`);
+  }
+  return parsed.snapshot;
+}
+
+/** The page booted and everything in view streamed in; the loading veil
+ *  (load-veil.ts) off, which would draw over what a flight brings. */
+async function bootPage(page: Page, url: string): Promise<void> {
+  await page.goto(url);
+  await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
+    timeout: READY_MS,
+  });
+  await page.evaluate(async () => {
+    if (window.__poc) {
+      window.__poc.veil = { radius: 6000, strength: 0 };
+      await window.__poc.handle?.sync();
     }
-    const snap: Snapshot = parsed.snapshot;
+  });
+}
 
-    await page.goto(shotUrl(snap));
-    await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
-      timeout: READY_MS,
-    });
-    // A plate shows the finished city: the snapshot's flight streams, and
-    // the loading veil (load-veil.ts) would draw over what it brings.
-    await page.evaluate(() => {
-      if (window.__poc) {
-        window.__poc.veil = { radius: 6000, strength: 0 };
+/**
+ * Apply a snapshot and wait, in frames, until its picture has settled:
+ * the shadow map re-rendered for the new pose and sun, the motion
+ * regression lifted (DoF is off for RECOVER_MS after the move), the lens
+ * grown in, the view's own tiles landed. Counted in frames, not waited out
+ * on a clock (a slow GPU took longer than any fixed sleep). By night no
+ * shadow map is drawn, so after `shadowless` frames the plate is taken
+ * without one. `settle`: the frames the stream needs to see the new view
+ * at all; `budgetMs`: how long it may take. Says whether it settled.
+ *
+ * "Settled" is what the scene reports: the stream idle with every
+ * dressing tried (boot-phases.ts), the shadow rings drawn, the lens
+ * still. A tile's late parts (murals, window niches: late-parts.ts) are
+ * not counted — they land when they land.
+ */
+async function applyAndSettle(
+  page: Page,
+  snap: Snapshot,
+  {
+    settle,
+    shadowless,
+    budgetMs,
+  }: { settle: number; shadowless: number; budgetMs: number }
+): Promise<boolean> {
+  // The same codec (and the same minute-floored instant) the HUD's Apply
+  // button uses, against the same store the sliders write — a new look
+  // control needs no edit here.
+  const lookPatch = decodeLook(snap.look);
+  const instant = snapshotInstant(snap).toISOString();
+  const before = await page.evaluate(
+    async ([camera, date, patch]) => {
+      const poc = window.__poc;
+      if (!(poc?.handle && poc.look)) {
+        throw new Error("scene handle not published");
       }
-    });
-
-    // The same codec (and the same minute-floored instant) the HUD's Apply
-    // button uses, against the same store the sliders write — a new look
-    // control needs no edit here.
-    const lookPatch = decodeLook(snap.look);
-    const instant = snapshotInstant(snap).toISOString();
-    const before = await page.evaluate(
-      ([camera, date, patch]) => {
+      poc.handle.applyCameraState(camera);
+      poc.handle.setSun(new Date(date));
+      poc.look.set(patch);
+      // The scene may run in a worker (ADR 0061): the counts below are
+      // its mirror, read only once it has heard the three calls — or the
+      // frames of a boot still streaming count as this view's.
+      await poc.handle.sync();
+      return { frames: poc.frames, shadows: poc.shadowRenders };
+    },
+    [snap.camera, instant, lookPatch] as const
+  );
+  await page.evaluate(hideOverlays);
+  // One loop inside the page, awaited: `waitForFunction` on an interval
+  // takes an async predicate's promise for its answer, and so never waited.
+  const settled = await page.evaluate(
+    async ({ frames, shadows, least, nightly, quiet, budget }) => {
+      const until = performance.now() + budget;
+      let busyAt = 0;
+      while (performance.now() < until) {
         const poc = window.__poc;
-        if (!(poc?.handle && poc.look)) {
-          throw new Error("scene handle not published");
-        }
-        const counts = { frames: poc.frames, shadows: poc.shadowRenders };
-        poc.handle.applyCameraState(camera);
-        poc.handle.setSun(new Date(date));
-        poc.look.set(patch);
-        return counts;
-      },
-      [snap.camera, instant, lookPatch] as const
-    );
-
-    await page.evaluate(hideOverlays);
-
-    // Let the shadow map re-render for the new pose and sun, the motion
-    // regression lift (DoF is off for RECOVER_MS after the move) and grading
-    // settle: counted in frames, not waited out on a clock (a slow
-    // GPU took longer than any fixed sleep). By night no shadow map is
-    // drawn, so after `shadowless` frames the plate is taken without one.
-    await page.waitForFunction(
-      async ({ frames, shadows, settle, shadowless }) => {
-        const poc = window.__poc;
-        const focus = await poc?.handle?.getFocusDebug();
         const drawn = (poc?.frames ?? 0) - frames;
-        return (
-          drawn >= settle &&
+        let busy =
           // the move regressed the post stack: DoF is back once it is
           // still, and grown in fully where the style draws it
-          !poc?.regressed &&
-          (focus?.settled ?? true) &&
+          poc?.regressed === true ||
           // the rings redraw one a frame, the wide ones at a distance
-          !poc?.handle?.shadowBusy() &&
+          poc?.handle?.shadowBusy() === true ||
           // a plate far from the spawn waits for its own tiles to land
-          !poc?.handle?.streamBusy() &&
-          ((poc?.shadowRenders ?? 0) > shadows || drawn >= shadowless)
-        );
-      },
-      // settle: frames for the stream to see the new view at all
-      { ...before, settle: 10, shadowless: 30 },
-      { timeout: READY_MS + 60_000 }
-    );
+          poc?.handle?.streamBusy() === true;
+        if (!busy) {
+          // (asked last: a call wakes the scene's pace, lib/city/frame-pace.ts)
+          const focus = await poc?.handle?.getFocusDebug();
+          busy = focus?.settled === false;
+        }
+        // Quiet for some frames on end, not for one: between a tile
+        // landing and its dressing being queued the scene says "settled".
+        if (busy) {
+          busyAt = Math.max(drawn, 0);
+        }
+        if (
+          drawn >= least &&
+          drawn - busyAt >= quiet &&
+          ((poc?.shadowRenders ?? 0) > shadows || drawn >= nightly)
+        ) {
+          return true;
+        }
+        await new Promise((resolve) => {
+          setTimeout(resolve, 100);
+        });
+      }
+      return false;
+    },
+    {
+      ...before,
+      least: settle,
+      nightly: shadowless,
+      quiet: SETTLE_QUIET_FRAMES,
+      budget: budgetMs,
+    }
+  );
+  // Again: a notice raised after the move ("Umgebung lädt") was not
+  // there to hide the first time.
+  await page.evaluate(hideOverlays);
+  return settled;
+}
 
-    // Again: a notice raised after the move ("Umgebung lädt") was not
-    // there to hide the first time.
-    await page.evaluate(hideOverlays);
-    const canvas = page.locator("canvas[data-engine]");
-    await expect(canvas).toBeVisible();
-    const tag = SHOTS_TAG ? `.${SHOTS_TAG}` : "";
-    await canvas.screenshot({
-      path: nodePath.join(SHOTS_DIR, `${name}${tag}.png`),
+if (PLATES_DIR) {
+  // The compared plates (scripts/plates.ts): every view from ONE booted
+  // page, in the table's order, on the held clock.
+  test("plates", async ({ page }) => {
+    const views = plateViews();
+    // Each view its budget and its screenshot, the boot before them —
+    // but no longer than a run may take, so that a run that hangs ends
+    // here, with its summary, and not by the job's cancellation.
+    test.setTimeout(
+      Math.min(PLATE_RUN_MS, READY_MS + views.length * (PLATE_VIEW_MS + 30_000))
+    );
+    mkdirSync(PLATES_DIR, { recursive: true });
+    const times: Record<string, number> = {};
+    const started = Date.now();
+    await bootPage(
+      page,
+      `/${SHOTS_SITE}${SHOTS_QUERY ? `?${SHOTS_QUERY}` : ""}`
+    );
+    times.boot = Date.now() - started;
+    const adapter = await page.evaluate(async () => {
+      // reason: lib.dom of this TypeScript has no `navigator.gpu`
+      const { gpu } = navigator as unknown as { gpu?: GpuLike };
+      const found = await gpu?.requestAdapter();
+      const info = found?.info;
+      return info
+        ? [info.vendor, info.architecture, info.device, info.description]
+            .filter(Boolean)
+            .join(" ")
+        : "none";
     });
+    // A fixed step a drawn frame, and no time passing in what animates
+    // (poc-scene.ts `still`): two renders of one commit are one picture.
+    const held = await page.evaluate(
+      async ([frameMs, still]) => {
+        const poc = window.__poc;
+        if (!poc) {
+          return false;
+        }
+        // a build from before the probe takes the value and holds nothing
+        const known =
+          Object.getOwnPropertyDescriptor(poc, "still")?.set !== undefined;
+        poc.frameMs = frameMs;
+        poc.still = still;
+        await poc.handle?.sync();
+        return known && still;
+      },
+      [PLATE_FRAME_MS, PLATES_STILL] as const
+    );
+    const canvas = page.locator("canvas[data-engine]");
+    for (const { path: file, name } of views) {
+      const viewStarted = Date.now();
+      const snap = readSnapshot(file);
+      const settled = await applyAndSettle(page, snap, {
+        ...PLATE_SETTLE,
+        budgetMs: PLATE_VIEW_MS,
+      });
+      if (!settled) {
+        throw new Error(
+          `plates: ${name} did not settle within ${PLATE_VIEW_MS / 1000} s`
+        );
+      }
+      const stands = await page.evaluate(() =>
+        window.__poc?.handle?.getCameraState()
+      );
+      const fault = stands
+        ? poseFault(snap.camera, stands)
+        : "the scene gave no camera";
+      if (fault) {
+        throw new Error(`plates: ${name} is not at its pose: ${fault}`);
+      }
+      await canvas.screenshot({
+        path: nodePath.join(PLATES_DIR, `${name}.png`),
+      });
+      times[name] = Date.now() - viewStarted;
+    }
+    writeFileSync(
+      nodePath.join(PLATES_DIR, "run.json"),
+      `${JSON.stringify({ adapter, held, query: SHOTS_QUERY, small: SHOTS_SMALL, ms: times }, null, 2)}\n`
+    );
   });
+} else {
+  for (const { path: file, name } of snapshotFiles()) {
+    test(`snapshot: ${name}`, async ({ page }) => {
+      // the boot, the settle, and the screenshot of a large canvas
+      test.setTimeout(READY_MS + SHOT_SETTLE_MS + 60_000);
+      const snap = readSnapshot(file);
+      await bootPage(page, shotUrl(snap));
+      // settle: frames for the stream to see the new view at all
+      const settled = await applyAndSettle(page, snap, {
+        settle: 10,
+        shadowless: 30,
+        budgetMs: SHOT_SETTLE_MS,
+      });
+      // A shot is for looking at: one that never went quiet is still
+      // written, and says so.
+      if (!settled) {
+        const description = `${name} was still busy after ${SHOT_SETTLE_MS / 1000} s`;
+        test.info().annotations.push({ type: "unsettled", description });
+        // (the line reporter shows no annotation)
+        process.stderr.write(`shots: unsettled: ${description}\n`);
+      }
+      const canvas = page.locator("canvas[data-engine]");
+      await expect(canvas).toBeVisible();
+      const tag = SHOTS_TAG ? `.${SHOTS_TAG}` : "";
+      await canvas.screenshot({
+        path: nodePath.join(SHOTS_DIR, `${name}${tag}.png`),
+      });
+    });
+  }
 }

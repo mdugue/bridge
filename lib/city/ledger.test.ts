@@ -711,6 +711,13 @@ const LEDGER = {
   },
   rasters: { rule: "rasters", cpuDecodes: [], sites: {}, sorts: SORT_OF },
   dressing: { tiles: {} },
+  bakeStore: {
+    sites: ["dresden"],
+    fileKinds: { total: 2, formats: 2, byFormat: { geojson: 1, png: 1 } },
+    mixedKeyOrder: [],
+    stepCacheCodeLines: 3,
+    neighboursModules: 1,
+  },
 } satisfies Ledger;
 
 type Tree = Record<string, unknown>;
@@ -853,6 +860,7 @@ test("the written ledger is the fresh figures, the heading first", () => {
     "counters",
     "rasters",
     "dressing",
+    "bakeStore",
   ]);
   // a further section is written where it was measured, and gated
   const more = { ...fresh, browser: BROWSER };

@@ -5342,6 +5342,29 @@
       }
     }
   },
+  "bakeStore": {
+    "sites": [
+      "dresden",
+      "grimma",
+      "hamburg",
+      "leipzig",
+      "meissen",
+      "muenchen",
+      "unna"
+    ],
+    "fileKinds": {
+      "total": 51,
+      "formats": 3,
+      "byFormat": {
+        "geojson": 28,
+        "json": 13,
+        "png": 10
+      }
+    },
+    "mixedKeyOrder": ["furniture", "traffic"],
+    "stepCacheCodeLines": 503,
+    "neighboursModules": 14
+  },
   "census": {
     "note": "Recorded, never compared (plan 094 phase 2): what lands when depends on the machine's frame rate. Each built site in the whole-site profile (?scene=lite&block=1, 400×300) with its data layers on (Dresden's bike counts answered by the spec, a design block loaded there): ready, then an overview from 2.5 km and low oblique stops over up to four tiles spread over the site, each held until the stream and the compiles fall quiet (or its cap). At each stop getPipelineBudget reads every build the scene holds, which holds them to WebGPU's limits too (interStage excludes the clay, held by the limits test). framedBuilds are in-frame node builds, programs three's info.memory.programs, compileWaits the compile timings' measures over the flight. modell: Dresden once more, entered with M after its flight.",
     "machine": "linux-x64, Bun 1.4.4",
@@ -6436,10 +6459,10 @@
     "firstLoad": {
       "note": "Every /_next/static/*.js the page or the workers ground, niches, scene fetched themselves (each one's resource timing) at /dresden?scene=lite (a NEXT_PUBLIC_POC_DEBUG=1 production build), cut at: ready, those workers running, then 5 s without a new script; a second read 5 s later must equal it. The BVH worker's own scripts are left out: it starts only if the spawn's buildings have no BVH yet. Each raw body gzipped at level 9 by the pinned Bun, exact. workerOnly: the files those workers fetched and the page did not — not the scene's JavaScript, which the page shares.",
       "files": 42,
-      "gzip": 1103160,
+      "gzip": 1103214,
       "workerOnly": {
         "files": 8,
-        "gzip": 34830
+        "gzip": 34828
       }
     },
     "phoneLiteSpawnCache": {
@@ -6873,53 +6896,53 @@
     "desktop": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 182.7,
-        "maxMs": 182.7
+        "totalMs": 5.6,
+        "maxMs": 5.6
       },
       "boot:frame": {
         "count": 8,
-        "totalMs": 889.6,
-        "maxMs": 675.2
+        "totalMs": 675.3,
+        "maxMs": 508.1
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 617.7,
-        "maxMs": 617.7
+        "totalMs": 605,
+        "maxMs": 605
       },
       "boot:light-wait": {
         "count": 1,
-        "totalMs": 3000.3,
-        "maxMs": 3000.3
+        "totalMs": 2379.2,
+        "maxMs": 2379.2
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 2032.6,
-        "maxMs": 2032.6
+        "totalMs": 1592,
+        "maxMs": 1592
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 458.7,
-        "maxMs": 458.7
+        "totalMs": 405.3,
+        "maxMs": 405.3
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 525.3,
-        "maxMs": 525.3
+        "totalMs": 620.3,
+        "maxMs": 620.3
       },
       "boot:scene-compile": {
         "count": 1,
-        "totalMs": 3000.4,
-        "maxMs": 3000.4
+        "totalMs": 3000.8,
+        "maxMs": 3000.8
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 114.1,
-        "maxMs": 114.1
+        "totalMs": 129.1,
+        "maxMs": 129.1
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 6035.4,
-        "maxMs": 6035.4
+        "totalMs": 5591.6,
+        "maxMs": 5591.6
       },
       "boot:tileset": {
         "count": 1,
@@ -6928,70 +6951,70 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4499.2,
-        "maxMs": 4499.2
+        "totalMs": 4272.9,
+        "maxMs": 4272.9
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 1218.1,
-        "maxMs": 952
+        "totalMs": 1000.2,
+        "maxMs": 732.3
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 12071.5,
-        "maxMs": 3051.5
+        "totalMs": 12002.5,
+        "maxMs": 3000.9
       }
     },
     "phone": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 189.7,
-        "maxMs": 189.7
+        "totalMs": 128.7,
+        "maxMs": 128.7
       },
       "boot:frame": {
-        "count": 5,
-        "totalMs": 866.8,
-        "maxMs": 562.5
+        "count": 7,
+        "totalMs": 682.9,
+        "maxMs": 456.4
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 610,
-        "maxMs": 610
+        "totalMs": 605,
+        "maxMs": 605
       },
       "boot:light-wait": {
         "count": 1,
-        "totalMs": 1583.4,
-        "maxMs": 1583.4
+        "totalMs": 1191.8,
+        "maxMs": 1191.8
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 1943.9,
-        "maxMs": 1943.9
+        "totalMs": 1780.3,
+        "maxMs": 1780.3
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 580.1,
-        "maxMs": 580.1
+        "totalMs": 411.2,
+        "maxMs": 411.2
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 106.3,
-        "maxMs": 106.3
+        "totalMs": 130.9,
+        "maxMs": 130.9
       },
       "boot:scene-compile": {
         "count": 1,
-        "totalMs": 3000.4,
-        "maxMs": 3000.4
+        "totalMs": 3000.8,
+        "maxMs": 3000.8
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 111.6,
-        "maxMs": 111.6
+        "totalMs": 97.8,
+        "maxMs": 97.8
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 4180.8,
-        "maxMs": 4180.8
+        "totalMs": 4459.8,
+        "maxMs": 4459.8
       },
       "boot:tileset": {
         "count": 1,
@@ -7000,24 +7023,24 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4381.5,
-        "maxMs": 4381.5
+        "totalMs": 4268.1,
+        "maxMs": 4268.1
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 1097.4,
-        "maxMs": 807.1
+        "totalMs": 994.9,
+        "maxMs": 745.9
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 9507.9,
-        "maxMs": 3137.7
+        "totalMs": 11051,
+        "maxMs": 3016.9
       }
     },
     "phoneHeld": {
-      "attributes": 1116,
-      "attributesSize": 47229174,
-      "geometries": 447,
+      "attributes": 1211,
+      "attributesSize": 47381554,
+      "geometries": 479,
       "indexAttributes": 133,
       "indexAttributesSize": 33979704,
       "indirectStorageAttributes": 0,
@@ -7031,9 +7054,9 @@
       "storageAttributesSize": 0,
       "textures": 63,
       "texturesSize": 71615312,
-      "uniformBuffers": 542,
-      "uniformBuffersSize": 139984,
-      "total": 154960164
+      "uniformBuffers": 576,
+      "uniformBuffersSize": 146096,
+      "total": 155118656
     },
     "firstLoad": [
       {
@@ -7062,6 +7085,16 @@
         "worker": false
       },
       {
+        "url": "/_next/static/chunks/08wa39oqfutdb.js",
+        "gzip": 134059,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/0dqqem97cgfoi.js",
+        "gzip": 8412,
+        "worker": false
+      },
+      {
         "url": "/_next/static/chunks/0h785u-h-7aqq.js",
         "gzip": 1743,
         "worker": false
@@ -7087,11 +7120,6 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/122ugne33q90t.js",
-        "gzip": 774,
-        "worker": true
-      },
-      {
         "url": "/_next/static/chunks/1acvom898pdb5.js",
         "gzip": 10385,
         "worker": false
@@ -7100,11 +7128,6 @@
         "url": "/_next/static/chunks/1kgvfy450pybk.js",
         "gzip": 16157,
         "worker": true
-      },
-      {
-        "url": "/_next/static/chunks/1mwqdamc33p2d.js",
-        "gzip": 291268,
-        "worker": false
       },
       {
         "url": "/_next/static/chunks/1pcw6gskne7pf.js",
@@ -7122,18 +7145,28 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1sx0d8a9ti4vq.js",
-        "gzip": 393,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/1v3j7ip4nz0ud.js",
         "gzip": 11666,
         "worker": false
       },
       {
+        "url": "/_next/static/chunks/1x-k_x482wv48.js",
+        "gzip": 392,
+        "worker": false
+      },
+      {
         "url": "/_next/static/chunks/26_jj1pp9j5ek.js",
         "gzip": 10253,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/281j3q-dm00mk.js",
+        "gzip": 291305,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/2a_zar-boijnz.js",
+        "gzip": 417,
         "worker": false
       },
       {
@@ -7162,18 +7195,8 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/2tr21qp__nime.js",
-        "gzip": 417,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/2wsjxrkk9_2d7.js",
         "gzip": 71849,
-        "worker": false
-      },
-      {
-        "url": "/_next/static/chunks/3-nbsju6oja6k.js",
-        "gzip": 134041,
         "worker": false
       },
       {
@@ -7184,11 +7207,6 @@
       {
         "url": "/_next/static/chunks/372v7qv1pnu01.js",
         "gzip": 14026,
-        "worker": false
-      },
-      {
-        "url": "/_next/static/chunks/39-kggz5qg_7b.js",
-        "gzip": 8410,
         "worker": false
       },
       {
@@ -7222,6 +7240,11 @@
         "worker": true
       },
       {
+        "url": "/_next/static/chunks/3yozywo6a5cbd.js",
+        "gzip": 772,
+        "worker": true
+      },
+      {
         "url": "/_next/static/chunks/turbopack-077hmtqrhcoji.js",
         "gzip": 4367,
         "worker": false
@@ -7232,7 +7255,7 @@
         "worker": true
       },
       {
-        "url": "/_next/static/chunks/turbopack-24yrdm75vtflc.js",
+        "url": "/_next/static/chunks/turbopack-2m-4g4r53h0p8.js",
         "gzip": 192,
         "worker": true
       },
