@@ -57,23 +57,13 @@ viewer, 45 by the build alone, 104 by the viewer alone.
 messages: `scene-protocol.ts` (the messages), `scene-server.ts` (the
 scene's end), `scene-client.ts` (the page's end, a handle), `scene-host.ts`,
 `page-view.ts` (the one door to the page), `scene-worker.ts`. The worker
-is made in `scene-client.ts`, `workerChannel`:
-
-```ts
-const worker = new Worker(new URL("./scene-worker.ts", import.meta.url), {
-  type: "module",
-  name: "scene",
-});
-```
-
-Three more workers (BVH, ground, window niches) are made the same way
-through `worker-client.ts`. What keeps a scene module off the DOM is
+is made in `scene-client.ts`, `workerChannel`, as
+`new Worker(new URL("./scene-worker.ts", import.meta.url), { type: "module", name: "scene" })`;
+three more workers (BVH, ground, window niches) the same way through
+`worker-client.ts`. What keeps a scene module off the DOM is
 `oxlint.config.ts`:
 
 ```ts
-// The scene runs in a worker where it can (ADR 0061), which has no
-// document, window or page address: scene code reads the page
-// through page-view.ts. The .tsx are the page's.
 files: ["app/_components/*.ts", "lib/**/*.ts"],
 rules: { "no-restricted-globals": ["error", { name: "document", … },
   { name: "window", … }, { name: "location", … }] },
@@ -100,16 +90,11 @@ takes a narrow context and gives back a handle, and its test runs it
 with a fake context:
 
 ```ts
-export interface TileMemoryContext {
-  tiles: GovernedTiles;
-  tier: "desktop" | "mobile";
-  safety: SafetyLevel;
-  held: () => number;
-  shedding: () => boolean;
-  note: (detail: string) => void;
-}
 export function bindTileMemory(ctx: TileMemoryContext): TileMemory { … }
 ```
+
+`TileMemoryContext` has six members (`tiles`, `tier`, `safety`, `held`,
+`shedding`, `note`); `tile-memory.test.ts` fakes them.
 
 The frame's order is a tested list (`frame-steps.ts`, `FRAME_STEPS`),
 and optional features listen to the spine through `feature-seam.ts`.
@@ -124,10 +109,8 @@ Y-up positions never goes inside it. The conversion has one home,
 `lib/city/ground-clamp.ts`:
 
 ```ts
-export function worldToEpsg(x: number, z: number, offset: RecenterOffset):
-  { x: number; y: number } { return { x: x + offset.cx, y: offset.cy - z }; }
-export function epsgToWorld(x: number, y: number, offset: RecenterOffset):
-  { x: number; z: number } { return { x: x - offset.cx, z: -(y - offset.cy) }; }
+worldToEpsg(x: number, z: number, offset): { x: number; y: number }
+epsgToWorld(x: number, y: number, offset): { x: number; z: number }
 ```
 
 31 modules call them; about a hundred more lines in `app/_components`
@@ -139,9 +122,9 @@ shaders the data frame comes from world space (`shader-chunks.ts`,
 `dataXY = vec2(positionWorld.x, positionWorld.z.negate())`).
 
 **A trap for part A.** The bake cache's key hashes each module's path
-with its contents (`scripts/bake-sources.ts`, `contentKey`:
-`h.update(`${path}:${hashOf(path)};`)`). A moved module is a new key for
-every bake that reaches it.
+with its contents (`scripts/bake-sources.ts`, `contentKey`: the string
+hashed is the path, a colon and the content's hash). A moved module is a
+new key for every bake that reaches it.
 
 ## Commands you will need
 
@@ -168,12 +151,10 @@ the owners taken out of it.
 - Any behaviour, constant, shader or pixel. A phase that changes a plate
   of 087 is wrong.
 - `components/ui/` (vendored by `shadcn add`).
-- Plan 021's `wissen/` package: this plan names the workspace it joins
-  and builds nothing of it.
+- Plan 021's `wissen/` package: named here, built there.
 - A registry of dressing kinds, more hooks through `feature-seam.ts`,
-  splitting `lib/city/features.ts` — each rejected on 2026-11-04 (the
-  README's *Rejected* list).
-- An `oxlint-disable` comment, anywhere.
+  splitting `lib/city/features.ts` (rejected 2026-11-04, the README's
+  *Rejected* list); an `oxlint-disable` comment, anywhere.
 
 ## Part B — a coordinate's frame is its type (independent, may go first)
 
@@ -221,8 +202,9 @@ Count from the import graph, not by eye: `moduleGraph` from
 three worker entries is **the scene**; over `app/**/*.tsx` and the page
 modules, less the scene, is **the page**; what both reach is **shared**.
 Write the three lists and their line counts into the Findings; they are
-the move's manifest. Expect far fewer than today's 210 modules: 090
-takes the mesh builders out of the viewer (plan 074 counted ≈ 7 400
+the move's manifest. On 2026-11-16 the scene's server alone reaches 281
+modules (144 under `app/_components`, 137 under `lib/`). Expect fewer:
+090 takes the mesh builders out of the viewer (plan 074 counted ≈ 7 400
 lines of them), 093 rewrites the stream.
 
 Then the spike, on a branch that is thrown away: declare Bun workspaces
@@ -258,11 +240,9 @@ chunk, not in the page's and the worker's (plan 043 once measured
   list of open PRs is short, and say so in each open PR the day before.
   `@/lib/city/*` and `@/app/_components/*` stay as `paths` aliases onto
   the new places for that week, then go in a second, small PR.
-- **Paths in prose** move in the same PR: `docs/`, `AGENTS.md` and the
-  skills name a module by path about nine hundred times, the code's
-  comments about seven hundred
-  (`grep -rhoE "app/_components/[a-z0-9-]+\.tsx?|lib/city/[a-z0-9-]+\.ts"`).
-  The script rewrites them too.
+- **Paths in prose** move in the same PR, by the same script: `docs/`,
+  `AGENTS.md` and the skills name a module by path about nine hundred
+  times, the code's comments about seven hundred.
 - **The bake cache**: every key changes (the trap above). The bytes do
   not. So the proof is the one this repository already uses: a cold
   bake of every site publishes no new file, and after
@@ -272,8 +252,8 @@ chunk, not in the page's and the worker's (plan 043 once measured
 **Verify**: `git diff --stat -M` shows renames and specifier lines only;
 `bun run verify`, `bun run build`, `bun run test:e2e` → green;
 a cold `bun run build` (or 088's publish) → 0 new files;
-`grep -n "no-restricted-globals\": \"off\"" oxlint.config.ts` → only the
-tests' entry; ledger: first-load JavaScript and the worker's chunk within
+the block of `oxlint.config.ts` that switches `no-restricted-globals` off
+lists test files only; ledger: first-load JavaScript and the worker's chunk within
 1 %; 087's plate compare passes.
 
 ## Part C — `bootApp` as owners (after 090 and A1)

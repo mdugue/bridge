@@ -69,12 +69,10 @@ Read these before changing anything; the roles are as of `5dfa300d`.
   `.glb.gz`, `.pts.gz`, `.crw.gz` keep both suffixes), `finish` writes
   `manifest.json` (`{ version: 1, files: { logical: hashed } }`) and
   prunes what the run did not name.
-- `scripts/shared-cache.ts` — a second bake cache every branch shares,
-  in Vercel's Remote Cache (`https://api.vercel.com/v8/artifacts`, the
-  token `VERCEL_ARTIFACTS_TOKEN` that only Vercel's build passes). It
-  exists because the deploy bakes.
-- `scripts/warmers.ts` — `bakeLimits`, `warmSteps`: one tile a process
-  so that the peaks fit the builder's memory.
+- `scripts/shared-cache.ts` (a second bake cache in Vercel's Remote
+  Cache, its token `VERCEL_ARTIFACTS_TOKEN` passed by Vercel's build
+  alone) and `scripts/warmers.ts` (`bakeLimits`, `warmSteps`: one tile a
+  process, so the peaks fit the builder) exist because the deploy bakes.
 - `lib/city/site-index.ts` — `siteDataBase(id)` returns `/data/${id}`:
   the one place the served base is made. `app/_lib/built-sites.ts`
   (`builtSites`, `firstFetches`) reads `public/data/sites.json` at build
@@ -91,24 +89,21 @@ Read these before changing anything; the roles are as of `5dfa300d`.
 - `lib/city/fetch-retry.ts` (ADR 0048): 404 and 410 mean absent;
   network errors, 408, 425, 429 and 5xx are retried; any other status
   is fatal.
-- `next.config.ts` — `/data/:path*` is served `public,
-  max-age=31536000, immutable`; `/data/:site/manifest.json` and
-  `/data/sites.json` `no-cache`; `outputFileTracingExcludes` keeps
-  `public/data` out of the server functions.
+- `next.config.ts` — `/data/:path*` is served `immutable` for a year,
+  each `manifest.json` and `sites.json` `no-cache`;
+  `outputFileTracingExcludes` keeps `public/data` out of the functions.
 - `.gitignore` — `/data/*` is ignored and seven folders are un-ignored
-  by name (`!/data/dresden/` … `!/data/unna/`); `/public/data/` and
-  `/.cache/` are ignored.
+  by name (`!/data/dresden/` … `!/data/unna/`).
 - `.github/workflows/ci.yml` — the unit job keys a cache by
   `git rev-parse HEAD:data/dresden/dgm`; the e2e job runs `bun run
   build`, which bakes from the checkout's `data/`, and keys its bake
   cache by `hashFiles('data/**', …)`; its scope step lists `data`
   among the paths that make the viewer shards run.
-- Tests bound to the data: 34 test files under `lib/`, `app/` and
-  `scripts/` read a site's folder (list them with `grep -rlE
-  "siteDataDir|sideFileSource|wallSourceFile|kerbSourceFile|data/dresden|dgm-cache|readDgm\(|tileSources\("
-  lib app scripts --include=*.test.ts`); several walk every site that
-  is on disk (`features.test.ts`: `SITES_BAKED`, `bake-files.test.ts`,
-  `tile-data.test.ts`, `png-raster.test.ts`, `markings.test.ts`).
+- Tests bound to the data: 24 test files name a site's folder (`grep
+  -rlE "siteDataDir|sideFileSource|wallSourceFile|kerbSourceFile|data/dresden|dgm-cache|readDgm\(|tileSources\("
+  lib app scripts --include=*.test.ts`), and more reach it through
+  helpers; several walk every site on disk (`features.test.ts`:
+  `SITES_BAKED`, `bake-files.test.ts`, `tile-data.test.ts`).
   `pipeline/tests/test_committed.py` globs the committed files and
   fails on an empty glob.
 
@@ -125,9 +120,7 @@ a maintainer action and shows up as a data diff".
 
 | Purpose | Command | Expected |
 |---|---|---|
-| Install | `bun install` | exit 0 |
 | Gate | `bun run verify` | lint, both type checks and the units pass |
-| Units | `bun run test` | all pass |
 | Build | `bun run build` | exit 0 |
 | E2E | `bun run test:e2e` | all pass (CI runs the shards) |
 | Where a site stands | `bun run site --all` | one line a tile |
@@ -140,10 +133,9 @@ a maintainer action and shows up as a data diff".
 
 - `scripts/publisher.ts`, `scripts/prepare-sites.ts`,
   `scripts/prepare/context.ts`, `scripts/shared-cache.ts`,
-  `scripts/site-choice.ts`, and new scripts with their tests:
-  `scripts/data-store.ts`, `scripts/publish-data.ts`,
-  `scripts/data-pull.ts`, `scripts/data-lock.ts`
-- `data.lock.json` (new, at the repository's root)
+  `scripts/site-choice.ts`; new, with tests: `scripts/data-store.ts`,
+  `scripts/publish-data.ts`, `scripts/data-pull.ts`,
+  `scripts/data-lock.ts`; `data.lock.json` at the repository's root
 - `lib/city/site-index.ts`, `lib/city/tile.ts` (the manifest's names),
   `app/_lib/built-sites.ts`, `app/_components/city-walk-client.tsx`,
   `app/_components/fetch-optional.ts` (phase 5 only), `next.config.ts`,
@@ -181,15 +173,14 @@ a maintainer action and shows up as a data diff".
    and into 087's ledger. If the whole site saves less than 3 %, phase
    5 is not built and the files are published as they are.
 2. **Decision 1 — the store.** Put a short table to the maintainer.
-   What a candidate must do: set `Content-Encoding` and
-   `Cache-Control: … immutable` on each object; answer a missing object
-   with 404 (`fetch-retry.ts` treats every other status as fatal or
-   transient); serve many small requests in parallel over HTTP/2 or 3;
-   take writes with a credential scoped to this store; keep the bytes
-   in the EU if the maintainer wants that. What it costs: storage for
-   every version ever published (a re-bake adds only the objects that
-   changed) and traffic. Do not assert a host's behaviour from memory:
-   try ten files on each candidate.
+   A candidate must set `Content-Encoding` and `Cache-Control: …
+   immutable` on each object, answer a missing object with 404
+   (`fetch-retry.ts` reads any other status as fatal or transient),
+   serve many small requests at once over HTTP/2 or 3, and take writes
+   with a credential scoped to this store. It costs storage for every
+   version ever published (a re-bake adds only what changed) and
+   traffic. Assert no host's behaviour from memory: try ten files on
+   each candidate.
 3. **Decision 2 — the site's own origin, or a second one.** Either
    `/data/*` on the site's host is forwarded to the store (the browser
    meets no new host; no CORS; the store is a processor behind the
@@ -310,9 +301,10 @@ once.
    (`provenance.json`, `landmark-facts.json`, `walks/`, `wissen/`,
    `transit/`, `murals/`). Everything else under `data/` is ignored and
    comes from `scripts/data-pull.ts`.
-2. Sort the 34 test files (the grep above) and `pipeline/tests/`: a
-   test that needs one tile runs on the fixture; a test that walks
-   every site runs on what is pulled. CI pulls all seven (a cache keyed
+2. Sort the tests that read data (run the units in a clone without
+   `data/` to find every one) and `pipeline/tests/`: a test that needs
+   one tile runs on the fixture; one that walks every site runs on
+   what is pulled. CI pulls all seven (a cache keyed
    by the lock's source hashes replaces the key
    `git rev-parse HEAD:data/dresden/dgm`) and sets `DATA_REQUIRED=1`,
    under which a site the lock names and the disk lacks is a failure.
@@ -360,15 +352,13 @@ tile's bytes on the wire, before and after.
 
 - `scripts/data-store.test.ts` (new): the directory twin; a `put` of
   an existing key writes nothing; a missing key reads as absent.
-- `scripts/data-lock.test.ts` (new): the lock's reader refuses an
-  unknown version; `check` changes with a bake module's text and not
-  with a viewer module's; two sites' blocks merge.
-- `scripts/data-pull.test.ts` (new): a wrong hash fails; a right file
-  is left alone.
-- `app/_lib/built-sites` and `lib/city/site-index.test.ts`: the base
-  from the lock, and `DATA_ORIGIN=local`.
-- Pattern for all of them: `scripts/site-choice.ts` and its test — no
-  file access in the logic, the caller hands it in.
+- `scripts/data-lock.test.ts` (new): an unknown version is refused;
+  `check` changes with a bake module's text and not with a viewer
+  module's. `scripts/data-pull.test.ts` (new): a wrong hash fails.
+- `lib/city/site-index.test.ts`: the base from the lock, and
+  `DATA_ORIGIN=local`.
+- Pattern: `scripts/site-choice.ts` and its test — no file access in
+  the logic, the caller hands it in.
 
 ## Done criteria
 
@@ -403,10 +393,8 @@ tile's bytes on the wire, before and after.
   request names it. Not built here; write it when the bill asks.
 - A new published kind needs nothing here: the publisher uploads what
   the manifest names.
-- A reviewer of phase 4 should look at the list of tests that stopped
-  running without pulled data, not at the removal's size.
-- The lock is the one file two data pull requests both touch; its
-  per-site blocks exist for that.
+- In phase 4's review, look at the tests that no longer run without
+  pulled data, not at the removal's size.
 
 ## What the series changes about this plan
 
