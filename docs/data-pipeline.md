@@ -1078,6 +1078,24 @@ offers to try again — it no longer falls back to
 and each `/data/<site>/manifest.json` and `/data/sites.json` as `no-cache`
 ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)).
 
+**Comparing two published sites.** While a change keeps the bakes'
+bytes, "the build publishes 0 new files" is its proof. Where it gives
+them up (plan 092 moves the hand-over format and cuts tiles at
+publishing), `bun scripts/compare-tilesets.ts <dir-a> <dir-b>` compares
+two `public/data/<site>` trees (or their manifests) by content: files
+matched by logical name, the same hashed name the same file; a glb by
+its decoded attributes (positions in the node's frame, within the coarser
+side's quantisation step), indices, property tables, names and extras;
+a raster by its decoded values (`png-raster.ts`, sharp for WebP); JSON
+and GeoJSON with the order of keys and of records ignored and a served
+name read as its logical one, so a tileset that names a changed file is
+not itself named; `.pts`, `.crw`, `.fpr` and the plate through their
+readers in `lib/city/`, as unordered records. It prints each file that
+differs and how, exits 1 on a difference, and reads a kind it has no
+reader for as bytes — a new kind of published file gets one there. What
+a change derives follows it: a tree moved 1 m changes the coarse crowns
+too when its new place falls into the share the coarse level draws.
+
 A `required` side file that is missing fails the build
 (`prepare-data: missing source file data/<site>/dlm/… — run bun run fetch <site> and bun run bake <site>`) rather than becoming a
 404 on every client; so do a missing DGM GeoTIFF or CityJSON. A missing
