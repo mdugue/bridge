@@ -32,15 +32,21 @@ const blank = (text: string): string => text.replaceAll(/[^\n]/gu, " ");
 
 /** A comment's words on one line: `//`, the block's ends and a JSDoc's
  *  leading stars gone, white space collapsed. */
-const commentWords = (raw: string): string =>
-  raw
-    .replace(/^\/\*+/u, "")
-    .replace(/\*+\/$/u, "")
+const commentWords = (raw: string): string => {
+  let inner = raw;
+  if (raw.startsWith("/*")) {
+    inner = raw.slice(
+      2,
+      raw.length >= 4 && raw.endsWith("*/") ? -2 : undefined
+    );
+  }
+  return inner
     .split("\n")
     .map((line) => line.replace(/^\s*(?:\/\/+|\*+|#+)?/u, ""))
     .join(" ")
     .replaceAll(/\s+/gu, " ")
     .trim();
+};
 
 /** What a lexer collects. */
 class Lexing {
@@ -384,7 +390,7 @@ export interface TopFunction {
 }
 
 const FUNCTION_HEAD =
-  /^\s*(?:export\s+)?(?:default\s+)?(?:(?:async\s+)?function\b\s*\*?\s*(?<fn>[\w$]*)|(?:abstract\s+)?class\s+(?<cls>[\w$]+))/u;
+  /^\s*(?:export\s+)?(?:default\s+)?(?:(?:async\s+)?function\b\s*\*?\s*(?<fn>[\w$]*)|(?:abstract\s+)?class\b\s*(?<cls>[\w$]*))/u;
 const CONST_HEAD = /^\s*(?:export\s+)?(?:const|let|var)\s+(?<name>[\w$]+)/u;
 
 /** A top-level statement's name where it is a function: a `function`, a

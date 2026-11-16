@@ -161,7 +161,6 @@ function sources(
   })
     .map((name) => name.replaceAll("\\", "/"))
     .filter((name) => !name.split("/").includes("node_modules") && keep(name))
-    .toSorted()
     .map((name) => ({
       path: `${dir}/${name}`,
       text: readFileSync(nodePath.join(root, dir, name), "utf-8"),

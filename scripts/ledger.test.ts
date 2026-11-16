@@ -510,7 +510,7 @@ test("a write, then a check that holds; a second write is the same file", () => 
   const ledger = JSON.parse(written) as Ledger;
   expect(ledger.dated).toBe("2026-11-16");
   expect(ledger).toEqual({ ...measure(SITE, root), dated: "2026-11-16" });
-  expect(written.endsWith("}\n")).toBe(true);
+  expect(written).toBe(`${JSON.stringify(ledger, null, 2)}\n`);
   expect(runOn(root, ["--check"], "2027-01-01")).toEqual({
     code: 0,
     report: "qa/ledger.json holds\n",
@@ -793,6 +793,9 @@ test("the counters are gated: code moves them, a comment does not", () => {
 });
 
 test("a site that is not built says so", () => {
-  const { root } = fixture();
+  const { root, data } = fixture();
   expect(() => measure("nowhere", root)).toThrow(/build first/u);
+  // nor one whose manifest names no tileset
+  writeFileSync(nodePath.join(data, "manifest.json"), '{"files":{}}');
+  expect(() => measure(SITE, root)).toThrow(/names no tileset\.json/u);
 });

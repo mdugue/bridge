@@ -58,6 +58,8 @@ test("an extension keeps the one before .gz and drops a twin's edge", () => {
   expect(extensionOf("landcover_33412_5656_2_sn.r2048.png")).toBe(".png");
   expect(extensionOf("trams.json")).toBe(".json");
   expect(extensionOf("README")).toBe("");
+  expect(extensionOf("some.dir/README")).toBe("");
+  expect(extensionOf("dir/.gz")).toBe(".gz");
   expect(
     distinctExtensions(["a.png", "b.r1024.png", "c.glb.gz", "d.json"])
   ).toEqual([".glb.gz", ".json", ".png"]);
@@ -207,6 +209,87 @@ test("the near buildings, the card's files, and every file a tile names", () => 
     }
   }
   expect(() => tileSet(a, "none" as "far", reads, false)).toThrow();
+});
+
+test("the reads are asked for by level, tier and reach", () => {
+  const asked: string[] = [];
+  const spy: RasterReads = (_extras, tier, phone, reach) => {
+    asked.push(`${tier} ${phone ? "phone" : "desktop"} ${reach}`);
+    return [];
+  };
+  const a = tileA();
+  const ask = (set: "far" | "fine" | "approached", phone: boolean) => {
+    asked.length = 0;
+    tileSet(a, set, spy, phone);
+    return [...asked];
+  };
+  // a far tile is beyond the reach by what it is
+  expect(ask("far", false)).toEqual(["1 desktop beyond"]);
+  expect(ask("far", true)).toEqual(["1 phone beyond"]);
+  expect(ask("fine", false)).toEqual(["0 desktop beyond"]);
+  expect(ask("fine", true)).toEqual(["0 phone beyond"]);
+  expect(ask("approached", true)).toEqual(["0 phone beyond", "0 phone within"]);
+  // each level's reads come from its own extras
+  const seen: unknown[] = [];
+  tileSet(
+    a,
+    "far",
+    (extras) => {
+      seen.push(extras);
+      return [];
+    },
+    false
+  );
+  tileSet(
+    a,
+    "fine",
+    (extras) => {
+      seen.push(extras);
+      return [];
+    },
+    false
+  );
+  expect(seen).toEqual([a.terrain[1].extras, a.terrain[0].extras]);
+});
+
+test("a set is its files once, sorted, an empty name left out", () => {
+  const tile = {
+    ...tileA(),
+    city: "",
+    ask: { z: "b.json", y: "a.json", x: "", w: "b.json" },
+  };
+  expect(tileSet(tile, "near", reads, false)).toEqual([]);
+  expect(tileSet(tile, "ask", reads, false)).toEqual(["a.json", "b.json"]);
+});
+
+test("a phone's row as soon as one tile reads other files", () => {
+  const tiles = ledgerTiles(TILESET);
+  const [a, b] = tiles;
+  if (!(a && b)) {
+    throw new Error("no tiles");
+  }
+  // tile a without a twin of its own: the phone reads what a desktop does
+  const same = {
+    ...a,
+    terrain: {
+      ...a.terrain,
+      0: {
+        ...a.terrain[0],
+        extras: {
+          ...a.terrain[0].extras,
+          landcoverLow: a.terrain[0].extras.landcover,
+          surface: undefined,
+          surfaceFar: undefined,
+        },
+      },
+    },
+  };
+  const some = bytesLedger([same, b], reads, () => 1);
+  expect(some.fine.phone).toBeDefined();
+  expect(some.fine.phone?.spawn).toEqual(some.fine.spawn);
+  const none = bytesLedger([same], reads, () => 1);
+  expect(none.fine.phone).toBeUndefined();
+  expect(none.approached.phone).toBeUndefined();
 });
 
 test("the minimap's bridges count with a tile that has them", () => {
@@ -450,6 +533,18 @@ test("a file a tile names that is not published is an error", () => {
       () => 1
     )
   ).toThrow(/not published.*city_a/u);
+  // each of them, in one order
+  expect(() =>
+    publishedLedger(
+      publishedOf(["manifest.json"]),
+      new Set(["z.png#", "a.png#"]),
+      () => 1,
+      () => 1
+    )
+  ).toThrow("2 files that are not published: a.png#, z.png#");
+  expect(() => classesOf(["zz.png", "manifest.json", "aa.png"])).toThrow(
+    "does: aa.png, zz.png"
+  );
 });
 
 test("a file published under two names is weighed once", () => {
@@ -466,11 +561,11 @@ test("a file published under two names is weighed once", () => {
   expect(ledger.files).toBe(1);
 });
 
-/** A binary glTF with `json` as its only chunk. */
+/** A binary glTF: `json`, padded, then a binary chunk that is no JSON. */
 const glb = (gltf: object): Uint8Array => {
   const text = new TextEncoder().encode(JSON.stringify(gltf));
   const padded = Math.ceil(text.length / 4) * 4;
-  const out = new Uint8Array(20 + padded).fill(0x20, 20);
+  const out = new Uint8Array(20 + padded + 12).fill(0x20, 20, 20 + padded);
   const view = new DataView(out.buffer);
   view.setUint32(0, 0x46_54_6c_67, true);
   view.setUint32(4, 2, true);
@@ -478,6 +573,9 @@ const glb = (gltf: object): Uint8Array => {
   view.setUint32(12, padded, true);
   view.setUint32(16, 0x4e_4f_53_4a, true);
   out.set(text, 20);
+  view.setUint32(20 + padded, 4, true);
+  view.setUint32(24 + padded, 0x00_4e_49_42, true);
+  out.fill(0x7d, 28 + padded);
   return out;
 };
 
@@ -489,6 +587,7 @@ test("a glTF's vertices, triangles and accessor bytes from its JSON", () => {
         { componentType: 5125, count: 6, type: "SCALAR" },
         { componentType: 5121, count: 4, type: "VEC4" },
         { componentType: 5126, count: 3, type: "VEC3" },
+        { componentType: 5123, count: 7, type: "SCALAR" },
       ],
       meshes: [
         {
@@ -498,18 +597,51 @@ test("a glTF's vertices, triangles and accessor bytes from its JSON", () => {
             { attributes: { POSITION: 0 }, indices: 1 },
           ],
         },
-        // no indices: a triangle of its positions; lines count none
+        // no indices: a triangle of its positions; lines and strips count
+        // none, a stated triangle list does; seven indices are two
         { primitives: [{ attributes: { POSITION: 3 } }] },
         { primitives: [{ attributes: { POSITION: 3 }, mode: 1 }] },
+        { primitives: [{ attributes: { POSITION: 3 }, mode: 5 }] },
+        { primitives: [{ attributes: { POSITION: 3 }, mode: 4, indices: 4 }] },
+        // an index that names no accessor counts nothing
+        { primitives: [{ attributes: { POSITION: 9 }, indices: 9 }] },
       ],
     })
   );
   expect(figures).toEqual({
     vertices: 7,
-    triangles: 2 + 2 + 1,
-    accessorBytes: 48 + 24 + 16 + 36,
+    triangles: 2 + 2 + 1 + 2,
+    accessorBytes: 48 + 24 + 16 + 36 + 14,
   });
-  expect(() => glbFigures(new Uint8Array(24))).toThrow();
+  expect(() => glbFigures(new Uint8Array(24))).toThrow(/not a binary glTF/u);
+  expect(() => glbFigures(glb({}).subarray(0, 16))).toThrow(
+    /not a binary glTF/u
+  );
+  expect(glbFigures(glb({}))).toEqual({
+    vertices: 0,
+    triangles: 0,
+    accessorBytes: 0,
+  });
+});
+
+const accessorBytesOf = (componentType: number, type: string) =>
+  glbFigures(glb({ accessors: [{ componentType, count: 1, type }] }))
+    .accessorBytes;
+
+test("an accessor's bytes by its component and its type", () => {
+  expect(
+    [5120, 5121, 5122, 5123, 5125, 5126].map((c) =>
+      accessorBytesOf(c, "SCALAR")
+    )
+  ).toEqual([1, 1, 2, 2, 4, 4]);
+  expect(
+    ["SCALAR", "VEC2", "VEC3", "VEC4", "MAT2", "MAT3", "MAT4"].map((t) =>
+      accessorBytesOf(5121, t)
+    )
+  ).toEqual([1, 2, 3, 4, 4, 9, 16]);
+  // a component or a type the table does not know weighs nothing
+  expect(accessorBytesOf(9999, "VEC3")).toBe(0);
+  expect(accessorBytesOf(5126, "TENSOR")).toBe(0);
 });
 
 const MESH = { vertices: 3, triangles: 1, accessorBytes: 36 };

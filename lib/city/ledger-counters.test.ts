@@ -383,3 +383,258 @@ test("the workarounds: the register's entries and the marked comments", () => {
     upstreamWorkarounds([], "## Workarounds for upstream bugs\n\n**a.** b\n")
   ).toEqual({ entries: 1, sites: 0 });
 });
+
+/* ------------------------------------------- the lexers, edge by edge */
+
+/** A source's comments, and its text with strings and comments blanked. */
+const read = (text: string) => {
+  const { bare, code, comments } = lexTs(text);
+  expect(bare.length).toBe(text.length);
+  expect(code.length).toBe(text.length);
+  return { bare, comments };
+};
+
+test("a string ends at its quote, an escape is no quote", () => {
+  expect(read('const a = "x\\\\"; // c')).toEqual({
+    bare: 'const a = "   ";     ',
+    comments: ["c"],
+  });
+  expect(read("f('a\\'b', 1); // c")).toEqual({
+    bare: "f('    ', 1);     ",
+    comments: ["c"],
+  });
+  expect(read('a = ""; b = "//"; // c').comments).toEqual(["c"]);
+  expect(read("a = '' + 1; /* c */").bare).toBe("a = '' + 1;        ");
+});
+
+test("a string that does not close ends with its line", () => {
+  expect(read('const a = "abc\nconst b = 1; // c')).toEqual({
+    bare: 'const a = "   \nconst b = 1;     ',
+    comments: ["c"],
+  });
+  expect(read('"abc').bare).toBe('"   ');
+  expect(read('"').bare).toBe('"');
+  expect(read('"ab\\').bare).toBe('"   ');
+});
+
+test("a slash opens a regular expression where a value may start", () => {
+  expect(read("x = /[/]\\//gi.test(s); // c")).toEqual({
+    bare: "x =          .test(s);     ",
+    comments: ["c"],
+  });
+  expect(read("a = b / c / d; // c")).toEqual({
+    bare: "a = b / c / d;     ",
+    comments: ["c"],
+  });
+  expect(read("a = (b) / 2 / c; // c").bare).toBe("a = (b) / 2 / c;     ");
+  expect(read("return /'/.test(s); // c")).toEqual({
+    bare: "return    .test(s);     ",
+    comments: ["c"],
+  });
+  expect(read("f(/[\"'`]/u, /\\//); // c")).toEqual({
+    bare: "f(        ,     );     ",
+    comments: ["c"],
+  });
+  // a class holds a slash, and closes; an escape in it is no bracket
+  expect(read("s.split(/[/\\]]+x/); // c").bare).toBe(
+    "s.split(         );     "
+  );
+  expect(read("s.split(/[a]\\[/); // c").comments).toEqual(["c"]);
+  // no closing slash on the line: a division after all
+  expect(read("a = [/ 2,\n'x']; // c")).toEqual({
+    bare: "a = [/ 2,\n' '];     ",
+    comments: ["c"],
+  });
+  expect(read("/a/.test(s)").bare).toBe("   .test(s)");
+  expect(read("x = /a/").bare).toBe("x =    ");
+});
+
+test("a comment's ends are its own", () => {
+  expect(read("/*/ x */ y")).toEqual({ bare: "         y", comments: ["/ x"] });
+  expect(read("/**/x")).toEqual({ bare: "    x", comments: [""] });
+  expect(read("a /* open")).toEqual({ bare: "a        ", comments: ["open"] });
+  expect(read("a // end")).toEqual({ bare: "a       ", comments: ["end"] });
+  expect(read("//\na")).toEqual({ bare: "  \na", comments: [""] });
+  // a line comment joins the one on the line before, not one further up
+  expect(read("a; // one\n// two\n\n// three\nb; /* four */\n// five")).toEqual(
+    {
+      bare: "a;       \n      \n\n        \nb;           \n       ",
+      comments: ["one two", "three", "four", "five"],
+    }
+  );
+  expect(read("// one\na;\n// two").comments).toEqual(["one", "two"]);
+});
+
+test("a template's text, holes and escapes", () => {
+  expect(read(`a = \`x \\\` y\`; // c`)).toEqual({
+    bare: "a = `      `;     ",
+    comments: ["c"],
+  });
+  expect(read(`a = \`x \\${HOLE}y} z\`; // c`).comments).toEqual(["c"]);
+  expect(read(`a = \`x ${HOLE}{ b: \`q\` }.b} y\`; // c`)).toEqual({
+    bare: `a = \`  ${HOLE}{ b: \` \` }.b}  \`;     `,
+    comments: ["c"],
+  });
+  expect(read(`a = \`x ${HOLE}f("}")} y\`; b = {};`).bare).toBe(
+    `a = \`  ${HOLE}f(" ")}  \`; b = {};`
+  );
+  // one that does not close runs to the end, a hole that does not too
+  expect(read("a = `x // y").bare).toBe("a = `      ");
+  expect(read(`a = \`x ${HOLE}b`).bare).toBe(`a = \`  ${HOLE}b`);
+  expect(read("a = `` + ``; // c").comments).toEqual(["c"]);
+  expect(read(`a = \`${HOLE}b}\`; // c`).comments).toEqual(["c"]);
+});
+
+test("a function's braces after a template's hole are code's again", () => {
+  expect(
+    topFunctions({
+      path: "a.ts",
+      text: ts(
+        "function a() {",
+        `  return \`${HOLE}1}\`;`,
+        "}",
+        "function b() {",
+        "  return { c: `}` };",
+        "}"
+      ),
+    })
+  ).toEqual([
+    { name: "a", lines: 3 },
+    { name: "b", lines: 3 },
+  ]);
+});
+
+/** A Python source's comments, and its code with strings blanked. */
+const readPy = (text: string) => {
+  const { bare, comments } = lexPy(text);
+  expect(bare.length).toBe(text.length);
+  return { bare, comments };
+};
+
+test("a Python string's ends, and a comment's", () => {
+  const first = readPy("a = 'it\\'s # no' # yes");
+  expect(first.bare.trimEnd()).toBe("a =");
+  expect(first.comments).toEqual(["yes"]);
+  const triple = readPy('a = """x\\""" y""" + b # c');
+  expect(triple.bare.replaceAll(/ +/gu, " ").trimEnd()).toBe("a = + b");
+  expect(triple.comments).toEqual(["c"]);
+  const lines = readPy('a = """x"\n# no\n""" + owns(b) # c');
+  expect(lines.bare.split("\n").map((l) => l.trim())).toEqual([
+    "a =",
+    "",
+    "+ owns(b)",
+  ]);
+  expect(lines.comments).toEqual(["c"]);
+  expect(readPy("a = '' + owns(b) + \"\"").bare.trim()).toBe(
+    "a =    + owns(b) +"
+  );
+  expect(readPy("a = '''open\nowns(").bare.trim()).toBe("a =");
+  expect(readPy("a = 'open\nowns(b)").bare.split("\n")[1]).toBe("owns(b)");
+  expect(readPy("# one\n# two\nx = 1\n# three").comments).toEqual([
+    "one two",
+    "three",
+  ]);
+  expect(readPy("#").comments).toEqual([""]);
+  expect(readPy("x = 1").bare).toBe("x = 1");
+});
+
+const names = (text: string) =>
+  topFunctions({ path: "a.ts", text }).map((f) => `${f.name} ${f.lines}`);
+
+test("top-level statements end at a semicolon or a closing brace", () => {
+  expect(names("function a() {}\nfunction b() {}\n")).toEqual(["a 1", "b 1"]);
+  expect(names("const a = 1;function b() {\n}\n")).toEqual(["b 2"]);
+  expect(names("\n\nfunction a() {\n  return 1;\n}\n")).toEqual(["a 3"]);
+  expect(names("// c\n\n/* d */\nfunction a() {\n\n  // e\n}\n")).toEqual([
+    "a 2",
+  ]);
+  expect(names("{\n}\nfunction a() {\n}\n")).toEqual(["a 2"]);
+  expect(names("(function () {\n})();\nfunction a() {\n}\n")).toEqual(["a 2"]);
+  // a type's arrows are not a value's
+  expect(
+    names("const t: Map<() => void, () => void> = m;\nconst f = () => 1;\n")
+  ).toEqual(["f 1"]);
+  expect(names("const g = a >= b;\nconst h = async (x) => x;\n")).toEqual([
+    "h 1",
+  ]);
+  expect(names("const o = { f: () => 1 };\nlet k = (a = 1) => a;\n")).toEqual([
+    "k 1",
+  ]);
+  expect(names("export default class {\n}\n")).toEqual(["(anonymous) 2"]);
+  expect(names("export abstract class A {\n}\n")).toEqual(["A 2"]);
+  expect(names("async function* gen() {\n}\n")).toEqual(["gen 2"]);
+  expect(names("")).toEqual([]);
+});
+
+test("brackets that close in the wrong order are refused", () => {
+  expect(() =>
+    topFunctions({ path: "a.ts", text: "const a = 1);\nconst b = (2;\n" })
+  ).toThrow(/a\.ts/u);
+  expect(() =>
+    topFunctions({ path: "a.ts", text: "}\nfunction a() {\n" })
+  ).toThrow();
+});
+
+const sized = (path: string, lines: number) => ({
+  path,
+  text: `function ${path.replaceAll(/\W/gu, "_")}() {\n${"  x();\n".repeat(lines - 2)}}\n`,
+});
+
+test("the longest function of files in any order, tests left out", () => {
+  for (const files of [
+    [sized("b.ts", 5), sized("a.ts", 5), sized("c.ts", 4)],
+    [sized("c.ts", 4), sized("a.ts", 5), sized("b.ts", 5)],
+    [sized("a.ts", 5), sized("c.ts", 4), sized("b.ts", 5)],
+  ]) {
+    expect(longestFunction(files)).toEqual({
+      lines: 5,
+      name: "a_ts",
+      path: "a.ts",
+    });
+  }
+  expect(
+    longestFunction([
+      sized("a.ts", 3),
+      sized("a.test.ts", 9),
+      sized("b.test.tsx", 9),
+    ]).path
+  ).toBe("a.ts");
+});
+
+const count = (path: string) => layerModules([{ path, text: "a;\n" }]).files;
+
+test("a layer module is one by its file's name", () => {
+  expect(count("tree-layer.ts")).toBe(1);
+  expect(count("app/x/tree-layer.tsx")).toBe(1);
+  expect(count("app/x-layer.ts/a.ts")).toBe(0);
+  expect(count("app/layer.ts")).toBe(0);
+  expect(count("app/tree-layer.ts.bak")).toBe(0);
+  expect(count("app/tree-layers.ts")).toBe(0);
+});
+
+const entries = (register: string) => upstreamWorkarounds([], register).entries;
+
+test("the register's section by its heading, whatever its level", () => {
+  expect(entries("# Workarounds for upstream bugs\n**a.** b")).toBe(1);
+  // it ends at the next heading of its level or above, not below
+  expect(
+    entries(
+      "## Workarounds for upstream bugs\n\n**a.** b\n\n### Sub\n\n**c.** d\n\n# Top\n\n**e.** f"
+    )
+  ).toBe(2);
+  expect(
+    entries(
+      "### Workarounds for upstream bugs\n\n**a.** b\n\n## Up\n\n**c.** d"
+    )
+  ).toBe(1);
+  // an entry opens its paragraph: bold further down is its text
+  expect(
+    entries(
+      "## Workarounds for upstream bugs\n\n**a.** one\ntwo\nthree\n\n**b.** one\n**two** three\nfour\n\nPlain **bold** text.\n\n**c.** last"
+    )
+  ).toBe(3);
+  expect(() => entries("Workarounds for upstream bugs\n\n**a.** b")).toThrow();
+  expect(() =>
+    entries("####### Workarounds for upstream bugs\n\n**a.** b")
+  ).toThrow();
+});
