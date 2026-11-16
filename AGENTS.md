@@ -85,7 +85,8 @@ a spec that writes then reads awaits `handle.sync()` (ADR 0061).
 **Frame.** Data stays in the provider's UTM (25833 Saxony and Berlin,
 25832 Hamburg, Bavaria, NRW). `x = E − cx`, `z = −(N − cy)`, `y` = height;
 a −90° X-rotated `world` group turns data-Z up, and tile content is Y-up.
-Dressing lives in the Y-up frame, **never inside the rotated group**. glTF
+Dressing lives in the Y-up frame, **never inside the rotated group**.
+A conversion between frames is a function in `lib/city/frames.ts`. glTF
 positions are quantised: shaders derive data-frame coordinates from world
 space (`shader-chunks.ts`). The glTF extras key is `tileId`, never `tile`
 (the renderer writes `userData.tile` itself). See ADR 0005.

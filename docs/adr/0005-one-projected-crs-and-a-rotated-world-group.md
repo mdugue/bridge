@@ -28,6 +28,9 @@ Y-up. Tiles must align to the centimetre, and lengths must be metres.
 - Coordinates in the baked files can be checked on a map.
 - Putting Y-up coordinates into the rotated group applies the turn twice
   (trees shoot skyward); AGENTS.md carries the rule.
+- A conversion between the projected, the data and the scene frame is a
+  function in `lib/city/frames.ts`, and its result carries its frame as a
+  type that erases at runtime.
 - Shaders that need data-frame coordinates derive them from world space
   (world (x, y, z) = data (x, −z, y)), because quantised glTF positions
   are not metres.
