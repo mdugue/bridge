@@ -542,9 +542,12 @@ keys count, and each row as it is written; exit 0, 1 or 2
 (unreadable). The kinds whose rows another file names by their place
 (below: `trees`, `markings`, `sport`, `smallbuild`, `structures`,
 `roofs`, `rail`, `tram`, `walls`) are compared in place whatever the
-flag. Negative zero is not zero, `null` is not absent, a linked folder
+flag — stricter than `rail`, `tram` and `walls` need (the levels are
+solved again in the same build, and only the terrain study reads the
+walls by number): noise only if the store reorders them, which phase 5
+decides. Negative zero is not zero, `null` is not absent, a linked folder
 is read through, `_raw/` is no side. Its tests are
-`pipeline/tests/test_compare_bakes.py` (59: a tree against itself, a
+`pipeline/tests/test_compare_bakes.py` (66: a tree against itself, a
 seeded difference of every sort, a test a join by place). First use: Meißen against itself,
 61 files, 0 differences in 12 s; Grimma as committed against the
 re-bake of this session, 114 files, 103 the same, 11 differ in 522

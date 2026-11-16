@@ -679,3 +679,87 @@ def test_a_kind_nobody_has_is_named(tmp_path):
 def test_the_laser_scan_mode_names_a_missing_raster(tmp_path, capsys):
     assert cb.main(["--rasters", str(tmp_path), str(tmp_path)]) == 2
     assert "dtm_050.tif" in capsys.readouterr().out
+
+
+def test_two_files_must_be_named_as_one_kind(tmp_path):
+    """The kind says what a row is and whether its place counts: a file
+    under another name must not be compared as something else, in either
+    order of the arguments."""
+    swapped = copy.deepcopy(LAMPS)
+    swapped["features"][0], swapped["features"][1] = swapped["features"][1], swapped["features"][0]
+    trees, new = tmp_path / f"trees_{TILE}.geojson", tmp_path / "new.geojson"
+    trees.write_text(json.dumps(LAMPS))
+    new.write_text(json.dumps(swapped))
+    assert _run(new, trees)[0] == 2
+    assert _run(trees, new)[0] == 2
+    other = tmp_path / "trees_33340_5678_2_sn.geojson"
+    other.write_text(json.dumps(swapped))
+    assert _run(trees, other)[0] == 1
+    assert _run(other, trees)[0] == 1
+    assert _run(trees, tmp_path / f"trees_{TILE}.json")[0] == 2
+
+
+@pytest.mark.parametrize(("one", "other"), [({}, []), ({"1": 1}, [1])])
+def test_a_table_that_is_a_map_is_not_one_that_is_a_list(tmp_path, one, other):
+    name = f"dlm/osmbuild_{TILE}.json"
+    a = _tree(tmp_path / "a", **{name: {"objects": one}})
+    for flags in ((), ("--order",)):
+        code, out = _run(
+            a, _tree(tmp_path / f"b{len(flags)}", **{name: {"objects": other}}), *flags
+        )
+        assert code == 1
+        assert "`objects` is a dict in a and a list in b" in out
+
+
+def test_minus_zero_without_a_fraction_is_negative_zero(tmp_path):
+    a, b = _tree(tmp_path / "a"), _tree(tmp_path / "b")
+    name = f"dlm/surface_{TILE}.json"
+    (a / name).write_text('{"h": 0}')
+    (b / name).write_text('{"h": -0}')
+    code, out = _run(a, b)
+    assert code == 1
+    assert "h" in out
+    (a / name).write_text('{"h": -0.0}')
+    assert _run(a, b)[0] == 0
+
+
+def test_a_dangling_link_is_unreadable_and_the_rest_is_still_compared(tmp_path):
+    lamps = copy.deepcopy(LAMPS)
+    lamps["features"].pop()
+    a, b = _tree(tmp_path / "a"), _tree(tmp_path / "b", **{f"dlm/lamps_{TILE}.geojson": lamps})
+    for root in (a, b):
+        for name in ("dlm/aaa.json", "dlm/aab.bin", "notes.txt"):
+            (root / name).unlink(missing_ok=True)
+            (root / name).symlink_to(tmp_path / "gone")
+    code, out = _run(a, b)
+    # unreadable wins over a difference, and neither hides the other
+    assert code == 2
+    assert out.count(": unreadable —") == 3
+    assert f"dlm/lamps_{TILE}.geojson: 3 → 2 features" in out
+    assert "1 differ: 1 differences; 3 unreadable" in out
+
+
+def test_a_vertex_named_by_a_boolean_is_unreadable(tmp_path):
+    city = copy.deepcopy(CITY)
+    city["CityObjects"]["DESN1"]["geometry"][0]["boundaries"] = [[[0, 1, True]]]
+    a = _tree(tmp_path / "a", **{f"cityjson/lod2_{TILE}.city.json": city})
+    assert _run(a, a)[0] == 2
+
+
+def test_order_sees_the_keys_of_a_map_in_another_order(tmp_path):
+    """Two records equal in everything but their key: only their place
+    tells them apart."""
+    same = {"levels": 3}
+    osmbuild = {"objects": {"DESN1": same, "DESN2": same}}
+    turned = {"objects": {"DESN2": same, "DESN1": same}}
+    obj = CITY["CityObjects"]["DESN1"]
+    city = {**CITY, "CityObjects": {"DESN1": obj, "DESN2": obj}}
+    city_turned = {**CITY, "CityObjects": {"DESN2": obj, "DESN1": obj}}
+    names = f"dlm/osmbuild_{TILE}.json", f"cityjson/lod2_{TILE}.city.json"
+    a = _tree(tmp_path / "a", **{names[0]: osmbuild, names[1]: city})
+    b = _tree(tmp_path / "b", **{names[0]: turned, names[1]: city_turned})
+    assert _run(a, b)[0] == 0
+    code, out = _run(a, b, "--order")
+    assert code == 1
+    assert "2 objects at another place in the file" in out
+    assert "2 city objects at another place in the file" in out

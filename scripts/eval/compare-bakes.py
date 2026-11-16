@@ -3,7 +3,8 @@ bake, or a change to how the bakes read and write (plan 092), reproduces
 what it replaces.
 
   uv run --project pipeline python scripts/eval/compare-bakes.py <a> <b>
-      two folders (data/<site>, a dlm/ folder, a whole data/) or two files.
+      two folders (data/<site>, a dlm/ folder, a whole data/) or two files
+      named as the same kind (`trees_<a>.geojson`, `trees_<b>.geojson`).
       Files are matched by their path below the folder, then compared a kind
       at a time:
 
@@ -265,7 +266,10 @@ def _some(items: list[str], n: int) -> str:
 
 def _load(path: Path) -> Any:
     try:
-        return json.loads(path.read_text())
+        # `-0` is negative zero to a reader in TypeScript, as `-0.0` is
+        return json.loads(path.read_text(), parse_int=lambda s: -0.0 if s == "-0" else int(s))
+    except OSError as err:
+        raise Unreadable(f"{path}: cannot be read ({err})") from err
     except (ValueError, UnicodeDecodeError) as err:
         raise Unreadable(f"{path}: not JSON ({err})") from err
 
@@ -367,6 +371,8 @@ def compare_json(a: Path, b: Path, kind: str, order: bool, examples: int) -> Rep
         )
     elif kind in TABLES and isinstance(da, dict) and isinstance(db, dict):
         member, named = TABLES[kind]
+        ta, tb = type(da.get(member)).__name__, type(db.get(member)).__name__
+        rep.add(ta != tb, f"`{member}` is a {ta} in a and a {tb} in b")
         compare_rows(
             table_rows(da, member, named, a),
             table_rows(db, member, named, b),
@@ -435,6 +441,10 @@ def compare_raster(a: Path, b: Path) -> Report:
 
 def compare_file(a: Path, b: Path, order: bool = False, examples: int = 3) -> Report:
     kind = kind_of(a.name)
+    if kind != kind_of(b.name) or a.name.split(".")[1:] != b.name.split(".")[1:]:
+        # two files given by name: what a row is, and whether its place
+        # counts, is the kind's — so both names must say the same kind
+        raise Unreadable(f"{a.name} and {b.name} are not named as one kind")
     try:
         if a.suffix == ".geojson":
             return compare_geojson(a, b, kind, order, examples)
@@ -446,7 +456,10 @@ def compare_file(a: Path, b: Path, order: bool = False, examples: int = 3) -> Re
     if a.suffix in (".png", ".tif", ".tiff"):
         return compare_raster(a, b)
     rep = Report()
-    rep.add(a.read_bytes() != b.read_bytes(), "the bytes differ")
+    try:
+        rep.add(a.read_bytes() != b.read_bytes(), "the bytes differ")
+    except OSError as err:
+        raise Unreadable(f"{a.name}: cannot be read ({err})") from err
     return rep
 
 
