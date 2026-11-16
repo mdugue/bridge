@@ -1513,20 +1513,22 @@ whose brackets do not close as read is an error, not a figure:
 The ledger's `bakeStore` section (plan 092; the counting in
 `lib/city/ledger-bake-store.ts`, the reading in
 `scripts/ledger-bake-store.ts`) is read from the tree alone — the bake
-modules and the baked files of every site that has them under
-`data/<site>/dlm/` and `dop/` —, needs no build and no bake, and falls as
-plan 092's phases land:
+modules and the baked files git tracks under `data/<site>/dlm/` and
+`dop/`, so a site that is fetched but not committed and a file an
+interrupted bake left behind are none —, needs no build and no bake, and
+falls as plan 092's phases land:
 
 | Figure | Counts | The tree, 2026-11-16 |
 |---|---|---|
-| `fileKinds` | the distinct `<kind>.<format>` among the files named for a tile, in all and by format; `formats` is how many formats | 51 in 3: 28 GeoJSON, 13 JSON, 10 PNG |
-| `mixedKeyOrder` | the feature kinds whose rows have no single key order (two keys turned round between rows, or more in a circle): a reader that returns rows in a schema's order does not return these as written | `furniture`, `traffic` |
+| `fileKinds` | the distinct `<kind>.<format>` among the files named for a tile, in all and by format — the union over the committed sites (Leipzig, München and Unna have 50 of them, Hamburg 49); `formats` is how many formats | 51 in 3: 28 GeoJSON, 13 JSON, 10 PNG |
+| `mixedKeyOrder` | the feature kinds whose rows, over all sites, have no single key order (two keys turned round between rows, or more in a circle): a reader that returns rows in a schema's order does not return these as written. `furniture` is mixed within single files; `traffic` has one order in each site, Dresden's another than the others' | `furniture`, `traffic` |
 | `stepCacheCodeLines` | `pipeline/bake/step_cache.py`'s lines of code (no comment, no blank line): the ledger of rewrites lives there | 503 |
 | `neighboursModules` | the bake modules that call `Tile.neighbours()` | 14 |
-| `ownsModules` | the bake modules that call or define `owns` — as a call of its own, so `crowns(` is none | 17 |
 
-Which step writes into another step's file is in a bake's manifests only,
-so it is no figure here: plan 092's *Findings* hold it.
+The bake modules that call `owns` are `counters.bakeSeamModules.ways.owns`
+(17), counted there. Which step writes into another step's file is in a
+bake's manifests only, so it is no figure here: plan 092's *Findings* hold
+it.
 
 ### The rasters, every site
 

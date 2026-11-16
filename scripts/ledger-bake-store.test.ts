@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
-import { measureBakeStore } from "./ledger-bake-store";
+import { measureBakeStore, trackedBaked } from "./ledger-bake-store";
 
 const write = (root: string, path: string, text: string) => {
   const file = nodePath.join(root, path);
@@ -43,7 +43,19 @@ function tree(): string {
   write(root, `${b}/sport_3_4_2_sn.json`, "{}");
   // the raw downloads are no site, whatever lies in them
   write(root, "data/_raw/sn/osm/lamps_9_9_2_sn.geojson", features({ z: 1 }));
+  commit(root);
   return root;
+}
+
+/** Makes `root` a work tree that tracks everything in it so far. */
+function commit(root: string): void {
+  for (const args of [
+    ["init", "-q"],
+    ["add", "-A"],
+  ]) {
+    const done = Bun.spawnSync(["git", ...args], { cwd: root });
+    expect(done.exitCode).toBe(0);
+  }
 }
 
 test("the section is read from the bake modules and every site's baked files", () => {
@@ -57,8 +69,43 @@ test("the section is read from the bake modules and every site's baked files", (
     mixedKeyOrder: ["traffic"],
     stepCacheCodeLines: 2,
     neighboursModules: 1,
-    ownsModules: 2,
   });
+});
+
+test("what git does not track is no figure: a site not committed, a leftover", () => {
+  const root = tree();
+  const before = measureBakeStore(root);
+  // a site fetched and baked here but never committed, a file an
+  // interrupted bake left behind, a kind nobody has committed
+  write(
+    root,
+    "data/gamma/dlm/lamps_5_6_2_sn.geojson",
+    features({ z: 1, h: 2 })
+  );
+  write(root, "data/gamma/dlm/traffic_5_6_2_sn.geojson", features({ b: 1 }));
+  write(root, "data/alpha/dlm/lamps_1_2_2_sn.geojson.tmp", "half a file");
+  write(root, "data/alpha/dlm/novel_1_2_2_sn.bin", "");
+  expect(measureBakeStore(root)).toEqual(before);
+  expect(trackedBaked(root).map((file) => file.site)).not.toContain("gamma");
+  // a tracked file is read as it lies in the work tree
+  write(
+    root,
+    "data/beta/dlm/lamps_3_4_2_sn.geojson",
+    features({ hs: 1, h: 2 })
+  );
+  expect(measureBakeStore(root).mixedKeyOrder).toEqual(["lamps", "traffic"]);
+});
+
+test("only a tile's files under dlm/ and dop/ are baked files", () => {
+  expect(trackedBaked(tree()).map((file) => file.path)).toEqual([
+    "data/alpha/dlm/lamps_1_2_2_sn.geojson",
+    "data/alpha/dlm/ndvi_1_2_2_sn.png",
+    "data/alpha/dlm/traffic_1_2_2_sn.geojson",
+    "data/alpha/dop/roofcolor_1_2_2_sn.json",
+    "data/beta/dlm/lamps_3_4_2_sn.geojson",
+    "data/beta/dlm/sport_3_4_2_sn.json",
+    "data/beta/dlm/traffic_3_4_2_sn.geojson",
+  ]);
 });
 
 test("a tree without bakes or baked files has a section all the same", () => {
@@ -69,7 +116,6 @@ test("a tree without bakes or baked files has a section all the same", () => {
     mixedKeyOrder: [],
     stepCacheCodeLines: 0,
     neighboursModules: 0,
-    ownsModules: 0,
   });
 });
 

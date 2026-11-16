@@ -520,8 +520,9 @@ session.
 alone are gated in `qa/ledger.json`'s `bakeStore` section
 (`lib/city/ledger-bake-store.ts`): the file kinds and formats, the
 kinds with no single key order, the step cache's lines of code (503 of
-its 619 lines), the modules calling `.neighbours()` and `owns(`. The
-steps that write another's path are in a bake's manifests only and
+its 619 lines) and the modules calling `.neighbours()`; the modules
+calling `owns(` are `counters.bakeSeamModules.ways.owns` there already.
+The steps that write another's path are in a bake's manifests only and
 stay here:
 
 | Counter | At phase 0 |
@@ -533,7 +534,7 @@ stay here:
 | Modules matching `\.neighbours()` | 14 |
 | Modules matching `owns(` | 20 by the plan's grep; 17 call `owns` — `canopy.py`, `roof_planes.py` and `skyview.py` only match in "cr**owns(**" |
 | Steps that write a path another step wrote | 4 (`islands`, `lamp-heights`, `lamp-water`, `trees`) |
-| Kinds with no single key order | 2 (`furniture`, `traffic`) |
+| Kinds with no single key order | 2 over all sites (`furniture` within a file, `traffic` between sites) |
 
 **The comparers.** `scripts/compare-tilesets.ts` is plan 087's, used
 as it is. `scripts/eval/compare-bakes.py` now takes two folders (or
@@ -802,13 +803,15 @@ What the trial found beside the table:
   and `passages.h` are written as `null`; everywhere else a missing
   value is a missing key. A column knows only null. The schema of
   phase 1 has to say which of the two a key is, whatever the format.
-- **The files have no single key order in two kinds**: `furniture` and
-  `traffic` write the same keys in different orders in different rows;
-  the other 26 feature kinds agree with one order each. Phase 4's "rows
-  in the schema's key order, which is the files' order today" does not
-  hold for those two until their writers are put in one order (which
-  changes their bytes, not their content: `compare-bakes.py --order`
-  shows exactly that).
+- **The files have no single key order in two kinds**, over all
+  sites: `furniture` writes the same keys in different orders in
+  different rows of one file; `traffic` has one order in each site, but
+  Dresden's (`t, f, hf, b, …`) is another than the other sites'
+  (`t, f, b, sp, hf, …`). The other 26 feature kinds agree with one
+  order each. Phase 4's "rows in the schema's key order, which is the
+  files' order today" does not hold for those two until their writers
+  are put in one order (which changes their bytes, not their content:
+  `compare-bakes.py --order` shows exactly that).
 - **Exact duplicates are in the committed files**: rows equal in
   geometry and every property — furniture 14, trees 13, lamps 9, walls
   5, structures 4, over all seven sites. A store that keeps "a row

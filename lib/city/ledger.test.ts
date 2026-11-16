@@ -717,7 +717,6 @@ const LEDGER = {
     mixedKeyOrder: [],
     stepCacheCodeLines: 3,
     neighboursModules: 1,
-    ownsModules: 1,
   },
 } satisfies Ledger;
 

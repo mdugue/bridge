@@ -7,7 +7,6 @@ import {
   NEIGHBOURS_CALL,
   stepCacheLines,
 } from "./ledger-bake-store";
-import { SEAM_WAYS } from "./ledger-counters";
 
 const py = (name: string, text: string) => ({
   path: `pipeline/bake/${name}`,
@@ -47,17 +46,6 @@ test("the formats are listed in one order, whatever the names' order", () => {
   );
 });
 
-test("owns is counted as a call of its own: crowns( is another word", () => {
-  const files = [
-    py("common.py", "def owns(bounds, x, y):\n    return True\n"),
-    py("trees.py", "if owns(tile.bounds, x, y):\n    keep()\n"),
-    py("canopy.py", "def scan_crowns(tile):\n    return crowns(tile)\n"),
-    py("skyview.py", '"""it owns(nothing)"""\n# owns(x)\nx = "owns("\n'),
-    { path: "scripts/owns.py", text: "owns(1, 2, 3)\n" },
-  ];
-  expect(callingModules(files, SEAM_WAYS.owns)).toBe(2);
-});
-
 test("a module that asks for the site's tiles is counted once", () => {
   const files = [
     py("walls.py", "a = tile.neighbours()\nb = tile.neighbours ()\n"),
@@ -78,6 +66,15 @@ test("the step cache's lines are its code: no comment, no blank line", () => {
   ];
   expect(stepCacheLines(files)).toBe(3);
   expect(stepCacheLines(files.slice(1))).toBe(0);
+});
+
+test("a kind that each site writes in one order, but not the same, is mixed", () => {
+  const orders = new KeyOrders();
+  // Dresden's traffic, then the other sites'
+  orders.add("traffic", ["t", "f", "hf", "b"]);
+  expect(orders.mixed()).toEqual([]);
+  orders.add("traffic", ["t", "f", "b", "sp", "hf"]);
+  expect(orders.mixed()).toEqual(["traffic"]);
 });
 
 test("a kind whose rows turn two keys round has no single key order", () => {
@@ -122,6 +119,5 @@ test("the section holds each figure under its own name", () => {
     mixedKeyOrder: ["traffic"],
     stepCacheCodeLines: 1,
     neighboursModules: 1,
-    ownsModules: 2,
   });
 });

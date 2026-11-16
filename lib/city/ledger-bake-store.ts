@@ -8,13 +8,11 @@
  * needs a bake to have run. (Which step writes into another's file is in
  * a bake's manifests only: it stays in the plan's Findings.)
  */
-import { SEAM_WAYS } from "./ledger-counters";
 import { codeLines, lexPy } from "./source-lexer";
 import type { SourceText } from "./source-lexer";
 
 /** A baked file's name: its kind, the tile it is of, its format. */
-const TILE_FILE =
-  /^(?<kind>.+?)_\d+_\d+_\d+_[a-z]+(?<twin>\.[^.]+)*?\.(?<format>[^.]+)$/u;
+const TILE_FILE = /^(?<kind>.+?)_\d+_\d+_\d+_[a-z]+\.(?<format>[^.]+)$/u;
 
 /** Strings by their code units: no locale reorders a gated figure. */
 const codeOrder = (a: string, b: string): number => {
@@ -30,8 +28,9 @@ const formatOf = (kind: string): string =>
 /**
  * The kinds of file a tile hands over, by format: the distinct
  * `<kind>.<format>` among the names given (a site's `dlm/` and `dop/`),
- * whatever the tile. `landcover_<tile>.png` and `landcover_<tile>.json`
- * are two kinds.
+ * whatever the tile — the union over the names: a site may lack a kind
+ * another has. `landcover_<tile>.png` and `landcover_<tile>.json` are two
+ * kinds.
  *
  * Cannot see: a file not named for a tile (a site's `landmark-facts.json`),
  * nor the fetch's own files (`cityjson/`, `dgm/`), which no bake step
@@ -70,9 +69,9 @@ export const NEIGHBOURS_CALL = /\.neighbours\s*\(/u;
 
 /**
  * How many bake modules hold a call that `pattern` matches — in code,
- * never in a comment, a docstring or a string, and as a word of its own:
- * `SEAM_WAYS.owns` does not match `crowns(`. The module that defines the
- * call counts with its callers.
+ * never in a comment, a docstring or a string. (The modules that call
+ * `owns` are `counters.bakeSeamModules.ways.owns`, ledger-counters.ts: no
+ * second leaf here.)
  */
 export function callingModules(
   files: readonly SourceText[],
@@ -93,8 +92,10 @@ export function stepCacheLines(files: readonly SourceText[]): number {
 }
 
 /**
- * Collects the order in which each kind's rows write their keys, and
- * names the kinds that have no single order: two keys written one way
+ * Collects the order in which each kind's rows write their keys — over
+ * every row handed in, so over all sites: a kind whose sites each keep
+ * one order, but not the same one, is named too — and names the kinds
+ * that have no single order: two keys written one way
  * round in one row and the other way in another, or more keys in a circle. Plan 092's phase 4 reads
  * rows "in the schema's key order, which is the files' order" — true of a
  * kind only while it is not named here.
@@ -163,15 +164,14 @@ function hasCycle(before: ReadonlySet<string>): boolean {
 
 /** `qa/ledger.json`'s `bakeStore` section. */
 export interface BakeStoreLedger {
-  /** the kinds of file a tile hands over, over every site whose baked
-   *  files are in the tree */
+  /** the kinds of file a tile hands over: the union over every site
+   *  whose baked files git tracks */
   fileKinds: ReturnType<typeof handedOverKinds>;
-  /** the feature kinds whose rows have no single key order */
+  /** the feature kinds whose rows, over all sites, have no single key
+   *  order */
   mixedKeyOrder: string[];
   /** bake modules that call `Tile.neighbours()` */
   neighboursModules: number;
-  /** bake modules that call (or define) `owns` */
-  ownsModules: number;
   /** the sites whose baked files were read */
   sites: string[];
   stepCacheCodeLines: number;
@@ -191,6 +191,5 @@ export function bakeStoreLedger(
     mixedKeyOrder: orders.mixed(),
     stepCacheCodeLines: stepCacheLines(bake),
     neighboursModules: callingModules(bake, NEIGHBOURS_CALL),
-    ownsModules: callingModules(bake, SEAM_WAYS.owns),
   };
 }
