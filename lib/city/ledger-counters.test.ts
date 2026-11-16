@@ -670,6 +670,8 @@ test("a value may start after each of the words, an arrow or a brace", () => {
   expect(read("if (a) {\n}\n/'/.test(s); // c").comments).toEqual(["c"]);
   // a word that only ends like one is a name: a division follows it
   expect(read("a = preturn / 2; b = 'x'; // c").comments).toEqual(["c"]);
+  // after a string a slash divides
+  expect(read('x = "a" / 2; y = "/"; // c').comments).toEqual(["c"]);
   // after `>` and `<` a slash divides or closes a tag, never opens
   expect(read("a = b > c / 2; d = '/'; // c").comments).toEqual(["c"]);
 });
