@@ -30,7 +30,7 @@ seam where it was:
 - the baked data lives in git and is baked again inside the web build;
 - looks are judged by hand on a GPU nobody has in CI.
 
-The maintainer chose all of it, with three aims and two rulings.
+The maintainer chose all of it, with three aims and four rulings.
 
 ## The three aims, and how each is counted
 
@@ -149,12 +149,16 @@ others leave, not for today's alone. These are the joints.
    rejection of pixel comparison on SwiftShader): in CI, base against
    head on the same runner's software renderer, as a tripwire for a
    change nobody meant — it says *changed*, never *good*; and on a real
-   GPU, where light, shadow and anti-aliasing are the product's. A plate is compared with main rendered on the same machine,
-   so no reference image is kept anywhere; a PR with a *Snapshots*
-   section claims a change and the plates report it, a PR without one
-   claims none and a differing view fails it. The reason is the series' own history: PR #156 (plan 074
-   part A's spike) has waited since 2026-10-11 for a look on a real
-   GPU, and plan 019 since September.
+   GPU, where light, shadow and anti-aliasing are the product's. A
+   plate is compared with the base rendered on the same machine, so no
+   reference image is kept anywhere. A PR with a *Snapshots* section
+   claims a change, and the plates report which views it changed; a PR
+   without one claims none, and a differing view fails its check until
+   the PR names the change and shows it (ruling 3: named and shown, a
+   slight deviation is acceptable — unnamed, it is not). The reason is
+   the series' own history: PR #156 (plan 074 part A's spike) has
+   waited since 2026-10-11 for a look on a real GPU, and plan 019
+   since September.
 2. **Data leaves git before a binary hand-over format enters it**
    (088 before 092). GeoJSON's one merit is the diff a re-bake shows in
    git; a binary table in git has neither a diff nor a delta. Which
@@ -188,7 +192,8 @@ others leave, not for today's alone. These are the joints.
    format in one place and not in every baker a second time.
 8. **Format, site-wide tables and steps that overwrite nothing are one
    plan** (092): all three rewrite the same input and output layer of
-   every bake step. Together they cost less than apart. The proof this repository leans
+   every bake step. Together they cost less than apart. The proof this
+   repository leans
    on — "a cold bake publishes 0 new files" — holds through 092's
    schema, its own-output rule, its store and even its change of
    format; only the last step, windows in place of tiles, changes
@@ -231,9 +236,10 @@ others leave, not for today's alone. These are the joints.
 - **074 part A** (bake the static dressing) and its spike **PR #156**:
   taken over by 090, which starts from the spike's numbers.
 - **019** (the GPU checklist): 087 turns its reference views into
-  compared plates and rewrites ADR 0018, which rejects pixel
-  comparison — on SwiftShader, where it stays rejected; whether a
-  picture is good, the two phones and the deploy host stay 019's.
+  compared plates and rewrites ADR 0018, which rejected pixel
+  comparison on SwiftShader: it stays rejected for judging a look and
+  is taken up as tier 1's tripwire (ruling 4); whether a picture is
+  good, the two phones and the deploy host stay 019's.
 - **070** (raster diet, partial) and 074's backlog item "one raster
   stack per tile": continued by 091. 076's and 077's rejection of KTX2
   stands for every exact raster (block compression would change ids);

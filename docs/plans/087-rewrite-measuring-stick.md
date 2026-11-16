@@ -41,7 +41,8 @@ real GPU". Every plan of the series moves geometry, textures or the
 stream; each would queue behind the same hand.
 
 After this plan a pull request is told two things without anyone
-looking: which reference views changed on a real GPU, and which of the
+looking: which reference views changed — in CI on the runner's
+software renderer, and on a real GPU where one runs — and which of the
 series' figures moved. What stays a person's is the judgement whether a
 changed picture is good.
 
@@ -120,7 +121,9 @@ over SwiftShader, none with a GPU. The shard "whole site, shell, docs"
 (`buildCheck: true`) always builds, so `public/data/` exists there.
 
 **ADR 0018** rejects "Pixel diffs in CI: SwiftShader output is not the
-product". That stands; this plan diffs on a real GPU.
+product". That stands for judging a look. Since 2026-11-16 this plan
+also compares base with head on SwiftShader, as a tripwire ("Two
+tiers" below), and Phase 6 rewrites the record.
 
 **Conventions to match**: a script's head comment says what it does; a
 generated file has a `--check` (`scripts/qa-views.ts`); pure logic
@@ -318,8 +321,10 @@ there, how many minutes does a PR's run take, and who can start it:
 Write the findings into this file and stop for the maintainer's choice.
 Then build the workflow for the chosen one. Whatever is chosen:
 
-- It never runs code from a fork. Triggers are `workflow_dispatch` and
-  a label a maintainer sets, on branches of this repository only.
+- It never runs code from a fork. Tier 2's triggers are
+  `workflow_dispatch` and a label a maintainer sets, on branches of
+  this repository only. Tier 1 runs on hosted runners for every PR
+  from a branch of this repository, whatever its base.
 - It reports each differing view with base, head and difference image
   as workflow artifacts (seven days, as the Playwright report) and a
   table in the job summary.
@@ -327,14 +332,21 @@ Then build the workflow for the chosen one. Whatever is chosen:
   `## Snapshots` section (the `pr-snapshots` skill) claims a visible
   change: the plates *report*, and the PR lists the differing views by
   name under that section. A PR without one claims the picture is the
-  same: any differing view *fails* the check. The `pr-snapshots` skill
+  same: a differing view *fails* the check until the PR names the
+  change and shows it — the check asks that a change be owned, not
+  that there be none (plan 086, ruling 3). The `pr-snapshots` skill
   gains this rule and the command.
 
 **Verify**: a branch that changes only a comment → the check passes
 with 0 differing views; a branch that changes one palette colour, with
 no Snapshots section → the check fails and names the views.
-**STOP** if no candidate gives a hardware adapter with a floor Phase 3
-accepts: the plates stay a local command, and the row says so.
+**STOP** (tier 2) if no candidate gives a hardware adapter with a floor
+Phase 3 accepts: tier 2 stays a local command, and the row says so.
+**Tier 1's own gates**: its noise floor is measured on the hosted
+runner's SwiftShader the same way (ten same-commit pairs of the views
+that hold there → 0 differ; a seeded change → that view differs), its
+run fits one CI job, and it stops if fewer than half of the views hold
+on SwiftShader — then tier 1 is those views and the row names them.
 
 ### Phase 5 — The published tileset compared by content
 
@@ -361,7 +373,8 @@ that file named.
 
 Rewrite ADR 0018 (decision 4: compared on a real GPU against main on
 the same machine; decision 7: a PR without snapshots claims no change;
-the SwiftShader alternative stays rejected). Write a new ADR, numbered
+SwiftShader stays rejected for judging a look and is the first tier's
+tripwire). Write a new ADR, numbered
 as `docs/adr/README.md` says under "Numbering": every plan writes its
 figures into the ledger; a gated figure that gets worse is committed
 with the PR that moves it. Update `docs/rendering.md` ("Verifying a
@@ -398,8 +411,11 @@ relative link resolves.
 - [ ] `grep -n "python3 - <<" docs/data-pipeline.md` finds nothing
 - [ ] Ten same-commit pairs of the kept views differ in 0 views
   (figure in the ledger)
-- [ ] The plates check exists as the maintainer chose it, never runs a
-  fork's code, and fails a no-snapshot PR that changes a view
+- [ ] Tier 1 runs in CI for PRs from this repository's branches, base
+  against head on the runner's renderer, and fails a no-snapshot PR
+  that changes a view
+- [ ] Tier 2 exists as the maintainer chose it and never runs a fork's
+  code
 - [ ] `bun scripts/compare-tilesets.ts` names a moved tree and nothing
   else
 - [ ] ADR 0018 rewritten, the ledger ADR written, `bun run verify`
