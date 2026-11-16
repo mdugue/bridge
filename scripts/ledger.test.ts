@@ -603,12 +603,7 @@ test("an argument the script does not know is refused, nothing written", async (
     expect(report).toContain("unknown argument");
     expect(existsSync(nodePath.join(root, LEDGER_PATH))).toBe(false);
   }
-  expect([...FLAGS]).toEqual([
-    "--check",
-    "--browser",
-    "--blocks",
-    "--census",
-  ]);
+  expect([...FLAGS]).toEqual(["--check", "--browser", "--blocks", "--census"]);
   // the script itself, as CI starts it: the code is the process's
   const script = Bun.spawnSync(["bun", "scripts/ledger.ts", "--chek"], {
     cwd: nodePath.join(import.meta.dir, ".."),

@@ -324,12 +324,7 @@ function formatAsCommitted(file: string): void {
 
 /** The arguments the script takes. A new one (a section's switch) joins
  *  here; anything else is refused. */
-export const FLAGS = [
-  "--check",
-  "--browser",
-  "--blocks",
-  "--census",
-] as const;
+export const FLAGS = ["--check", "--browser", "--blocks", "--census"] as const;
 
 export interface RunOptions {
   /** where the report goes */
