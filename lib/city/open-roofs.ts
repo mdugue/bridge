@@ -11,6 +11,7 @@
  * non-indexed triangles wound counter-clockwise seen from outside, like
  * every structure. No THREE, no DOM.
  */
+import * as PMath from "./portable-math";
 import type { Point2 } from "./polyline";
 import type { StructureMesh } from "./small-buildings";
 
@@ -73,7 +74,7 @@ export function minimumRectangle(points: readonly Point2[]): {
   for (let i = 0; i < hull.length; i += 1) {
     const a = hull[i];
     const b = hull[(i + 1) % hull.length];
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const len = PMath.hypot(b[0] - a[0], b[1] - a[1]);
     if (len === 0) {
       continue;
     }
@@ -170,7 +171,7 @@ function segmentDistance(p: Point2, a: Point2, b: Point2): number {
           Math.max(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2, 0),
           1
         );
-  return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+  return PMath.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
 }
 
 /** Evenly spread offsets over a span: `n` of them at the ends (`ends`) or

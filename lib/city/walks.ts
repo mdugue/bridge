@@ -10,6 +10,7 @@
  * by Claude wherever it shows; the facts carry their sources (ADR 0042,
  * ADR 0055). No THREE, no DOM.
  */
+import * as PMath from "./portable-math";
 import { isRenderStyle } from "./render-style";
 import type { RenderStyle } from "./render-style";
 import type { MovementMode, ViewpointGeometry } from "./site";
@@ -165,9 +166,9 @@ export function stopView(stop: WalkStop): ViewpointGeometry {
   const [ax, ay, az] = stop.at;
   const dx = ax - fx;
   const dy = ay - fy;
-  const run = Math.hypot(dx, dy);
-  const heading = (Math.atan2(dx, dy) * DEG + 360) % 360;
-  const pitch = Math.atan2(az - (stop.ground + above), Math.max(run, 1)) * DEG;
+  const run = PMath.hypot(dx, dy);
+  const heading = (PMath.atan2(dx, dy) * DEG + 360) % 360;
+  const pitch = PMath.atan2(az - (stop.ground + above), Math.max(run, 1)) * DEG;
   return {
     epsg: { x: fx, y: fy },
     aboveGround: above,

@@ -11,6 +11,7 @@
  * at the path's start — the path runs with the wall's outside on its
  * right, so the photo reads as seen from the street.
  */
+import * as PMath from "./portable-math";
 import type { Mural, MuralFile } from "./murals-file";
 
 // The file's shape is its schema's (ADR 0059); the viewer takes the types
@@ -128,7 +129,7 @@ function segmentNormals(path: readonly [number, number][]): [number, number][] {
   for (let i = 0; i + 1 < path.length; i += 1) {
     const dx = path[i + 1][0] - path[i][0];
     const dy = path[i + 1][1] - path[i][1];
-    const len = Math.hypot(dx, dy) || 1;
+    const len = PMath.hypot(dx, dy) || 1;
     // the outside is on the right of the way
     out.push([dy / len, -dx / len]);
   }
@@ -145,7 +146,7 @@ export function muralStrip(
   for (let i = 1; i < n; i += 1) {
     along.push(
       along[i - 1] +
-        Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1])
+        PMath.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1])
     );
   }
   const total = along[n - 1] || 1;
@@ -158,7 +159,7 @@ export function muralStrip(
     const b = segs[Math.min(i, segs.length - 1)];
     const nx = a[0] + b[0];
     const ny = a[1] + b[1];
-    const len = Math.hypot(nx, ny) || 1;
+    const len = PMath.hypot(nx, ny) || 1;
     const x = path[i][0] - offset.cx;
     const z = -(path[i][1] - offset.cy);
     const u = along[i] / total;

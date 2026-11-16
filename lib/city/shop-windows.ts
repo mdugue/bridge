@@ -13,6 +13,7 @@
  * A bay the wall's triangles do not cover (a jog, a passage) is not cut.
  * Pure, no THREE.
  */
+import * as PMath from "./portable-math";
 import earcut from "earcut";
 import { difference, intersection } from "polygon-clipping";
 import type { Polygon as ClipPolygon, Ring } from "polygon-clipping";
@@ -98,7 +99,7 @@ function facing(axes: WallAxes, triangles: readonly WallTriangle[]): Flat[] {
   for (const { id, p } of triangles) {
     const three: [V3, V3, V3] = [p[0], p[1], p[2]];
     const normal = cross(sub(three[1], three[0]), sub(three[2], three[0]));
-    const len = Math.hypot(...normal);
+    const len = PMath.hypot(...normal);
     if (len < 1e-9 || dot(normal, axes.n) < FACING_COS * len) {
       continue;
     }
@@ -194,7 +195,7 @@ function triangulate(f: Flat, polys: readonly ClipPolygon[]): number[] {
         lift(f, pts[k])
       );
       const n = cross(sub(tri[1], tri[0]), sub(tri[2], tri[0]));
-      if (Math.hypot(...n) < 1e-9) {
+      if (PMath.hypot(...n) < 1e-9) {
         continue;
       }
       const order = dot(n, f.normal) < 0 ? [0, 2, 1] : [0, 1, 2];
