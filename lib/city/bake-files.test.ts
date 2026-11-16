@@ -6,6 +6,8 @@ import { directImports } from "../../scripts/bake-sources";
 import { bakeFileProblems, parseBakeFile } from "./bake-file";
 import type { BakeFile } from "./bake-file";
 import type { FacadeMaterial } from "./building-tint";
+import { CANOPY_FILE } from "./canopy-file";
+import { CULTIVATED_FILE } from "./cultivated-file";
 import { FACADES_FILE } from "./facades-file";
 import type { WallMaterial } from "./city-mesh";
 import type { FountainStyle, MonumentForm, MonumentKind } from "./features";
@@ -38,6 +40,9 @@ import type { FACADE_MATERIALS, WALL_MATERIALS } from "./osm-buildings-file";
 import { OSM_BUILDINGS_FILE } from "./osm-buildings-file";
 import { PROVENANCE_FILE_SPEC } from "./provenance-file";
 import { ROOF_COLOURS_FILE } from "./roof-colours-file";
+import { SCAN_CROWNS_FILE } from "./scan-crowns-file";
+import { TREES_FILE } from "./trees-file";
+import { VEG_ROWS_FILE } from "./veg-rows-file";
 import type { Site } from "./site";
 import {
   cityMeshSourceFiles,
@@ -50,6 +55,7 @@ import {
   tileIds,
   wallSourceFile,
 } from "./tile";
+import type { TileArtifactKind } from "./tile";
 import { tramTimetableSource } from "./tram-timetable";
 import type { TramDayKind } from "./tram-timetable";
 import type { TRAM_DAY_KINDS } from "./tram-timetable-file";
@@ -100,6 +106,10 @@ const citySource = (
   member: keyof ReturnType<typeof cityMeshSourceFiles>
 ): string[] => perTile((s, t) => cityMeshSourceFiles(s, t)[member]);
 
+/** A side file's committed sources, by its artifact kind. */
+const sideSource = (kind: TileArtifactKind): string[] =>
+  perTile((s, t) => sideFileSource(s, tileArtifacts(t)[kind].file));
+
 SPECS.push(
   [DOORS_FILE, citySource("doors")],
   [DORMERS_FILE, citySource("dormers")],
@@ -110,6 +120,12 @@ SPECS.push(
   [SMALL_BUILDINGS_FILE, citySource("smallBuild")],
   [STRUCTURES_FILE, citySource("structures")],
   [WINDOWS_FILE, citySource("windows")],
+  // the tree table's sources (scripts/dressing-sources.ts)
+  [CANOPY_FILE, sideSource("canopy")],
+  [SCAN_CROWNS_FILE, sideSource("canopyx")],
+  [TREES_FILE, sideSource("trees")],
+  [VEG_ROWS_FILE, sideSource("vegrows")],
+  [CULTIVATED_FILE, sideSource("cultivated")],
   [KERBS_FILE, perTile(kerbSourceFile)],
   [STAIRS_FILE, perTile(stairSourceFile)],
   [TERRACES_FILE, perTile(terraceSourceFile)],

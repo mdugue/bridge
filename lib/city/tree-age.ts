@@ -7,6 +7,7 @@
  *
  * Pure: no THREE, no DOM.
  */
+export { treeAge } from "./tree-planting";
 
 /** Below this age (years) a tree stands between its stakes. */
 export const STAKED_YEARS = 5;
@@ -45,14 +46,6 @@ const scaled = (
 ): [number, number, number] => [v[0] * k, v[1] * k, v[2] * k];
 
 const unit = (v: number) => Math.min(Math.max(v, 0), 1);
-
-/** A tree's age (years) in `year`, or undefined without a planting year. */
-export function treeAge(
-  planted: number | undefined,
-  year: number
-): number | undefined {
-  return planted === undefined ? undefined : Math.max(year - planted, 0);
-}
 
 /** The look of a tree of `age` years (undefined: unknown, as a mature one). */
 export function ageLook(age: number | undefined): AgeLook {

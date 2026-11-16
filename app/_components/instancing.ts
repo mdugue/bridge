@@ -23,6 +23,7 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
+import { vertexLayout } from "@/lib/city/dressing-pack";
 import {
   standAt,
   standCount,
@@ -32,7 +33,6 @@ import {
   STAND_STEP_M,
   STAND_STEP_Y_M,
   STAND_TURN_UNIT,
-  STAND_WORD,
 } from "@/lib/city/stand-record";
 import { outOfDesignSite } from "./design-site";
 import type { F, V3, V4 } from "./shader-chunks";
@@ -92,16 +92,21 @@ const isStandTable = (
  * the memory governor's lines were measured on that count
  * (lib/city/memory-governor.ts).
  *
- * A set has a second way in (plan 090, phase 0): a table of stand records
- * (`Instances.ofStands`), twenty bytes an instance in place of sixty-four.
+ * A set has a second way in (plan 090): a table of stand records
+ * (`Instances.ofStands`), twenty bytes an instance in place of sixty-four
+ * — every tree's, on both terrain levels (lib/city/tree-stands.ts).
  * Its geometry carries the records' words as `iPlace`, `iSize` and
- * `iKind` — three views of one interleaved buffer, one vertex buffer —
- * and `instanceMatrix()` composes place, turn and scale from them in the
- * vertex stage, so nothing writes a matrix. The table's origin is the
- * drawn object's (`userData.standOrigin`), read by one uniform every
- * material shares: sets of one layout still share one build. Such a set
- * has no matrices to write (`setMatrixAt` throws); `getMatrixAt` gives
- * the matrix the shader composes.
+ * `iKind` — three views of one interleaved buffer, one vertex buffer,
+ * named by the dressing file's own table of sections
+ * (lib/city/dressing-pack.ts `vertexLayout`) — and `instanceMatrix()`
+ * composes place, turn and scale from them in the vertex stage, so
+ * nothing writes a matrix. The table's origin is the drawn object's
+ * (`userData.standOrigin`), read by one uniform every material shares:
+ * sets of one layout still share one build. Several sets may draw one
+ * table (a chunk's crowns, trunks and feet), each as many of its records
+ * as its `drawCount` says. Such a set has no matrices to write
+ * (`setMatrixAt` throws); `getMatrixAt` gives the matrix the shader
+ * composes.
  */
 export class Instances<M extends Material = Material> extends Mesh<
   InstancedBufferGeometry,
@@ -178,19 +183,14 @@ export class Instances<M extends Material = Material> extends Mesh<
     // by reference: the uniform reads the table's corner as it is
     this.userData.standOrigin = table.origin;
     const { buffer } = table;
-    const g = this.geometry;
-    g.setAttribute(
-      "iPlace",
-      new InterleavedBufferAttribute(buffer, 4, STAND_WORD.place)
-    );
-    g.setAttribute(
-      "iSize",
-      new InterleavedBufferAttribute(buffer, 4, STAND_WORD.scale)
-    );
-    g.setAttribute(
-      "iKind",
-      new InterleavedBufferAttribute(buffer, 2, STAND_WORD.kind)
-    );
+    // the views the section's own table names (lib/city/dressing-pack.ts):
+    // a file's records and a set's attributes cannot differ
+    for (const view of vertexLayout("stand")) {
+      this.geometry.setAttribute(
+        view.attribute,
+        new InterleavedBufferAttribute(buffer, view.itemSize, view.offset)
+      );
+    }
   }
 
   /** The table the set is drawn from, if it is one of records. */
@@ -299,6 +299,14 @@ export class Instances<M extends Material = Material> extends Mesh<
       this.#base.computeBoundingSphere();
     }
     const base = this.#base.boundingSphere ?? new Sphere();
+    if (this.#stands) {
+      this.geometry.boundingSphere = standsSphere(
+        this.#stands,
+        this.drawCount,
+        base
+      );
+      return;
+    }
     const box = new Box3();
     const m = new Matrix4();
     const p = new Vector3();
@@ -314,6 +322,43 @@ export class Instances<M extends Material = Material> extends Mesh<
     sphere.radius += reach;
     this.geometry.boundingSphere = sphere;
   }
+}
+
+/**
+ * The sphere around the first `count` records of `table` drawing a
+ * geometry whose own sphere is `base`: read off the words, no matrix made
+ * (a forest tile's sets hold tens of thousands). A record turns about the
+ * vertical only, so the geometry's centre is taken on its axis and its
+ * distance from it added to the reach.
+ */
+function standsSphere(table: StandTable, count: number, base: Sphere): Sphere {
+  const words = table.buffer.array as Uint16Array;
+  const aside = Math.hypot(base.center.x, base.center.z);
+  const box = new Box3();
+  const p = new Vector3();
+  let reach = 0;
+  for (let i = 0; i < count; i += 1) {
+    const at = i * STAND_RECORD_WORDS;
+    const sx = words[at + 4] / STAND_SCALE_UNIT;
+    const sy = words[at + 5] / STAND_SCALE_UNIT;
+    const sz = words[at + 6] / STAND_SCALE_UNIT;
+    const widest = Math.max(sx, sy, sz);
+    box.expandByPoint(
+      p.set(
+        words[at] * STAND_STEP_M,
+        words[at + 1] * STAND_STEP_Y_M + base.center.y * sy,
+        words[at + 2] * STAND_STEP_M
+      )
+    );
+    reach = Math.max(reach, (base.radius + aside) * widest);
+  }
+  if (box.isEmpty()) {
+    return new Sphere();
+  }
+  const sphere = box.getBoundingSphere(new Sphere());
+  sphere.center.add(table.origin);
+  sphere.radius += reach;
+  return sphere;
 }
 
 /** Whether an object is an `Instances` set. */
@@ -369,6 +414,21 @@ export const instanceMatrix = Fn((builder) => {
   }
   return mat4(column(0), column(1), column(2), column(3));
 });
+
+/** A stand record's spare word as a float, 0..65535 (0 off a set of
+ *  records): the kind's own sixteen bits — a trunk's drop
+ *  (lib/city/tree-stands.ts). */
+export function standSpare(): F {
+  return Fn((builder) =>
+    hasStands(builder.geometry) ? attribute("iSize", "uvec4").w.toFloat() : 0
+  )() as F;
+}
+
+/** A column of the drawn instance's matrix (`m · eᵢ`; identity off a set). */
+export const instanceColumn = (i: number): V4 =>
+  instanceMatrix().mul(
+    vec4(i === 0 ? 1 : 0, i === 1 ? 1 : 0, i === 2 ? 1 : 0, i === 3 ? 1 : 0)
+  );
 
 /** Byte `index` (0–3) of a stand record's kind and more words, as a float
  *  0..255 (0 off a set of records). A word or a hash seed made of it

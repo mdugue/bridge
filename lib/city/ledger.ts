@@ -130,7 +130,7 @@ export function wireBytes(name: string, bytes: Uint8Array): number {
 }
 
 /** A logical name's extension: the last, with the one before it where the
- *  last is `.gz` (`.glb.gz`, `.pts.gz`); a raster twin's `.r1024` is not one. */
+ *  last is `.gz` (`.glb.gz`, `.drs.gz`); a raster twin's `.r1024` is not one. */
 export function extensionOf(name: string): string {
   const base = name.slice(name.lastIndexOf("/") + 1);
   const parts = base.split(".").slice(1);
@@ -366,13 +366,17 @@ export function tileSet(
   const coarse = tile.terrain[1];
   const fine = tile.terrain[0];
   /** the fine level at a reach: the dressing build fetches the sports
-   *  table on every tier (its goals and nets) and samples the NDVI
-   *  (tile-stream.ts `buildDressing`) */
+   *  table on every tier (its goals and nets; tile-stream.ts
+   *  `buildDressing`). It reads its tile's coarse level's dressing file
+   *  too (`coarseDressing`: the third of the tile's trees that level
+   *  draws), which is the set `far`'s — the tile renderer loads a tile's
+   *  coarse level with or before its fine one (its `loadAncestors`), so a
+   *  visit fetches that file once, for the coarse level. */
   const fineAt = (reach: Reach): string[] => [
     fine.uri,
     ...reads(fine.extras, 0, phone, reach),
     ...names(fine.extras.dressing),
-    ...names({ t: fine.extras.sportTable, n: fine.extras.ndvi }),
+    ...names({ t: fine.extras.sportTable }),
   ];
   switch (set) {
     case "far": {

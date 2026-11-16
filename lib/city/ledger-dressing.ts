@@ -121,7 +121,11 @@ export interface DressingRecorded {
   /** another site's watched tile (its published files, where built) */
   muenchen?: unknown;
   note: string;
-  /** scripts/eval/stand-record-probe.ts and stand-record-bytes.ts */
+  /** scripts/eval/tree-table-bytes.ts: the trees' tables against the
+   *  same trees as stand records (plan 090, phase 1) */
+  trees?: unknown;
+  /** scripts/eval/stand-record-probe.ts, and phase 0's bytes of a coarse
+   *  level's crowns as records (its tool went with the file it read) */
   stands?: unknown;
 }
 

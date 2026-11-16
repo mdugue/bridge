@@ -113,6 +113,73 @@ export function standOrigin(
     : [Math.floor(origin[0]), Math.floor(origin[1]), Math.floor(origin[2])];
 }
 
+/** A scale's word, counted where it is out of range or too small to tell
+ *  from nothing (the thing would vanish). */
+function scaleWord(scale: number, report: StandPackReport): number {
+  const scaled = scale * STAND_SCALE_UNIT;
+  if (scaled > 0 && Math.round(scaled) === 0) {
+    report.clamped += 1;
+  }
+  return field(scaled, WORD_MAX, report);
+}
+
+const UNCOUNTED: StandPackReport = { clamped: 0 };
+
+/**
+ * Writes record `index` of `words` from its fields, the place from
+ * `origin`: what `writeStand` writes, without a `Stand` made for it — a
+ * forest tile writes tens of thousands (lib/city/tree-stands.ts
+ * `placementRecords`). `bytes` is the kind and more words' four bytes
+ * packed (`standBytes`).
+ */
+export function writeStandFields(
+  words: Uint16Array,
+  index: number,
+  place: { turn: number; x: number; y: number; z: number },
+  scale: { sx: number; sy: number; sz: number },
+  spare: number,
+  bytes: number,
+  origin: readonly [number, number, number],
+  counted?: StandPackReport
+): void {
+  const report = counted ?? UNCOUNTED;
+  const at = index * STAND_RECORD_WORDS;
+  words[at] = field((place.x - origin[0]) / STAND_STEP_M, WORD_MAX, report);
+  words[at + 1] = field(
+    (place.y - origin[1]) / STAND_STEP_Y_M,
+    WORD_MAX,
+    report
+  );
+  words[at + 2] = field((place.z - origin[2]) / STAND_STEP_M, WORD_MAX, report);
+  const turn = (((place.turn % TAU) + TAU) % TAU) / TAU;
+  // (a full circle is no turn: 65 536 wraps to 0)
+  words[at + STAND_WORD.turn] =
+    Math.round(turn * STAND_TURN_UNIT) % STAND_TURN_UNIT;
+  words[at + STAND_WORD.scale] = scaleWord(scale.sx, report);
+  words[at + STAND_WORD.scale + 1] = scaleWord(scale.sy, report);
+  words[at + STAND_WORD.scale + 2] = scaleWord(scale.sz, report);
+  words[at + STAND_WORD.spare] = field(spare, WORD_MAX, report);
+  words[at + STAND_WORD.kind] = bytes & 0xff_ff;
+  words[at + STAND_WORD.more] = bytes >>> 16;
+}
+
+/** Four bytes (0..255 each) as `writeStandFields` takes them: the kind
+ *  word's two, then the more word's; one out of range is counted. */
+export function standBytes(
+  kind: readonly [number, number],
+  more: readonly [number, number],
+  counted?: StandPackReport
+): number {
+  const report = counted ?? UNCOUNTED;
+  return (
+    (field(kind[0], 255, report) |
+      (field(kind[1], 255, report) << 8) |
+      (field(more[0], 255, report) << 16) |
+      (field(more[1], 255, report) << 24)) >>>
+    0
+  );
+}
+
 /** Writes `stand` as record `index` of `words`, its place from `origin`;
  *  counts in `report` every field it had to bend. */
 export function writeStand(
@@ -122,31 +189,19 @@ export function writeStand(
   origin: readonly [number, number, number],
   counted?: StandPackReport
 ): void {
-  const report = counted ?? { clamped: 0 };
-  const at = index * STAND_RECORD_WORDS;
-  const word = (v: number) => field(v, WORD_MAX, report);
-  const byte = (v: number) => field(v, 255, report);
-  words[at] = word((stand.x - origin[0]) / STAND_STEP_M);
-  words[at + 1] = word((stand.y - origin[1]) / STAND_STEP_Y_M);
-  words[at + 2] = word((stand.z - origin[2]) / STAND_STEP_M);
-  const turn = (((stand.turn % TAU) + TAU) % TAU) / TAU;
-  // (a full circle is no turn: 65 536 wraps to 0)
-  words[at + STAND_WORD.turn] =
-    Math.round(turn * STAND_TURN_UNIT) % STAND_TURN_UNIT;
-  for (let axis = 0; axis < 3; axis += 1) {
-    const scaled = stand.scale[axis] * STAND_SCALE_UNIT;
-    if (scaled > 0 && Math.round(scaled) === 0) {
-      // too small to tell from nothing: the thing would vanish
-      report.clamped += 1;
-    }
-    words[at + STAND_WORD.scale + axis] = word(scaled);
-  }
-  words[at + STAND_WORD.spare] = word(stand.spare ?? 0);
-  const [k0, k1] = stand.kind ?? [0, 0];
-  words[at + STAND_WORD.kind] = byte(k0) | (byte(k1) << 8);
-  const [m0, m1] = stand.more ?? [0, 0];
-  words[at + STAND_WORD.more] = byte(m0) | (byte(m1) << 8);
+  writeStandFields(
+    words,
+    index,
+    stand,
+    { sx: stand.scale[0], sy: stand.scale[1], sz: stand.scale[2] },
+    stand.spare ?? 0,
+    standBytes(stand.kind ?? ZERO_BYTES, stand.more ?? ZERO_BYTES, counted),
+    origin,
+    counted
+  );
 }
+
+const ZERO_BYTES = [0, 0] as const;
 
 /** `stands` as a table over its own buffer. `report` counts the fields
  *  that had to be bent; with `strict` (a build) any is an error. */

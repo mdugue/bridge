@@ -19,9 +19,9 @@
  * - Rasters: an 8-bit grey `.png` through lib/city/png-raster.ts,
  *   another 8-bit PNG or a `.webp` through sharp; the decoded values,
  *   cell by cell. A PNG of another bit depth is unreadable.
- * - The packed binaries through their readers in lib/city/, in order: the
- *   canopy points (`.pts`), the coarse crowns (`.crw`), the footprints
- *   (`.fpr`), the ground plate (`plate.bin`, through each tileset).
+ * - The packed binaries through their readers in lib/city/, in order: a
+ *   level's dressing tables (`.drs`), the footprints (`.fpr`), the ground
+ *   plate (`plate.bin`, through each tileset).
  * - Anything else as bytes: a new kind of published file needs its reader
  *   here, or it compares as bytes only.
  *
@@ -36,11 +36,14 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { gunzipSync } from "node:zlib";
 import sharp from "sharp";
-import { unpackCrowns } from "../lib/city/coarse-crowns";
+import {
+  SECTION_NAMES,
+  sectionStride,
+  unpackDressing,
+} from "../lib/city/dressing-pack";
 import { readFootprints, unpackedFootprints } from "../lib/city/footprint-pack";
 import { decodePlate, plateOf } from "../lib/city/ground-plate";
 import type { PlateRef } from "../lib/city/ground-plate";
-import { unpackPoints } from "../lib/city/point-pack";
 import { decodeGreyPng } from "../lib/city/png-raster";
 import { MANIFEST_FILE } from "../lib/city/tile";
 import { compareGlbs, readGlbContent, tolerant } from "./compare-glb";
@@ -232,20 +235,32 @@ function read<T>(value: T | null, what: string): T {
   return value;
 }
 
-/** The canopy points as rows, and their header. */
-function pointRows(bytes: Uint8Array): Packed {
-  const p = read(unpackPoints(copied(bytes)), "a canopy pack (PTS1)");
+/** A dressing file's records as rows, each under its section's name,
+ *  and its header: the corner and every section's runs. */
+function dressingRows(bytes: Uint8Array): Packed {
+  const pack = read(unpackDressing(copied(bytes)), "a dressing pack (DRS1)");
+  const rows: string[] = [];
+  const runs: string[] = [];
+  for (const name of SECTION_NAMES) {
+    const { runs: sectionRuns, words } = pack.sections[name];
+    const per = words.length === 0 ? 1 : words.length / recordsOf(name, words);
+    for (let at = 0; at < words.length; at += per) {
+      rows.push(
+        `${name}:${Array.from(words.subarray(at, at + per)).join(",")}`
+      );
+    }
+    runs.push(`${name} ${asJson(sectionRuns)}`);
+  }
   return {
-    header: `stride ${p.stride}, flags ${p.flags}, origin ${p.origin.join(" ")}`,
-    noun: "points",
-    rows: Array.from({ length: p.count }, (_, i) =>
-      Array.from(p.data.subarray(i * p.stride, (i + 1) * p.stride)).join(",")
-    ),
+    header: `origin ${pack.origin.join(" ")}; ${runs.join("; ")}`,
+    noun: "records",
+    rows,
   };
 }
 
-const crownRows = (bytes: Uint8Array): string[] =>
-  read(unpackCrowns(copied(bytes)), "a crown pack (CRW1)").map(asJson);
+/** How many records `words` of section `name` are. */
+const recordsOf = (name: (typeof SECTION_NAMES)[number], words: Uint16Array) =>
+  words.length / (sectionStride(name) / 2);
 
 const footprintRows = (bytes: Uint8Array): string[] =>
   unpackedFootprints(
@@ -283,11 +298,8 @@ function packedRows(
   bytes: Uint8Array,
   site: PublishedSite
 ): Packed | undefined {
-  if (name.endsWith(".pts")) {
-    return pointRows(bytes);
-  }
-  if (name.endsWith(".crw")) {
-    return { noun: "crowns", rows: crownRows(bytes) };
+  if (name.endsWith(".drs")) {
+    return dressingRows(bytes);
   }
   if (name.endsWith(".fpr")) {
     return { noun: "footprints", rows: footprintRows(bytes) };

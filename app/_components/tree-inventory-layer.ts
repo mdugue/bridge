@@ -1,22 +1,14 @@
-import type { RasterSampler } from "@/lib/city/raster-sampler";
-import { Color, Group, Matrix4, Quaternion, Vector3 } from "three/webgpu";
+import { Color, Group } from "three/webgpu";
 import type { BufferGeometry } from "three/webgpu";
-import type { TreeFeature } from "@/lib/city/features";
+import { packStands, standOrigin } from "@/lib/city/stand-record";
 import { familyLook, TRUNK_BASE } from "@/lib/city/tree-family";
 import { ageLook } from "@/lib/city/tree-age";
 import { buildTreeStakes } from "./tree-stakes";
 import { buildTreePlan } from "./tree-plan";
-import {
-  CROWN_SHAPES,
-  inventoryCovers,
-  inventoryTrees,
-  trunkGirth,
-} from "@/lib/city/tree-inventory";
-import type {
-  CrownShape,
-  InventoryTree,
-  TreeExtents,
-} from "@/lib/city/tree-inventory";
+import { CROWN_SHAPES } from "@/lib/city/tree-inventory";
+import type { CrownShape, InventoryTree } from "@/lib/city/tree-inventory";
+import { registerCrownStand, registerTrunkStand } from "@/lib/city/tree-stands";
+import type { CrownFit } from "@/lib/city/tree-stands";
 import { seasonCrowns } from "./crown-season";
 import type {
   CrownMaterials,
@@ -30,9 +22,9 @@ import {
   reshapeCrown,
 } from "./conifer-crown";
 import type { SilhouetteMap } from "./conifer-crown";
-import { finished, inRuns } from "@/lib/city/build-steps";
+import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
-import { Instances } from "./instancing";
+import { Instances, standTable } from "./instancing";
 import {
   applySeasons,
   buildCrownGeo,
@@ -43,12 +35,10 @@ import {
   evergreenColor,
   hash,
   sceneCrowns,
-  TRUNK_H,
 } from "./vegetation-layer";
 import type {
   CrownCell,
   TreeInstance,
-  TreeVeto,
   VegetationContext,
   VegetationControl,
 } from "./vegetation-layer";
@@ -124,11 +114,8 @@ const NORMAL_CENTRE: Record<ReshapedShape, number> = {
   weep: 0.5,
 };
 /** A crown geometry plus the local box the instance scale is fitted to. */
-interface FittedGeo {
+interface FittedGeo extends CrownFit {
   geo: BufferGeometry;
-  height: number;
-  minY: number;
-  width: number;
 }
 
 function fitted(geo: BufferGeometry): FittedGeo {
@@ -200,71 +187,21 @@ export function barkTint(genus: number, evergreen: boolean): Color {
   return bark.setRGB(bark.r / own.r, bark.g / own.g, bark.b / own.b);
 }
 
-const Y_AXIS = new Vector3(0, 1, 0);
-
-/** Register trees placed per step (build-steps.ts). */
-const INVENTORY_RUN = 256;
-
-/** Crown matrices: the geometry's local box fitted to the tree's crown. */
-function writeCrowns(
-  mesh: Instances,
-  items: InventoryTree[],
-  fit: FittedGeo
-): void {
-  for (let i = 0; i < items.length; i += 1) {
-    const t = items[i];
-    mesh.setMatrixAt(i, crownMatrix(t, fit));
-  }
-  mesh.instanceMatrix.needsUpdate = true;
-  // Without this the cull test uses the origin-centred geometry sphere and
-  // culls the whole chunk whenever the world origin is off-screen.
-  mesh.computeBoundingSphere();
-}
-
-/** Trunk girth: the measured diameter where there is one, else the height
- *  (tree-inventory.ts trunkGirth). */
-function trunkMatrix(t: InventoryTree): Matrix4 {
-  // a measured trunk is as measured; else the age thins or thickens it
-  const girth =
-    trunkGirth(t.ext, t.dbh) * (t.dbh === undefined ? ageLook(t.age).girth : 1);
-  return new Matrix4().compose(
-    new Vector3(t.x, t.ground, t.z),
-    new Quaternion().setFromAxisAngle(Y_AXIS, t.rot),
-    new Vector3(girth, t.ext.trunkTop / TRUNK_H, girth)
-  );
-}
-
-/** Where a crown stands and how far it reaches. */
-type CrownPlace = Pick<InventoryTree, "ground" | "rot" | "x" | "z"> & {
-  ext: Pick<TreeExtents, "crownBase" | "crownTop" | "crownWidth">;
-};
-
-/** The crown's local box fitted to the tree's crown (see writeCrowns). */
-function crownMatrix(t: CrownPlace, fit: Omit<FittedGeo, "geo">): Matrix4 {
-  const sy = (t.ext.crownTop - t.ext.crownBase) / fit.height;
-  const sxz = t.ext.crownWidth / fit.width;
-  return new Matrix4().compose(
-    new Vector3(t.x, t.ground + t.ext.crownBase - fit.minY * sy, t.z),
-    new Quaternion().setFromAxisAngle(Y_AXIS, t.rot),
-    new Vector3(sxz, sy, sxz)
-  );
-}
-
-let broadFit: Omit<FittedGeo, "geo"> | null = null;
+let broadFit: CrownFit | null = null;
 
 /**
- * A register tree's broadleaf crown as the canopy's chunks place it (its
- * cheap matrix, `canopyInstances`): what the coarse level draws for a
- * register tree (coarse-crowns-layer.ts), whatever its silhouette.
+ * The box of the lobed crown the canopy's chunks fit a register tree's
+ * broadleaf crown into (its cheap one): what the coarse level fits every
+ * register crown to (coarse-crowns-layer.ts), whatever its silhouette.
  */
-export function registerCrownMatrix(t: CrownPlace): Matrix4 {
+export function broadCrownFit(): CrownFit {
   if (!broadFit) {
     const geo = buildCrownGeo();
     const { height, minY, width } = fitted(geo);
     geo.dispose();
     broadFit = { height, minY, width };
   }
-  return crownMatrix(t, broadFit);
+  return broadFit;
 }
 
 /**
@@ -280,15 +217,15 @@ function canopyInstances(
     const out: TreeInstance = {
       x: t.x,
       z: t.z,
-      trunk: trunkMatrix(t),
+      trunk: registerTrunkStand(t),
       bark: barkTint(t.genus, t.leaf === "e"),
     };
     if (t.shape === "broad") {
       const colour = new Color();
       inventoryColor(colour, t, hash(t.x * 0.3 + t.z * 0.7) - 0.5);
       out.crown = {
-        cheap: crownMatrix(t, broad.cheap),
-        rich: crownMatrix(t, broad.rich),
+        cheap: registerCrownStand(t, broad.cheap),
+        rich: registerCrownStand(t, broad.rich),
         colour,
         season: seasonKeyOf(t),
       };
@@ -372,17 +309,25 @@ function crownPair(
   geos: ShapeGeos[CrownShape],
   materials: CrownMaterials
 ): { lod: CrownCell; season: SeasonalCrowns } {
-  const cheap = new Instances(geos.cheap.geo, materials.leafy, items.length);
-  const rich = new Instances(geos.rich.geo, materials.leafy, items.length);
-  for (const [mesh, fit] of [
-    [cheap, geos.cheap],
-    [rich, geos.rich],
-  ] as const) {
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    writeCrowns(mesh, items, fit);
-    paint(mesh, items);
-  }
+  // a record a tree and tier: each tier's geometry has its own box
+  const setOf = (fit: FittedGeo): Instances => {
+    const stands = items.map((t) => registerCrownStand(t, fit));
+    const origin = standOrigin(stands);
+    const set = Instances.ofStands(
+      fit.geo,
+      materials.leafy,
+      standTable(packStands(stands, origin), origin)
+    );
+    set.castShadow = true;
+    set.receiveShadow = true;
+    // Without this the cull test uses the origin-centred geometry sphere
+    // and culls the whole chunk whenever the world origin is off-screen.
+    set.computeBoundingSphere();
+    return set;
+  };
+  const cheap = setOf(geos.cheap);
+  const rich = setOf(geos.rich);
+  paint(cheap, items);
   rich.visible = false;
   // the cheap tier is the season's "mid": the pair shares one tint buffer
   const season = seasonCrowns(
@@ -402,35 +347,30 @@ export interface TreeInventory {
   control: VegetationControl;
   /** per-tile census of what was built, for the cost report */
   counts: Record<CrownShape, number>;
-  /** every trunk and the broadleaf crowns, for the canopy's chunk meshes
+  /** every trunk and the broadleaf crowns, for the canopy's chunk sets
    *  (VegetationFeatures.extraTrees) */
   instances: TreeInstance[];
-  /** false where an inventory tree stands (VegetationFeatures.keepTree);
-   *  a canopy point that clearly overtops it is kept, and a tree in DLM
-   *  forest/copse (`f`) vetoes nothing (tree-inventory.ts) */
-  keepTree: TreeVeto;
 }
 
 /**
- * Builds one tile's inventory trees. Empty input yields an empty group, no
- * instances and a `keepTree` that vetoes nothing. The group is added to the
- * Y-up `scene`, like every tree; the instances go to buildVegetation.
+ * Builds one tile's inventory trees, each on its ground already
+ * (lib/city/tree-table.ts `registerTree`). None yields an empty group and
+ * no instances. The group is added to the Y-up `scene`, like every tree;
+ * the instances go to buildVegetation.
  */
 export function buildTreeInventory(
-  features: TreeFeature[],
-  ctx: VegetationContext,
-  ndviAt?: RasterSampler
+  trees: InventoryTree[],
+  ctx: VegetationContext
 ): TreeInventory {
-  return finished(treeInventorySteps(features, ctx, ndviAt));
+  return finished(treeInventorySteps(trees, ctx));
 }
 
-/** `buildTreeInventory` in steps: per run of register trees, per cell of
- *  silhouettes (build-steps.ts).
+/** `buildTreeInventory` in steps: per cell of silhouettes
+ *  (build-steps.ts).
  *  @yields {void} once per step of the build. */
 export function* treeInventorySteps(
-  features: TreeFeature[],
-  ctx: VegetationContext,
-  ndviAt?: RasterSampler
+  trees: InventoryTree[],
+  ctx: VegetationContext
 ): Steps<TreeInventory> {
   const group = new Group();
   group.name = "tree-inventory";
@@ -440,13 +380,6 @@ export function* treeInventorySteps(
     CrownShape,
     number
   >;
-
-  // A tree in DLM forest/copse vetoes nothing (inventoryCovers).
-  const covers = inventoryCovers(features);
-  yield;
-  const trees = yield* inRuns(features, INVENTORY_RUN, (run) =>
-    inventoryTrees(run, ctx, ndviAt)
-  );
   const cells: CrownCell[] = [];
   const seasons: SeasonalCrowns[] = [];
   let instances: TreeInstance[] = [];
@@ -485,7 +418,6 @@ export function* treeInventorySteps(
   return {
     counts,
     instances,
-    keepTree: (x, y, h) => !covers(x, y, h),
     control: {
       group,
       // Its trunks and broadleaf crowns ride in the canopy's chunks

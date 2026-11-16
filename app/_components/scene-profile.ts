@@ -68,16 +68,10 @@ export function reversedDepthFromSearch(search: string): boolean {
 }
 
 /**
- * Whether the page asked for plan 090's spikes (`?stands=record`: a coarse
- * level's crowns drawn from stand records, lib/city/stand-record.ts;
- * `?rails=table`: the rails drawn from a segment table,
- * lib/city/rail-table.ts). QA knobs: the default path is what a visitor
- * gets. Pure.
+ * Whether the page asked for plan 090's spike (`?rails=table`: the rails
+ * drawn from a segment table, lib/city/rail-table.ts). A QA knob: the
+ * default path is what a visitor gets. Pure.
  */
-export function standRecordRequested(search: string): boolean {
-  return new URLSearchParams(search).get("stands") === "record";
-}
-
 export function railTableRequested(search: string): boolean {
   return new URLSearchParams(search).get("rails") === "table";
 }

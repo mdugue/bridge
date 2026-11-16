@@ -103,8 +103,8 @@ test("a page that goes to the background or leaves keeps the count", () => {
   }
 });
 
-test("a page drawn through one of plan 090's spikes is told apart", () => {
-  expect(trailUrl("/dresden", "?rails=table&at=51,13&stands=record")).toBe(
-    "/dresden?stands=record&rails=table"
+test("a page drawn through plan 090's spike is told apart", () => {
+  expect(trailUrl("/dresden", "?rails=table&at=51,13")).toBe(
+    "/dresden?rails=table"
   );
 });

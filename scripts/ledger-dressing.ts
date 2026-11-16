@@ -79,7 +79,7 @@ function recorded(
   today: string,
   publish: Publish
 ): DressingRecorded {
-  const fold = (key: "browser" | "lines" | "stands") => {
+  const fold = (key: "browser" | "lines" | "stands" | "trees") => {
     const file = nodePath.join(root, DRESSING_SCRATCH_PATH, `${key}.json`);
     return existsSync(file)
       ? (JSON.parse(readFileSync(file, "utf-8")) as unknown)
@@ -90,6 +90,7 @@ function recorded(
     muenchen: muenchen(was?.muenchen, root, today, publish),
     browser: fold("browser"),
     stands: fold("stands"),
+    trees: fold("trees"),
     lines: fold("lines"),
   };
   for (const [key, value] of Object.entries(members)) {

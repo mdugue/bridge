@@ -12,9 +12,7 @@
  * Browser code: bundled and served by the probe, never by the app.
  */
 import {
-  AmbientLight,
   BoxGeometry,
-  DirectionalLight,
   Color,
   InstancedBufferAttribute,
   InstancedBufferGeometry,
@@ -31,7 +29,7 @@ import {
   Vector3,
   WebGPURenderer,
 } from "three/webgpu";
-import type { Material, Object3D, BufferGeometry } from "three/webgpu";
+import type { Material, Object3D } from "three/webgpu";
 import {
   attribute,
   normalLocal,
@@ -50,8 +48,6 @@ import { addRibbon, mesh3, meshFrom } from "@/app/_components/mesh-kit";
 import { railChunkMesh, railProfile } from "@/app/_components/rail-segments";
 import { packRails } from "@/lib/city/rail-table";
 import type { RailRun } from "@/lib/city/rail-table";
-import { buildCoarseCrowns } from "@/app/_components/coarse-crowns-layer";
-import { unpackCrowns } from "@/lib/city/coarse-crowns";
 import { packStands, standOrigin } from "@/lib/city/stand-record";
 import type { Stand } from "@/lib/city/stand-record";
 
@@ -143,26 +139,6 @@ const differing = (a: Uint8ClampedArray, b: Uint8ClampedArray) => {
   }
   return n;
 };
-
-const bytesOf = (group: Object3D) => {
-  const seen = new Set<unknown>();
-  let bytes = 0;
-  group.traverse((o) => {
-    const g = (o as Mesh).geometry as BufferGeometry | undefined;
-    for (const name of ["iMat0", "iPlace"]) {
-      const a = g?.getAttribute(name) as
-        | { data?: { array: ArrayBufferView } }
-        | undefined;
-      if (a?.data && !seen.has(a.data)) {
-        seen.add(a.data);
-        bytes += a.data.array.byteLength;
-      }
-    }
-  });
-  return bytes;
-};
-
-const firstOf = (group: Object3D) => group.children[0];
 
 async function main() {
   const canvas = document.createElement("canvas");
@@ -326,90 +302,6 @@ async function main() {
     buildsForASecondRecordSet: recordBuilds,
     matrices: await shaderOf(matrixSets[0]),
     records: await shaderOf(recordSets[0]),
-  };
-
-  // --- 1b. a tile's coarse crowns, on the scene's own crown material ----------
-  const crownFile = await fetch("/crowns");
-  const crownBytes = await crownFile.arrayBuffer();
-  const crowns = unpackCrowns(crownBytes) ?? [];
-  const crownSets = (standRecord: boolean) =>
-    buildCoarseCrowns(crowns, {
-      heightAt: (x, y) => 110 + Math.sin(x / 90) * 6 + Math.cos(y / 70) * 4,
-      offset: { cx: 0, cy: 0 },
-      standRecord,
-    }).group;
-  const crownBox = { x: 0, z: 0, n: 0 };
-  for (const c of crowns) {
-    crownBox.x += c.x;
-    crownBox.z += c.z;
-    crownBox.n += 1;
-  }
-  const mid = { x: crownBox.x / crownBox.n, z: crownBox.z / crownBox.n };
-  // 240 m across: a crown is a dozen pixels wide
-  const crownCamera = new OrthographicCamera(-120, 120, 120, -120, 1, 5000);
-  crownCamera.position.set(mid.x + 900, 110 + 1200, mid.z + 1400);
-  crownCamera.lookAt(mid.x, 110, mid.z);
-  crownCamera.updateMatrixWorld();
-  const drawWith = async (view: OrthographicCamera, objects: Object3D[]) => {
-    scene.clear();
-    // the crown material is lit
-    scene.add(new AmbientLight(0xff_ff_ff, 1.5));
-    const sun = new DirectionalLight(0xff_ff_ff, 2);
-    sun.position.set(300, 600, 200);
-    scene.add(sun);
-    for (const o of objects) {
-      scene.add(o);
-    }
-    await frame(scene, view);
-    const copy = document.createElement("canvas");
-    copy.width = SIZE;
-    copy.height = SIZE;
-    const ctx = copy.getContext("2d");
-    if (!ctx) {
-      throw new Error("no 2d context");
-    }
-    ctx.drawImage(canvas, 0, 0);
-    return ctx.getImageData(0, 0, SIZE, SIZE).data;
-  };
-  const crownErrors = errors.length;
-  const byMatrix = crownSets(false);
-  const byRecord = crownSets(true);
-  const crownsFromMatrices = await drawWith(crownCamera, [byMatrix]);
-  // the first set alone (the others hidden, none reparented), so that
-  // what the rest of the tile builds can be counted
-  for (const [i, set] of byRecord.children.entries()) {
-    set.visible = i === 0;
-  }
-  await drawWith(crownCamera, [byRecord]);
-  for (const set of byRecord.children) {
-    set.visible = true;
-  }
-  builds = 0;
-  const crownsFromRecords = await drawWith(crownCamera, [byRecord]);
-  const shaderWith = async (view: OrthographicCamera, object: Object3D) => {
-    const s = await renderer.debug.getShaderAsync(scene, view, object);
-    return budgetOf(s.vertexShader, object);
-  };
-  scene.clear();
-  scene.add(byRecord);
-  const recordCrownShader = await shaderWith(crownCamera, firstOf(byRecord));
-  scene.clear();
-  scene.add(byMatrix);
-  const matrixCrownShader = await shaderWith(crownCamera, firstOf(byMatrix));
-  const coarseCrowns = {
-    crowns: crowns.length,
-    sets: byRecord.children.length,
-    litMatrices: lit(crownsFromMatrices),
-    litRecords: lit(crownsFromRecords),
-    differing: differing(crownsFromMatrices, crownsFromRecords),
-    // the other sets after the first is built: one a crown form (the
-    // lobed crown, the cone, the pine are three geometries' layouts)
-    buildsForTheOtherRecordSets: builds,
-    placementBytesMatrices: bytesOf(byMatrix),
-    placementBytesRecords: bytesOf(byRecord),
-    matrices: matrixCrownShader,
-    records: recordCrownShader,
-    errors: errors.slice(crownErrors),
   };
 
   // --- 2. which arrays reach TSL as which types ----------------------------
@@ -749,7 +641,6 @@ async function main() {
       }
     ).adapter?.info?.description,
     stands,
-    coarseCrowns,
     types: typeRows,
     oneArrayBufferTwoViews: {
       attributesBefore: memoryBefore.attributes,

@@ -1,29 +1,24 @@
 /**
  * Step 2 of scripts/prepare-data.ts, the terrain: a tile's two levels as
- * glTF (the fine one with its stairs, walls, kerbs and fences) and the
- * coarse level's crowns (bake-entries.ts `terrain`, `coarseCrowns`).
+ * glTF (the fine one with its stairs, walls, kerbs and fences), each named
+ * with its dressing file (prepare/dressing.ts; bake-entries.ts `terrain`).
  */
 import { existsSync, readFileSync } from "node:fs";
 import { cutWallGates } from "../../lib/city/fences";
 import { tileExtentOf } from "../../lib/city/site";
 import type { TerrainBounds } from "../../lib/city/terrain-geometry";
 import {
-  cityMeshSourceFiles,
   COARSE_DRESSING_KINDS,
   DRESSING_KINDS,
   pickFiles,
   dgmSourceFiles,
-  sideFileSource,
-  tileArtifacts,
 } from "../../lib/city/tile";
-import type { TileArtifactKind } from "../../lib/city/tile";
 import { TERRAIN_LEVELS, terrainRasterExtras } from "../../lib/city/tileset";
 import type {
   TerrainContent,
   TerrainExtras,
   TerrainFiles,
 } from "../../lib/city/tileset";
-import { bakeCoarseCrowns } from "../coarse-crowns";
 import { BAKE_ENTRIES } from "../bake-entries";
 import {
   fenceMesh,
@@ -60,6 +55,7 @@ import {
   publish,
   utf8,
 } from "./context";
+import { publishDressing } from "./dressing";
 import { shapedBy, siteShapes } from "./lines";
 import { colonyCrops, sideFiles } from "./side-files";
 import { offset } from "./frame";
@@ -173,62 +169,18 @@ async function fineChildren(
 }
 
 /**
- * The trees the tile's coarse level draws (lib/city/coarse-crowns.ts,
- * scripts/coarse-crowns.ts): the fine level's own placement of the tile's
- * trees on its own ground, a third of them. Pre-gzipped like the packed
- * canopy.
+ * The tile's dressing files (prepare/dressing.ts): its trees on the fine
+ * level's own ground, the coarse level's third in that level's file.
  */
-async function publishCrowns(tile: string): Promise<string | undefined> {
-  const a = tileArtifacts(tile);
-  const side = (kind: TileArtifactKind) => {
-    const path = at(sideFileSource(SITE, a[kind].file));
-    return existsSync(path) ? path : undefined;
-  };
-  const sources = {
-    canopy: side("canopy"),
-    canopyx: side("canopyx"),
-    cultivated: side("cultivated"),
-    monuments: side("monuments"),
-    ndvi: side("ndvi"),
-    city: existsSync(at(cityMeshSourceFiles(SITE, tile).city))
-      ? at(cityMeshSourceFiles(SITE, tile).city)
-      : undefined,
-    sheds: existsSync(at(cityMeshSourceFiles(SITE, tile).smallBuild))
-      ? at(cityMeshSourceFiles(SITE, tile).smallBuild)
-      : undefined,
-    structures: existsSync(at(cityMeshSourceFiles(SITE, tile).structures))
-      ? at(cityMeshSourceFiles(SITE, tile).structures)
-      : undefined,
-    trees: side("trees"),
-    vegrows: side("vegrows"),
-  };
-  if (
-    !(sources.canopy || sources.canopyx || sources.trees || sources.vegrows)
-  ) {
-    return undefined;
-  }
-  const inputs = [
-    ...Object.values(sources).filter((p): p is string => p !== undefined),
-    ...terrainInputs(tile),
-  ];
-  const [minX, minY] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
-  const { file } = a.crowns;
-  const bytes = await cached(
-    file,
-    cacheKey(inputs, BAKE_ENTRIES.coarseCrowns, offset, shapedBy(tile)),
-    async () => {
-      const fine = await shapedTerrain(tile, 0);
-      return gz(
-        await bakeCoarseCrowns(sources, {
-          bounds: fine.bounds,
-          heightAt: fine.heightAt,
-          offset,
-          origin: [minX, minY],
-        })
-      );
-    }
+async function dressingOf(
+  tile: string
+): Promise<{ dressing: string; dressingCoarse: string }> {
+  return await publishDressing(
+    tile,
+    async () => await shapedTerrain(tile, 0),
+    terrainInputs(tile),
+    shapedBy(tile)
   );
-  return publish(file, bytes);
 }
 
 /** A tile's terrain at one level: glTF + its extent and elevation range. */
@@ -246,13 +198,7 @@ export async function bakeTerrain(
   if (!existsSync(at(source.tif))) {
     fail(`missing source file ${source.tif}${HINT}`);
   }
-  const names = sideFiles.get(tile) ?? {};
-  if (level === 1) {
-    const crowns = await publishCrowns(tile);
-    if (crowns) {
-      names.crowns = crowns;
-    }
-  }
+  const names = { ...sideFiles.get(tile), ...(await dressingOf(tile)) };
   const { n } = TERRAIN_LEVELS[level];
   // The fine level's walls stand on the neighbours' ground too.
   const inputs =
@@ -267,7 +213,11 @@ export async function bakeTerrain(
     // lib/city/tile.ts COARSE_RASTER_PX)
     ...terrainRasterExtras(names, level, colonyCrops.get(tile)),
     ...(level === 0
-      ? { dressing: pickFiles(names, DRESSING_KINDS) }
+      ? {
+          dressing: pickFiles(names, DRESSING_KINDS),
+          // the third of the tile's trees the coarse level's file holds
+          coarseDressing: names.dressingCoarse,
+        }
       : { coarse: pickFiles(names, COARSE_DRESSING_KINDS) }),
   };
   const described = {

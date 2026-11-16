@@ -15,11 +15,9 @@ import {
 } from "@gltf-transform/extensions";
 import { MeshoptDecoder } from "meshoptimizer";
 import sharp from "sharp";
-import { packCrowns } from "../lib/city/coarse-crowns";
-import type { CoarseCrown } from "../lib/city/coarse-crowns";
+import { emptyPack, packDressing } from "../lib/city/dressing-pack";
 import { packFootprints } from "../lib/city/footprint-pack";
 import { encodePlate } from "../lib/city/ground-plate";
-import { packPoints } from "../lib/city/point-pack";
 import {
   compareSites,
   multisetDiff,
@@ -928,48 +926,43 @@ test("a WebP compares by its decoded values", async () => {
 
 // --- the packed binaries ------------------------------------------------------------
 
-const origin: [number, number] = [392_000, 5_668_000];
-const point = (x: number) => ({ h: 10, x, y: 1 });
-const pts = (xs: number[], flags = 0) => ({
-  "canopy_t.pts.gz": gzipSync(packPoints(xs.map(point), origin, 3, flags)),
-});
+/** A dressing file with one six-word tree a value of `xs`. */
+const drs = (xs: number[], elevation = 100) => {
+  const pack = emptyPack([392_000, 5_668_000, elevation]);
+  pack.sections.trees = {
+    runs: [
+      {
+        cx: 0,
+        cz: 0,
+        group: 0,
+        start: 0,
+        count: xs.length,
+        box: [0, 0, 0, 1, 1, 1],
+        reach: 1,
+      },
+    ],
+    words: new Uint16Array(xs.flatMap((x) => [x, 2, 3, 4, 5, 6])),
+  };
+  return { "dressing_t.drs.gz": gzipSync(packDressing(pack)) };
+};
 
-test("canopy points: a moved point, or the same in another order, differ", async () => {
+test("a dressing file: a moved tree, the same in another order, another corner differ", async () => {
+  await same(drs([1, 2]), drs([1, 2]));
   const [first] = await onlyDiffers(
-    "canopy_t.pts.gz",
-    pts([1, 2]),
-    pts([1, 3])
+    "dressing_t.drs.gz",
+    drs([1, 2]),
+    drs([1, 5])
   );
-  expect(first).toStartWith("1 points only in a, 1 only in b");
+  expect(first).toStartWith("1 records only in a, 1 only in b");
   expect(
-    await onlyDiffers("canopy_t.pts.gz", pts([1, 2]), pts([2, 1]))
-  ).toEqual(["the same 2 points in another order"]);
-  expect(
-    await onlyDiffers("canopy_t.pts.gz", pts([1, 2]), pts([1, 2], 1))
-  ).toEqual([
-    "stride 3, flags 0, origin 392000 5668000 → stride 3, flags 1, origin 392000 5668000",
-  ]);
-});
-
-const crown = (x: number): CoarseCrown => ({
-  kind: "canopy",
-  rot: 0,
-  s: 1,
-  x,
-  z: 2,
-});
-const crw = (xs: number[]) => ({
-  "crowns_t.crw.gz": gzipSync(packCrowns(xs.map(crown))),
-});
-
-test("coarse crowns: a moved crown differs, the same crowns are equal", async () => {
-  await same(crw([1, 2]), crw([1, 2]));
-  const [first] = await onlyDiffers(
-    "crowns_t.crw.gz",
-    crw([1, 2]),
-    crw([1, 5])
+    await onlyDiffers("dressing_t.drs.gz", drs([1, 2]), drs([2, 1]))
+  ).toEqual(["the same 2 records in another order"]);
+  const [corner] = await onlyDiffers(
+    "dressing_t.drs.gz",
+    drs([1, 2]),
+    drs([1, 2], 101)
   );
-  expect(first).toStartWith("1 crowns only in a, 1 only in b");
+  expect(corner).toStartWith("origin 392000 5668000 100;");
 });
 
 const footprint = (x: number) => [

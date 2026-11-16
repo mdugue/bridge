@@ -32,7 +32,7 @@ export function isAbortError(err: unknown): boolean {
 
 /**
  * Whether `bytes` are still gzipped. The pre-gzipped artifacts (`.glb.gz`,
- * `.pts.gz`) are judged on the magic, not the URL: a host that serves `.gz`
+ * `.drs.gz`) are judged on the magic, not the URL: a host that serves `.gz`
  * with `Content-Encoding: gzip` has the browser inflate them already.
  */
 export function isGzipped(bytes: Uint8Array): boolean {
