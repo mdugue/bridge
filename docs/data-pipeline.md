@@ -407,7 +407,10 @@ falls back on BBBike's city extract the site names (`Site.bbbike`):
   source: no fallback, the fetch says so.
 - **Only where it covers the site, every time.** BBBike publishes each
   extract's boundary (`<City>.poly`, an Osmosis polygon); the fetch keeps
-  it beside the extract. An extract is taken only if that boundary covers
+  it beside the extract, fetched together with it and recorded with it
+  (its md5 in the extract's record): a boundary that is not the one
+  fetched with the file is refused, and when BBBike publishes another one
+  the fetch fetches the pair again. An extract is taken only if that boundary covers
   every tile of the site about to read it with the widest margin a bake
   reads OSM beyond a tile, `MAX_MARGIN_DEG` = 0.05° (the monorail's whole
   chain, `rail_osm.py`); `test_osm_source.py` holds every margin a bake
@@ -421,15 +424,25 @@ falls back on BBBike's city extract the site names (`Site.bbbike`):
   and by how much and takes nothing; the fetch then exits 1.
 - **A bake needs a covering extract.** A `bake` whose steps read OSM
   stops before its first step when no extract covers the site
-  (`refuse_without_extract`): those steps would skip, but some rewrite
-  their committed files with less (the OSM extract's row in
-  [portability.md](./portability.md#degradation-matrix)). `--without-osm`
-  runs them anyway, for a new site or a test.
+  (`refuse_without_extract`), and so does one whose extract is not the
+  file its record names (replaced by hand under its record): those steps
+  would skip, but some rewrite their committed files with less (the OSM
+  extract's row in [portability.md](./portability.md#degradation-matrix)).
+  `--without-osm` runs them anyway, for a new site or a test; a step
+  that ran without an extract keeps no day in the provenance. Which
+  steps read OSM is a hand list (`OSM_FREE` in `__main__.py` names the
+  seven whose code reaches `osm.py` only for a helper: skyview, roofs,
+  dormers, windows, facades, plinths, lamp-water); a bake fails where a
+  step on that list reads the extract after all. Geofabrik's extract is
+  a Land's or a Regierungsbezirk's, which holds every site configured on
+  it, so it gets no coverage check.
 - **Each under its own name, and checked.** BBBike's extract lands as
   `data/_raw/<provider>/osm/<City>.osm.pbf` beside Geofabrik's. The bakes
   read Geofabrik's where it is there, else the site's BBBike one where it
   covers the site (`osm_source.resolve`). A file whose md5 is not the one
-  its record names is not taken (and the fetch fetches it again). The
+  its record names is not taken; the fetch fetches it again, into a file
+  beside it that takes its place only once complete and checked, so it
+  never deletes an extract it cannot replace. The
   fallback's URL travels beside the spec (`--osm-fallback`), not in it,
   and is resolved outside `spec.py`, so no step's code key changes with
   it. Which extract a step read is in its cache key all the same
@@ -442,12 +455,17 @@ falls back on BBBike's city extract the site names (`Site.bbbike`):
   day its data is as of), the file's md5 and the one its server
   publishes, the day it was fetched. The fetch's log and every `bake`
   start with one line naming the extract, its source and that day; an
-  extract placed by hand has no record and says so. Every step that reads
-  OSM is recorded per tile it finished — a failed bake's too — in the
+  extract placed by hand has no record and says so. Every step that read
+  the extract (by its recorded reads) is recorded per tile it finished —
+  a failed bake's too, a `--jobs` bake's whichever tile failed — in the
   site's `provenance.json` as `openstreetmap.baked.<step>.<tile>`:
   `dataAsOf`, the data's day first, then source and URL, and `on`, the
   bake's day, apart. An extract with no day (placed by hand, or no
-  `Last-Modified`) is recorded as `unknown`, never as the bake's day. The
+  `Last-Modified`) is recorded as `unknown`, never as the bake's day:
+  after this lands, the first bake on the maintainer's hand-placed
+  extracts writes `unknown` for each step it runs (`mapillary` first, the
+  one step whose key changes), until the extract is fetched with a
+  record. The
   Open-Data-Wächter reads the age there (an `unknown` is a finding of its
   own), and the inquiry card's OSM editions come from it, the oldest day
   over the site's tiles (`provenance.ts` `bakedStand`); the file has its

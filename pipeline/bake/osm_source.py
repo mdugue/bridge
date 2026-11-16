@@ -53,13 +53,14 @@ import shapely
 from .common import Tile
 from .net import USER_AGENT
 from .osm import wgs84_bbox
+from .rail_osm import MONORAIL_MARGIN
 from .spec import Spec, osm_path
 
 # The widest margin (degrees) any bake reads OSM beyond a tile: the
-# monorail's whole chain of ways (rail_osm.py `MONORAIL_MARGIN`).
-# tests/test_osm_source.py holds every margin a bake passes to the OSM
-# readers to it, so a wider read cannot slip past the coverage check.
-MAX_MARGIN_DEG = 0.05
+# monorail's whole chain of ways, taken from its reader rather than
+# copied. tests/test_osm_source.py holds every margin a bake passes to the
+# OSM readers to it, so a wider read cannot slip past the coverage check.
+MAX_MARGIN_DEG = MONORAIL_MARGIN
 
 # What a cut connection looks like once net.py has wrapped it in OSError.
 _CUT = re.compile(r"\d+ of \d+ bytes|IncompleteRead|RemoteDisconnected|timed out", re.IGNORECASE)
@@ -125,17 +126,28 @@ def file_md5(path: Path) -> str:
     return h.hexdigest()
 
 
+def text_md5(text: str) -> str:
+    return hashlib.md5(text.encode()).hexdigest()
+
+
 def write_record(
-    pbf: Path, url: str, modified: str | None, md5: str, published: str | None
+    pbf: Path,
+    url: str,
+    modified: str | None,
+    md5: str,
+    published: str | None,
+    poly_md5: str | None = None,
 ) -> dict:
     """The extract's record: `md5` is the file's, `published` the server's
-    (None where it published none; the download checked the two agree)."""
+    (None where it published none; the download checked the two agree),
+    `poly_md5` the boundary's fetched with it (a BBBike extract's)."""
     record = {
         "source": source_name(url),
         "url": url,
         "lastModified": modified,
         "md5": md5,
         "publishedMd5": published,
+        "polyMd5": poly_md5,
         "fetched": datetime.date.today().isoformat(),
     }
     part = record_path(pbf).with_suffix(".part")
@@ -242,6 +254,11 @@ def usable(spec: Spec, pbf: Path) -> str | None:
     poly = poly_path(pbf)
     if not poly.exists():
         return f"no boundary beside it ({poly.name}) to tell whether it covers {spec.site}"
+    record = read_record(pbf) or {}
+    if record.get("polyMd5") != text_md5(poly.read_text()):
+        # a boundary fetched apart from its extract (or after it) may
+        # describe another cut than the file's
+        return f"{poly.name} is not the boundary fetched with {pbf.name}"
     try:
         short = shortfall(parse_poly(poly.read_text()), spec.tiles)
     except (OSError, ValueError) as err:
@@ -263,16 +280,22 @@ def candidates(spec: Spec, fallback: str | None) -> list[Path]:
 
 def resolve(spec: Spec, fallback: str | None, say=print) -> Spec:
     """The spec reading the extract the site may use: Geofabrik's where it
-    is there (and is the file its record names), else the fallback's where
-    it covers the site (`usable`), else none (the spec's own, absent or
-    refused: the OSM steps then find no extract). Done here, not in
-    spec.py, which a step's code reaches (allometry.py)."""
+    is there, else the fallback's where it covers the site (`usable`),
+    else none (the spec's own, absent: the bake then refuses its OSM steps,
+    __main__.py `refuse_without_extract`). Geofabrik's is a Land's or a
+    Regierungsbezirk's extract, which holds every site configured on it,
+    so it is not checked for coverage — but it must be the file its record
+    names, or the bake stops here (an extract replaced by hand under a
+    record is no extract the bake can name). Done here, not in spec.py,
+    which a step's code reaches (allometry.py)."""
     if spec.osm.exists():
         problem = intact(spec.osm)
-        if problem is None:
-            return spec
-        say(f"OSM extract: {problem} — not used")
-        return _without_extract(spec)
+        if problem is not None:
+            raise SystemExit(
+                f"OSM extract: {problem} — `bun run fetch` it again, or remove "
+                f"{record_path(spec.osm).name} if you placed it by hand"
+            )
+        return spec
     if fallback is None:
         return spec
     pbf = osm_path(spec.raw, fallback)
@@ -284,13 +307,6 @@ def resolve(spec: Spec, fallback: str | None, say=print) -> Spec:
         return spec
     tiles = [dataclasses.replace(t, osm=pbf) for t in spec.tiles]
     return dataclasses.replace(spec, osm_url=fallback, tiles=tiles)
-
-
-def _without_extract(spec: Spec) -> Spec:
-    """The spec pointing at an extract that is not there: the steps skip."""
-    absent = spec.raw / "osm" / "refused" / spec.osm.name
-    tiles = [dataclasses.replace(t, osm=absent) for t in spec.tiles]
-    return dataclasses.replace(spec, osm_url=f"refused/{spec.osm.name}", tiles=tiles)
 
 
 def identity(spec: Spec, primary: Path) -> dict | str | None:
@@ -330,23 +346,36 @@ def provenance_entry(record: dict | None, pbf: Path, today: str) -> dict:
     return {"dataAsOf": what, "on": today}
 
 
-def record_bake(provenance: Path, pbf: Path, ran: Iterable[tuple[str, str]]) -> None:
+def record_bake(
+    provenance: Path, pbf: Path, read: Iterable[tuple[str, str]], without: Iterable[tuple[str, str]]
+) -> None:
     """Writes into the site's `provenance.json` which extract each step was
-    baked from on each tile it ran on (`openstreetmap.baked.<step>.<tile>`),
-    leaving every other member as it is. A site without a provenance file
-    yet gets none: it is written when the site is first committed."""
-    ran = sorted(set(ran))
-    if not ran or not provenance.exists():
+    baked from on each tile where it read one (`read`:
+    `openstreetmap.baked.<step>.<tile>`), and drops the entry of each OSM
+    step that ran on a tile without reading one (`without`: its file holds
+    no OSM data of any day now), leaving every other member as it is. A
+    site without a provenance file yet gets none: it is written when the
+    site is first committed."""
+    read, without = sorted(set(read)), sorted(set(without))
+    if not (read or without) or not provenance.exists():
         return
     doc = json.loads(provenance.read_text())
     osm = doc.setdefault("openstreetmap", {})
     baked = osm.setdefault("baked", {})
     entry = provenance_entry(read_record(pbf), pbf, datetime.date.today().isoformat())
-    if all(baked.get(step, {}).get(tile) == entry for step, tile in ran):
+    if all(baked.get(s, {}).get(t) == entry for s, t in read) and not any(
+        t in baked.get(s, {}) for s, t in without
+    ):
         return  # nothing new: a hand-formatted file stays as it is
-    for step, tile in ran:
+    for step, tile in read:
         baked.setdefault(step, {})[tile] = entry
-    osm["baked"] = {s: dict(sorted(t.items())) for s, t in sorted(baked.items())}
+    for step, tile in without:
+        baked.get(step, {}).pop(tile, None)
+    osm["baked"] = {s: dict(sorted(t.items())) for s, t in sorted(baked.items()) if t}
+    ran = read
     provenance.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
     steps = sorted({s for s, _ in ran})
-    print(f"{provenance}: {', '.join(steps)} recorded as baked from {pbf.name}")
+    if steps:
+        print(f"{provenance}: {', '.join(steps)} recorded as baked from {pbf.name}")
+    if without:
+        print(f"{provenance}: no extract's day for {len(without)} step-tile(s) baked without one")

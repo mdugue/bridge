@@ -224,24 +224,26 @@ def step_key(step: str, research: bool, spec_hash: str, osm=None) -> dict:
     return key
 
 
-def recorded_tile(spec, step: str, tile, research: bool, key: dict, save: bool) -> None:
+def recorded_tile(spec, step: str, tile, research: bool, key: dict, save: bool) -> bool:
     """The step on the tile, its run recorded (step_cache.py) — or, with the
     cache off, its old record dropped. A step that fails says on which
     site, tile and step before the error goes on (in a worker of a
-    `--jobs` run as well): tile 11 of 15 names itself."""
+    `--jobs` run as well): tile 11 of 15 names itself. True when it read
+    the OSM extract (`took_extract`)."""
     started = time.perf_counter()
     try:
         manifest = step_cache.manifest_path(spec.raw, spec.site, step, tile.id)
         if not save:
             Path(manifest).unlink(missing_ok=True)
+        with step_cache.recording([os.getcwd(), str(spec.data), str(spec.raw)]) as rec:
             run_tile(step, tile, spec.tiles, research)
-        else:
-            with step_cache.recording([os.getcwd(), str(spec.data), str(spec.raw)]) as rec:
-                run_tile(step, tile, spec.tiles, research)
+        if save:
             step_cache.save(manifest, key, rec)
+        read = took_extract(step, tile, rec)
         # where a bake's minutes go, tile by tile (the step's own line says
         # what it found)
         print(f"{tile.id}: {step} took {time.perf_counter() - started:.1f} s")
+        return read
     except (Exception, SystemExit) as exc:  # a step's `SystemExit("no OSM extract")` too
         print(f"{spec.site} {tile.id} {step}: {exc}", file=sys.stderr)
         raise
@@ -285,8 +287,9 @@ class Bake:
         self.mode = mode
         self.ledger = step_cache.Ledger(spec.raw, spec.site, list(STEPS))
         self.tiles = {t.id: t for t in spec.tiles}
-        # each (step, tile) that ran in this bake and finished
-        self.ran: set[tuple[str, str]] = set()
+        # each (step, tile) that ran in this bake and finished → whether
+        # it read the OSM extract
+        self.ran: dict[tuple[str, str], bool] = {}
 
     def _key(self, step: str) -> dict:
         return step_key(step, self.research, self.spec_hash, self.osm)
@@ -303,9 +306,8 @@ class Bake:
         args = (self.research, self._key(step), self.mode != "off")
         if self.jobs <= 1 or len(tiles) <= 1:
             for tile in tiles:
-                recorded_tile(self.spec, step, tile, *args)
+                self.ran[(step, tile.id)] = recorded_tile(self.spec, step, tile, *args)
                 self.ledger.done(step, tile.id)
-                self.ran.add((step, tile.id))
             return
         warm(self.spec, step, tiles, self.jobs)
         # fork: the workers share the parent's loaded modules (and what
@@ -313,11 +315,16 @@ class Bake:
         context = multiprocessing.get_context("fork")
         with ProcessPoolExecutor(min(self.jobs, len(tiles)), mp_context=context) as pool:
             runs = [(t, pool.submit(recorded_tile, self.spec, step, t, *args)) for t in tiles]
+            failed = None
             for t, done in runs:
-                done.result()
-                self.ran.add((step, t.id))
-        for tile in tiles:
-            self.ledger.done(step, tile.id)
+                # every tile that finished counts, whichever failed first
+                try:
+                    self.ran[(step, t.id)] = done.result()
+                    self.ledger.done(step, t.id)
+                except (Exception, SystemExit) as exc:
+                    failed = failed or exc
+        if failed is not None:
+            raise failed
 
     def step(self, step: str, tiles) -> None:
         """A step over the tiles, `jobs` tiles at a time. Each tile writes
@@ -352,9 +359,28 @@ class Bake:
             self.step(s, [self.tiles[tid]])
 
 
+# The steps whose code reaches osm.py (for a helper: `tag`, a footprint
+# reader) but which read no OSM extract. Kept by hand: a step's reads are
+# known only once it ran, and the refusal comes before the first step;
+# `took_extract` fails a bake whose step reads the extract while listed
+# here, so the list cannot hide one.
+OSM_FREE = frozenset({"skyview", "roofs", "dormers", "windows", "facades", "plinths", "lamp-water"})
+
+
 def reads_osm(step: str) -> bool:
-    """Whether a step's code reaches the OSM reader (`osm.py`)."""
-    return "bake.osm" in step_cache.closure(STEPS[step].__module__)
+    """Whether a step reads the OSM extract: its code reaches the OSM
+    reader (`osm.py`) and it is not one of `OSM_FREE`."""
+    return step not in OSM_FREE and "bake.osm" in step_cache.closure(STEPS[step].__module__)
+
+
+def took_extract(step: str, tile, rec) -> bool:
+    """Whether the step's run on the tile read the OSM extract (the index
+    notes the extract as read, osm_index.py), from its recorded reads.
+    Raises where a step listed as reading none (`OSM_FREE`) read it."""
+    read = tile.osm is not None and os.path.abspath(tile.osm) in rec.reads
+    if read and not reads_osm(step):
+        raise RuntimeError(f"{step} read the OSM extract but is listed in OSM_FREE (__main__.py)")
+    return read
 
 
 def refuse_without_extract(spec, steps: list[str], without_osm: bool) -> None:
@@ -416,14 +442,16 @@ def main() -> None:
     )
     args = parser.parse_args()
     parsed = parse(args.spec)
-    spec = osm_source.resolve(parsed, args.osm_fallback)
-    unknown = set(args.tile) - {t.id for t in spec.tiles}
+    unknown = set(args.tile) - {t.id for t in parsed.tiles}
     if unknown:
-        parser.error(f"not a tile of {spec.site}: {', '.join(sorted(unknown))}")
-    tiles = [t for t in spec.tiles if not args.tile or t.id in args.tile]
+        parser.error(f"not a tile of {parsed.site}: {', '.join(sorted(unknown))}")
     if args.command == "fetch":
-        fetch.run(spec, tiles, lsc=args.lsc, fallback=args.osm_fallback)
+        tiles = [t for t in parsed.tiles if not args.tile or t.id in args.tile]
+        fetch.run(parsed, tiles, lsc=args.lsc, fallback=args.osm_fallback)
         return
+    # the extract the site may read; one that is not its record's stops here
+    spec = osm_source.resolve(parsed, args.osm_fallback)
+    tiles = [t for t in spec.tiles if not args.tile or t.id in args.tile]
     print(
         f"OSM extract: {osm_source.describe(spec.osm)}"
         if spec.osm.exists()
@@ -453,14 +481,15 @@ def main() -> None:
         for step in steps:
             bake.step(step, tiles)
     finally:
-        if spec.osm.exists():
-            # which extract each OSM step was baked from on each tile it
-            # finished, a failed bake's too (the Wächter reads the age there)
-            osm_source.record_bake(
-                spec.data / "provenance.json",
-                spec.osm,
-                [(s, t) for s, t in bake.ran if reads_osm(s)],
-            )
+        # which extract each step was baked from on each tile it finished
+        # where it read one, a failed bake's too (the Wächter reads the age
+        # there); an OSM step that ran without one keeps no day
+        osm_source.record_bake(
+            spec.data / "provenance.json",
+            spec.osm,
+            [st for st, read in bake.ran.items() if read],
+            [st for st, read in bake.ran.items() if not read and reads_osm(st[0])],
+        )
     if args.step == "all" and not args.tile:
         for step in SITE_STEPS:
             run_site_step(spec, step)

@@ -522,6 +522,20 @@ def test_a_geofabrik_404_is_a_wrong_config_not_an_outage(tmp_path, monkeypatch, 
     assert not (tmp_path / "raw" / "osm" / "Dresden.osm.pbf").exists()
 
 
+def test_the_fetch_never_deletes_an_extract_it_cannot_replace(tmp_path, monkeypatch, capsys):
+    # Geofabrik's extract replaced by hand under its record, Geofabrik
+    # unreachable: the file stays (the bake refuses it), nothing is lost
+    raw = tmp_path / "raw"
+    pbf = raw / "osm" / "sachsen-latest.osm.pbf"
+    pbf.parent.mkdir(parents=True)
+    pbf.write_bytes(b"replaced by hand")
+    fetch.osm_source.write_record(pbf, _SPEC["osm"], None, "abc", "abc")
+    with pytest.raises(SystemExit):
+        _fetch_run(tmp_path, monkeypatch, "osm", dlm=True, fallback=BBBIKE, raw=raw)
+    assert pbf.read_bytes() == b"replaced by hand"
+    assert "stays, and the bake refuses it" in capsys.readouterr().out
+
+
 def test_a_failed_checksum_is_no_outage_and_takes_no_fallback(tmp_path, monkeypatch, capsys):
     with pytest.raises(SystemExit):
         tried, _, _ = _fetch_run(tmp_path, monkeypatch, "osm-md5", dlm=True, fallback=BBBIKE)

@@ -71,7 +71,7 @@ from .citygml import write_cityjson
 from .common import Tile, dlm_complete
 from .dop_light import flight_file
 from .net import download, fetch_text
-from .osm_source import poly_url, record_path
+from .osm_source import poly_url, read_record
 from .rasters import write_tile_raster
 from .spec import Spec, osm_path
 
@@ -311,61 +311,61 @@ def _published_md5(url: str) -> str | None:
         return None
 
 
-def _download_extract(url: str, dest: Path) -> None:
+def _download_extract(url: str, dest: Path, poly: str | None = None) -> None:
     """An extract checked against its published md5, and its record
-    (osm_source.py). Only a failure to reach the server is tried again
-    (`osm_source.unreachable`); a 404, a checksum that does not match or a
-    full disk raise at once."""
+    (osm_source.py), with `poly`, the boundary fetched with it (BBBike's).
+    It is downloaded beside `dest` and takes its place only once complete
+    and checked, so a failed download leaves what was there. Only a failure
+    to reach the server is tried again (`osm_source.unreachable`); a 404, a
+    checksum that does not match or a full disk raise at once."""
+    new = dest.with_name(dest.name + ".new")
     for attempt in range(1, OSM_TRIES + 1):
+        new.unlink(missing_ok=True)
         try:
             published = _published_md5(url)
-            download(url, dest, md5_url=f"{url}.md5")
+            download(url, new, md5_url=f"{url}.md5")
             break
         except Exception as err:
             if not osm_source.unreachable(err) or attempt == OSM_TRIES:
                 raise
             print(f"OSM extract: {url} failed ({type(err).__name__}: {err}) — try {attempt + 1}")
             time.sleep(OSM_PAUSE_S * attempt)
-    md5 = osm_source.file_md5(dest)
+    md5 = osm_source.file_md5(new)
     if published is not None and published != md5:
-        dest.unlink()
+        new.unlink()
         raise ValueError(f"{url}: md5 {md5}, published {published}")
-    osm_source.write_record(dest, url, osm_source.last_modified(url), md5, published)
-
-
-def _keep_boundary(url: str, pbf: Path) -> str | None:
-    """BBBike's boundary of the extract, kept beside it (the bakes check
-    coverage against it); None when it could not be read."""
-    poly = poly_url(url)
-    try:
-        text = fetch_text(poly)
-        osm_source.parse_poly(text)
-    except Exception as err:  # noqa: BLE001 — no boundary, no coverage to vouch for
-        return f"its boundary {poly} not read ({type(err).__name__}: {err})"
-    path = osm_source.poly_path(pbf)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text)
-    return None
+    new.replace(dest)
+    if poly is not None:
+        osm_source.poly_path(dest).write_text(poly)
+    modified = osm_source.last_modified(url)
+    poly_md5 = osm_source.text_md5(poly) if poly is not None else None
+    osm_source.write_record(dest, url, modified, md5, published, poly_md5)
 
 
 def _fetch_bbbike(spec: Spec, url: str | None) -> bool:
     """BBBike's city extract the site names, if its published boundary
     covers the site's tiles with the bakes' widest margin; else a line on
-    by how much it falls short, and nothing is taken."""
+    by how much it falls short, and nothing is taken. The extract and its
+    boundary are fetched together, and fetched again together when the
+    boundary BBBike publishes is not the one recorded with the file."""
     if url is None:
         print(f"OSM extract: {spec.site} names no BBBike extract to fall back on (Site.bbbike)")
         return False
     dest = osm_path(spec.raw, url)
+    try:
+        poly = fetch_text(poly_url(url))
+        problem = _covers(spec, osm_source.parse_poly(poly))
+    except Exception as err:  # noqa: BLE001 — no boundary, no coverage to vouch for
+        poly, problem = None, f"its boundary {poly_url(url)} not read ({type(err).__name__}: {err})"
     # the coverage first: a site it does not cover downloads nothing, and
     # a copy another site of the Land fetched stays for that site
-    problem = _keep_boundary(url, dest) or _covers(spec, dest)
-    if problem is None and dest.exists() and osm_source.intact(dest) is not None:
-        # the file on disk is not the one its record names: fetched again
-        record_path(dest).unlink(missing_ok=True)
-        dest.unlink()
-    if problem is None and not dest.exists():
+    if problem is None and (
+        not dest.exists()
+        or osm_source.intact(dest) is not None
+        or (read_record(dest) or {}).get("polyMd5") != osm_source.text_md5(poly)
+    ):
         try:
-            _download_extract(url, dest)
+            _download_extract(url, dest, poly)
         except Exception as err:  # noqa: BLE001 — report, then fetch the tiles
             problem = f"not downloaded ({type(err).__name__}: {err})"
     problem = problem or osm_source.usable(spec, dest)
@@ -379,17 +379,13 @@ def _fetch_bbbike(spec: Spec, url: str | None) -> bool:
     return True
 
 
-def _covers(spec: Spec, dest: Path) -> str | None:
-    """Whether the boundary kept beside `dest` covers the site (before the
-    extract itself is there)."""
-    poly = osm_source.poly_path(dest)
-    short = osm_source.shortfall(osm_source.parse_poly(poly.read_text()), spec.tiles)
+def _covers(spec: Spec, boundary) -> str | None:
+    """Whether `boundary` covers the site with the bakes' widest margin."""
+    short = osm_source.shortfall(boundary, spec.tiles)
     if short is None:
         return None
-    return (
-        f"it does not cover {spec.site} with the bakes' {osm_source.MAX_MARGIN_DEG}° margin "
-        f"({poly.name}: short {short})"
-    )
+    margin = osm_source.MAX_MARGIN_DEG
+    return f"it does not cover {spec.site} with the bakes' {margin}° margin (short {short})"
 
 
 def fetch_osm(spec: Spec, fallback: str | None = None) -> bool:
@@ -397,19 +393,20 @@ def fetch_osm(spec: Spec, fallback: str | None = None) -> bool:
     first; where it cannot be reached (after `OSM_TRIES`; a 404, a failed
     checksum or a full disk are no outage) BBBike's city extract the site
     names, if it covers the site (osm_source.py) — checked for this site
-    even when another site of the Land fetched the file. The tiles are
-    still fetched, but the bakes need it (every OSM layer, and the land
-    cover where the provider has no Basis-DLM), so `run` fails at the end."""
+    even when another site of the Land fetched the file. A file is only
+    ever replaced by a complete, checked download, never deleted first.
+    The tiles are still fetched, but the bakes need it (every OSM layer,
+    and the land cover where the provider has no Basis-DLM), so `run`
+    fails at the end."""
     primary = spec.osm
     if primary.exists():
         problem = osm_source.intact(primary)
         if problem is None:
+            # Geofabrik's Land extract: no coverage to check (osm_source.resolve)
             print(f"OSM extract: {osm_source.describe(primary)}")
             return True
-        print(f"OSM extract: {problem} — fetched again")
-        record_path(primary).unlink(missing_ok=True)
-        primary.unlink()
-    if fallback is not None:
+        print(f"OSM extract: {problem} — fetched again (it stays until a download replaces it)")
+    elif fallback is not None:
         pbf = osm_path(spec.raw, fallback)
         if pbf.exists() and osm_source.usable(spec, pbf) is None:
             print(f"OSM extract: {osm_source.describe(pbf)}")
@@ -420,12 +417,16 @@ def fetch_osm(spec: Spec, fallback: str | None = None) -> bool:
         return True
     except Exception as err:  # noqa: BLE001 — report, then maybe the fallback
         print(f"OSM extract: {spec.osm_url} not downloaded ({type(err).__name__}: {err})")
+        if primary.exists():
+            # a file that is not its record's: no fallback reads past it
+            print(f"OSM extract: {primary.name} stays, and the bake refuses it")
+            return False
         if not osm_source.unreachable(err):
             print("OSM extract: not a failure to reach Geofabrik — no fallback (check the config)")
             return False
     if _fetch_bbbike(spec, fallback):
         return True
-    print(f"OSM extract: none for {spec.site}; put one at {primary}")
+    print(f"OSM extract: none for {spec.site}; Geofabrik's {spec.osm_url} belongs at {primary}")
     return False
 
 
@@ -480,8 +481,7 @@ def run(spec: Spec, tiles: list[Tile], lsc: bool = False, fallback: str | None =
         )
         if not ok
     ]
-    # the murals read the extract that is there now
-    spec = osm_source.resolve(spec, fallback)
+
     if spec.trams:
         transit.fetch_gtfs(transit.gtfs_dir(spec.raw))
     fetch_glo30(spec)
@@ -494,7 +494,8 @@ def run(spec: Spec, tiles: list[Tile], lsc: bool = False, fallback: str | None =
     except Exception as err:  # noqa: BLE001 — optional: the nameplates show the name alone
         print(f"{spec.site}: the landmarks' facts not fetched ({type(err).__name__}: {err})")
     if not site_failed:
-        fetch_murals(spec)
+        # the murals read the extract that is there now
+        fetch_murals(osm_source.resolve(spec, fallback))
     failures = {tid: what for tid, what in failures.items() if what}
     if site_failed:
         # the land cover needs the DLM, or without one the extract; every
