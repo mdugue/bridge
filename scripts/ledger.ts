@@ -10,8 +10,11 @@
  *   bun scripts/ledger.ts           # write qa/ledger.json
  *   bun scripts/ledger.ts --check   # name each figure that differs, exit 1
  *
- * It reads public/data/<site>/, so a build (or `bun scripts/prepare-sites.ts
- * dresden`) comes first.
+ * It reads public/data/<site>/, so a build (or `bun scripts/prepare-sites.ts`)
+ * comes first: the reference site for the bytes and counters, and every site
+ * a build serves for the `rasters` section (plan 091 phase 0,
+ * scripts/ledger-rasters.ts). After a write, `bun run fix` formats the file
+ * as committed; `--check` compares values, not layout.
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { cpus } from "node:os";
@@ -56,6 +59,7 @@ import type { DataManifest } from "../lib/city/tile";
 import type { ContentExtras } from "../lib/city/tileset";
 import { TILESET_FILE } from "../lib/city/tileset";
 import { REFERENCE_SITE } from "../sites";
+import { rasterLedger, readySites } from "./ledger-rasters";
 
 const ROOT = nodePath.join(import.meta.dir, "..");
 export const LEDGER_FILE = nodePath.join(ROOT, "qa/ledger.json");
@@ -179,7 +183,7 @@ function cpuCount(): { count: number; model: string } {
 /** The ledger's figures for `site`, from its published files: the gated
  *  ones and the recorded ones. */
 export function measure(site: string): {
-  gated: Omit<Ledger, "dated" | "recorded">;
+  gated: Omit<Ledger, "dated" | "recorded" | "rasters">;
   recorded: Omit<Recorded, "machine" | "read">;
 } {
   const published = publishedFiles(site);
@@ -224,11 +228,23 @@ export function measure(site: string): {
   };
 }
 
-function main(check: boolean): void {
+/** Every built site's rasters (plan 091 phase 0): the sites a build
+ *  serves, each of which must be built. */
+export async function measureRasters(): Promise<Ledger["rasters"]> {
+  return await rasterLedger(
+    readySites(),
+    publishedFiles,
+    sources("app", isSource)
+  );
+}
+
+async function main(check: boolean): Promise<void> {
   const committed: unknown = existsSync(LEDGER_FILE)
     ? JSON.parse(readFileSync(LEDGER_FILE, "utf-8"))
     : null;
-  const { gated, recorded } = measure(REFERENCE_SITE);
+  const measured = measure(REFERENCE_SITE);
+  const { recorded } = measured;
+  const gated = { ...measured.gated, rasters: await measureRasters() };
   if (check) {
     const moved = ledgerDiff(committed ?? {}, gated);
     for (const line of moved) {
@@ -272,5 +288,5 @@ function main(check: boolean): void {
 }
 
 if (import.meta.main) {
-  main(process.argv.includes("--check"));
+  await main(process.argv.includes("--check"));
 }

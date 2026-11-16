@@ -30,7 +30,7 @@
   files, fewer shader variants)
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: TODO
+- **Status**: IN PROGRESS — phase 0 measured (the table is in `qa/ledger.json`, `rasters`); phases 2, 3 and 5 decided below
 
 ## Why this matters
 
@@ -408,4 +408,57 @@ files, bindings, distinct ground variants, frame time.
 
 ## Findings
 
-(Empty. Each phase writes its figures and its verdict here.)
+### Phase 0 — the table (2026-11-16, every committed site)
+
+`qa/ledger.json`'s `rasters` section, computed from the published files
+by the viewer's own rules (`scripts/ledger-rasters.ts`,
+`lib/city/ledger-rasters.ts`; the table and how to read it in
+`docs/data-pipeline.md`, "The rasters, every site"). Every figure is
+gated. The drift check found no in-scope file changed since `5dfa300d`.
+
+**A phone's fine level** is the same on all seven sites to within 2 MiB:
+exact 24.0 MiB (class 4, paving 16, markings 4; no sports raster), measured
+8.0–10.0 (edges 8, a colony crop 0–2), soft 4.7 (NDVI 1.3, sky view 1.3,
+horizon 2.0), the colour splat 21.3 — **58.0–60.0 MiB, the soft fields
+7.8–8.0 %**. A desktop's: exact 64.0 (class, paving, sports, markings 16
+each), 98.0–106.0 in all, soft 4.4–4.8 %. **A coarse level** — the level
+every far tile holds — is 11.0 MiB on both tiers: class 1.0, splat 5.3, and
+the same three soft fields, **4.7 MiB, 43 %** (both levels of a tile share
+them by file).
+
+**Programs**: 2–4 `splatVariant` keys a site and tier over both levels;
+over all seven sites 4 on a desktop, 3 on a phone (with sports grounds or
+not, with colonies or not, the coarse level's).
+
+**Cover** (mean share of texels that carry anything, fine level): paving
+31–47 %, its bounding box the whole tile; markings 8–17 %, box 93–100 %;
+sports grounds **0.4–1.1 % (largest 3.8 %)** in a box of 17–82 %;
+colonies 0.3–6.1 % (already cropped, `colonyCrop`).
+
+**CPU reads**: one — the NDVI, decoded again for the crowns' greenness
+(`vegetation-layer.ts` `loadNdviSampler`, every fine level, every tier;
+the same file is uploaded for the ground).
+
+**What it decides**
+
+- **The STOP condition before phase 2 does not hold**: the soft fields are
+  7.8–8.0 % of a phone's fine level, above a twentieth. Phase 2's trial
+  goes ahead as planned.
+- **Phase 3 is carried, on phase 2's numbers, and for the coarse level
+  more than the fine one.** BC4 or EAC R11 halve a one-channel raster:
+  sky view 1.3 → 0.7, NDVI the same (after 090), the horizon as 32
+  one-channel layers 2.0 → 1.0. All three: 2.3 MiB, about 4 % of a phone's
+  fine level — small — but 21 % of a coarse level, and a phone holds many
+  more coarse levels than fine ones. The horizon is half of it and is
+  the first candidate; the NDVI waits for 090 (its CPU read).
+- **Phase 5 is carried narrowed.** *Variants*: 4 programs a desktop, 3 a
+  phone, over all sites — the variant leg has nothing to win and is
+  closed. *Bindings*: paving and markings span the whole tile (box
+  93–100 %), so stacking them as layers costs no empty layers on a
+  desktop; on a phone they differ in size (2048² against 1024²) and do
+  not stack. *Sports grounds*: 1 % of their texels carry, so a 2048²
+  RGBA layer (16 MiB on a desktop) is the wrong home for them — cropped
+  as the colonies are (*Maintenance notes*), the desktop's fine level
+  saves 16 MiB × (1 − box), 3–13 MiB a tile; that is a plan of its own or
+  phase 5's first step, desktop only (a phone does not read them).
+  *Files*: unchanged, a fine level still fetches 9 rasters and 2 tables.

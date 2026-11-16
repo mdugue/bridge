@@ -15,6 +15,7 @@
  * the gate. Their triangle counts and every file count stay gated.
  */
 import { gzipSync } from "node:zlib";
+import type { RasterLedger } from "./ledger-rasters";
 import { TERRAIN_RASTER_KEYS } from "./tileset";
 
 /** The extensions a static host sends as they are: compressed already. */
@@ -546,6 +547,8 @@ export interface Ledger {
   dated: string;
   /** every file the manifest names (the machine-bound files' bytes left out) */
   published: Weight;
+  /** every built site's rasters (plan 091 phase 0, ledger-rasters.ts) */
+  rasters: RasterLedger;
   recorded: Recorded;
   site: string;
   tiles: number;
@@ -638,6 +641,7 @@ export function datedLedger(
     bytes: fresh.bytes,
     buildings: fresh.buildings,
     counters: fresh.counters,
+    rasters: fresh.rasters,
     recorded: record,
   };
 }

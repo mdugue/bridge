@@ -19,6 +19,7 @@ import {
   wireBytes,
 } from "./ledger";
 import type { Ledger, RasterReads, Recorded } from "./ledger";
+import { SORT_OF } from "./ledger-rasters";
 import { buildTileset } from "./tileset";
 import type { BakedTile, TerrainFiles } from "./tileset";
 
@@ -307,6 +308,7 @@ const LEDGER = {
     publishedExtensions: [".png"],
     upstreamWorkarounds: 2,
   },
+  rasters: { rule: "rasters", cpuDecodes: [], sites: {}, sorts: SORT_OF },
   recorded: RECORDED,
 } satisfies Ledger;
 

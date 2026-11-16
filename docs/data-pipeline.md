@@ -1150,9 +1150,11 @@ polygons on a tile for lack of it).
 ## Measuring what the browser downloads
 
 The figures live in [`qa/ledger.json`](../qa/ledger.json), the rewrite
-series' ledger (plan 087). `bun run ledger` writes it from the reference
-site's published files — `public/data/dresden/`, so after a build or
-`bun scripts/prepare-sites.ts dresden` — and `bun run ledger -- --check`
+series' ledger (plan 087). `bun run ledger` writes it from the published
+files — the reference site's (`public/data/dresden/`) for the bytes and
+counters, every site a build serves for the rasters, so after a build or
+`bun scripts/prepare-sites.ts`; `bun run fix` then formats it as committed
+— and `bun run ledger -- --check`
 names each figure that differs and exits 1; CI's build-check shard runs the
 check after its build. Every figure is a function of the tree: a pull
 request that moves one commits the new file, and its diff is what the
@@ -1216,6 +1218,46 @@ today), gave a tile 4.0–9.7 MB and the site ≈ 98.9 MB. A visit fetches
 less than a set's site figure: streaming loads a tile's content only when it is in view, and a far tile stops at its far
 set. Sources on disk that are never served: the DGM GeoTIFF
 (12.9–15.6 MB a tile) and the CityJSON (2.7–13.6 MB a tile).
+
+### The rasters, every site
+
+The ledger's `rasters` section (plan 091 phase 0; the arithmetic in
+`lib/city/ledger-rasters.ts`, the reading in `scripts/ledger-rasters.ts`)
+holds, for every site a build serves, what a terrain level's rasters
+weigh. It decodes each published raster with the viewer's decoder and asks
+the viewer's own rules which file a level reads on a tier (`rasterFiles`),
+how its texture is laid out (the kinds table's looks) and what it weighs on
+the GPU (`textureBytes`, and `splatScaleFor` for the colour splat painted
+from the classes). Per site: each raster and table artifact's files, wire
+bytes and texture shapes; each kind's GPU bytes on the spawn tile and the
+largest, per tier and level, near the camera (the float tables are not
+weighed, as in the viewer); a fine level by sort — **exact** ids (class,
+paving, sports grounds, markings), **measured** fields (edges, colonies),
+**soft** fields (NDVI, sky view, horizon) and the splat; the share of
+texels that carry anything in the sparse rasters (paving, sports grounds,
+markings, colonies) and of their bounding box, against the full tile
+raster; and the ground programs (`splatVariant` keys) the levels ask for.
+`cpuDecodes` names what the viewer decodes on the CPU without uploading —
+today the NDVI, for the crowns' greenness (`vegetation-layer.ts`); a new
+caller of the PNG decoder fails the ledger until it is named there. Every
+figure is gated: all are functions of the published files and the code.
+
+Baseline, 2026-11-16 (MiB on the GPU; the largest tile; *programs* over
+both levels; *cover* the mean share of carrying texels, the sports
+grounds' bounding box in brackets):
+
+| Site (tiles) | Phone, fine level: exact / measured / soft / splat = total | Soft | Desktop, fine | Coarse level | Programs desktop / phone | Cover: paving / markings / sport (box) / colonies |
+|---|---|---|---|---|---|---|
+| Dresden (15) | 24.0 / 9.9 / 4.7 / 21.3 = 59.9 | 7.8 % | 105.7 | 11.0 | 4 / 3 | 35.5 % / 11.6 % / 1.1 % (62 %) / 4.8 % |
+| Grimma (2) | 24.0 / 9.8 / 4.7 / 21.3 = 59.8 | 7.8 % | 105.0 | 11.0 | 2 / 2 | 46.7 % / 8.0 % / 0.4 % (17 %) / 5.6 % |
+| Hamburg (4) | 24.0 / 8.0 / 4.7 / 21.3 = 58.0 | 8.0 % | 98.0 | 11.0 | 2 / 2 | 33.5 % / 17.3 % / 0.5 % (30 %) / — |
+| Leipzig (4) | 24.0 / 10.0 / 4.7 / 21.3 = 60.0 | 7.8 % | 106.0 | 11.0 | 2 / 2 | 43.7 % / 16.8 % / 0.9 % (73 %) / 2.3 % |
+| Meißen (1) | 24.0 / 10.0 / 4.7 / 21.3 = 60.0 | 7.8 % | 105.9 | 11.0 | 2 / 2 | 31.2 % / 12.2 % / 0.7 % (75 %) / 6.1 % |
+| München (4) | 24.0 / 8.3 / 4.7 / 21.3 = 58.3 | 8.0 % | 99.2 | 11.0 | 3 / 3 | 39.2 % / 14.9 % / 1.1 % (82 %) / 0.4 % |
+| Unna (2) | 24.0 / 8.3 / 4.7 / 21.3 = 58.3 | 8.0 % | 99.1 | 11.0 | 3 / 3 | 46.4 % / 12.1 % / 0.7 % (77 %) / 0.3 % |
+
+A coarse level is the 1024² class raster (1.0), its splat (5.3) and the
+three soft fields (4.7), which both levels of a tile share.
 
 ## Provenance
 
