@@ -183,8 +183,13 @@ It also fails when pyright did not read every module of `bake/` or a
 setting beyond the known ones relaxes it, and in CI when the baseline
 holds what the base branch's does not, unless the PR's description says
 why in a line `Typecheck-baseline-raise: …`.
-Neither the checker nor the script re-keys a bake: both live outside
-`bake/` and the dev group is not in `locked_runtime`. Fetch and bakes
+Where a library leaves the bakes' calls untyped, `pipeline/typings/`
+holds partial stub packages for pyright alone — scipy's `ndimage` and
+`fft`, rasterio's package and `windows`, pyogrio's package, laspy's point
+records — each typed from the installed library's source and checked
+against it when that library is bumped (`typings/README.md`).
+Neither the checker, the script nor the stubs re-key a bake: all live
+outside `bake/` and the dev group is not in `locked_runtime`. Fetch and bakes
 need the network and the raw downloads and run on the maintainer's
 machine.
 
