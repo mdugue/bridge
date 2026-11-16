@@ -13,6 +13,7 @@
  * the track, never over it. DOM-free, THREE-free.
  */
 
+import * as PMath from "./portable-math";
 import { difference } from "polygon-clipping";
 import type { Polygon as ClipPolygon } from "polygon-clipping";
 import type { MultiPolygonGeometry, PolygonGeometry } from "./features";
@@ -124,7 +125,7 @@ export class AxisIndex {
 
 /** The capsule's radius over the clearance: its polygon's edges, not
  *  only its corners, at the clearance. */
-const CIRCUMSCRIBE = 1 / Math.cos(Math.PI / (2 * CAP_STEPS));
+const CIRCUMSCRIBE = 1 / PMath.cos(Math.PI / (2 * CAP_STEPS));
 
 /** The points within `s.clear` of a segment, as one polygon (a capsule,
  *  circumscribed). */
@@ -132,21 +133,21 @@ function capsule(s: Segment): ClipPolygon {
   const r = s.clear * CIRCUMSCRIBE;
   const [ax, ay] = s.a;
   const [bx, by] = s.b;
-  const len = Math.hypot(bx - ax, by - ay);
+  const len = PMath.hypot(bx - ax, by - ay);
   const ux = len > 0 ? (bx - ax) / len : 1;
   const uy = len > 0 ? (by - ay) / len : 0;
-  const base = Math.atan2(uy, ux);
+  const base = PMath.atan2(uy, ux);
   const ring: [number, number][] = [];
   // around b from its left (+normal) through ahead to its right, then
   // around a from its right through behind back to its left: counter-
   // clockwise
   for (let k = 0; k <= CAP_STEPS; k += 1) {
     const t = base - Math.PI / 2 + (Math.PI * k) / CAP_STEPS;
-    ring.push([bx + r * Math.cos(t), by + r * Math.sin(t)]);
+    ring.push([bx + r * PMath.cos(t), by + r * PMath.sin(t)]);
   }
   for (let k = 0; k <= CAP_STEPS; k += 1) {
     const t = base + Math.PI / 2 + (Math.PI * k) / CAP_STEPS;
-    ring.push([ax + r * Math.cos(t), ay + r * Math.sin(t)]);
+    ring.push([ax + r * PMath.cos(t), ay + r * PMath.sin(t)]);
   }
   ring.push(ring[0]);
   return [ring];
@@ -173,7 +174,7 @@ function polygonArea(rings: readonly (readonly Point2[])[]): number {
 export function ringLength(ring: readonly Point2[]): number {
   let l = 0;
   for (let i = 1; i < ring.length; i += 1) {
-    l += Math.hypot(ring[i][0] - ring[i - 1][0], ring[i][1] - ring[i - 1][1]);
+    l += PMath.hypot(ring[i][0] - ring[i - 1][0], ring[i][1] - ring[i - 1][1]);
   }
   return l;
 }
@@ -213,7 +214,7 @@ function toSegment(p: Point2, a: Point2, b: Point2): number {
     l2 > 0
       ? Math.min(1, Math.max(0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2))
       : 0;
-  return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
+  return PMath.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy);
 }
 
 /** The distance (m) between two segments (0 where they cross). */

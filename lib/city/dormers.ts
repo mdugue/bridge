@@ -10,6 +10,7 @@
  * front (lib/city/windows.ts `DORMER_WINDOW`: the front is the wall
  * `front` marks), none into the cheeks or a chimney. Pure, no THREE.
  */
+import * as PMath from "./portable-math";
 import type { DormerFeature } from "./features";
 
 /** How far the front and the cheeks reach into the roof under them. */
@@ -57,7 +58,7 @@ export function chimneyMesh(
     return out;
   }
   const slope = Math.min(Math.max(p.slope, 0), 80);
-  const tan = Math.tan((slope * Math.PI) / 180);
+  const tan = PMath.tan((slope * Math.PI) / 180);
   // the roof falls along its axis, or across it astride a ridge
   const low = p.z - (tan * Math.max(p.w, p.d)) / 2 - DORMER_SINK;
   const top = Math.max(p.top, p.z + MIN_FRONT);
@@ -118,7 +119,7 @@ export function dormerMesh(
     return out;
   }
   const slope = Math.max(p.slope, 15);
-  const tan = Math.tan((slope * Math.PI) / 180);
+  const tan = PMath.tan((slope * Math.PI) / 180);
   const bf = p.d / 2;
   const zf = p.z - tan * bf;
   const top = Math.max(p.top, zf + MIN_FRONT);
@@ -126,7 +127,7 @@ export function dormerMesh(
   // a shed dormer's roof at its front, and how it falls per metre
   const fall = Math.min(Math.max(p.tf ?? 0, 0), slope - SHED_SHALLOWER);
   const front = Math.max(
-    top - Math.tan((fall * Math.PI) / 180) * (bf - bb),
+    top - PMath.tan((fall * Math.PI) / 180) * (bf - bb),
     zf + MIN_FRONT
   );
   const pitch = (top - front) / (bf - bb);
