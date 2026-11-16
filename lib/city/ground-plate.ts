@@ -16,7 +16,7 @@
  * then per tile `PLATE_N`² uint8 classes. Rows run north to south, columns
  * west to east (the coarse grid's convention).
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import type { TerrainBounds } from "./terrain-geometry";
 
 /** Vertices along a tile's edge: 62.5 m apart on a 2 km tile. */

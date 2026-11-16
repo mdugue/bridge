@@ -12,7 +12,7 @@
  * ellipsoid. A WGS84 fix is taken as ETRS89, as proj4 took it with these
  * definitions: no datum shift.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 
 /** UTM zone by EPSG code (ETRS89 / UTM zone N, northern hemisphere). */
 const UTM_ZONES: Partial<Record<number, number>> = { 25_832: 32, 25_833: 33 };

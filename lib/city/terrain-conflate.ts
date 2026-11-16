@@ -24,7 +24,7 @@
  * `MIN_STEP_M` — so freestanding garden walls and flat fountain rims leave the
  * terrain alone. A `MAX_STEP_M` clamp stops a bad height tag gouging a canyon.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { subdividePolyline } from "./polyline";
 import { isInvalidElevation, sampleHeightfield } from "./terrain-geometry";
 import type { TerrainBounds } from "./terrain-geometry";

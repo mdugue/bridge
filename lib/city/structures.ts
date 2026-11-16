@@ -12,7 +12,7 @@
  * shadows, collide and can be picked like any building. No THREE, no DOM:
  * the roof's triangulation is passed in.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import type { HeightField, StructureFeature, StructureKind } from "./features";
 import { postsMesh, roofDepth, roofPosts } from "./open-roofs";
 import type { Point2 } from "./polyline";

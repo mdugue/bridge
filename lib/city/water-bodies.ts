@@ -13,7 +13,7 @@
  *   water sheet reads (app/_components/water-layer.ts).
  */
 
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { decodeGreyPng } from "./png-raster";
 import { isInvalidElevation } from "./terrain-geometry";
 import type { TerrainBounds } from "./terrain-geometry";

@@ -37,7 +37,7 @@
  * z0 + (k+1)·rise, so the last tread is the top landing and every tread
  * lies on or above the ramp z0 → z1.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { EDGE_TOLERANCE_M, joinsAlong, meetGround, SINK } from "./ground-join";
 import type { HeightAt, JoinPoint } from "./ground-join";
 import type { StairFeature, TerraceFeature } from "./features";

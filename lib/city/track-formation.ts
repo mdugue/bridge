@@ -14,7 +14,7 @@
  * it, before the buildings are baked. DOM-free, THREE-free.
  */
 
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { isOpenRoof } from "./open-roofs";
 import type { Bed } from "./track-beds";
 import type { CityJsonDocument, CityObject } from "./types";

@@ -11,7 +11,7 @@
  * Saturday, Sunday; a public holiday runs as its weekday), and the trips
  * of the day before that run past midnight are still on their way.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import type { Point2 } from "./polyline";
 import type { TramPattern, TramTimetableFile } from "./tram-timetable-file";
 

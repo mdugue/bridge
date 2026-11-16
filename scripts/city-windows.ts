@@ -4,7 +4,7 @@
  * columns (`assignWindows`) and each wall vertex's place on its wall, the
  * `_FACADE` attribute (`facadeOf`). No DOM.
  */
-import { PMath } from "../lib/city/portable-math";
+import * as PMath from "../lib/city/portable-math";
 import { carriesPlinth } from "./city-fittings";
 import { cm } from "./city-bake";
 import type { BakedCityMesh } from "./city-bake";

@@ -2,7 +2,7 @@
  * The city in numbers of scripts/prepare-data.ts, for the start page. Its
  * bake's entries name this module (bake-entries.ts `siteStats`).
  */
-import { PMath } from "../../lib/city/portable-math";
+import * as PMath from "../../lib/city/portable-math";
 import sharp from "sharp";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";

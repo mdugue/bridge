@@ -10,7 +10,7 @@
  * which products are open, the OSM extract — is the `Provider`, shared by
  * every site of that Land (ADR 0037).
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 
 export type MovementMode = "fly" | "walk";
 

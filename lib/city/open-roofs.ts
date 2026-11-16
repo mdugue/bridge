@@ -11,7 +11,7 @@
  * non-indexed triangles wound counter-clockwise seen from outside, like
  * every structure. No THREE, no DOM.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import type { Point2 } from "./polyline";
 import type { StructureMesh } from "./small-buildings";
 

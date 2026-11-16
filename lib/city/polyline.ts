@@ -3,7 +3,7 @@
  * terrain (walls, the wall→terrain conflation, rails, tree rows). No THREE,
  * no DOM.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 
 export type Point2 = [number, number];
 

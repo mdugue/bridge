@@ -1,5 +1,6 @@
 /**
- * The maths a bake may call: `PMath`, the functions of `Math` that a
+ * The maths a bake may call (`import * as PMath`, so that a bundle keeps
+ * only what it calls): the functions of `Math` that a
  * JavaScript engine hands to the machine's C library, written here in the
  * operations IEEE 754 fixes to the last bit (+, −, ×, ÷, the square root,
  * floor), so that a bake's bytes are a function of the tree and not of
@@ -87,8 +88,36 @@ function folded(x: number): number {
   return r - turns * TWO_PI_LO;
 }
 
+/** π/2 in 24-bit parts and what is left: n times a part is exact for a
+ *  whole n below 2^29. */
+const PIO2_A = 1.570796251296997;
+const PIO2_B = 7.549789415861596e-8;
+const PIO2_C = 5.390302529957765e-15;
+const PIO2_D = 3.2820035428735005e-22;
+/** Up to here n · PIO2_A is exact. */
+const REDUCE_WIDE = 500_000_000;
+
+/** `reduce` for an angle up to REDUCE_WIDE (a hash's seed times its
+ *  constant): the same steps in smaller parts, without the remainder a
+ *  larger one takes. */
+function reduceWide(x: number): void {
+  const n = Math.floor(x * INV_PIO2 + 0.5);
+  const t = x - n * PIO2_A - n * PIO2_B;
+  let w = n * PIO2_C;
+  const r = t - w;
+  w = n * PIO2_D - (t - r - w);
+  reduced.r = r - w;
+  reduced.tail = r - reduced.r - w;
+  reduced.quadrant = ((n % 4) + 4) % 4;
+}
+
 function reduce(value: number): void {
-  const x = Math.abs(value) > REDUCE_MAX ? folded(value) : value;
+  const size = Math.abs(value);
+  if (size > REDUCE_MAX && size <= REDUCE_WIDE) {
+    reduceWide(value);
+    return;
+  }
+  const x = size > REDUCE_MAX ? folded(value) : value;
   const n = Math.floor(x * INV_PIO2 + 0.5);
   const t = x - n * PIO2_1;
   let w = n * PIO2_2;
@@ -488,8 +517,7 @@ function sinh(x: number): number {
   return x < 0 ? -s : s;
 }
 
-/** `Math`'s machine-dependent functions, the same on every machine. */
-export const PMath = {
+export {
   acos,
   asin,
   asinh,
@@ -507,4 +535,4 @@ export const PMath = {
   sin,
   sinh,
   tan,
-} as const;
+};

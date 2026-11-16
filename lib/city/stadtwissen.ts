@@ -10,7 +10,7 @@
  * (`data/<site>/wissen/wikidata.json`, `scripts/fetch-stadtwissen.ts`).
  * No THREE, no DOM.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import type { SourceInfo } from "./provenance";
 
 /** The site-wide index under `public/data/<site>/`. */

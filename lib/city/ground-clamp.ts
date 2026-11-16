@@ -5,7 +5,7 @@
  * World frame: three.js Y-up scene after the -90°-about-X rotation of the
  * data group — x = easting - cx, z = -(northing - cy), y = elevation.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 
 export interface RecenterOffset {
   cx: number;

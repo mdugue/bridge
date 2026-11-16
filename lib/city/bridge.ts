@@ -6,7 +6,7 @@
  * deck's axis from its first abutment. No THREE, no DOM.
  */
 
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { reachLevel } from "./ground-join";
 
 /** Spacing of the baked stations (`line`, `rise`) along the axis (m) —

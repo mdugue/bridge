@@ -26,7 +26,7 @@
  * The UV carries only the kind: `u` = the code's slot, `v` = the height
  * fraction (the shader's top edge and rooted foot).
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { followGround, joinsAlong, SINK } from "./ground-join";
 import type { JoinPoint } from "./ground-join";
 import { epsgToWorld } from "./ground-clamp";

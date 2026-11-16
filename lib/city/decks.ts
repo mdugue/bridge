@@ -7,7 +7,7 @@
  *
  * Coordinates are the Y-up world frame's (x, z) (lib/city/ground-clamp.ts).
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { axisFrame, BRIDGE_STEP } from "./bridge";
 import type { BridgeFeature } from "./features";
 import { epsgToWorld } from "./ground-clamp";

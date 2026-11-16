@@ -4,7 +4,7 @@
  * where, turned which way and how long, and which playground patches lie
  * under them. No THREE, no DOM.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { isFlagDesign } from "./features";
 import type { BinTone, FlagDesign, FurnitureFeature } from "./features";
 import type { Point2 } from "./polyline";

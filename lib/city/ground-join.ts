@@ -25,7 +25,7 @@
  * check (`checkJoins`, scripts/ground-joins.test.ts over every committed
  * tile) holds every layer — and every layer added later — to those rules.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 
 /** Ground height at an EPSG point (m), or null off the known ground. */
 export type HeightAt = (x: number, y: number) => number | null;

@@ -28,7 +28,7 @@
  * and own colour, with an absolute roughness in its `rough` column.
  * Pure, no THREE.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { rayHit, trianglesOnRays } from "./doors";
 import type { V3 } from "./doors";
 import type { DoorFeature, ShopfrontWall } from "./features";

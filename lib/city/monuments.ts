@@ -5,7 +5,7 @@
  * relief, and the markers of monuments nothing measured. Plain numbers in,
  * plain numbers out. No THREE, no DOM.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { SINK } from "./ground-join";
 import type {
   FountainStyle,

@@ -12,7 +12,7 @@
  * (`joinStretches`).
  * Pure, no THREE.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import type { PlinthFeature } from "./features";
 import { joinsAlong, SINK } from "./ground-join";
 import type { JoinPoint } from "./ground-join";

@@ -43,7 +43,7 @@
  * are centred on the wall. Pure, no DOM.
  */
 
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { isStructure } from "./building-tint";
 import { DORMER_SINK } from "./dormers";
 import { OPEN_ROOF_FUNCTIONS } from "./open-roofs";

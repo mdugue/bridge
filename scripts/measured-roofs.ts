@@ -24,7 +24,7 @@
  * walls run into it, as the LoD2 walls did; lower: the base is the LoD2's,
  * which already reached the lowest ground under the footprint (ADR 0030).
  */
-import { PMath } from "../lib/city/portable-math";
+import * as PMath from "../lib/city/portable-math";
 import Delatin from "delatin";
 import Delaunator from "delaunator";
 import { ShapeUtils, Vector2 } from "three";

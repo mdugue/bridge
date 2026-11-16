@@ -22,7 +22,7 @@
  * and wall-or-roof), so two buildings standing back to back, or a wall
  * and its roof, never blend. Pure, no DOM.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 
 /** The largest turn between two faces still read as one curved surface
  *  (degrees). The facets of a rounded wall turn 5–20°; an octagon's

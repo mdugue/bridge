@@ -21,7 +21,7 @@
  * its drop's height over the road — 3 cm, or flush — and ramps back to the
  * full height over RAMP_M either side.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { followGround, joinsAlong, meetGround, SINK } from "./ground-join";
 import type { JoinPoint } from "./ground-join";
 import { epsgToWorld } from "./ground-clamp";

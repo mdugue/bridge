@@ -4,7 +4,7 @@
  * then cut through the dressed walls and lined (`withPassages`), last of
  * all. No DOM.
  */
-import { PMath } from "../lib/city/portable-math";
+import * as PMath from "../lib/city/portable-math";
 import { cm, triangulateXY } from "./city-bake";
 import type { BakedCityMesh } from "./city-bake";
 import {

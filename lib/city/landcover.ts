@@ -6,7 +6,7 @@
  * (scripts/bake-wissen-hero.ts). Changing a colour here is a look change,
  * not a re-bake. No THREE, no DOM.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 
 export interface LandcoverClass {
   id: number;

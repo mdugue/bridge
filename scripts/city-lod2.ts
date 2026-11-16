@@ -5,7 +5,7 @@
  * and each roof face's own colour (`withFaceRoofColours`), and the frame a
  * tile is recentered in (`cityFrame`). No DOM.
  */
-import { PMath } from "../lib/city/portable-math";
+import * as PMath from "../lib/city/portable-math";
 import { CityJSONLoader, CityJSONParser } from "cityjson-threejs-loader";
 import type { Matrix4, Mesh, BufferGeometry } from "three";
 import type { RoofColours } from "../lib/city/building-tint";

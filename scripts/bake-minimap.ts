@@ -6,7 +6,7 @@
  * is a dozen metres, so the buildings are their cover of each pixel
  * (lib/city/footprint-figure.ts), not outlines: a block reads as a block.
  */
-import { PMath } from "../lib/city/portable-math";
+import * as PMath from "../lib/city/portable-math";
 import sharp from "sharp";
 import { coverRaster } from "../lib/city/footprint-figure";
 import { packFootprints, readFootprints } from "../lib/city/footprint-pack";

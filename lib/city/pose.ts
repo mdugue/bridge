@@ -6,7 +6,7 @@
  * World frame (Y-up): north = -Z, east = +X. A heading is a compass bearing
  * (0 = north, clockwise positive, so 90° = east); pitch tilts towards +Y.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import type { CameraStateJson } from "./snapshot";
 
 export const DEG2RAD = Math.PI / 180;

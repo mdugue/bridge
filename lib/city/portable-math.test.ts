@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 
 /** A double's bits, as hex. */
 function bits(x: number): string {
@@ -174,6 +174,9 @@ test("a hash's large angle keeps its sine", () => {
   });
   expect(worst).toBeLessThan(1e-14);
   expect(bits(PMath.sin(123_456_789 * 12.9898))).toBe("bfe69dacfbc006c4");
+  // (a tree's seed: the reduction in 24-bit parts)
+  expect(bits(PMath.sin(1_234_567 * 12.9898))).toBe("bfd628d6fcf8d22b");
+  expect(bits(PMath.cos(1_234_567 * 12.9898))).toBe("bfee0548a328369c");
 });
 
 test("the exact cases are exact", () => {

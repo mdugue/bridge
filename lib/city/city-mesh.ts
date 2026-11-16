@@ -1,4 +1,4 @@
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import type { DrawnFacts } from "./drawn-facts";
 import type { ObjectFacts } from "./object-facts";
 import type { OsmBuildingRow } from "./osm-buildings-file";

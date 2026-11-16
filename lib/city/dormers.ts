@@ -10,7 +10,7 @@
  * front (lib/city/windows.ts `DORMER_WINDOW`: the front is the wall
  * `front` marks), none into the cheeks or a chimney. Pure, no THREE.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import type { DormerFeature } from "./features";
 
 /** How far the front and the cheeks reach into the roof under them. */

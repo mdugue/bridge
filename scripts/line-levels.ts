@@ -12,7 +12,7 @@
  * runner is a file of its own so this module imports no `sites/` config
  * (the build cache keys the terrain on this module's imports).
  */
-import { PMath } from "../lib/city/portable-math";
+import * as PMath from "../lib/city/portable-math";
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 import { bridgeDecks, decksAt } from "../lib/city/decks";

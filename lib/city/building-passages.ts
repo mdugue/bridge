@@ -33,7 +33,7 @@
  * z triples in the recentred data frame (Z up) in and out, wound
  * counter-clockwise seen from outside. No THREE, no DOM.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { SINK } from "./ground-join";
 
 /** A drive's clear height (m): a fire lane's 3.5 m under DIN 14090 and a

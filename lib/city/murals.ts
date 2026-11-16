@@ -11,7 +11,7 @@
  * at the path's start — the path runs with the wall's outside on its
  * right, so the photo reads as seen from the street.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import type { Mural, MuralFile } from "./murals-file";
 
 // The file's shape is its schema's (ADR 0059); the viewer takes the types

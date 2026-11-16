@@ -22,7 +22,7 @@
  * layer lays its ballast on the same beds (`BedIndex`), so the ballast,
  * the sleepers and the rails stand on one surface the ground lies under.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import type { RailFeature, TramBed } from "./features";
 import type { Point2 } from "./polyline";
 

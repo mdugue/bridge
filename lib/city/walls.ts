@@ -17,7 +17,7 @@
  * Each wall is toned by its material (`WALL_TONES`, the mesh's vertex
  * colours).
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { epsgToWorld } from "./ground-clamp";
 import type { RecenterOffset } from "./ground-clamp";
 import { subdividePolyline } from "./polyline";

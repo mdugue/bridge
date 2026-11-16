@@ -4,7 +4,7 @@
  * (`withMeasuredRoofs`, scripts/measured-roofs.ts), and a roof on posts
  * LoD2 draws as a block is opened (`withOpenRoofs`). No DOM.
  */
-import { PMath } from "../lib/city/portable-math";
+import * as PMath from "../lib/city/portable-math";
 import { cm, triangulateXY } from "./city-bake";
 import { rootOf } from "./city-lod2";
 import { inheritedAttributes } from "../lib/city/building-tint";

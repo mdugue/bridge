@@ -13,7 +13,7 @@
  * A bay the wall's triangles do not cover (a jog, a passage) is not cut.
  * Pure, no THREE.
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import earcut from "earcut";
 import { difference, intersection } from "polygon-clipping";
 import type { Polygon as ClipPolygon, Ring } from "polygon-clipping";

@@ -1,4 +1,4 @@
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { clamp01 } from "./math";
 /**
  * Per-building clay tint — pure, DOM/three-free so it unit-tests under `bun test`

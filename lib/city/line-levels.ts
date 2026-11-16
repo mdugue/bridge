@@ -16,7 +16,7 @@
  * (lib/city/line-profile.ts, the feature's `lz`), indexed by the very
  * samples the layer takes (`subdividePolyline` at LEVEL_STEP).
  */
-import { PMath } from "./portable-math";
+import * as PMath from "./portable-math";
 import { decksAt } from "./decks";
 import type { DeckPoly } from "./decks";
 import type { RailFeature } from "./features";
