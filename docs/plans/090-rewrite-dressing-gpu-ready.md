@@ -401,7 +401,9 @@ row against Phase 0's baseline.
   or a build a tile, or a variant needs a ninth vertex buffer or a
   seventeenth inter-stage variable. Report the layout that failed.
 - Any phase: a fine level's wire bytes grow on a measured tile, or a
-  phone's bytes grow (ADR 0047). Leave that kind where it was.
+  phone's bytes grow (ADR 0047). Leave that kind where it was — unless
+  the maintainer has granted that kind's bytes by name (below: one
+  grant so far).
 - A ground-join budget would have to rise.
 - A plate differs beyond 087's tolerance and the cause is not found in
   one attempt: report with both plates and the snapshot JSON.
@@ -410,6 +412,43 @@ row against Phase 0's baseline.
 - The dressing's compile, once it is uploads only, still holds a
   tile-renderer parse slot on a real GPU (the spike's open question):
   keep it a late part and report the timing.
+
+## What the maintainer has granted
+
+A fine level's wire bytes may grow only on the maintainer's word, a kind
+at a time. Each grant is recorded here by whoever has that word at first
+hand; a grant is never widened to another kind.
+
+- **2026-11-16 — the rails of `rail` and `tram` as a segment table.**
+  Phase 0 measured the rails' homes on the yards' tile (PR #319, the
+  table under "The rails' home" in *Findings*; wire gzipped / GPU
+  bytes): built at runtime as today 34.7 kB / 7.08 MB; baked triangles
+  as PR #156 did, simplified, 288.1 kB / 2.41 MB; a segment table the
+  GPU expands, simplified alike, 72.5 kB / 0.15 MB. The table is 38 kB
+  more on the wire on that tile than the tracks' GeoJSON it replaces,
+  and takes about 6.9 MB off the GPU and the rails' share of the
+  builders (about 0.3 s under Bun) off the scene's thread. Put to the
+  maintainer by the coordinating session and accepted ("Ok",
+  2026-11-16).
+
+  What it covers: the rails' table *in place of* the tracks' GeoJSON,
+  on any tile, at the yards' rate (38 kB on 47.7 km of track). A tile
+  that costs more than that rate is put to the maintainer again.
+
+  What it does not cover: any other kind (sleepers, ballast, platforms,
+  wires); and a level that ships the table *and* the tracks' GeoJSON.
+  While another reader of those lines (sleepers, catenary, beds,
+  `lampsBy`) still needs the GeoJSON, the table is 72.5 kB more, not
+  38: that state stays behind `?rails=table` and does not reach main.
+
+  The figures were corrected on 2026-11-16, after the review of
+  PR #319 and after the maintainer's word; the maintainer was told. The
+  first wording set the unsimplified triangles (364.4 kB / 6.09 MB)
+  against the simplified table, named the whole rail builder's 840 ms
+  where the rails' share is about 0.3 s, and gave the table's step as
+  4 mm (that is its height; 8 mm in plan) against "3 cm" for the
+  triangles (that is one step of a tile-wide node, not the triangles'
+  error). The 38 kB and the 6.9 MB stand as they were put.
 
 ## Maintenance notes
 
