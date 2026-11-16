@@ -86,10 +86,12 @@ a spec that writes then reads awaits `handle.sync()` (ADR 0061).
 25832 Hamburg, Bavaria, NRW). `x = E − cx`, `z = −(N − cy)`, `y` = height;
 a −90° X-rotated `world` group turns data-Z up, and tile content is Y-up.
 Dressing lives in the Y-up frame, **never inside the rotated group**.
-A conversion between frames is a function in `lib/city/frames.ts`. glTF
-positions are quantised: shaders derive data-frame coordinates from world
-space (`shader-chunks.ts`). The glTF extras key is `tileId`, never `tile`
-(the renderer writes `userData.tile` itself). See ADR 0005.
+New code converts between frames through `lib/city/frames.ts`; the
+older hand arithmetic on the offset is counted in plan 095's Findings and
+goes with its phase B2. glTF positions are quantised: shaders derive
+data-frame coordinates from world space (`shader-chunks.ts`). The glTF
+extras key is `tileId`, never `tile` (the renderer writes `userData.tile`
+itself). See ADR 0005.
 
 **Rendering** (ADR 0027; details in the `city-walker` skill):
 
