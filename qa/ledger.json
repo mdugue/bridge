@@ -5,17 +5,17 @@
   "wire": ".png, .webp and .gz at face value; .json and .geojson gzipped at level 6 by the pinned Bun's zlib; any other extension is an error, never a guess. The text figures are this Bun's, not what a host sends: zlib 1.3 gives 0.6–2.2 % other bytes for the same level, and Vercel sends text as brotli. They are a stand-in kept constant so that the figures compare over time, exact once plan 088 stores files in their transport encoding. The committed figures are those of linux-x64 with the pinned Bun: regenerate the ledger there or in a cloud session. `published.server` is bytes on disk: those files never travel.",
   "tiles": 15,
   "published": {
-    "files": 700,
+    "files": 670,
     "boot": {
-      "bytes": 39818,
+      "bytes": 39222,
       "files": 3
     },
     "tiles": {
-      "bytes": 193620659,
-      "files": 641
+      "bytes": 192370985,
+      "files": 611
     },
     "site": {
-      "bytes": 3514754,
+      "bytes": 3514730,
       "files": 39
     },
     "server": {
@@ -30,7 +30,7 @@
       },
       "manifest": {
         "class": "boot",
-        "bytes": 9200,
+        "bytes": 8823,
         "files": 1
       },
       "minimap": {
@@ -75,12 +75,12 @@
       },
       "tileset": {
         "class": "boot",
-        "bytes": 9354,
+        "bytes": 9135,
         "files": 1
       },
       "tileset-spawn": {
         "class": "site",
-        "bytes": 2044,
+        "bytes": 2020,
         "files": 1
       },
       "trams": {
@@ -104,105 +104,105 @@
     "far": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 4685390,
+        "bytes": 4667061,
         "files": 10
       },
       "median": {
         "tile": "33410_5654_2_sn",
-        "bytes": 4593643,
+        "bytes": 4575724,
         "files": 10
       },
       "largest": {
-        "tile": "33416_5656_2_sn",
-        "bytes": 5828229,
+        "tile": "33414_5654_2_sn",
+        "bytes": 5776356,
         "files": 10
       },
       "site": {
-        "bytes": 67041172,
+        "bytes": 66394057,
         "files": 150
       }
     },
     "fine": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 5448502,
-        "files": 29
+        "bytes": 5387131,
+        "files": 27
       },
       "median": {
         "tile": "33410_5656_2_sn",
-        "bytes": 5620119,
-        "files": 29
+        "bytes": 5578437,
+        "files": 27
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 7456536,
-        "files": 29
+        "bytes": 7449341,
+        "files": 27
       },
       "site": {
-        "bytes": 84044307,
-        "files": 433
+        "bytes": 83441748,
+        "files": 403
       },
       "phone": {
         "spawn": {
           "tile": "33412_5656_2_sn",
-          "bytes": 5307652,
-          "files": 28
+          "bytes": 5246281,
+          "files": 26
         },
         "median": {
           "tile": "33410_5656_2_sn",
-          "bytes": 5425454,
-          "files": 28
+          "bytes": 5383772,
+          "files": 26
         },
         "largest": {
           "tile": "33416_5656_2_sn",
-          "bytes": 7296929,
-          "files": 28
+          "bytes": 7289734,
+          "files": 26
         },
         "site": {
-          "bytes": 81811715,
-          "files": 418
+          "bytes": 81209156,
+          "files": 388
         }
       }
     },
     "approached": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 7915007,
-        "files": 34
+        "bytes": 7853636,
+        "files": 32
       },
       "median": {
         "tile": "33410_5658_2_sn",
-        "bytes": 8102507,
-        "files": 34
+        "bytes": 8064968,
+        "files": 32
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 9986129,
-        "files": 34
+        "bytes": 9978934,
+        "files": 32
       },
       "site": {
-        "bytes": 118404471,
-        "files": 506
+        "bytes": 117801912,
+        "files": 476
       },
       "phone": {
         "spawn": {
           "tile": "33412_5656_2_sn",
-          "bytes": 7520658,
-          "files": 30
+          "bytes": 7459287,
+          "files": 28
         },
         "median": {
           "tile": "33410_5656_2_sn",
-          "bytes": 7589137,
-          "files": 30
+          "bytes": 7547455,
+          "files": 28
         },
         "largest": {
           "tile": "33416_5656_2_sn",
-          "bytes": 9625447,
-          "files": 30
+          "bytes": 9618252,
+          "files": 28
         },
         "site": {
-          "bytes": 112281794,
-          "files": 448
+          "bytes": 111679235,
+          "files": 418
         }
       }
     },
@@ -251,22 +251,22 @@
     "all": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 13786870,
-        "files": 43
+        "bytes": 13707170,
+        "files": 41
       },
       "median": {
         "tile": "33410_5658_2_sn",
-        "bytes": 13766237,
-        "files": 43
+        "bytes": 13699597,
+        "files": 41
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 17452843,
-        "files": 43
+        "bytes": 17393254,
+        "files": 41
       },
       "site": {
-        "bytes": 193620659,
-        "files": 641
+        "bytes": 192370985,
+        "files": 611
       }
     },
     "unvisited": {
@@ -448,23 +448,22 @@
     }
   },
   "counters": {
-    "dressingKinds": 17,
+    "dressingKinds": 15,
     "coarseDressingKinds": 3,
     "askKinds": 1,
     "publishedExtensions": [
       ".bin.gz",
-      ".crw.gz",
+      ".drs.gz",
       ".fpr.gz",
       ".geojson",
       ".glb.gz",
       ".json",
       ".png",
-      ".pts.gz",
       ".webp"
     ],
     "layerModules": {
       "files": 27,
-      "codeLines": 14516
+      "codeLines": 14303
     },
     "longestFunction": {
       "lines": 2365,
@@ -501,13 +500,7 @@
       "svf": "soft",
       "horizon": "soft"
     },
-    "cpuDecodes": [
-      {
-        "module": "app/_components/vegetation-layer.ts",
-        "kind": "ndvi",
-        "use": "the crowns' greenness, sampled once a fine level's dressing builds (loadNdviSampler; the same file is uploaded for the ground too)"
-      }
-    ],
+    "cpuDecodes": [],
     "sites": {
       "dresden": {
         "tiles": 15,
@@ -4301,13 +4294,12 @@
         "tile": "33412_5656_2_sn",
         "what": "spawn",
         "fine": {
-          "bytes": 249125,
-          "files": 18,
+          "bytes": 187754,
+          "files": 16,
           "kinds": {
             "bridge": 1053,
-            "canopy": 40495,
-            "canopyx": 43036,
             "cultivated": 772,
+            "dressing": 106310,
             "furniture": 25898,
             "lamps": 3733,
             "lowveg": 4252,
@@ -4320,16 +4312,15 @@
             "sportTable": 1332,
             "traffic": 8015,
             "tram": 16963,
-            "trees": 84150,
             "vegrows": 1531
           }
         },
         "coarse": {
-          "bytes": 84944,
+          "bytes": 66615,
           "files": 3,
           "kinds": {
             "bridge": 1053,
-            "crowns": 75876,
+            "dressingCoarse": 57547,
             "traffic": 8015
           }
         }
@@ -4338,13 +4329,12 @@
         "tile": "33416_5658_2_sn",
         "what": "forest",
         "fine": {
-          "bytes": 496855,
-          "files": 18,
+          "bytes": 470712,
+          "files": 16,
           "kinds": {
             "bridge": 162,
-            "canopy": 468887,
-            "canopyx": 22869,
             "cultivated": 162,
+            "dressing": 466148,
             "furniture": 345,
             "lamps": 162,
             "lowveg": 191,
@@ -4357,16 +4347,15 @@
             "sportTable": 620,
             "traffic": 614,
             "tram": 162,
-            "trees": 535,
             "vegrows": 730
           }
         },
         "coarse": {
-          "bytes": 398235,
+          "bytes": 241091,
           "files": 3,
           "kinds": {
             "bridge": 162,
-            "crowns": 397459,
+            "dressingCoarse": 240315,
             "traffic": 614
           }
         }
@@ -4375,13 +4364,12 @@
         "tile": "33410_5656_2_sn",
         "what": "yards",
         "fine": {
-          "bytes": 275994,
-          "files": 18,
+          "bytes": 234312,
+          "files": 16,
           "kinds": {
             "bridge": 5311,
-            "canopy": 56529,
-            "canopyx": 25106,
             "cultivated": 557,
+            "dressing": 89900,
             "furniture": 29202,
             "lamps": 5544,
             "lowveg": 1730,
@@ -4394,16 +4382,15 @@
             "sportTable": 1906,
             "traffic": 7761,
             "tram": 35801,
-            "trees": 49947,
             "vegrows": 1192
           }
         },
         "coarse": {
-          "bytes": 78626,
+          "bytes": 60963,
           "files": 3,
           "kinds": {
             "bridge": 5311,
-            "crowns": 65554,
+            "dressingCoarse": 47891,
             "traffic": 7761
           }
         }
@@ -4418,13 +4405,12 @@
             "tile": "32690_5334_2_by",
             "what": "heaviest",
             "fine": {
-              "bytes": 183505,
-              "files": 17,
+              "bytes": 166217,
+              "files": 15,
               "kinds": {
                 "bridge": 162,
-                "canopy": 22034,
-                "canopyx": 43276,
                 "cultivated": 162,
+                "dressing": 63334,
                 "furniture": 39243,
                 "lamps": 4441,
                 "lowveg": 3489,
@@ -4436,42 +4422,41 @@
                 "riverside": 162,
                 "sportTable": 915,
                 "tram": 27448,
-                "trees": 15312,
                 "vegrows": 122
               }
             },
             "coarse": {
-              "bytes": 51303,
+              "bytes": 34490,
               "files": 2,
               "kinds": {
                 "bridge": 162,
-                "crowns": 51141
+                "dressingCoarse": 34328
               }
             }
           }
         }
       },
       "browser": {
-        "baseline": {
+        "phase1": {
           "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, linux-x64, headless Chromium, WebGPU on SwiftShader",
           "read": "2026-11-16",
           "dresden/33412_5656_2_sn/desktop": {
             "what": "spawn",
             "builderMs": {
-              "asks": 78.1,
-              "furniture": 60.9,
-              "hedges": 8.2,
-              "lamps": 17.7,
-              "monuments": 30.8,
-              "rail": 95.2,
-              "riverside": 3.8,
-              "sport": 12.4,
-              "tram": 107.7,
-              "trees": 230.9
+              "asks": 39.8,
+              "furniture": 71.4,
+              "hedges": 14,
+              "lamps": 18,
+              "monuments": 26.7,
+              "rail": 90.9,
+              "riverside": 5.2,
+              "sport": 13.8,
+              "tram": 147.2,
+              "trees": 139.3
             },
-            "builderMsTotal": 645.7,
+            "builderMsTotal": 566.3,
             "cacheBytes": {
-              "vegetation": 5536488,
+              "vegetation": 2720860,
               "lowVegetation": 130360,
               "lamps": 322776,
               "monuments": 603792,
@@ -4481,47 +4466,47 @@
               "riverside": 72580,
               "sport": 184680
             },
-            "cacheBytesTotal": 12818883,
+            "cacheBytesTotal": 10003255,
             "marks": {
               "dressing:asks": {
                 "count": 6,
-                "maxMs": 2237.7,
-                "totalMs": 2647.7
+                "maxMs": 2227.3,
+                "totalMs": 2520.8
               },
               "dressing:build": {
                 "count": 9,
-                "maxMs": 2191.9,
-                "totalMs": 5271.4
+                "maxMs": 2051.7,
+                "totalMs": 5170.2
               },
               "dressing:compile": {
                 "count": 9,
-                "maxMs": 3645.6,
-                "totalMs": 27702.1
+                "maxMs": 3724.7,
+                "totalMs": 28088.6
               },
               "dressing:queue-wait": {
                 "count": 9,
-                "maxMs": 16730,
-                "totalMs": 102359.8
+                "maxMs": 15954.5,
+                "totalMs": 103973.2
               }
             }
           },
           "dresden/33412_5656_2_sn/phone": {
             "what": "spawn",
             "builderMs": {
-              "asks": 69.8,
-              "furniture": 116,
-              "hedges": 17.7,
-              "lamps": 25.9,
-              "monuments": 41.4,
-              "rail": 150.5,
-              "riverside": 5.3,
-              "sport": 12.1,
-              "tram": 166.9,
-              "trees": 307.5
+              "asks": 61.4,
+              "furniture": 91.4,
+              "hedges": 13.8,
+              "lamps": 20,
+              "monuments": 29.5,
+              "rail": 90.2,
+              "riverside": 3.7,
+              "sport": 17.9,
+              "tram": 116.4,
+              "trees": 164.1
             },
-            "builderMsTotal": 913.1,
+            "builderMsTotal": 608.4,
             "cacheBytes": {
-              "vegetation": 5536488,
+              "vegetation": 2720860,
               "lowVegetation": 130360,
               "lamps": 322776,
               "monuments": 603792,
@@ -4531,133 +4516,133 @@
               "riverside": 72580,
               "sport": 184680
             },
-            "cacheBytesTotal": 12818883,
+            "cacheBytesTotal": 10003255,
             "marks": {
               "dressing:asks": {
                 "count": 4,
-                "maxMs": 121.2,
-                "totalMs": 297.9
+                "maxMs": 88.4,
+                "totalMs": 256.2
               },
               "dressing:build": {
                 "count": 6,
-                "maxMs": 2351.6,
-                "totalMs": 5846.3
+                "maxMs": 1783.5,
+                "totalMs": 3804.6
               },
               "dressing:compile": {
                 "count": 6,
-                "maxMs": 3714.4,
-                "totalMs": 18715.9
+                "maxMs": 7177.4,
+                "totalMs": 27106.6
               },
               "dressing:queue-wait": {
                 "count": 6,
-                "maxMs": 18475.2,
-                "totalMs": 73552.9
+                "maxMs": 13352.2,
+                "totalMs": 40905.2
               }
             }
           },
           "dresden/33416_5658_2_sn/desktop": {
             "what": "forest",
             "builderMs": {
-              "asks": 206.8,
-              "furniture": 2.7,
+              "asks": 138.3,
+              "furniture": 3,
               "lamps": 0.1,
-              "monuments": 0.9,
+              "monuments": 1.2,
               "rail": 0.1,
               "sport": 0,
-              "trees": 541.3
+              "trees": 214.9
             },
-            "builderMsTotal": 751.9,
+            "builderMsTotal": 357.6,
             "cacheBytes": {
-              "vegetation": 12130254,
+              "vegetation": 5457544,
               "lamps": 0,
               "monuments": 10288,
               "furniture": 156208,
               "rail": 0
             },
-            "cacheBytesTotal": 12296750,
+            "cacheBytesTotal": 5624040,
             "marks": {
               "dressing:asks": {
                 "count": 8,
-                "maxMs": 767.6,
-                "totalMs": 1831.8
+                "maxMs": 138.6,
+                "totalMs": 619.9
               },
               "dressing:build": {
                 "count": 14,
-                "maxMs": 2078.7,
-                "totalMs": 6510.1
+                "maxMs": 2086.6,
+                "totalMs": 5667.4
               },
               "dressing:compile": {
                 "count": 14,
-                "maxMs": 3282.3,
-                "totalMs": 42396.9
+                "maxMs": 3478.9,
+                "totalMs": 42482.4
               },
               "dressing:queue-wait": {
                 "count": 14,
-                "maxMs": 18339.3,
-                "totalMs": 131317.5
+                "maxMs": 15877.4,
+                "totalMs": 114165.9
               }
             }
           },
           "dresden/33416_5658_2_sn/phone": {
             "what": "forest",
             "builderMs": {
-              "asks": 223.1,
-              "furniture": 3.9,
-              "lamps": 0.1,
-              "monuments": 0.9,
-              "rail": 0.1,
+              "asks": 137.3,
+              "furniture": 3,
+              "lamps": 0,
+              "monuments": 1.5,
+              "rail": 0.3,
               "sport": 0,
-              "trees": 521.4
+              "trees": 167.3
             },
-            "builderMsTotal": 749.5,
+            "builderMsTotal": 309.4,
             "cacheBytes": {
-              "vegetation": 12130254,
+              "vegetation": 5457544,
               "lamps": 0,
               "monuments": 10288,
               "furniture": 156208,
               "rail": 0
             },
-            "cacheBytesTotal": 12296750,
+            "cacheBytesTotal": 5624040,
             "marks": {
               "dressing:asks": {
-                "count": 6,
-                "maxMs": 239.8,
-                "totalMs": 832.2
+                "count": 4,
+                "maxMs": 139.3,
+                "totalMs": 387.7
               },
               "dressing:build": {
-                "count": 12,
-                "maxMs": 771.2,
-                "totalMs": 4233.1
+                "count": 11,
+                "maxMs": 637.4,
+                "totalMs": 2784.8
               },
               "dressing:compile": {
-                "count": 12,
-                "maxMs": 3307.8,
-                "totalMs": 36405.2
+                "count": 11,
+                "maxMs": 3492.4,
+                "totalMs": 33577.5
               },
               "dressing:queue-wait": {
-                "count": 12,
-                "maxMs": 10277.7,
-                "totalMs": 34755.4
+                "count": 11,
+                "maxMs": 10807.2,
+                "totalMs": 48159.7
               }
             }
           },
           "dresden/33410_5656_2_sn/desktop": {
             "what": "yards",
             "builderMs": {
-              "asks": 66.2,
-              "furniture": 54.6,
+              "asks": 45.1,
+              "furniture": 47.9,
               "hedges": 1.6,
-              "lamps": 21.5,
-              "monuments": 47.5,
-              "rail": 839.6,
-              "riverside": 3.6,
-              "sport": 6.1,
-              "tram": 185,
-              "trees": 122.6
+              "lamps": 28.2,
+              "monuments": 36.9,
+              "rail": 905.3,
+              "riverside": 10,
+              "sport": 11.3,
+              "tram": 259.9,
+              "trees": 174.1
             },
-            "builderMsTotal": 1348.3,
+            "builderMsTotal": 1520.3,
             "cacheBytes": {
-              "vegetation": 4933762,
+              "vegetation": 2341840,
               "lowVegetation": 32440,
               "lamps": 406292,
               "monuments": 988504,
@@ -4667,47 +4652,47 @@
               "riverside": 71622,
               "sport": 190512
             },
-            "cacheBytesTotal": 22005364,
+            "cacheBytesTotal": 19413442,
             "marks": {
               "dressing:asks": {
-                "count": 6,
-                "maxMs": 1983.2,
-                "totalMs": 2344.8
+                "count": 4,
+                "maxMs": 50.4,
+                "totalMs": 183.2
               },
               "dressing:build": {
                 "count": 8,
-                "maxMs": 5121.8,
-                "totalMs": 12660.2
+                "maxMs": 3731.7,
+                "totalMs": 6913.8
               },
               "dressing:compile": {
                 "count": 8,
-                "maxMs": 5804.5,
-                "totalMs": 32630.1
+                "maxMs": 12036.6,
+                "totalMs": 40357.4
               },
               "dressing:queue-wait": {
                 "count": 8,
-                "maxMs": 20187.5,
-                "totalMs": 113650
+                "maxMs": 19847.8,
+                "totalMs": 116943.3
               }
             }
           },
           "dresden/33410_5656_2_sn/phone": {
             "what": "yards",
             "builderMs": {
-              "asks": 74.9,
-              "furniture": 59.2,
+              "asks": 54.7,
+              "furniture": 72.9,
               "hedges": 1.8,
-              "lamps": 19.8,
-              "monuments": 39,
-              "rail": 812.7,
-              "riverside": 4.1,
-              "sport": 5.3,
-              "tram": 199.4,
-              "trees": 142.9
+              "lamps": 40.4,
+              "monuments": 41.9,
+              "rail": 830.3,
+              "riverside": 3.3,
+              "sport": 5.4,
+              "tram": 195.2,
+              "trees": 85.5
             },
-            "builderMsTotal": 1359.1,
+            "builderMsTotal": 1331.4,
             "cacheBytes": {
-              "vegetation": 4933762,
+              "vegetation": 2341840,
               "lowVegetation": 32440,
               "lamps": 406292,
               "monuments": 988504,
@@ -4717,46 +4702,46 @@
               "riverside": 74374,
               "sport": 190512
             },
-            "cacheBytesTotal": 21955500,
+            "cacheBytesTotal": 19363578,
             "marks": {
               "dressing:asks": {
-                "count": 4,
-                "maxMs": 230.4,
-                "totalMs": 416.8
+                "count": 6,
+                "maxMs": 140.8,
+                "totalMs": 354
               },
               "dressing:build": {
-                "count": 9,
-                "maxMs": 3568.1,
-                "totalMs": 10620.2
+                "count": 10,
+                "maxMs": 3560.4,
+                "totalMs": 10657.6
               },
               "dressing:compile": {
-                "count": 9,
-                "maxMs": 6029.8,
-                "totalMs": 30046.5
+                "count": 10,
+                "maxMs": 3764.4,
+                "totalMs": 31304.8
               },
               "dressing:queue-wait": {
-                "count": 9,
-                "maxMs": 14146.5,
-                "totalMs": 60128.7
+                "count": 10,
+                "maxMs": 10166,
+                "totalMs": 37954
               }
             }
           },
           "muenchen/32690_5334_2_by/desktop": {
             "what": "heaviest",
             "builderMs": {
-              "asks": 86.9,
-              "furniture": 72,
-              "hedges": 5.3,
-              "lamps": 11.8,
-              "monuments": 96.7,
-              "rail": 314.9,
-              "sport": 4.3,
-              "tram": 147.6,
-              "trees": 149
+              "asks": 40.6,
+              "furniture": 75.4,
+              "hedges": 6.5,
+              "lamps": 15.9,
+              "monuments": 93.3,
+              "rail": 321.4,
+              "sport": 7.7,
+              "tram": 224.7,
+              "trees": 112.6
             },
-            "builderMsTotal": 888.5,
+            "builderMsTotal": 898.1,
             "cacheBytes": {
-              "vegetation": 3238558,
+              "vegetation": 1413672,
               "lowVegetation": 60280,
               "lamps": 139172,
               "monuments": 4608520,
@@ -4765,46 +4750,46 @@
               "tram": 4646288,
               "sport": 45792
             },
-            "cacheBytesTotal": 16673134,
+            "cacheBytesTotal": 14848248,
             "marks": {
               "dressing:asks": {
                 "count": 4,
-                "maxMs": 116.5,
-                "totalMs": 406.8
+                "maxMs": 52.3,
+                "totalMs": 185.6
               },
               "dressing:build": {
                 "count": 4,
-                "maxMs": 892.4,
-                "totalMs": 1640.2
+                "maxMs": 927.2,
+                "totalMs": 1610.8
               },
               "dressing:compile": {
                 "count": 4,
-                "maxMs": 3756.5,
-                "totalMs": 13196.6
+                "maxMs": 3770.3,
+                "totalMs": 12771.3
               },
               "dressing:queue-wait": {
                 "count": 4,
-                "maxMs": 11755.1,
-                "totalMs": 43339.2
+                "maxMs": 14028.2,
+                "totalMs": 47383.7
               }
             }
           },
           "muenchen/32690_5334_2_by/phone": {
             "what": "heaviest",
             "builderMs": {
-              "asks": 62.5,
-              "furniture": 90.3,
-              "hedges": 7.1,
-              "lamps": 13.1,
-              "monuments": 83,
-              "rail": 343.4,
-              "sport": 4.9,
-              "tram": 163.6,
-              "trees": 175.3
+              "asks": 44.3,
+              "furniture": 67.5,
+              "hedges": 16.5,
+              "lamps": 12.5,
+              "monuments": 99.5,
+              "rail": 352,
+              "sport": 5.1,
+              "tram": 218.9,
+              "trees": 108.2
             },
-            "builderMsTotal": 943.2,
+            "builderMsTotal": 924.5,
             "cacheBytes": {
-              "vegetation": 3238558,
+              "vegetation": 1413672,
               "lowVegetation": 60280,
               "lamps": 139172,
               "monuments": 4608520,
@@ -4813,82 +4798,27 @@
               "tram": 4646288,
               "sport": 45792
             },
-            "cacheBytesTotal": 16673134,
+            "cacheBytesTotal": 14848248,
             "marks": {
               "dressing:asks": {
                 "count": 2,
-                "maxMs": 76.3,
-                "totalMs": 138.8
+                "maxMs": 50.4,
+                "totalMs": 94.7
               },
               "dressing:build": {
                 "count": 2,
-                "maxMs": 1001.7,
-                "totalMs": 1058.9
+                "maxMs": 941,
+                "totalMs": 997.3
               },
               "dressing:compile": {
                 "count": 2,
-                "maxMs": 3000.3,
-                "totalMs": 6000.5
+                "maxMs": 3053,
+                "totalMs": 6053.4
               },
               "dressing:queue-wait": {
                 "count": 2,
-                "maxMs": 9805.8,
-                "totalMs": 16816.1
-              }
-            }
-          }
-        },
-        "spikes": {
-          "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, linux-x64, headless Chromium, WebGPU on SwiftShader",
-          "read": "2026-11-16",
-          "dresden/33410_5656_2_sn/desktop": {
-            "what": "yards",
-            "builderMs": {
-              "asks": 75.8,
-              "furniture": 53.7,
-              "hedges": 1.7,
-              "lamps": 16.9,
-              "monuments": 38.5,
-              "rail": 807.2,
-              "rail-table": 22.6,
-              "riverside": 3.3,
-              "sport": 8.7,
-              "tram": 46.7,
-              "trees": 132.1
-            },
-            "builderMsTotal": 1207.2,
-            "cacheBytes": {
-              "vegetation": 4933762,
-              "lowVegetation": 32440,
-              "lamps": 406292,
-              "monuments": 988504,
-              "furniture": 1829904,
-              "rail": 5593855,
-              "tram": 1543118,
-              "riverside": 71622,
-              "sport": 190512
-            },
-            "cacheBytesTotal": 15590009,
-            "marks": {
-              "dressing:asks": {
-                "count": 6,
-                "maxMs": 104.4,
-                "totalMs": 566.5
-              },
-              "dressing:build": {
-                "count": 8,
-                "maxMs": 4007.6,
-                "totalMs": 9608.2
-              },
-              "dressing:compile": {
-                "count": 8,
-                "maxMs": 7424.5,
-                "totalMs": 34150.1
-              },
-              "dressing:queue-wait": {
-                "count": 8,
-                "maxMs": 20787.6,
-                "totalMs": 109888.9
+                "maxMs": 9597.8,
+                "totalMs": 16523.7
               }
             }
           }
@@ -5209,6 +5139,47 @@
           ]
         }
       },
+      "trees": {
+        "read": "2026-11-16",
+        "tiles": [
+          {
+            "tile": "33412_5656_2_sn",
+            "what": "spawn",
+            "trees": 8483,
+            "register": 6455,
+            "table": {
+              "fine": 106310,
+              "coarse": 57547,
+              "both": 163857
+            },
+            "asStandRecords": 279148
+          },
+          {
+            "tile": "33416_5658_2_sn",
+            "what": "forest",
+            "trees": 84286,
+            "register": 1,
+            "table": {
+              "fine": 466148,
+              "coarse": 240315,
+              "both": 706463
+            },
+            "asStandRecords": 1318933
+          },
+          {
+            "tile": "33410_5656_2_sn",
+            "what": "yards",
+            "trees": 9492,
+            "register": 4013,
+            "table": {
+              "fine": 89900,
+              "coarse": 47891,
+              "both": 137791
+            },
+            "asStandRecords": 236741
+          }
+        ]
+      },
       "lines": {
         "site": "dresden",
         "tile": "33410_5656_2_sn",
@@ -5347,20 +5318,20 @@
     "firstLoad": {
       "note": "Every /_next/static/*.js the page or the workers ground, niches, scene fetched themselves (each one's resource timing) at /dresden?scene=lite (a NEXT_PUBLIC_POC_DEBUG=1 production build), cut at: ready, those workers running, then 5 s without a new script; a second read 5 s later must equal it. The BVH worker's own scripts are left out: it starts only if the spawn's buildings have no BVH yet. Each raw body gzipped at level 9 by the pinned Bun, exact. workerOnly: the files those workers fetched and the page did not — not the scene's JavaScript, which the page shares.",
       "files": 42,
-      "gzip": 1103187,
+      "gzip": 1102423,
       "workerOnly": {
         "files": 8,
-        "gzip": 34828
+        "gzip": 34676
       }
     },
     "phoneLiteSpawnCache": {
       "note": "The tile cache's own accounting (calculateBytesUsed, as its budget counts it) on an emulated phone (isMobile, hasTouch; the scene's tier asserted mobile) at /dresden?scene=lite once ready and two reads 4 s apart (more than a late part's 3 s compile wait) agree with no compile queued, loaded contents only: the spawn tile alone, one of fifteen, under the lite profile. It is not the phone's memory: what a tile holds on the GPU that never reaches calculateBytesUsed moves nothing here, and three's info.memory is recorded only (timings.phoneHeld), since two reads of one build differ.",
-      "bytes": 158979087,
+      "bytes": 155942579,
       "contents": {
         "city_33412_5656_2_sn_far.glb.gz": 12632382,
         "city_33412_5656_2_sn.glb.gz": 27015566,
-        "terrain_33412_5656_2_sn_l0.glb.gz": 94610268,
-        "terrain_33412_5656_2_sn_l1.glb.gz": 24720871
+        "terrain_33412_5656_2_sn_l0.glb.gz": 91794640,
+        "terrain_33412_5656_2_sn_l1.glb.gz": 24499991
       }
     }
   },
@@ -5371,38 +5342,38 @@
     "desktop": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 62.8,
-        "maxMs": 62.8
+        "totalMs": 17,
+        "maxMs": 17
       },
       "boot:frame": {
-        "count": 6,
-        "totalMs": 549.7,
-        "maxMs": 411.9
+        "count": 11,
+        "totalMs": 716.9,
+        "maxMs": 579.1
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 608.7,
-        "maxMs": 608.7
+        "totalMs": 609.7,
+        "maxMs": 609.7
       },
       "boot:light-wait": {
         "count": 1,
-        "totalMs": 3000.3,
-        "maxMs": 3000.3
+        "totalMs": 2105.2,
+        "maxMs": 2105.2
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 1491.1,
-        "maxMs": 1491.1
+        "totalMs": 1405.7,
+        "maxMs": 1405.7
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 354.1,
-        "maxMs": 354.1
+        "totalMs": 352.6,
+        "maxMs": 352.6
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 617.8,
-        "maxMs": 617.8
+        "totalMs": 2466.5,
+        "maxMs": 2466.5
       },
       "boot:scene-compile": {
         "count": 1,
@@ -5411,13 +5382,13 @@
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 119,
-        "maxMs": 119
+        "totalMs": 138.9,
+        "maxMs": 138.9
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 5323.4,
-        "maxMs": 5323.4
+        "totalMs": 7393.9,
+        "maxMs": 7393.9
       },
       "boot:tileset": {
         "count": 1,
@@ -5426,112 +5397,112 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4309.7,
-        "maxMs": 4309.7
+        "totalMs": 4352.8,
+        "maxMs": 4352.8
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 1028.8,
-        "maxMs": 775.4
+        "totalMs": 1073.3,
+        "maxMs": 762.9
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 12008,
-        "maxMs": 3007.2
+        "totalMs": 12001.6,
+        "maxMs": 3000.6
       }
     },
     "phone": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 124.3,
-        "maxMs": 124.3
+        "totalMs": 35.3,
+        "maxMs": 35.3
       },
       "boot:frame": {
-        "count": 7,
-        "totalMs": 728.3,
-        "maxMs": 474
+        "count": 10,
+        "totalMs": 739.6,
+        "maxMs": 453.1
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 606.1,
-        "maxMs": 606.1
+        "totalMs": 605.9,
+        "maxMs": 605.9
       },
       "boot:light-wait": {
         "count": 1,
-        "totalMs": 3000.6,
-        "maxMs": 3000.6
+        "totalMs": 3000.3,
+        "maxMs": 3000.3
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 1514.5,
-        "maxMs": 1514.5
+        "totalMs": 924.9,
+        "maxMs": 924.9
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 378.3,
-        "maxMs": 378.3
+        "totalMs": 154,
+        "maxMs": 154
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 103.8,
-        "maxMs": 103.8
+        "totalMs": 13.7,
+        "maxMs": 13.7
       },
       "boot:scene-compile": {
         "count": 1,
-        "totalMs": 3000.4,
-        "maxMs": 3000.4
+        "totalMs": 3000.7,
+        "maxMs": 3000.7
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 86.6,
-        "maxMs": 86.6
+        "totalMs": 119.5,
+        "maxMs": 119.5
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 3808.8,
-        "maxMs": 3808.8
+        "totalMs": 6286.9,
+        "maxMs": 6286.9
       },
       "boot:tileset": {
         "count": 1,
-        "totalMs": 0,
-        "maxMs": 0
+        "totalMs": 0.1,
+        "maxMs": 0.1
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4189.3,
-        "maxMs": 4189.3
+        "totalMs": 4221.4,
+        "maxMs": 4221.4
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 901.8,
-        "maxMs": 673.1
+        "totalMs": 938.2,
+        "maxMs": 674.9
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 10750.5,
-        "maxMs": 3027.8
+        "totalMs": 11015.9,
+        "maxMs": 3004.7
       }
     },
     "phoneHeld": {
-      "attributes": 1211,
-      "attributesSize": 47381554,
-      "geometries": 479,
-      "indexAttributes": 133,
-      "indexAttributesSize": 33979704,
+      "attributes": 1040,
+      "attributesSize": 46268756,
+      "geometries": 438,
+      "indexAttributes": 128,
+      "indexAttributesSize": 33979674,
       "indirectStorageAttributes": 0,
       "indirectStorageAttributesSize": 0,
-      "programs": 166,
-      "programsSize": 1995990,
+      "programs": 164,
+      "programsSize": 2127711,
       "readbackBuffers": 0,
       "readbackBuffersSize": 0,
       "renderTargets": 10,
       "storageAttributes": 0,
       "storageAttributesSize": 0,
-      "textures": 63,
-      "texturesSize": 71615312,
-      "uniformBuffers": 576,
-      "uniformBuffersSize": 146096,
-      "total": 155118656
+      "textures": 64,
+      "texturesSize": 71615313,
+      "uniformBuffers": 533,
+      "uniformBuffersSize": 139184,
+      "total": 154130638
     },
     "firstLoad": [
       {
@@ -5545,23 +5516,23 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/01n94la_98kqw.js",
-        "gzip": 134057,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/02_nblhr_bcei.js",
         "gzip": 12125,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/07thxtfm0d9r6.js",
-        "gzip": 20053,
-        "worker": false
+        "url": "/_next/static/chunks/06jw2coqfr12p.js",
+        "gzip": 16148,
+        "worker": true
       },
       {
         "url": "/_next/static/chunks/085vsoa7yruch.js",
         "gzip": 15204,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/0aagv4qf3peyb.js",
+        "gzip": 8408,
         "worker": false
       },
       {
@@ -5570,9 +5541,9 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/0iu_x5fsq6oa_.js",
-        "gzip": 8958,
-        "worker": true
+        "url": "/_next/static/chunks/0n56k_s3l90vd.js",
+        "gzip": 393,
+        "worker": false
       },
       {
         "url": "/_next/static/chunks/0oo697a5jcpj1.js",
@@ -5590,26 +5561,6 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1acvom898pdb5.js",
-        "gzip": 10385,
-        "worker": false
-      },
-      {
-        "url": "/_next/static/chunks/1gf9032yqxdyi.js",
-        "gzip": 8410,
-        "worker": false
-      },
-      {
-        "url": "/_next/static/chunks/1kgvfy450pybk.js",
-        "gzip": 16157,
-        "worker": true
-      },
-      {
-        "url": "/_next/static/chunks/1m_ofslgs3mu1.js",
-        "gzip": 773,
-        "worker": true
-      },
-      {
         "url": "/_next/static/chunks/1pcw6gskne7pf.js",
         "gzip": 2019,
         "worker": false
@@ -5625,8 +5576,8 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1v3j7ip4nz0ud.js",
-        "gzip": 11666,
+        "url": "/_next/static/chunks/2_97hehc4axdz.js",
+        "gzip": 290837,
         "worker": false
       },
       {
@@ -5635,8 +5586,13 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/281xse1jmbhyz.js",
-        "gzip": 394,
+        "url": "/_next/static/chunks/28m15w7wbq8ht.js",
+        "gzip": 134055,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/29erlc01yfcz9.js",
+        "gzip": 418,
         "worker": false
       },
       {
@@ -5655,6 +5611,11 @@
         "worker": false
       },
       {
+        "url": "/_next/static/chunks/2i-r02s0cqk6z.js",
+        "gzip": 11658,
+        "worker": false
+      },
+      {
         "url": "/_next/static/chunks/2ngthuj25x5zl.js",
         "gzip": 9501,
         "worker": false
@@ -5665,19 +5626,34 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/2wsjxrkk9_2d7.js",
-        "gzip": 71849,
+        "url": "/_next/static/chunks/2ucylbbmvzup_.js",
+        "gzip": 10230,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/2xu6msu6xts86.js",
-        "gzip": 418,
+        "url": "/_next/static/chunks/2wsjxrkk9_2d7.js",
+        "gzip": 71849,
         "worker": false
       },
       {
         "url": "/_next/static/chunks/31903l951_hv_.js",
         "gzip": 8244,
         "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/3326ibn5vxnvi.js",
+        "gzip": 8817,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/34_tf8y-rghwr.js",
+        "gzip": 20051,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/34y5d54cuftnp.js",
+        "gzip": 771,
+        "worker": true
       },
       {
         "url": "/_next/static/chunks/372v7qv1pnu01.js",
@@ -5705,11 +5681,6 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/3l3hnqt1cbw6w.js",
-        "gzip": 291279,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/3r-ml6mc8gxvh.js",
         "gzip": 8946,
         "worker": false
@@ -5720,11 +5691,6 @@
         "worker": true
       },
       {
-        "url": "/_next/static/chunks/turbopack-03crpj052a4p0.js",
-        "gzip": 191,
-        "worker": true
-      },
-      {
         "url": "/_next/static/chunks/turbopack-077hmtqrhcoji.js",
         "gzip": 4367,
         "worker": false
@@ -5732,6 +5698,11 @@
       {
         "url": "/_next/static/chunks/turbopack-1e5f49zawb_bt.js",
         "gzip": 176,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/turbopack-1yyzts_5d7-8u.js",
+        "gzip": 191,
         "worker": true
       },
       {
