@@ -89,7 +89,7 @@ type Context =
 const BEFORE_JSX = "(,=:?&|{};[!";
 /** After these a slash opens a regular expression (with `=>` and
  *  `BEFORE_REGEX`); after `<` it closes a JSX tag, after `>` it divides. */
-const BEFORE_SLASH = "(,=:[!&|?{};+-*%~^}";
+const BEFORE_SLASH = "(,=:[!&|?{};+-*%~^";
 
 /** A TypeScript source's reader (`lexTs`). */
 class TsLexer {
@@ -169,9 +169,8 @@ class TsLexer {
       return;
     }
     this.flush(i);
-    // (`</` and `/>` are a JSX tag's, never an expression's)
-    const opens =
-      next !== ">" && this.out.last !== "<" && this.valueStarts(BEFORE_SLASH);
+    // (`/>` ends a JSX tag; after `<`, as after `>`, no value starts)
+    const opens = next !== ">" && this.valueStarts(BEFORE_SLASH);
     const end = opens ? regexEnd(text, i) : -1;
     if (end === -1) {
       this.i += 1;
