@@ -3,6 +3,7 @@ import {
   genderOf,
   placesAround,
   STARTERS,
+  starterPool,
   starterQuestions,
   withArticle,
 } from "./ask-starters";
@@ -83,4 +84,26 @@ test("without a camera or landmarks the place question is the neighbourhood's", 
     seeded(7)
   );
   expect(qs).toHaveLength(STARTERS);
+  expect(qs.join(" ")).not.toContain("Elbe");
+});
+
+test("no question asks what the data cannot say", () => {
+  const pool = starterPool({
+    at: { x: 0, y: 0, headingDeg: 300 },
+    now: new Date(2026, 11, 10, 23, 0),
+    landmarks: [],
+    layers: ["tramLayer", "trafficLayer", "bikeLayer"],
+  })
+    .map((c) => c.question)
+    .join(" ");
+  for (const gone of [
+    "Weihnachtsmärkte",
+    "angestrahlt",
+    "gezählt",
+    "ältesten Häuser",
+    "nach einer Frau",
+    "kleinste",
+  ]) {
+    expect(pool).not.toContain(gone);
+  }
 });

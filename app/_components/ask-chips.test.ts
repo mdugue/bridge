@@ -79,3 +79,24 @@ test("the places shown are those on the city, eight at most", () => {
   const shown = shownPlaces(all, { within: (x) => x >= 0 });
   expect(shown.map((p) => p.x)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
 });
+
+test("a search round the visitor takes its centre from the result", () => {
+  const round = [
+    answer[0],
+    {
+      id: "a",
+      role: "assistant",
+      parts: [
+        {
+          ...call("in_der_naehe", { radius: 120 }),
+          output: { mitte: { x: 411_790, y: 5_656_340 }, treffer: [] },
+        },
+      ],
+    },
+  ] as unknown as UIMessage[];
+  expect(answerChips(round, 1).near).toEqual({
+    reach: 120,
+    x: 411_790,
+    y: 5_656_340,
+  });
+});

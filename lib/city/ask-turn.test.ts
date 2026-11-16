@@ -371,7 +371,7 @@ test("an answer a refusal left empty is neither counted nor sent to the provider
   expect(seen).toEqual([Array.from({ length: 21 }, () => "user")]);
 });
 
-test("a scripted answer shows the place, then says so on the resume", async () => {
+test("a scripted answer looks through the browser, then says so on the resume", async () => {
   const first = fakeText();
   first.setResponses([
     {
@@ -381,14 +381,8 @@ test("a scripted answer shows the place, then says so on the resume", async () =
       // the search's hit is in what the model reads next
       expect(JSON.stringify(request.messages)).toContain("Q157229");
       return {
-        toolCalls: [
-          {
-            name: "zeige",
-            input: {
-              ziele: [{ name: "Frauenkirche", x: 411_803, y: 5_656_355 }],
-            },
-          },
-        ],
+        // was_ist_da is the one tool the browser answers
+        toolCalls: [{ name: "was_ist_da", input: {} }],
       };
     },
   ]);
@@ -405,7 +399,7 @@ test("a scripted answer shows the place, then says so on the resume", async () =
   const sent = events(oneText);
   expect(
     sent.filter((e) => e.type === "TOOL_CALL_START").map((e) => e.toolCallName)
-  ).toEqual(["suche_stadt", "zeige"]);
+  ).toEqual(["suche_stadt", "was_ist_da"]);
   expect(sent.some((e) => e.type === "TOOL_CALL_RESULT")).toBe(true);
   expect(errorsOf(sent)).toEqual([]);
   const last = sent.at(-1) as {

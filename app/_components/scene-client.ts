@@ -139,6 +139,8 @@ export type CityWalkHandle = SceneStatic & {
   thread: SceneThread;
   /** The design layer's calls (design-layer.ts, ADR 0054). */
   design: { [K in keyof DesignControls]: Async<DesignControls[K]> };
+  /** The canvas's width over its height, as the page lays it out. */
+  viewAspect: () => number;
   /** Where the camera stands, as of the scene's last turn. */
   getCameraState: () => CameraState;
   getPose: () => PlayerPose;
@@ -862,6 +864,9 @@ function handleOf(
     ...asked,
     thread: channel.thread,
     design,
+    viewAspect: () =>
+      Math.max(client.canvas.clientWidth, 1) /
+      Math.max(client.canvas.clientHeight, 1),
     getCameraState: () => mirrored().camera,
     getPose: () => mirrored().pose,
     getViewMode: () => mirrored().viewMode,
