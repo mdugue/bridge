@@ -1149,62 +1149,62 @@ polygons on a tile for lack of it).
 
 ## Measuring what the browser downloads
 
-The guide's size figures come from this procedure. After
-`bun scripts/prepare-data.ts dresden`, sum the published files per tile, taking
-PNG/WebP/`.gz` at face value and gzipping JSON/GeoJSON at level 6 (what a
-static host sends):
+The figures live in [`qa/ledger.json`](../qa/ledger.json), the rewrite
+series' ledger (plan 087). `bun run ledger` writes it from the reference
+site's published files — `public/data/dresden/`, so after a build or
+`bun scripts/prepare-sites.ts dresden` — and `bun run ledger -- --check`
+names each figure that differs and exits 1; CI's build-check shard runs the
+check after its build. Every figure is a function of the tree: a pull
+request that moves one commits the new file, and its diff is what the
+reviewer reads. The shapes and the arithmetic are `lib/city/ledger.ts`; the
+script finds the files through one function, `publishedFiles`.
 
-```bash
-bun scripts/prepare-data.ts dresden
-python3 - <<'PY'
-import os, gzip, json, re
-d = "public/data/dresden"; man = json.load(open(f"{d}/manifest.json"))["files"]
-tot = {}
-for logical, hashed in man.items():
-    p = f"{d}/{hashed}"; raw = os.path.getsize(p)
-    packed = logical.endswith((".png", ".webp", ".gz"))
-    wire = raw if packed else len(gzip.compress(open(p, "rb").read(), 6))
-    m = re.search(r"\d{5}_\d{4}_\d+(?:_[a-z]+)?", logical)
-    t = tot.setdefault(m.group(0) if m else "(site)", [0, 0])
-    t[0] += raw; t[1] += wire
-for tile, (raw, wire) in sorted(tot.items()):
-    print(tile, f"raw {raw/1e6:.2f} MB", f"wire {wire/1e6:.2f} MB")
-PY
-```
+The rule for a file's bytes on the wire: `.png`, `.webp` and `.gz` at face
+value, every other file (JSON, GeoJSON) gzipped at level 6, as a static
+host sends it (Bun's zlib, so the figure moves with Bun's version only). A
+request is a file. Per tile, the ledger reads the tileset's names in five
+sets:
 
-Measured 2026-09-25 on the current build (Dresden, gzipped wire sizes):
+- **far** — what a tile in view costs from afar: the far buildings with
+  their side files (the facade reading, the sky view), the coarse terrain,
+  the rasters it reads and its coarse side files (bridges, traffic,
+  crowns);
+- **fine** — the fine terrain, the rasters it reads near the camera and
+  its dressing files;
+- **near** — the buildings as baked (their side files came with the far
+  ones);
+- **ask** — the inquiry card's files (ADR 0042);
+- **all** — every file the tile names: both levels' twins, the minimap's
+  footprints and bridges, the card's.
 
-| Per tile | Wire |
-|---|---|
-| buildings `city_<t>.glb.gz` | up to 1.9 MB (33416_5658, all forest, holds one building) |
-| fine terrain L0 (the TIN, with walls, stairs and kerb stones) | 1.3–3.6 MB |
-| coarse terrain L1 | 0.41–0.65 MB |
-| minimap picture | one for the site, 87 kB (the footprints, up to 0.08 MB a tile, on demand) |
-| class raster 4096² / 2048² | 0.15–0.29 MB / 0.06–0.11 MB |
-| NDVI 1024² | 0.32–0.77 MB |
-| paving raster 2048² (fine level only) | 0.25–0.97 MB |
-| edge raster 2048² (fine level only) | 0.03–1.97 MB (the forest tiles are the bottom, the southern row the top) |
-| canopy, packed (`canopy_<t>.pts.gz`, `lib/city/point-pack.ts`: 12 bytes a point — stride 5, 20 bytes, once a crown is an evergreen (a pine among them) or reaches over a carriageway (the `flags` float) —, x/y relative to the tile's south-west corner, pre-gzipped) | 0.03–0.40 MB (0.06–0.98 MB raw; the forest tiles 33414_5658 and 33416_5658 are the top). Until 2026-10-03 GeoJSON: 0.04–0.53 MB on the wire but 0.6–9.5 MB to parse in one task (≈ 96 ms in V8 for 33416_5658; unpacked into the same features now ≈ 13 ms) |
-| street furniture GeoJSON | up to 0.02 MB (0.19 MB raw; the forest tile 33416_5658 has seven pieces); with plan 030's signs and fixtures 0.01–0.03 MB (0.07–0.25 MB raw) on the four first tiles |
-| street-tree cadastre + OSM trees GeoJSON | 0.01–0.07 MB (0.1–0.9 MB raw; none on 33416_5658, all forest; the four first tiles with OSM trees 0.04–0.07 MB) |
-| scan trees, packed (`canopyx_<t>.pts.gz`, 16 bytes a point with the crown radius) | 0.02–0.07 MB (0.05–0.14 MB raw; GeoJSON until 2026-10-03, 0.4–1.1 MB raw) |
-| coarse crowns (`crowns_<t>.crw.gz`, `lib/city/coarse-crowns.ts`: 20 bytes a crown — the world x/z as the fine level's matrix holds them, scale or the register crown's extents, turn, NDVI, genus, season offset; a third of the fine level's trees, chosen by where each stands, built by prepare-data from the tile's tree files on its fine ground, `scripts/coarse-crowns.ts`; fetched with the coarse level's other side files) | 0.04–0.29 MB (0.07–0.56 MB raw; 3 700–27 900 crowns, 136 000 over Dresden's fifteen tiles) |
-| OSM hedges GeoJSON | ≤ 0.005 MB |
-| trams GeoJSON (the four first tiles) | 0.003–0.017 MB (0.01–0.09 MB raw) |
-| riverside GeoJSON (the four first tiles) | ≤ 0.004 MB (≤ 0.02 MB raw) |
-| everything else (veg rows, lamps, monuments, walls, rail, bridges, platforms) | ≈ 0.01–0.04 MB together |
-| **tile total** | **4.0–9.7 MB** (phones, without the 4096² raster: 3.8–9.4 MB) |
+Which rasters a level reads is the viewer's own rule (`rasterFiles`,
+`app/_components/tile-rasters.ts`), so the ledger states no second one:
+near the camera the full rasters, never the far twins; on a phone the
+class raster's and the markings' and colonies' twins, and no sports
+raster. A set where a phone reads other files has a `phone` row beside the
+desktop's. Each set is recorded as the spawn tile, the median tile (the
+lower of an even count), the largest tile and the site (each file once).
 
-The whole Dresden site is ≈ 98.9 MB on the wire (≈ 95.6 MB for a phone),
-the spawn tile alone — the `lite` profile — ≈ 6.4 MB. A visit fetches
-less: streaming loads a tile's content only when it is in view, and a far
-tile stops at its coarse terrain (≈ 1.3–3.3 MB per tile: buildings,
-footprints, the coarse terrain with its 1024² raster and the NDVI).
-Before the tileset a desktop visit loaded the then four-tile site whole
-at boot, ≈ 10.6 MB; the growth is quantised meshes instead of a heightfield blob
-(≈ 1.4 + 1.5 + 0.4 MB of buildings and terrain per tile now vs
-≈ 1.0 + 1.1 MB). Sources on disk that are never served: the DGM
-GeoTIFF (12.9–15.6 MB/tile) and the CityJSON (2.7–13.6 MB/tile).
+Baseline, 2026-11-16 (Dresden, fifteen tiles; MB = 10⁶ bytes on the wire,
+files in brackets):
+
+| Set | Spawn tile | Median tile | Largest tile | Site |
+|---|---|---|---|---|
+| far | 4.69 (10) | 4.59 | 5.83 | 67.0 (150) |
+| fine | 6.94 (29) | 7.14 | 9.01 | 105.0 (433) |
+| fine, phone | 6.64 (28) | 6.74 | 8.72 | 100.4 (418) |
+| near | 3.04 (1) | 2.45 | 4.25 | 37.1 (15) |
+| ask | 0.04 (1) | 0.02 | 0.04 | 0.35 (15) |
+| all | 13.8 (43) | 13.8 | 17.5 | 193.6 (641) |
+
+Everything the manifest names is 197.8 MB in 698 files (the rest beyond
+the tiles: the tileset, the minimap and site map, the walks' photos, the
+murals, the plate, the timetable). The last count by hand, 2026-09-25
+with the same rule over every file named after a tile (the set *all*
+today), gave a tile 4.0–9.7 MB and the site ≈ 98.9 MB. A visit fetches less than a set's site figure: streaming loads a
+tile's content only when it is in view, and a far tile stops at its far
+set. Sources on disk that are never served: the DGM GeoTIFF
+(12.9–15.6 MB a tile) and the CityJSON (2.7–13.6 MB a tile).
 
 ## Provenance
 

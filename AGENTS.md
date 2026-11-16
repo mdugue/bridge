@@ -36,6 +36,7 @@ bun run test            # units in lib/, app/_components/, scripts/
 bun run test:e2e        # playwright against a production build
                         # (E2E_DEV=1: against bun dev)
 bun run shots           # real-GPU plates of shots/*.json (headed)
+bun run ledger          # qa/ledger.json: bytes, requests, counters (-- --check: CI)
 bun run site <site>     # where a site stands (--all: every site)
 bun run fetch <site>    # downloads → data/_raw/<provider>/, sources → data/<site>/
 bun run bake <site>     # offline bakes [tile…] [--step X] [--jobs N] [--force]

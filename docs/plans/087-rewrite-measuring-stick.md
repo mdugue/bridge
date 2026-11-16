@@ -25,7 +25,8 @@
 - **Category**: rewrite — all three aims, as their proof
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: TODO
+- **Status**: IN PROGRESS — phase 1 (the ledger) built 2026-11-16;
+  phases 2–6 TODO
 
 ## Why this matters
 
@@ -207,6 +208,31 @@ new `qa/ledger.json`; the diff is what the reviewer reads.
 → no diff on a second run (the file is a function of the tree);
 `bun test lib/city/ledger.test.ts` → pass. **Ledger**: the first
 baseline of bytes, requests and counters, dated.
+
+**Built (2026-11-16).** What later phases and plans can rely on:
+
+- `qa/ledger.json` (version 1) has `bytes` (the five sets, each with
+  `spawn`, `median`, `largest`, `site`, and `phone` where a phone reads
+  other files — today the fine level only), `published` (the whole
+  manifest) and `counters`. Phase 2 adds its browser figures and a
+  `timings` section beside them; `ledgerDiff` compares every leaf but
+  `dated`, so a recorded-only section needs its own exclusion there.
+- `datedLedger` keeps the committed date while no figure moves, so a
+  second run writes the same file; the date changes only with a figure.
+- `publishedFiles(site)` in `scripts/ledger.ts` is the one reader of the
+  published site (088 repoints it). Which rasters a level reads is the
+  viewer's `rasterFiles`, handed in as `RasterReads`; a change to that
+  rule moves the ledger by itself.
+- The wire rule gzips with Bun's zlib: a Bun upgrade may move the JSON
+  figures by a few bytes, and that diff is committed with the upgrade.
+- CI runs `bun scripts/ledger.ts --check` as the build-check shard's last
+  step, after its e2e, whenever the build succeeded.
+- Baseline (Dresden): the spawn tile's fine level 6.94 MB in 29 files
+  (a phone's 6.64 MB in 28), its far set 4.69 MB in 10, everything the
+  manifest names 197.8 MB in 698 files; 17 dressing kinds, 27 layer
+  modules with 18 769 lines, `bootApp` 3 088 lines, 52 of 77 bake
+  modules on seams, 8 upstream workarounds. The figures are in the file
+  and in `docs/data-pipeline.md`, "Measuring what the browser downloads".
 
 ### Phase 2 — Figures a browser has to produce
 

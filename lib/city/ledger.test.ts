@@ -1,0 +1,261 @@
+import { expect, test } from "bun:test";
+import { gzipSync } from "node:zlib";
+import {
+  bytesLedger,
+  datedLedger,
+  distinctExtensions,
+  extensionOf,
+  functionLines,
+  layerModules,
+  ledgerDiff,
+  ledgerTiles,
+  lineCount,
+  seamModules,
+  setFigures,
+  tileSet,
+  upstreamWorkarounds,
+  wireBytes,
+} from "./ledger";
+import type { Ledger, RasterReads } from "./ledger";
+import { buildTileset } from "./tileset";
+import type { BakedTile, TerrainFiles } from "./tileset";
+
+const json = new TextEncoder().encode(
+  JSON.stringify({ features: Array.from({ length: 50 }, () => ({ a: 1 })) })
+);
+
+test("packed files count at face value, the rest gzipped at level 6", () => {
+  expect(wireBytes("crowns_t.crw.gz", json)).toBe(json.length);
+  expect(wireBytes("landcover_t.png", json)).toBe(json.length);
+  expect(wireBytes("walk.webp", json)).toBe(json.length);
+  const geojson = wireBytes("trees_t.1a2b.geojson", json);
+  expect(geojson).toBe(gzipSync(json, { level: 6 }).length);
+  expect(geojson).toBeLessThan(json.length);
+});
+
+test("an extension keeps the one before .gz and drops a twin's edge", () => {
+  expect(extensionOf("city_33412_5656_2_sn.glb.gz")).toBe(".glb.gz");
+  expect(extensionOf("plate.bin.gz")).toBe(".bin.gz");
+  expect(extensionOf("landcover_33412_5656_2_sn.r2048.png")).toBe(".png");
+  expect(extensionOf("trams.json")).toBe(".json");
+  expect(extensionOf("README")).toBe("");
+  expect(
+    distinctExtensions(["a.png", "b.r1024.png", "c.glb.gz", "d.json"])
+  ).toEqual([".glb.gz", ".json", ".png"]);
+});
+
+/** A terrain level's extras with a phone twin for the class raster. */
+const level = (t: string, n: 0 | 1): TerrainFiles => ({
+  landcover: `landcover_${t}_${n}.png`,
+  landcoverLow: n === 0 ? `landcover_${t}.r2048.png` : `landcover_${t}_1.png`,
+  svf: `svf_${t}.png`,
+  ...(n === 0
+    ? {
+        surfaceFar: `surface_${t}.r1024.png`,
+        dressing: { lamps: `lamps_${t}.geojson`, trees: `trees_${t}.geojson` },
+      }
+    : { coarse: { crowns: `crowns_${t}.crw.gz` } }),
+});
+
+const baked = (t: string, x: number): BakedTile => ({
+  id: t,
+  bounds: [x, 0, x + 2000, 2000],
+  zRange: [100, 150],
+  city: `city_${t}.glb.gz`,
+  cityFar: `city_${t}_far.glb.gz`,
+  terrain: { 0: `terrain_${t}_l0.glb.gz`, 1: `terrain_${t}_l1.glb.gz` },
+  files: {
+    city: { svf: `svf_${t}.png`, facades: `facades_${t}.json` },
+    terrain: { 0: level(t, 0), 1: level(t, 1) },
+  },
+});
+
+const TILESET = buildTileset([baked("a", 0), baked("b", 2000)], {
+  epsg: 25_833,
+  offset: { cx: 2000, cy: 1000 },
+  site: "test",
+  tiles: ["a", "b"].map((id, i) => ({
+    id,
+    bounds: [i * 2000, 0, i * 2000 + 2000, 2000],
+    footprints: `footprints_${id}.fpr.gz`,
+    ...(id === "a" ? { ask: { treeFacts: "treefacts_a.json" } } : {}),
+  })),
+});
+
+/** The viewer's rule in small: the class raster or its phone twin, and
+ *  the sky view; a far twin is never read near the camera. */
+const reads: RasterReads = (extras, _level, phone) =>
+  [phone ? extras.landcoverLow : extras.landcover, extras.svf].filter(
+    (f): f is string => typeof f === "string"
+  );
+
+test("a level's file set from a two-tile tileset", () => {
+  const [a, b] = ledgerTiles(TILESET);
+  expect(a?.id).toBe("a");
+  expect(b?.id).toBe("b");
+  if (!a) {
+    throw new Error("no tile");
+  }
+  expect(tileSet(a, "far", reads, false)).toEqual([
+    "city_a_far.glb.gz",
+    "crowns_a.crw.gz",
+    "facades_a.json",
+    "landcover_a_1.png",
+    "svf_a.png",
+    "terrain_a_l1.glb.gz",
+  ]);
+  expect(tileSet(a, "fine", reads, false)).toEqual([
+    "lamps_a.geojson",
+    "landcover_a_0.png",
+    "svf_a.png",
+    "terrain_a_l0.glb.gz",
+    "trees_a.geojson",
+  ]);
+  expect(tileSet(a, "fine", reads, true)).toContain("landcover_a.r2048.png");
+  expect(tileSet(a, "fine", reads, true)).not.toContain("landcover_a_0.png");
+  expect(tileSet(a, "near", reads, false)).toEqual(["city_a.glb.gz"]);
+  expect(tileSet(a, "ask", reads, false)).toEqual(["treefacts_a.json"]);
+  expect(b && tileSet(b, "ask", reads, false)).toEqual([]);
+  // everything the tile names, every twin with it, each file once
+  const all = tileSet(a, "all", reads, false);
+  expect(all).toContain("surface_a.r1024.png");
+  expect(all).toContain("footprints_a.fpr.gz");
+  expect(all.filter((f) => f === "svf_a.png")).toHaveLength(1);
+  expect(all).toHaveLength(15);
+});
+
+test("a tileset whose tiles and children differ is refused", () => {
+  const broken = structuredClone(TILESET) as { root: { children: unknown[] } };
+  broken.root.children.pop();
+  expect(() => ledgerTiles(broken)).toThrow();
+});
+
+/** A fixture file's bytes, written after its name (`s:5`). */
+const fixtureWire = (file: string) => Number(file.split(":")[1]);
+
+test("spawn, median and largest by bytes; the site counts a file once", () => {
+  const figures = setFigures(
+    [
+      { tile: "spawn", files: ["s:5", "shared:1"] },
+      { tile: "big", files: ["b:9", "shared:1"] },
+      { tile: "mid", files: ["m:3", "shared:1"] },
+      { tile: "small", files: ["x:1"] },
+    ],
+    fixtureWire
+  );
+  expect(figures.spawn).toEqual({ tile: "spawn", bytes: 6, files: 2 });
+  // the lower median of four: small 1, mid 4, spawn 6, big 10
+  expect(figures.median.tile).toBe("mid");
+  expect(figures.largest).toEqual({ tile: "big", bytes: 10, files: 2 });
+  expect(figures.site).toEqual({ bytes: 19, files: 5 });
+});
+
+test("a phone's figures only where a set has a low twin", () => {
+  const ledger = bytesLedger(ledgerTiles(TILESET), reads, () => 1);
+  expect(ledger.fine.phone).toBeDefined();
+  expect(ledger.near.phone).toBeUndefined();
+  // the coarse level's twin is its own file: no phone row
+  expect(ledger.far.phone).toBeUndefined();
+});
+
+test("lines as wc -l counts them", () => {
+  expect(lineCount("")).toBe(0);
+  expect(lineCount("a\nb\n")).toBe(2);
+  expect(lineCount("a\nb")).toBe(2);
+});
+
+test("the layer modules, tests left out", () => {
+  expect(
+    layerModules([
+      { path: "app/_components/tree-layer.ts", text: "a\nb\n" },
+      { path: "app/_components/tree-layer.test.ts", text: "a\n" },
+      { path: "app/_components/tile-stream.ts", text: "a\n" },
+      { path: "app/_components/rail-layer.ts", text: "a\n" },
+    ])
+  ).toEqual({ files: 2, lines: 3 });
+});
+
+test("a function's lines run to the first brace at a line's start", () => {
+  const text = [
+    "const x = 1;",
+    "async function bootApp(",
+    "  a: number",
+    ") {",
+    "  if (a) {",
+    "  }",
+    "}",
+    "function after() {}",
+  ].join("\n");
+  expect(functionLines(text, "bootApp")).toBe(6);
+  expect(() => functionLines(text, "missing")).toThrow();
+});
+
+test("the bake modules that handle a seam, one level deep", () => {
+  expect(
+    seamModules([
+      { path: "pipeline/bake/a.py", text: "# reads the Neighbour tile" },
+      { path: "pipeline/bake/b.py", text: "MARGIN = 20" },
+      { path: "pipeline/bake/c.py", text: "def bake(): pass" },
+      { path: "pipeline/bake/providers/d.py", text: "seam" },
+    ])
+  ).toEqual({ matching: 2, of: 3 });
+});
+
+test("the comments that name a workaround for upstream", () => {
+  expect(
+    upstreamWorkarounds([
+      {
+        path: "app/a.ts",
+        text: [
+          "// An upstream workaround (docs/rendering.md)",
+          " * three's dispose — Upstream workaround",
+          'const s = "upstream workaround";',
+          "// nothing here",
+        ].join("\n"),
+      },
+    ])
+  ).toBe(2);
+});
+
+const LEDGER = {
+  version: 1,
+  site: "test",
+  dated: "2026-11-16",
+  wire: "rule",
+  tiles: 2,
+  published: { bytes: 10, files: 2 },
+  bytes: {} as Ledger["bytes"],
+  counters: {
+    askKinds: 1,
+    bakeSeamModules: { matching: 2, of: 3 },
+    bootAppLines: 6,
+    coarseDressingKinds: 3,
+    dressingKinds: 17,
+    layerModules: { files: 2, lines: 3 },
+    publishedExtensions: [".png"],
+    upstreamWorkarounds: 2,
+  },
+} satisfies Ledger;
+
+test("the check names each figure that moved, never the date", () => {
+  expect(ledgerDiff(LEDGER, { ...LEDGER, dated: "2027-01-01" })).toEqual([]);
+  const moved = {
+    ...LEDGER,
+    published: { bytes: 12, files: 2 },
+    counters: { ...LEDGER.counters, publishedExtensions: [".png", ".json"] },
+  };
+  expect(ledgerDiff(LEDGER, moved)).toEqual([
+    'counters.publishedExtensions: [".png"] → [".png",".json"]',
+    "published.bytes: 10 → 12",
+  ]);
+  expect(ledgerDiff({}, LEDGER)).toContain("tiles: (none) → 2");
+});
+
+test("the date holds while the figures do", () => {
+  const { dated: _, ...fresh } = LEDGER;
+  expect(datedLedger(fresh, LEDGER, "2027-01-01").dated).toBe("2026-11-16");
+  expect(datedLedger({ ...fresh, tiles: 3 }, LEDGER, "2027-01-01").dated).toBe(
+    "2027-01-01"
+  );
+  expect(datedLedger(fresh, null, "2027-01-01").dated).toBe("2027-01-01");
+});

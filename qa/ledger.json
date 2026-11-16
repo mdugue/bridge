@@ -1,0 +1,165 @@
+{
+  "version": 1,
+  "site": "dresden",
+  "dated": "2026-11-16",
+  "wire": ".png, .webp and .gz at face value; every other file gzipped at level 6 (Bun's zlib)",
+  "tiles": 15,
+  "published": {
+    "bytes": 197758698,
+    "files": 698
+  },
+  "bytes": {
+    "far": {
+      "spawn": {
+        "tile": "33412_5656_2_sn",
+        "bytes": 4685390,
+        "files": 10
+      },
+      "median": {
+        "tile": "33410_5654_2_sn",
+        "bytes": 4593643,
+        "files": 10
+      },
+      "largest": {
+        "tile": "33416_5656_2_sn",
+        "bytes": 5828229,
+        "files": 10
+      },
+      "site": {
+        "bytes": 67041184,
+        "files": 150
+      }
+    },
+    "fine": {
+      "spawn": {
+        "tile": "33412_5656_2_sn",
+        "bytes": 6943789,
+        "files": 29
+      },
+      "median": {
+        "tile": "33410_5658_2_sn",
+        "bytes": 7135639,
+        "files": 29
+      },
+      "largest": {
+        "tile": "33416_5656_2_sn",
+        "bytes": 9012221,
+        "files": 29
+      },
+      "site": {
+        "bytes": 105047288,
+        "files": 433
+      },
+      "phone": {
+        "spawn": {
+          "tile": "33412_5656_2_sn",
+          "bytes": 6636926,
+          "files": 28
+        },
+        "median": {
+          "tile": "33410_5656_2_sn",
+          "bytes": 6738130,
+          "files": 28
+        },
+        "largest": {
+          "tile": "33416_5656_2_sn",
+          "bytes": 8723602,
+          "files": 28
+        },
+        "site": {
+          "bytes": 100368124,
+          "files": 418
+        }
+      }
+    },
+    "near": {
+      "spawn": {
+        "tile": "33412_5656_2_sn",
+        "bytes": 3040770,
+        "files": 1
+      },
+      "median": {
+        "tile": "33414_5656_2_sn",
+        "bytes": 2454881,
+        "files": 1
+      },
+      "largest": {
+        "tile": "33414_5654_2_sn",
+        "bytes": 4252759,
+        "files": 1
+      },
+      "site": {
+        "bytes": 37089115,
+        "files": 15
+      }
+    },
+    "ask": {
+      "spawn": {
+        "tile": "33412_5656_2_sn",
+        "bytes": 38461,
+        "files": 1
+      },
+      "median": {
+        "tile": "33410_5658_2_sn",
+        "bytes": 23697,
+        "files": 1
+      },
+      "largest": {
+        "tile": "33410_5654_2_sn",
+        "bytes": 41092,
+        "files": 1
+      },
+      "site": {
+        "bytes": 347613,
+        "files": 15
+      }
+    },
+    "all": {
+      "spawn": {
+        "tile": "33412_5656_2_sn",
+        "bytes": 13788640,
+        "files": 43
+      },
+      "median": {
+        "tile": "33410_5658_2_sn",
+        "bytes": 13767066,
+        "files": 43
+      },
+      "largest": {
+        "tile": "33416_5656_2_sn",
+        "bytes": 17452843,
+        "files": 43
+      },
+      "site": {
+        "bytes": 193624128,
+        "files": 641
+      }
+    }
+  },
+  "counters": {
+    "dressingKinds": 17,
+    "coarseDressingKinds": 3,
+    "askKinds": 1,
+    "publishedExtensions": [
+      ".bin.gz",
+      ".crw.gz",
+      ".fpr.gz",
+      ".geojson",
+      ".glb.gz",
+      ".json",
+      ".png",
+      ".pts.gz",
+      ".webp"
+    ],
+    "layerModules": {
+      "files": 27,
+      "lines": 18769
+    },
+    "bootAppLines": 3088,
+    "bakeSeamModules": {
+      "matching": 52,
+      "of": 77
+    },
+    "upstreamWorkarounds": 8
+  }
+}
