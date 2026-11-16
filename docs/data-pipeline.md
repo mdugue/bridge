@@ -1598,6 +1598,43 @@ compared.
   Recorded with the machine and the day, never compared: on SwiftShader
   a timing depends on the runner drawn. `browser.readWith` names the
   browser and adapter beside the figures, uncompared too.
+- **The builds against WebGPU's limits** (`browser.pipelines`, plan
+  094): on the desktop page, once no compile is queued, every build the
+  lite spawn draws with, from `handle.getPipelineBudget()` (the e2e
+  "limits" test's probe), named `key [draw: layout] shadowed camera`,
+  each with the vertex buffers, attributes and inter-stage variables it
+  takes of WebGPU's 8, 16 and 16 and the variables it has spare
+  (`lib/city/ledger-census.ts` `pipelineFigures`). Gated exactly: a row
+  that moves is a layer coming nearer a limit, and the diff says which.
+
+### The census of builds
+
+`bun run ledger -- --census` (plan 094, phase 2; implies `--browser`)
+also flies every built site, one test of `e2e/ledger.spec.ts` each
+(`LEDGER_CENSUS`), and writes the `census` section — recorded, never
+compared (it is in `UNCOMPARED` whole): what lands when is the machine's
+frame rate's. Each site in the whole-site profile
+(`?scene=lite&block=1`, 400×300) with every data layer it has switched
+on — Dresden's bicycle counts answered by the spec
+(`e2e/scene-fixtures.ts`), a design block loaded there — reads its
+counters at `ready`, then flies `censusFlight`: an overview from 2.5 km
+over the site's middle (the far building level), and low oblique stops
+over up to four tiles, the spawn and those farthest from the ones seen.
+A stop waits for the view to rest, the stream to be quiet and no compile
+queued in two reads two seconds apart (at most four minutes; `settled`
+says whether it got there) and reads `getPipelineBudget` — every build
+the scene holds, so the whole site's builds are held to the limits too
+(the probe's `probeBuilt`: programs the read itself made). Dresden is
+then entered in Modell (`M`) from its spawn and read once more. Per
+site: the distinct builds (key × draw × layout × shadow receipt ×
+camera), the distinct keys and each key family with more than one key
+(`keyFamily`: what comes before the first value — the sets made from
+data), `framedBuilds` and `programs` at `ready` and at the flight's end,
+the compile timings over the flight (`compile:*`, `*:compile`,
+`*:queue-wait`: counts and totals subtracted, the larger maximum kept),
+the tightest builds by each limit, and the errors met. Tens of minutes
+on SwiftShader, so never on CI; run it on linux-x64 after building every
+site.
 
 Baseline, 2026-11-16 (linux-x64 cloud container, Bun 1.4.4, Chromium 153
 on SwiftShader): the first load fetches 42 scripts, 1 103 124 bytes gzip

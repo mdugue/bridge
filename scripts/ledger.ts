@@ -11,6 +11,9 @@
  *   bun scripts/ledger.ts --check   # name each figure that differs, exit 1
  *   … --browser                     # with what a browser reads
  *                                   # (scripts/ledger-browser.ts)
+ *   … --census                      # and plan 094's census: every built
+ *                                   # site flown (implies --browser; tens
+ *                                   # of minutes, never on CI)
  *
  * Any other argument is refused (exit 2) and nothing is written: a
  * mistyped `--check` must not pass as a write. It reads
@@ -297,7 +300,7 @@ function formatAsCommitted(file: string): void {
 
 /** The arguments the script takes. A new one (a section's switch) joins
  *  here; anything else is refused. */
-export const FLAGS = ["--check", "--browser"] as const;
+export const FLAGS = ["--check", "--browser", "--census"] as const;
 
 export interface RunOptions {
   /** where the report goes */
@@ -310,23 +313,28 @@ export interface RunOptions {
 
 /** The browser's sections (lib/city/ledger-browser.ts): read now with
  *  `--browser`, else the committed ones, which `--check` then does not
- *  compare. */
+ *  compare; the census (recorded only) read with `--census` over every
+ *  built site, else the committed one. */
 async function browserPart(
-  read: boolean,
+  read: { browser: boolean; census: boolean },
   site: string,
   root: string,
   committed: Partial<Ledger> | null
-): Promise<Pick<Ledger, "browser" | "timings">> {
-  if (read) {
-    return await browserSections(
+): Promise<Pick<Ledger, "browser" | "census" | "timings">> {
+  const kept = committed?.census ? { census: committed.census } : {};
+  if (read.browser || read.census) {
+    const fresh = await browserSections(
       publishedFiles(site, root).files,
       platform(),
-      root
+      root,
+      read.census ? readySites(root) : []
     );
+    return { ...kept, ...fresh };
   }
   return {
     ...(committed?.browser ? { browser: committed.browser } : {}),
     ...(committed?.timings ? { timings: committed.timings } : {}),
+    ...kept,
   };
 }
 
@@ -363,7 +371,8 @@ export async function run(
   // then the dressing (its recorded part only on a write: the check
   // never compares it), then what a browser read (`--browser`)
   const check = argv.includes("--check");
-  const browser = argv.includes("--browser");
+  const census = argv.includes("--census");
+  const browser = argv.includes("--browser") || census;
   const fresh = {
     ...measure(site, root),
     rasters: await measureRasters(root),
@@ -374,7 +383,7 @@ export async function run(
       check ? undefined : { committed, today }
     ),
     ...(await browserPart(
-      browser,
+      { browser, census },
       site,
       root,
       committed as Partial<Ledger> | null

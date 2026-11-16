@@ -37,7 +37,9 @@ bun run test:e2e        # playwright against a production build
                         # (E2E_DEV=1: against bun dev)
 bun run shots           # real-GPU plates of shots/*.json (headed)
 bun run ledger          # qa/ledger.json: bytes, requests, counters (-- --check: CI;
-                        # -- --browser: first-load JS, a phone's tiles, timings)
+                        # -- --browser: first-load JS, a phone's tiles, timings,
+                        # the lite builds' limits; -- --census: every site
+                        # flown, its builds counted, by hand, not on CI)
 bun run site <site>     # where a site stands (--all: every site)
 bun run fetch <site>    # downloads → data/_raw/<provider>/, sources → data/<site>/
 bun run bake <site>     # offline bakes [tile…] [--step X] [--jobs N] [--force]
@@ -110,8 +112,9 @@ itself). See ADR 0005.
   vanishes (the headless e2e draws WebGPU too, ADR 0027). The e2e
   "limits" test counts both for the main pass of what the lite scene
   draws (not traffic, the data layers or a picture style's swap: a
-  layer outside it tests its own count); the clay's two are a number
-  in it, changed only on purpose.
+  layer outside it tests its own count, and the ledger's `--census`
+  reads the whole site's, data layers on, by hand); the clay's two are
+  a number in it, changed only on purpose.
 - A TSL `select` and a `Loop` body are scopes: in per-pixel graphs use
   `mix`/`step`, and take what a loop reads into a `toVar()` before it.
   A packed word or a hash seed reaches the fragment as a FLAT varying.

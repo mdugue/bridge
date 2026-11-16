@@ -26,6 +26,7 @@ const READING: BrowserReading = {
   ],
   workers: ["ground", "niches", "scene"],
   elsewhere: [],
+  pipelines: [],
   phone: {
     tier: "mobile",
     held: {},
