@@ -31,7 +31,7 @@
   frame), less complexity (the compile choreography)
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: TODO
+- **Status**: IN PROGRESS — phases 0–1 done (2026-11-16), see *Findings*
 
 ## Why this matters
 
@@ -395,4 +395,157 @@ Whether or not phase 4 applies:
 
 ## Findings
 
-(Empty. Phases 0 and 2 write their tables here.)
+### Phase 0 — the spike (2026-11-16, three r187, headless Chromium on SwiftShader)
+
+**The counts can be had on public API.**
+`renderer.debug.getShaderAsync(scene, camera, object)` returns the two
+WGSL texts of a drawable's build; nothing private is touched. What the
+call needs around it:
+
+- It runs a `compileAsync`, so it takes a compile's turn
+  (`compileInTurn`), and it reads the build back for **the render target
+  set once that compile has resolved** — so the scene's target stays set
+  over the whole call, not only over its synchronous half as a compile's
+  does. A frame that gets in meanwhile ends on the canvas, and the read
+  would then look the drawable up under the canvas's context (and make a
+  render object for it). `PostStack.shadersOf` therefore compiles the
+  drawable first (`compileNow`), after which the read's own compile
+  awaits nothing a frame fits into, checks the target after the read and
+  reads again if it changed.
+- It looks the drawable up under the render context's own clipping
+  context, not a `ClippingGroup`'s: under a held Ausschnitt the read
+  would miss the build that is drawn. `shadersOf` answers null while a
+  cut is held.
+- Measured: reading all 69 builds of the lite scene took 0.2 s, and
+  `info.memory.programs` (182; 261 in Modell) and `framedBuilds`
+  (59 other, 22 shadow) were the same before and after, and 8 s later.
+  The probe builds nothing.
+
+**What counts** (WebGPU specification, "validating inter-stage
+interfaces" and "validating GPURenderPipelineDescriptor", read
+2026-11-16): the vertex stage may write `maxInterStageShaderVariables`
+(16) user-defined outputs — one fewer on a point list, one fewer for
+every four `clip_distances`, which also lower the highest location; the
+fragment stage may read as many user-defined inputs, one fewer for each
+of `front_facing`, `sample_index`, `sample_mask`, `primitive_index` and
+the two subgroup builtins it names. `position` counts on neither side.
+A pipeline has at most `maxVertexBuffers` (8) buffers and
+`maxVertexAttributes` (16) attributes. three writes the vertex stage's
+attributes as `main`'s parameters and the varyings as `VaryingsStruct`;
+it makes one buffer layout for each attribute and one for an interleaved
+buffer (`WebGPUAttributeUtils.createShaderVertexBuffers`), so the buffers
+are the distinct `attribute` / `attribute.data` objects among those the
+vertex stage names. The device is made without `requiredLimits` and
+reports 16 / 16 / 8.
+
+**The counts explain the known limits**: the clay passes thirteen
+variables and reads `front_facing`, two spare — the skill's sentence.
+
+| Build | Camera | Vertex buffers (of 8) | Attributes (of 16) | Variables out / in | Counting builtins | Spare variables |
+|---|---|---|---|---|---|---|
+| `clay\|niches` — the spawn tile, near level, openings cut | walk/fly | 4 (`featureId`, `facade`, `position`, `normal`) | 4 | 13 / 13 | `front_facing` | **2** |
+| `clay` — the far building level, from 3.5 km | walk/fly | 4 | 4 | 13 / 13 | `front_facing` | **2** |
+| `clay` — near level in Modell (no niches there) | parallel | 4 | 4 | 12 / 12 | `front_facing` | **3** |
+| `clay\|double` — the Schnitt (Modell's `section` preset) | parallel | 4 | 4 | 12 / 12 | `front_facing` | **3** |
+| `window-niche` — an `Instances` set (`iMat0`–`3` interleaved: one buffer) | walk/fly | 4 | 7 | 12 / 12 | — | 4 |
+| `window-niche` | parallel | 4 | 7 | 11 / 11 | — | 5 |
+| `terrain\|ndvi\|surface\|edges\|sport\|markings\|colonies\|svf\|horizon\|2000\|2000` — the spawn tile's ground, every raster | walk/fly | 2 | 2 | 4 / 4 | — | 12 |
+| the same ground | parallel | 2 | 2 | 3 / 3 | — | 13 |
+
+Over the lite scene's 69 builds (spawn tile, every layer of it): at most
+5 vertex buffers (the trees' feet, `crown-bare`, the instanced
+`monument-clay`, `furniture-hands`) and 8 attributes; after the clay and
+the niches the fewest spare variables are 7 (`crown-bare`, the feet's
+`tree-earth`, `-litter`, `-shade`). No attribute a vertex stage names is
+missing on its geometry.
+
+**A parallel camera's build passes one variable fewer**, every lit
+material alike: `v_positionViewDirection` is not a varying where the
+direction to the eye is one for the whole view. The clay's budget is
+therefore the walk/fly camera's.
+
+The fixtures are the clay's texts, `lib/city/__fixtures__/wgsl-budget/`
+(`clay.*` = `clay|niches` under the walk/fly camera, `clay-parallel.*` =
+`clay` under Modell's).
+
+### Phase 1 — the counting test (2026-11-16)
+
+- `lib/city/wgsl-budget.ts` (pure; `wgslBudget`, `budgetSpare`,
+  `budgetBreaches`) with its unit test: the fixtures, hand-made texts at
+  and over each limit, a builtin that counts and one that does not.
+- The probe is `app/_components/pipeline-budget.ts`, behind `pocEnabled`
+  (a production build answers with no rows), reached as the handle's
+  value call `getPipelineBudget()` beside `getGpuDebug` — no new message
+  in `scene-protocol.ts`, the call rides the existing `call`.
+- The e2e test "limits: every build is within WebGPU's limits, the clay
+  two variables short" (`@desktop-render`): the lite scene at the spawn
+  (`clay|niches`), from far off (`clay`, the far level), and inside the
+  Modell test under the parallel camera (`clay`), which on its way out
+  switches to the Schnitt for `clay|double` (the preset's `poche` turns the clay
+  two-sided through `setClaySection`; only `setCutOut` makes the
+  `ClippingGroup`, so the Schnitt is readable). The budget is
+  `CLAY_SPARE_VARIABLES` (2, parallel 3) and `CLAY_VERTEX_BUFFERS` (4) in
+  the spec.
+- Seen to fail: with one more varying on the clay
+  (`varying(float(0.25))` added to its colour, not committed) the e2e
+  test fails with `clay|niches […]: 1 spare` where it expects `2 spare`.
+  The ninth plain attribute is a unit test
+  (`pipeline-budget.test.ts`: eight buffers pass, the ninth is a
+  breach) — a real ninth buffer in the scene would log a failed
+  pipeline and trip the spec's error watch before the count.
+
+- What it costs the `@desktop-render` shard (headless, four cores
+  here): the limits test 1.1 min — the far flight and its compiles —
+  and about 0.5 min in the Modell test, on a shard of about 3.2 min
+  before. No test was retried on CI. If the shards' balance asks for
+  it, the far flight is the part to give up: the far level's `clay`
+  differs from the near `clay|niches` by the openings' mask alone, and
+  both measured the same thirteen variables and four buffers.
+
+**Open after phases 0–1**
+
+- **The ledger** (phase 1 step 4): `qa/ledger.json` (plan 087) is
+  written by a script from the published files, without a browser; the
+  rows here need the headless scene. They go in with phase 2's census,
+  which runs the scene over the whole site anyway. This PR moves one of
+  the ledger's counters: `bootAppLines` 3088 → 3090, the two lines that
+  hand `getPipelineBudget` out of `bootApp`.
+- **The clip distances** (and `clay|double|niches`, which needs the
+  walk/fly camera on a two-sided clay and does not come about): the
+  probe does not read under a held Ausschnitt (above). By the
+  specification a cut's clip distances (up to four) take one output and
+  one location on the vertex side, where the clay has three spare
+  outputs — the fragment side's two stay the tighter bound; unmeasured.
+- **A picture style's swap** (Papier, Strich, Schwarzplan): the
+  buildings are drawn with `scene.overrideMaterial`, a second lit build
+  on the clay's layout with varyings of its own. The probe reads
+  `object.material`. three's hook would read the override, but once its
+  compile has resolved, and the swap (`paper-scene.ts` `swapped`) holds
+  the override for a compile's synchronous half only; held over the
+  await, a frame would draw as paper. Unread — a read needs either a
+  swap that can be held with the frames held, or the override's texts
+  from a build of its own.
+- **Outside the scene**: the nameplate's overlay scene, the outline's
+  mask and blur, the post passes are not under the root the probe walks.
+- **Builds the lite scene does not draw** — **the traffic bodies**, the
+  layer that once vanished, first of all; tram cars, bridges' ribs, the
+  data layers, the designs: the probe reads whatever is in the scene, so
+  **phase 2's census over the whole site holds them to the limits with
+  the same call** (switch the data layers on for it); until then
+  `traffic-layer.test.ts` keeps its own count.
+- **The shadow pass's builds** are not read (`getShaderAsync` reads the
+  main pass's build).
+- **For phase 2's census**: the rows are `compileRepresentatives` of the
+  scene, drawn or not — a drawable hidden for good is a row, and the
+  probe compiles it to read it (in the lite scene nothing new was built:
+  the boot compiles the whole scene; over a flight this may differ, so
+  compare `info.memory.programs` around the call). A tile that leaves
+  during the read is counted as `left` and never compiled.
+- Seen beside the work, not caused by it: entering Modell **before any
+  inquiry** (no nameplate built yet) headless logs
+  three's `Async render pipeline creation failed
+  (renderPipeline_nameplate-shadow_…): The fragment stage has fewer
+  output components (2) than the color format` once, with and without
+  the probe — in each of four such runs here; the shard's order, with
+  the inquiry tests before the Modell test, did not log it. The spec's
+  error watch fails on it, so `--grep "Modell"` alone is red.
