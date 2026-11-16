@@ -1741,6 +1741,44 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expectNoErrors(errors);
   });
 
+  test("limits: the Schnitt's two-sided clay is within them too", async () => {
+    // The Schnitt draws the clay from both sides, a build of its own
+    // (`clay|double`): the preset fills the cut faces, it holds no
+    // Ausschnitt. Entered at the preset, read, left.
+    await page.evaluate(() => {
+      window.__poc?.handle?.setModelPreset("section");
+    });
+    try {
+      await page.waitForFunction(
+        () => {
+          const hud = window.__poc?.handle?.getModelHud();
+          return hud?.preset === "section" && !hud.transitioning;
+        },
+        undefined,
+        { timeout: slow(90_000) }
+      );
+      await waitForFrames(page, 2);
+      await compilesSettled(page);
+      await expectWithinLimits(page, {
+        builds: 40,
+        camera: "parallel",
+        clay: ["clay|double"],
+      });
+    } finally {
+      await page.evaluate(() => {
+        window.__poc?.handle?.toggleModel();
+      });
+      await page.waitForFunction(
+        () =>
+          window.__poc?.handle?.getViewMode() !== "model" &&
+          window.__poc?.handle?.getModelHud() === null,
+        undefined,
+        { timeout: slow(90_000) }
+      );
+    }
+    expectNoErrors(errors);
+  });
+
   test("a design file takes its place and sets the buildings it covers aside", async () => {
     // A 40 × 30 m block in the Land's coordinates by the Albertplatz, on
     // the primary tile: read on the page, placed by its own coordinates,

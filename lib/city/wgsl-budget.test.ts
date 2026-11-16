@@ -124,6 +124,30 @@ test("a text without the entry point is an error, not a zero", () => {
   );
 });
 
+test("a shape the parser does not know is an error, never an empty count", () => {
+  // an alias for the struct: its members would otherwise count as none
+  const aliased = `struct In { @location(0) uv : vec2<f32> }
+alias Inputs = In;
+@fragment fn main(in : Inputs) -> @location(0) vec4<f32> { return vec4<f32>(); }`;
+  expect(() => stageInterface(aliased, "fragment")).toThrow(
+    "neither a location, a builtin nor a struct of them: in : Inputs"
+  );
+  // a location that is a constant, not a literal
+  const named = `const UV = 3;
+@fragment fn main(@location(UV) uv : vec2<f32>) -> @location(0) vec4<f32> { return vec4<f32>(); }`;
+  expect(() => stageInterface(named, "fragment")).toThrow(
+    "a location not a literal"
+  );
+  // clip distances sized by a constant
+  const clipped = vertexText({ attributes: 1, varyings: 1 }).replace(
+    "@builtin( position ) builtinClipSpace : vec4<f32>",
+    "@builtin( position ) builtinClipSpace : vec4<f32>,\n\t@builtin( clip_distances ) clip : array<f32, PLANES>"
+  );
+  expect(() => wgslBudget(clipped, fragmentText({ varyings: 1 }))).toThrow(
+    "clip_distances of an unread size"
+  );
+});
+
 test("sixteen variables pass, a seventeenth does not", () => {
   const at = wgslBudget(
     vertexText({ attributes: 1, varyings: 16 }),

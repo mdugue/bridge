@@ -143,6 +143,10 @@ function variableOf(declaration: string): StageVariable {
   };
   if (location) {
     variable.location = Number(location.groups?.index);
+  } else if (declaration.includes("@location")) {
+    // a named constant, an expression: a count that cannot read it must
+    // not read as none
+    throw new Error(`wgsl-budget: a location not a literal: ${declaration}`);
   }
   if (builtin) {
     variable.builtin = builtin.groups?.name;
@@ -170,7 +174,15 @@ function flattened(
   if (variable.location !== undefined || variable.builtin !== undefined) {
     return [variable];
   }
-  return structs.get(variable.type) ?? [];
+  const members = structs.get(variable.type);
+  // an alias, a nested struct: a shape this parser does not know must not
+  // count as an empty interface
+  if (!members?.every((m) => m.location !== undefined || m.builtin)) {
+    throw new Error(
+      `wgsl-budget: neither a location, a builtin nor a struct of them: ${variable.name} : ${variable.type}`
+    );
+  }
+  return members;
 }
 
 /**
@@ -210,6 +222,16 @@ const userDefined = (list: StageVariable[]) =>
 const builtinsOf = (list: StageVariable[]) =>
   list.flatMap((v) => (v.builtin === undefined ? [] : [v.builtin]));
 
+/** The size of a `clip_distances` output, `array<f32, N>` with a literal
+ *  N: any other spelling is an error, never a guess. */
+function clipSize(type: string): number {
+  const size = ARRAY_SIZE.exec(type)?.groups?.size;
+  if (size === undefined) {
+    throw new Error(`wgsl-budget: clip_distances of an unread size: ${type}`);
+  }
+  return Number(size);
+}
+
 /** What `vertex` and `fragment`, a pipeline's two WGSL texts, ask of the
  *  limits. */
 export function wgslBudget(vertex: string, fragment: string): WgslBudget {
@@ -224,9 +246,7 @@ export function wgslBudget(vertex: string, fragment: string): WgslBudget {
       vertexIn: builtinsOf(v.inputs),
       vertexOut: builtinsOf(v.outputs),
     },
-    clipDistances: clip
-      ? Number(ARRAY_SIZE.exec(clip.type)?.groups?.size ?? 1)
-      : 0,
+    clipDistances: clip ? clipSize(clip.type) : 0,
     interStageBuiltins: fragmentIn.filter((b) => INTER_STAGE_BUILTINS.has(b)),
     interStageIn: userDefined(f.inputs).length,
     interStageOut: userDefined(v.outputs).length,

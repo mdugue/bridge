@@ -2063,5 +2063,29 @@ every row to the device's limits and the clay to its budget, a number in
 the spec: 2 spare variables under the walk/fly camera (13 passed, one to
 `front_facing`), 3 under Modell's parallel one, 4 vertex buffers. It
 reads the lite scene at the spawn, from far off (the far building level)
-and in Modell; a build only the whole site has, and the clay under a
-held Ausschnitt, are not read.
+and in Modell, with the Schnitt's two-sided clay.
+
+What the test does **not** read, so that nobody takes it for more than
+it is:
+
+- what the lite scene does not draw: the traffic bodies (the layer that
+  once vanished past eight buffers: `traffic-layer.test.ts` counts its
+  attributes), tram cars, the data layers, a visitor's design, and
+  whatever only another tile of the site has;
+- the clay under a held Ausschnitt: three's hook looks a drawable up
+  outside its `ClippingGroup`, so the probe answers nothing while a cut
+  is held, and the clip distances' variable on the vertex side is not
+  counted;
+- a picture style's swap (Papier, Strich, Schwarzplan:
+  `scene.overrideMaterial`, `paper-scene.ts`): three's hook reads the
+  override once its compile has resolved, the swap holds it for a
+  compile's synchronous half only, and holding it longer would let a
+  frame draw as paper;
+- the shadow pass's builds (the hook reads the main pass's);
+- what is drawn outside the scene: the nameplate's overlay, the
+  outline's mask and blur, the post passes.
+
+The rows are what a compile would walk (`compileRepresentatives`), drawn
+or not: a drawable hidden for good is a row too, and the probe compiles
+it to read it.
+

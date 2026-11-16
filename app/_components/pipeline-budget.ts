@@ -58,11 +58,14 @@ export interface PipelineBudgetRow {
 
 /** `SceneApp.getPipelineBudget`'s report. */
 export interface PipelineBudget {
-  /** the device's limits, WebGPU's defaults where it does not say */
+  /** the device's limits (a production build: WebGPU's defaults, unread) */
   limits: PipelineLimits;
   rows: PipelineBudgetRow[];
-  /** representatives no text could be had for: a material array, a tile
-   *  that left, a cut held meanwhile */
+  /** representatives whose tile left before or while they were read:
+   *  never compiled, no build of the scene any more */
+  left: number;
+  /** representatives still in the scene no text could be had for: a
+   *  material array, a cut held meanwhile */
   unread: number;
 }
 
@@ -78,22 +81,28 @@ type Drawable = Object3D & {
   material?: Material | Material[];
 };
 
-/** The device's own limits, read off three's backend. */
+/**
+ * The device's own limits, read off three's backend. One that cannot be
+ * read is an error: the defaults in its place would hold the scene to
+ * limits the device may not have, and the spec asserts exactly those.
+ */
 function deviceLimits(renderer: object): PipelineLimits {
   // reason: the backend's `device` is the GPUDevice, typed only on the
   // WebGPU backend's class
   const limits = (
     renderer as { backend?: { device?: { limits?: Partial<PipelineLimits> } } }
   ).backend?.device?.limits;
+  const read = (name: keyof PipelineLimits): number => {
+    const value = limits?.[name];
+    if (typeof value !== "number") {
+      throw new TypeError(`pipeline-budget: the device reports no ${name}`);
+    }
+    return value;
+  };
   return {
-    maxInterStageShaderVariables:
-      limits?.maxInterStageShaderVariables ??
-      DEFAULT_PIPELINE_LIMITS.maxInterStageShaderVariables,
-    maxVertexAttributes:
-      limits?.maxVertexAttributes ??
-      DEFAULT_PIPELINE_LIMITS.maxVertexAttributes,
-    maxVertexBuffers:
-      limits?.maxVertexBuffers ?? DEFAULT_PIPELINE_LIMITS.maxVertexBuffers,
+    maxInterStageShaderVariables: read("maxInterStageShaderVariables"),
+    maxVertexAttributes: read("maxVertexAttributes"),
+    maxVertexBuffers: read("maxVertexBuffers"),
   };
 }
 
@@ -133,22 +142,32 @@ function buildOf(object: Drawable, material: Material): string {
   return `${shared}|${object.type}|${layoutOf(object.geometry)}|${object.receiveShadow}`;
 }
 
+/** Whether `object` still hangs under `root`: a tile that left took its
+ *  content out of the scene. */
+function under(object: Object3D, root: Object3D): boolean {
+  for (let o: Object3D | null = object; o; o = o.parent) {
+    if (o === root) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
- * A row for each build under `roots`, as `view` draws them. Each is one
- * read in the compiles' turn; the scene keeps drawing meanwhile.
+ * A row for each build under `root`, as `view` draws them. Each is one
+ * read in the compiles' turn; the scene keeps drawing meanwhile, so a
+ * tile may leave between two reads: what no longer hangs under `root` is
+ * not asked for (a read compiles first, and compiling what a tile has
+ * freed would upload it again), and counted as `left`.
  */
-export async function pipelineBudget(
-  renderer: object,
+export async function budgetRows(
   stack: Pick<PostStack, "shadersOf">,
   root: Object3D,
   view: Camera,
+  limits: PipelineLimits,
   query: PipelineBudgetQuery = {}
 ): Promise<PipelineBudget> {
-  const limits = deviceLimits(renderer);
-  const report: PipelineBudget = { limits, rows: [], unread: 0 };
-  if (!pocEnabled) {
-    return report;
-  }
+  const report: PipelineBudget = { left: 0, limits, rows: [], unread: 0 };
   const camera = (view as { isOrthographicCamera?: boolean })
     .isOrthographicCamera
     ? "parallel"
@@ -164,10 +183,15 @@ export async function pipelineBudget(
     if (seen.has(build)) {
       continue;
     }
+    if (!under(object, root)) {
+      report.left += 1;
+      continue;
+    }
     seen.add(build);
     const shaders = await stack.shadersOf(object, view);
     if (!(shaders?.vertexShader && shaders.fragmentShader)) {
-      report.unread += 1;
+      // gone during its own read, or unreadable where it is
+      report[under(object, root) ? "unread" : "left"] += 1;
       continue;
     }
     const { vertexShader: vertex, fragmentShader: fragment } = shaders;
@@ -198,4 +222,22 @@ export async function pipelineBudget(
     });
   }
   return report;
+}
+
+/**
+ * `budgetRows` for the scene, held to its device's limits. Debug builds
+ * only: a production build answers with no rows.
+ */
+export async function pipelineBudget(
+  renderer: object,
+  stack: Pick<PostStack, "shadersOf">,
+  root: Object3D,
+  view: Camera,
+  query: PipelineBudgetQuery = {}
+): Promise<PipelineBudget> {
+  if (!pocEnabled) {
+    const limits = DEFAULT_PIPELINE_LIMITS;
+    return { left: 0, limits, rows: [], unread: 0 };
+  }
+  return await budgetRows(stack, root, view, deviceLimits(renderer), query);
 }

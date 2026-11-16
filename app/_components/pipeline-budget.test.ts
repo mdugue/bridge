@@ -1,13 +1,23 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import nodePath from "node:path";
 import {
   BufferAttribute,
   BufferGeometry,
+  Group,
   InstancedInterleavedBuffer,
   InterleavedBufferAttribute,
+  Mesh,
+  MeshBasicNodeMaterial,
+  PerspectiveCamera,
 } from "three/webgpu";
-import { budgetBreaches } from "@/lib/city/wgsl-budget";
+import type { Object3D } from "three/webgpu";
+import {
+  budgetBreaches,
+  DEFAULT_PIPELINE_LIMITS,
+} from "@/lib/city/wgsl-budget";
 import type { WgslBudget } from "@/lib/city/wgsl-budget";
-import { vertexBuffersOf } from "./pipeline-budget";
+import { budgetRows, vertexBuffersOf } from "./pipeline-budget";
 
 const plain = () => new BufferAttribute(new Float32Array(3), 1);
 
@@ -74,4 +84,116 @@ test("an attribute the geometry lacks is named, and counted as a buffer", () => 
     buffers: 2,
     unmatched: ["aGone"],
   });
+});
+
+const fixture = (name: string) =>
+  readFileSync(
+    nodePath.join(
+      import.meta.dir,
+      "..",
+      "..",
+      "lib",
+      "city",
+      "__fixtures__",
+      "wgsl-budget",
+      name
+    ),
+    "utf-8"
+  );
+
+/** A mesh in the clay's layout, each attribute a buffer of its own. */
+function clayMesh(): Mesh {
+  const geometry = new BufferGeometry();
+  for (const name of ["featureId", "facade", "position", "normal"]) {
+    geometry.setAttribute(name, plain());
+  }
+  const material = new MeshBasicNodeMaterial();
+  material.name = "clay-stand-in";
+  return new Mesh(geometry, material);
+}
+
+test("a row a build: the clay's texts on the clay's layout", async () => {
+  const root = new Group();
+  root.add(clayMesh());
+  // a second tile's mesh on its own material is a build of its own
+  root.add(clayMesh());
+  const asked: Object3D[] = [];
+  const budget = await budgetRows(
+    {
+      shadersOf: async (object) => {
+        asked.push(object);
+        return {
+          fragmentShader: fixture("clay.fragment.wgsl"),
+          vertexShader: fixture("clay.vertex.wgsl"),
+        };
+      },
+    },
+    root,
+    new PerspectiveCamera(),
+    DEFAULT_PIPELINE_LIMITS
+  );
+  expect(asked).toHaveLength(2);
+  expect(budget.unread).toBe(0);
+  expect(budget.left).toBe(0);
+  expect(budget.rows[0]).toMatchObject({
+    breaches: [],
+    camera: "perspective",
+    draw: "Mesh",
+    key: "clay-stand-in",
+    layout: "facade,featureId,normal,position",
+    unmatched: [],
+    vertexBuffers: 4,
+  });
+  expect(budget.rows[0].spare.interStage).toBe(2);
+});
+
+test("a tile that left while the rows were read is not asked for", async () => {
+  const root = new Group();
+  const first = clayMesh();
+  const second = clayMesh();
+  root.add(first, second);
+  const asked: Object3D[] = [];
+  const budget = await budgetRows(
+    {
+      shadersOf: async (object) => {
+        asked.push(object);
+        // the second tile leaves while the first is read
+        root.remove(second);
+        return {
+          fragmentShader: fixture("clay.fragment.wgsl"),
+          vertexShader: fixture("clay.vertex.wgsl"),
+        };
+      },
+    },
+    root,
+    new PerspectiveCamera(),
+    DEFAULT_PIPELINE_LIMITS
+  );
+  expect(asked).toEqual([first]);
+  expect(budget.rows).toHaveLength(1);
+  expect(budget.left).toBe(1);
+  expect(budget.unread).toBe(0);
+});
+
+test("one that left during its own read is left, one unreadable is unread", async () => {
+  const root = new Group();
+  const leaving = clayMesh();
+  const held = clayMesh();
+  root.add(leaving, held);
+  const budget = await budgetRows(
+    {
+      shadersOf: async (object) => {
+        if (object === leaving) {
+          root.remove(leaving);
+        }
+        return null;
+      },
+    },
+    root,
+    new PerspectiveCamera(),
+    DEFAULT_PIPELINE_LIMITS
+  );
+  expect(budget.rows).toEqual([]);
+  expect(budget.left).toBe(1);
+  expect(budget.unread).toBe(1);
 });

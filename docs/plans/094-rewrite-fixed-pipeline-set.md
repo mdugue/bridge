@@ -446,6 +446,7 @@ variables and reads `front_facing`, two spare — the skill's sentence.
 | `clay\|niches` — the spawn tile, near level, openings cut | walk/fly | 4 (`featureId`, `facade`, `position`, `normal`) | 4 | 13 / 13 | `front_facing` | **2** |
 | `clay` — the far building level, from 3.5 km | walk/fly | 4 | 4 | 13 / 13 | `front_facing` | **2** |
 | `clay` — near level in Modell (no niches there) | parallel | 4 | 4 | 12 / 12 | `front_facing` | **3** |
+| `clay\|double` — the Schnitt (Modell's `section` preset) | parallel | 4 | 4 | 12 / 12 | `front_facing` | **3** |
 | `window-niche` — an `Instances` set (`iMat0`–`3` interleaved: one buffer) | walk/fly | 4 | 7 | 12 / 12 | — | 4 |
 | `window-niche` | parallel | 4 | 7 | 11 / 11 | — | 5 |
 | `terrain\|ndvi\|surface\|edges\|sport\|markings\|colonies\|svf\|horizon\|2000\|2000` — the spawn tile's ground, every raster | walk/fly | 2 | 2 | 4 / 4 | — | 12 |
@@ -479,7 +480,10 @@ The fixtures are the clay's texts, `lib/city/__fixtures__/wgsl-budget/`
 - The e2e test "limits: every build is within WebGPU's limits, the clay
   two variables short" (`@desktop-render`): the lite scene at the spawn
   (`clay|niches`), from far off (`clay`, the far level), and inside the
-  Modell test under the parallel camera (`clay`). The budget is
+  Modell test under the parallel camera (`clay`); a second test enters
+  the Schnitt for `clay|double` (the preset's `poche` turns the clay
+  two-sided through `setClaySection`; only `setCutOut` makes the
+  `ClippingGroup`, so the Schnitt is readable). The budget is
   `CLAY_SPARE_VARIABLES` (2, parallel 3) and `CLAY_VERTEX_BUFFERS` (4) in
   the spec.
 - Seen to fail: with one more varying on the clay
@@ -498,21 +502,42 @@ The fixtures are the clay's texts, `lib/city/__fixtures__/wgsl-budget/`
   which runs the scene over the whole site anyway. This PR moves one of
   the ledger's counters: `bootAppLines` 3088 → 3090, the two lines that
   hand `getPipelineBudget` out of `bootApp`.
-- **`clay|double`, `clay|double|niches` and the clip distances**: the
-  Schnitt comes with a cut, and the probe does not read under a held cut
-  (above). By the specification a cut's clip distances (up to four)
-  take one output and one location on the vertex side, where the clay
-  has three spare outputs — the fragment side's two stay the tighter
-  bound; unmeasured.
-- **Builds the lite scene does not draw** (the traffic bodies, tram
-  cars, bridges' ribs, the data layers, the designs): the probe reads
-  whatever is in the scene, so phase 2's census over the whole site can
-  hold them to the limits with the same call; until then
+- **The clip distances** (and `clay|double|niches`, which needs the
+  walk/fly camera on a two-sided clay and does not come about): the
+  probe does not read under a held Ausschnitt (above). By the
+  specification a cut's clip distances (up to four) take one output and
+  one location on the vertex side, where the clay has three spare
+  outputs — the fragment side's two stay the tighter bound; unmeasured.
+- **A picture style's swap** (Papier, Strich, Schwarzplan): the
+  buildings are drawn with `scene.overrideMaterial`, a second lit build
+  on the clay's layout with varyings of its own. The probe reads
+  `object.material`. three's hook would read the override, but once its
+  compile has resolved, and the swap (`paper-scene.ts` `swapped`) holds
+  the override for a compile's synchronous half only; held over the
+  await, a frame would draw as paper. Unread — a read needs either a
+  swap that can be held with the frames held, or the override's texts
+  from a build of its own.
+- **Outside the scene**: the nameplate's overlay scene, the outline's
+  mask and blur, the post passes are not under the root the probe walks.
+- **Builds the lite scene does not draw** — **the traffic bodies**, the
+  layer that once vanished, first of all; tram cars, bridges' ribs, the
+  data layers, the designs: the probe reads whatever is in the scene, so
+  **phase 2's census over the whole site holds them to the limits with
+  the same call** (switch the data layers on for it); until then
   `traffic-layer.test.ts` keeps its own count.
 - **The shadow pass's builds** are not read (`getShaderAsync` reads the
   main pass's build).
-- Seen beside the work, not caused by it: entering Modell headless logs
+- **For phase 2's census**: the rows are `compileRepresentatives` of the
+  scene, drawn or not — a drawable hidden for good is a row, and the
+  probe compiles it to read it (in the lite scene nothing new was built:
+  the boot compiles the whole scene; over a flight this may differ, so
+  compare `info.memory.programs` around the call). A tile that leaves
+  during the read is counted as `left` and never compiled.
+- Seen beside the work, not caused by it: entering Modell **before any
+  inquiry** (no nameplate built yet) headless logs
   three's `Async render pipeline creation failed
   (renderPipeline_nameplate-shadow_…): The fragment stage has fewer
   output components (2) than the color format` once, with and without
-  the probe.
+  the probe — in each of four such runs here; the shard's order, with
+  the inquiry tests before the Modell test, did not log it. The spec's
+  error watch fails on it, so `--grep "Modell"` alone is red.

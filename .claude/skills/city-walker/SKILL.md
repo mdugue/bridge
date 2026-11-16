@@ -416,7 +416,9 @@ and therefore what keeps builds out of frames:
   test counts the buffers of every build the lite scene draws with
   (`handle.getPipelineBudget()`, pipeline-budget.ts: the attributes
   three's vertex stage names, by the geometry's distinct buffers); a
-  layer the lite scene does not draw tests its own count.
+  layer the lite scene does not draw — traffic, the very one that
+  vanished, the data layers, the designs — tests its own count
+  (`traffic-layer.test.ts`).
 - **Points are 1 px on WebGPU**, whatever their size. The lamp halos are
   billboard quads: an `Instances` set under a `PointsNodeMaterial`.
 - **No tone mapping.** The output node is `renderOutput(…, NoToneMapping,
@@ -454,9 +456,13 @@ More traps, each found the hard way:
   (`CLAY_SPARE_VARIABLES`: 2, and 3 under Modell's parallel camera,
   whose direction to the eye needs no varying). A change that takes one
   edits that number and says so in its PR; run the test at every bump
-  of three, whose lighting and fog pass variables too. The probe does
-  not read under a held cut (the Ausschnitt), so the clip distances'
-  one is not counted.
+  of three, whose lighting and fog pass variables too. It reads the
+  main pass's build of each drawable's own material, under the walk/fly
+  camera and in Modell (the Schnitt's `clay|double` too). Not read:
+  under a held Ausschnitt (so the clip distances' one is not counted),
+  a picture style's override (Papier, Strich, Schwarzplan), the shadow
+  pass, and what is drawn outside the scene (the nameplate, the
+  outline's mask) — `docs/rendering.md`, "Verifying a change".
 - **A TSL `select` is an if/else in the shader.** three builds each arm in
   its own scope: what an arm builds first is built again where it is used
   outside, and a derivative or texture read first built in an arm runs in

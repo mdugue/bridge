@@ -206,8 +206,11 @@ export interface PostStack {
    * (lib/city/wgsl-budget.ts, plan 094). A debug read, through three's
    * public `renderer.debug.getShaderAsync`, which runs a compile — so it
    * takes its turn like one, after the drawable's own compile. Null for a
-   * drawable whose tile left, and while a cut is held (the read would
-   * look the drawable up outside its clipping group).
+   * drawable whose geometry was disposed while the read waited or ran (its
+   * tile left: compiling it would upload buffers nothing frees again),
+   * and while a cut is held (the read would look the drawable up outside
+   * its clipping group). It reads the drawable's own material: not a
+   * swap's override (paper-scene.ts), not the shadow pass's build.
    */
   shadersOf: (
     object: Object3D,
@@ -1416,9 +1419,16 @@ export function createPostStack(
     anchorCount: () => anchors.count(),
     shadersOf: async (object, view = camera) => {
       let shaders: Awaited<ReturnType<typeof shadersNow>> = null;
-      await compileInTurn(renderer, async () => {
-        shaders = await shadersNow(object, view);
-      });
+      // heard from now on: a tile that leaves while the read waits for its
+      // turn, or between its builds, is `left`
+      const unwatch = watchGone(drawablesOf(object));
+      try {
+        await compileInTurn(renderer, async () => {
+          shaders = await shadersNow(object, view);
+        });
+      } finally {
+        unwatch();
+      }
       return shaders;
     },
     holdCut: async (group, roots, view) => {
