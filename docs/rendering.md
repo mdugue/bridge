@@ -58,7 +58,15 @@ tile's object texture, while the live look uniforms are shared nodes
 crowns, trunks, hedges, fountains, furniture, wires — is one node material
 for the whole scene (`three-utils.ts` `sceneMaterial`), and instanced layers
 draw through `Instances` (`instancing.ts`) so every set with the same
-material shares one node build. Everything a tile adds —
+material shares one node build. A set is placed by sixteen floats an
+instance, written on the CPU; plan 090's phase 0 gave it a second way in,
+behind QA knobs only: a table of twenty-byte stand records
+(`lib/city/stand-record.ts`, `Instances.ofStands`) whose bytes are the
+instance buffer and whose matrix the vertex stage composes
+(`?stands=record`: a coarse level's crowns), and rails as a table of
+segments an instanced profile expands (`lib/city/rail-table.ts`,
+`rail-segments.ts`; `?rails=table`). What three's public API does with
+such a record, and the numbers, are in plan 090's *Findings*. Everything a tile adds —
 material, object texture, BVH, splat, water, dressing — is disposed with it
 (`disposeTile` in `tile-stream.ts`).
 
@@ -1905,7 +1913,10 @@ the table once loaded and 20 s later (`console.table`). The long tasks
 (`longtask`) and the crash trail's `heapMB` are the page's alone: a
 worker reports neither, so they are counted only with `?thread=main`
 (Chromium; Safari reports no long tasks). The names are a contract for
-later perf work: add one rather than rename one. None of it reaches the
+later perf work: add one rather than rename one. A dressing's builders
+are counted apart (`dressing:trees`, `dressing:rail`, `dressing:tram`, …;
+`dressing-figures.ts`): the time inside each builder's own slices, the
+pauses between them left out. None of it reaches the
 crash trail or the reports — a tile's id names where the player was.
 
 **The renderer itself: `?inspect=1`** (`inspector.ts`) puts three's own

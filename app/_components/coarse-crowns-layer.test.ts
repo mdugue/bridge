@@ -170,3 +170,62 @@ test("a coarse pine stands on the pine's crown, high on its stem, as its fine tr
     }
   }
 });
+
+test("crowns drawn from stand records stand where the matrices put them (plan 090's spike)", () => {
+  const crowns: CoarseCrown[] = [
+    ...Array.from({ length: 120 }, (_, i): CoarseCrown => ({
+      kind: "canopy",
+      x: -300 + (i % 12) * 61.7,
+      z: 200 + Math.floor(i / 12) * 43.3,
+      rot: i * 0.37,
+      s: 1 + (i % 5) * 0.6,
+      w: 1.2 + (i % 3),
+      base: i % 4 === 0 ? undefined : 2.5,
+      ...(i % 6 === 0 ? { evergreen: true } : {}),
+    })),
+    {
+      kind: "register",
+      x: 12.3,
+      z: 45.6,
+      rot: 2,
+      colour: "leaf",
+      ext: { crownBase: 3, crownTop: 14, crownWidth: 8 },
+      genus: 3,
+      jitter: 0.5,
+    },
+  ];
+  const hilly = {
+    ...ctx,
+    heightAt: (x: number, y: number) => 100 + Math.sin(x / 50) * 9 + y * 1e-6,
+  };
+  const byMatrix = sets(buildCoarseCrowns(crowns, hilly).group);
+  const byRecord = sets(
+    buildCoarseCrowns(crowns, { ...hilly, standRecord: true }).group
+  );
+  expect(byRecord.map((s) => s.drawCount)).toEqual(
+    byMatrix.map((s) => s.drawCount)
+  );
+  // every set a view of one buffer of the tile's records, in its order
+  const buffers = new Set(byRecord.map((s) => s.stands?.buffer.array.buffer));
+  expect(buffers.size).toBe(1);
+  expect(byRecord.every((s) => !s.geometry.hasAttribute("iMat0"))).toBe(true);
+  const a = new Matrix4();
+  const b = new Matrix4();
+  for (const [k, set] of byMatrix.entries()) {
+    for (let i = 0; i < set.drawCount; i += 1) {
+      set.getMatrixAt(i, a);
+      byRecord[k].getMatrixAt(i, b);
+      for (let e = 0; e < 16; e += 1) {
+        // the place within a step (3 cm), turn and scale within a
+        // thousandth of the crown
+        expect(Math.abs(a.elements[e] - b.elements[e])).toBeLessThan(
+          e >= 12 ? 0.017 : 0.02
+        );
+      }
+    }
+    // the tints are painted as before
+    expect(byRecord[k].instanceTints?.array).toEqual(
+      set.instanceTints?.array as Float32Array
+    );
+  }
+});

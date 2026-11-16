@@ -36,6 +36,7 @@ import {
   run,
   viewerReads,
 } from "./ledger";
+import { measureDressing } from "./ledger-dressing";
 
 /* -------------------------------------------- the viewer's rule, and ours */
 
@@ -534,6 +535,10 @@ test("a write, then a check that holds; a second write is the same file", async 
   expect(ledger).toEqual({
     ...measure(SITE, root),
     rasters: await measureRasters(root),
+    dressing: measureDressing(SITE, root, publishedFiles, {
+      committed: null,
+      today: "2026-11-16",
+    }),
     dated: "2026-11-16",
   });
   expect(Object.keys(ledger).slice(0, 5)).toEqual([
