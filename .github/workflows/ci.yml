@@ -134,6 +134,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun scripts/prepare-sites.ts dresden > bake.log 2>&1 || (tail -50 bake.log; exit 1)
       - run: bun scripts/diag-city-bytes.ts dresden --full | tee diag.txt
+      - run: sha1sum public/data/dresden/manifest.json && ls public/data/dresden | wc -l
       - uses: actions/upload-artifact@v7
         with:
           name: diag

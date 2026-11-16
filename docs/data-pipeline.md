@@ -1004,6 +1004,24 @@ stale keys dropped first — never the entry itself nor another process's
 part file — so processes baking side by side never read half an entry nor
 delete each other's.
 
+**The machine is not an input.** A bake's bytes are a function of the
+tree: the same commit bakes the same files on a desk, on CI's runner and
+on the host's builder, which is what lets a file be published once under
+its content hash and checked against what git bakes (plan 088). What
+would make the machine an input is the maths: in Bun `Math.hypot`, the
+trigonometric, exponential and power functions (and `**` to anything but
+a whole literal) are the C library's, whose last bits differ between
+glibc versions and between processors it gives its FMA variants and
+those it does not — and a corner test, a weld of equal vertices or a
+smallest rectangle that reads such a value decides differently (Dresden's
+near buildings differed by one to three vertices a tile between glibc
+2.39 and 2.43, 2026-11-16). So every module `prepare-data.ts` reaches
+computes with `PMath` (`lib/city/portable-math.ts`): the same functions
+in the operations IEEE 754 rounds exactly. `scripts/bake-entries.test.ts`
+holds those modules to it, `lib/city/portable-math.test.ts` pins the
+functions' bits. The gzip (libdeflate, level 9) and meshopt's codecs gave
+the same bytes on both machines.
+
 **Shared cache.** Vercel restores each branch's build cache from that
 branch's last build (production's for a new branch), so branches rebased
 onto the same main each baked the same entries cold, side by side. Behind
