@@ -5,7 +5,8 @@
  * (`rasterFiles`), how its texture is laid out (`RASTER_KINDS`' looks) and
  * what it weighs on the GPU (`textureBytes`, `splatScaleFor`), and hands
  * the figures to lib/city/ledger-rasters.ts. scripts/ledger.ts writes the
- * result into `qa/ledger.json`'s `rasters` section, every built site.
+ * result into `qa/ledger.json`'s `rasters` section, every site git tracks
+ * (`trackedSites`), each of which must be built.
  */
 import { existsSync } from "node:fs";
 import nodePath from "node:path";
@@ -46,6 +47,7 @@ import { tileArtifacts, TERRAIN_RASTER_KINDS } from "../lib/city/tile";
 import type { TileArtifactKind } from "../lib/city/tile";
 import type { ContentExtras } from "../lib/city/tileset";
 import { SITES } from "../sites";
+import { trackedFiles } from "./git-tracked";
 import type { SiteId } from "../sites";
 
 // the ledger's kinds are the viewer's, both ways
@@ -78,14 +80,35 @@ export const CPU_DECODES: readonly CpuDecode[] = [
 /** The module that decodes a raster to upload it. */
 export const UPLOAD_PATH = "app/_components/raster-upload.ts";
 
-/** The sites a build serves: every one whose data is ready, as
- *  scripts/prepare-sites.ts picks them. */
-export function readySites(root = process.cwd()): SiteId[] {
+/** The sites a build serves: every one whose data is ready under `root`,
+ *  as scripts/prepare-sites.ts picks them (what lies on the disk, fetched
+ *  or committed: the census's flight, never a gated figure). */
+export function readySites(root: string): SiteId[] {
   // (the report names its files from the repository's root)
   const exists = (file: string) => existsSync(nodePath.resolve(root, file));
   return (Object.keys(SITES) as SiteId[]).filter((id) =>
     siteReport(SITES[id], exists).every((t) => t.next === "ready")
   );
+}
+
+/**
+ * The ledger's sites: every configured site whose data git tracks under
+ * `root` (`data/<site>/`), in the sites' order. Tracked, not what lies on
+ * the disk: a site fetched here but never committed (`data/` is ignored
+ * but for the committed sites) is no site of the ledger, whose figures are
+ * functions of the tree. Each must be built — the sections read its
+ * published files, and one not built is an error naming it
+ * (`publishedFiles`). Read from git's index (`trackedFiles`): a staged,
+ * uncommitted site counts. None where `root` is no work tree; a git that
+ * fails otherwise is an error.
+ */
+export function trackedSites(root: string): SiteId[] {
+  const tracked = new Set(
+    trackedFiles(root, "data").map(
+      (path) => /^data\/(?<site>[^/]+)\//u.exec(path)?.groups?.site
+    )
+  );
+  return (Object.keys(SITES) as SiteId[]).filter((id) => tracked.has(id));
 }
 
 /** Which viewer kind an extras key names (as its file, a twin, or its

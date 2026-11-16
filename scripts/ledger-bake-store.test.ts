@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
+import { gitEnv } from "./git-tracked";
 import { measureBakeStore, trackedBaked } from "./ledger-bake-store";
 
 const write = (root: string, path: string, text: string) => {
@@ -53,7 +54,7 @@ function commit(root: string): void {
     ["init", "-q"],
     ["add", "-A"],
   ]) {
-    const done = Bun.spawnSync(["git", ...args], { cwd: root });
+    const done = Bun.spawnSync(["git", ...args], { cwd: root, env: gitEnv() });
     expect(done.exitCode).toBe(0);
   }
 }

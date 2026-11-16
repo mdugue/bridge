@@ -10,6 +10,7 @@ import nodePath from "node:path";
 import { bakeStoreLedger, KeyOrders } from "../lib/city/ledger-bake-store";
 import type { BakeStoreLedger } from "../lib/city/ledger-bake-store";
 import type { SourceText } from "../lib/city/source-lexer";
+import { trackedFiles } from "./git-tracked";
 
 /** Where the bakes lie, and where a site's baked files do. */
 const BAKE_ROOT = "pipeline/bake";
@@ -38,26 +39,16 @@ const BAKED_FILE = /^data\/(?<site>[^/]+)\/(?:dlm|dop)\/(?<name>[^/]+)$/u;
  * not what lies on the disk: a site that is fetched and baked but not
  * committed (`data/` is ignored but for the committed sites) and a file an
  * interrupted bake left behind are no figure of the tree. None where
- * `root` is no work tree.
+ * `root` is no work tree; a git that fails otherwise is an error
+ * (`trackedFiles`).
  */
 export function trackedBaked(
   root: string
 ): { name: string; path: string; site: string }[] {
-  const listed = Bun.spawnSync(["git", "ls-files", "-z", "--", DATA_ROOT], {
-    cwd: root,
-    stdout: "pipe",
-    stderr: "ignore",
+  return trackedFiles(root, DATA_ROOT).flatMap((path) => {
+    const found = BAKED_FILE.exec(path)?.groups;
+    return found ? [{ site: found.site, name: found.name, path }] : [];
   });
-  if (listed.exitCode !== 0) {
-    return [];
-  }
-  return listed.stdout
-    .toString()
-    .split("\u0000")
-    .flatMap((path) => {
-      const found = BAKED_FILE.exec(path)?.groups;
-      return found ? [{ site: found.site, name: found.name, path }] : [];
-    });
 }
 
 /** A feature file's kind: its name before the tile's id. */
