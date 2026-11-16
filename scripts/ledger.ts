@@ -9,17 +9,31 @@
  *
  *   bun scripts/ledger.ts           # write qa/ledger.json
  *   bun scripts/ledger.ts --check   # name each figure that differs, exit 1
+ *   … --browser                     # with the figures a browser produces
  *
  * It reads public/data/<site>/, so a build (or `bun scripts/prepare-sites.ts
- * dresden`) comes first.
+ * dresden`) comes first. `--browser` (phase 2) also runs e2e/ledger.spec.ts
+ * against the NEXT_PUBLIC_POC_DEBUG=1 production build (a running server is
+ * reused, else Playwright builds and starts one): the first load's
+ * JavaScript and a phone's tile bytes, gated within their tolerance, and
+ * the timings, recorded only. Without it, the committed browser figures and
+ * timings are kept as they are and not compared.
  */
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { cpus } from "node:os";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { cpus, tmpdir } from "node:os";
 import nodePath from "node:path";
 import { gunzipSync } from "node:zlib";
 import { RASTER_KINDS, rasterFiles } from "../app/_components/tile-rasters";
 import type { RasterKind } from "../app/_components/tile-rasters";
 import {
+  browserLedger,
   bytesLedger,
   datedLedger,
   distinctExtensions,
@@ -38,6 +52,8 @@ import {
   wireBytes,
 } from "../lib/city/ledger";
 import type {
+  BrowserFigures,
+  BrowserReading,
   ByLevel,
   Counters,
   Ledger,
@@ -45,6 +61,7 @@ import type {
   RasterReads,
   Recorded,
   SourceText,
+  Timings,
 } from "../lib/city/ledger";
 import {
   ASK_KINDS,
@@ -224,12 +241,81 @@ export function measure(site: string): {
   };
 }
 
-function main(check: boolean): void {
+/** Runs e2e/ledger.spec.ts and returns what the browser read. */
+function readBrowser(): BrowserReading {
+  const dir = mkdtempSync(nodePath.join(tmpdir(), "ledger-"));
+  const out = nodePath.join(dir, "browser.json");
+  try {
+    const run = Bun.spawnSync(
+      ["bunx", "playwright", "test", "e2e/ledger.spec.ts", "--reporter=line"],
+      {
+        cwd: ROOT,
+        env: { ...process.env, LEDGER: "1", LEDGER_OUT: out },
+        // Playwright's progress to stderr: stdout is the ledger's report
+        stdio: ["ignore", process.stderr.fd, "inherit"],
+      }
+    );
+    if (run.exitCode !== 0 || !existsSync(out)) {
+      throw new Error(
+        `ledger: the browser's read failed (e2e/ledger.spec.ts, exit ${run.exitCode})`
+      );
+    }
+    return JSON.parse(readFileSync(out, "utf-8")) as BrowserReading;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** The browser's figures for `site`: read now, or the committed ones. */
+function browserFigures(
+  site: string,
+  read: boolean,
+  committed: Partial<Ledger> | null
+): { figures?: BrowserFigures; timings?: Timings } {
+  if (!read) {
+    return { figures: committed?.browser, timings: committed?.timings };
+  }
+  const { files } = publishedFiles(site);
+  const logicalOf = new Map(
+    Object.entries(files).map(([logical, served]) => [served, logical])
+  );
+  return browserLedger(
+    readBrowser(),
+    (served) => logicalOf.get(served),
+    machine(),
+    new Date().toISOString().slice(0, 10)
+  );
+}
+
+/** The timings as `--check` prints them: one line a category and side. */
+function timingReport(timings: Timings): string {
+  const rows = (["desktop", "phone"] as const).flatMap((side) =>
+    Object.entries(timings[side]).map(
+      ([category, t]) =>
+        `recorded, not compared: ${side} ${category}: ${t.count}× ${t.totalMs} ms (max ${t.maxMs})\n`
+    )
+  );
+  return `${rows.join("")}recorded on: ${timings.machine}, ${timings.adapter}\n`;
+}
+
+function main(check: boolean, browser: boolean): void {
   const committed: unknown = existsSync(LEDGER_FILE)
     ? JSON.parse(readFileSync(LEDGER_FILE, "utf-8"))
     : null;
-  const { gated, recorded } = measure(REFERENCE_SITE);
+  const measured = measure(REFERENCE_SITE);
+  const { recorded } = measured;
+  const read = browserFigures(
+    REFERENCE_SITE,
+    browser,
+    committed as Partial<Ledger> | null
+  );
+  const gated = read.figures
+    ? { ...measured.gated, browser: read.figures }
+    : measured.gated;
   if (check) {
+    if (read.timings && browser) {
+      process.stdout.write(timingReport(read.timings));
+    }
     const moved = ledgerDiff(committed ?? {}, gated);
     for (const line of moved) {
       process.stdout.write(`differs: ${line}\n`);
@@ -253,7 +339,7 @@ function main(check: boolean): void {
     process.stdout.write(
       moved.length === 0
         ? "qa/ledger.json holds\n"
-        : `${moved.length} figures differ: run bun scripts/ledger.ts and commit qa/ledger.json\n`
+        : `${moved.length} figures differ: run bun scripts/ledger.ts${moved.some((m) => m.startsWith("browser.")) ? " --browser" : ""} and commit qa/ledger.json\n`
     );
     if (moved.length > 0) {
       // the gated JSON bytes are zlib's on CI's platform: a platform
@@ -266,11 +352,18 @@ function main(check: boolean): void {
     return;
   }
   const today = new Date().toISOString().slice(0, 10);
-  const ledger = datedLedger(gated, recorded, committed, today, machine());
+  const ledger = datedLedger(
+    gated,
+    recorded,
+    committed,
+    today,
+    machine(),
+    read.timings
+  );
   writeFileSync(LEDGER_FILE, `${JSON.stringify(ledger, null, 2)}\n`);
   process.stdout.write(`qa/ledger.json (${ledger.dated})\n`);
 }
 
 if (import.meta.main) {
-  main(process.argv.includes("--check"));
+  main(process.argv.includes("--check"), process.argv.includes("--browser"));
 }

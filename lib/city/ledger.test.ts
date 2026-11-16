@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
 import { gzipSync } from "node:zlib";
 import {
+  browserLedger,
   bytesLedger,
   datedLedger,
   distinctExtensions,
   extensionOf,
+  firstLoadFigures,
   functionLines,
   gatedWire,
   glbFigures,
@@ -12,13 +14,21 @@ import {
   ledgerDiff,
   ledgerTiles,
   lineCount,
+  phoneTiles,
   seamModules,
   setFigures,
   tileSet,
+  timingRows,
   upstreamWorkarounds,
   wireBytes,
 } from "./ledger";
-import type { Ledger, RasterReads, Recorded } from "./ledger";
+import type {
+  BrowserFigures,
+  BrowserReading,
+  Ledger,
+  RasterReads,
+  Recorded,
+} from "./ledger";
 import { buildTileset } from "./tileset";
 import type { BakedTile, TerrainFiles } from "./tileset";
 
@@ -367,4 +377,175 @@ test("the date holds while the gated figures do; the record while its own do", (
   expect(other.dated).toBe("2026-11-16");
   expect(other.recorded).toMatchObject({ machine: "another", read: today });
   expect(datedLedger(fresh, figures, null, today, "b").dated).toBe(today);
+});
+
+/* ---------------------------------------------------------------- browser */
+
+test("the first load: every file, and the workers' share", () => {
+  expect(
+    firstLoadFigures([
+      { gzip: 100, worker: false },
+      { gzip: 50, worker: true },
+      { gzip: 25, worker: true },
+    ])
+  ).toEqual({ files: 3, gzip: 175, workers: { files: 2, gzip: 75 } });
+});
+
+test("a phone's tiles by logical name; the buildings counted, not weighed", () => {
+  const logical = new Map([
+    ["terrain_t_l1.abc.glb.gz", "terrain_t_l1.glb.gz"],
+    ["city_t.def.glb.gz", "city_t.glb.gz"],
+  ]);
+  expect(
+    phoneTiles(
+      [
+        { uri: "./terrain_t_l1.abc.glb.gz", bytes: 300 },
+        { uri: "city_t.def.glb.gz", bytes: 9000 },
+        { uri: "https://x/data/tileset-spawn.0a1b.json?v=1", bytes: 7 },
+        { uri: "odd.bin", bytes: 5 },
+      ],
+      (served) => logical.get(served)
+    )
+  ).toEqual({
+    bytes: 305,
+    contents: 4,
+    machineBound: 2,
+    tiles: { "odd.bin": 5, "terrain_t_l1.glb.gz": 300 },
+  });
+});
+
+test("the timings keep the boot, a tile's dressing and compile, the long tasks", () => {
+  expect(
+    Object.keys(
+      timingRows({
+        "boot:tileset": { count: 1, totalMs: 12.345, maxMs: 12.345 },
+        "tile:bvh": { count: 3, totalMs: 9, maxMs: 4 },
+        "tile:compile": { count: 2, totalMs: 40, maxMs: 30 },
+        "dressing:build": { count: 2, totalMs: 40, maxMs: 30 },
+        "dressing:queue-wait": { count: 2, totalMs: 40, maxMs: 30 },
+        longtask: { count: 0, totalMs: 0, maxMs: 0 },
+      })
+    )
+  ).toEqual(["boot:tileset", "dressing:build", "longtask", "tile:compile"]);
+  expect(
+    timingRows({ "boot:frame": { count: 1, totalMs: 1.26, maxMs: 1.24 } })
+  ).toEqual({ "boot:frame": { count: 1, totalMs: 1.3, maxMs: 1.2 } });
+});
+
+const READING: BrowserReading = {
+  adapter: "Google / swiftshader",
+  browser: "chromium 140",
+  firstLoad: [
+    { url: "/_next/static/chunks/b.js", gzip: 1000, worker: true },
+    { url: "/_next/static/chunks/a.js", gzip: 2000, worker: false },
+  ],
+  phone: {
+    bytes: 1300,
+    held: { geometries: 2, textures: 1 },
+    tiles: [
+      { uri: "terrain_t_l1.abc.glb.gz", bytes: 300 },
+      { uri: "city_t.def.glb.gz", bytes: 1000 },
+    ],
+  },
+  timings: {
+    desktop: { "boot:loaded": { count: 1, totalMs: 900, maxMs: 900 } },
+    phone: { "boot:loaded": { count: 1, totalMs: 1200, maxMs: 1200 } },
+  },
+};
+
+test("the browser's reading: figures gated, the rest recorded", () => {
+  const { figures, timings } = browserLedger(
+    READING,
+    () => {},
+    "here",
+    "2027-01-01"
+  );
+  expect(figures.firstLoad.gzip).toBe(3000);
+  expect(figures.phone).toMatchObject({ bytes: 300, machineBound: 1 });
+  expect(figures.phone).not.toHaveProperty("held");
+  expect(timings).toMatchObject({
+    machine: "here",
+    read: "2027-01-01",
+    phoneMachineBound: { "city_t.def.glb.gz": 1000 },
+    phoneHeld: { geometries: 2, textures: 1 },
+  });
+  expect(timings.firstLoad.map((f) => f.url)).toEqual([
+    "/_next/static/chunks/a.js",
+    "/_next/static/chunks/b.js",
+  ]);
+});
+
+const BROWSER: BrowserFigures = {
+  firstLoad: { files: 2, gzip: 100_000, workers: { files: 1, gzip: 40_000 } },
+  phone: {
+    bytes: 300,
+    contents: 2,
+    machineBound: 1,
+    tiles: { t: 300 },
+  },
+};
+
+test("the first load's bytes hold within 0.5 %, its files and a tile's bytes exactly", () => {
+  const was = { ...LEDGER, browser: BROWSER };
+  const within = {
+    ...was,
+    browser: {
+      ...BROWSER,
+      firstLoad: { ...BROWSER.firstLoad, gzip: 100_500 },
+    },
+  };
+  expect(ledgerDiff(was, within)).toEqual([]);
+  const over = {
+    ...was,
+    browser: {
+      firstLoad: {
+        files: 3,
+        gzip: 100_501,
+        workers: { files: 1, gzip: 39_799 },
+      },
+      phone: { ...BROWSER.phone, tiles: { t: 301 } },
+    },
+  };
+  expect(ledgerDiff(was, over)).toEqual([
+    "browser.firstLoad.files: 2 → 3",
+    "browser.firstLoad.gzip: 100000 → 100501",
+    "browser.firstLoad.workers.gzip: 40000 → 39799",
+    "browser.phone.tiles.t: 300 → 301",
+  ]);
+  // the timings are never compared
+  expect(
+    ledgerDiff(was, {
+      ...was,
+      timings: { ...browserLedger(READING, () => {}, "a", "b").timings },
+    })
+  ).toEqual([]);
+});
+
+test("a read within the tolerance keeps the committed browser figures", () => {
+  const { dated: _, recorded: __, ...fresh } = LEDGER;
+  const { machine: ___, read: ____, ...figures } = RECORDED;
+  const was = { ...LEDGER, browser: BROWSER };
+  const near = {
+    ...BROWSER,
+    firstLoad: { ...BROWSER.firstLoad, gzip: 100_200 },
+  };
+  const kept = datedLedger(
+    { ...fresh, browser: near },
+    figures,
+    was,
+    "2027-01-01",
+    "here"
+  );
+  expect(kept.browser).toEqual(BROWSER);
+  expect(kept.dated).toBe("2026-11-16");
+  const far = { ...BROWSER, phone: { ...BROWSER.phone, bytes: 301 } };
+  const moved = datedLedger(
+    { ...fresh, browser: far },
+    figures,
+    was,
+    "2027-01-01",
+    "here"
+  );
+  expect(moved.browser).toEqual(far);
+  expect(moved.dated).toBe("2027-01-01");
 });

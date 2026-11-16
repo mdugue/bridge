@@ -26,7 +26,7 @@
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
 - **Status**: IN PROGRESS — phase 1 (the ledger) built 2026-11-16;
-  phases 2–6 TODO
+  phase 2 (the browser's figures) built 2026-11-16; phases 3–6 TODO
 
 ## Why this matters
 
@@ -263,6 +263,23 @@ unless `SHOTS=1`), run by `bun run ledger -- --browser` against the
    `scene-server.ts`, `scene-client.ts`), returning
    `streamTimings.summary()`. Record the `boot:*` marks,
    `dressing:build`, `tile:compile` and `longtask`.
+
+**Built (2026-11-16).** `bun run ledger -- --browser` runs
+`e2e/ledger.spec.ts` and writes `browser` (gated) and `timings`
+(recorded, in `UNCOMPARED`) into `qa/ledger.json`; without the flag both
+stay as committed. `getTimings` needed no protocol change: a value call
+is a name in `ASKED` (`scene-client.ts`), served generically.
+`getGpuDebug().tileCache` gained `tiles` (each content's URI and exact
+bytes) beside its rounded `sizes`. The workers' scripts are told apart
+by the page's resource timing (Playwright names a frame for a worker's
+fetch too). The buildings' glTF in a phone's cache are counted, their
+bytes recorded, as in phase 1 (`MACHINE_BOUND`). `held` is recorded,
+not gated: two reads of one build differed (attributes 332 against 325,
+textures 44 against 35). `longtask` has no row:
+the scene counts long tasks only with `?trace=1`. Six reads over two
+builds of the same source gave the gated figures exactly. CI's build-check shard reads the
+browser with the check wherever its e2e half runs. Figures:
+`docs/data-pipeline.md`, "What a browser reads".
 
 Gated: 1 and 2, with a tolerance each figure names (bytes of JavaScript
 ±0.5 %, a tile's bytes exact). **Recorded only**: 3. On SwiftShader a

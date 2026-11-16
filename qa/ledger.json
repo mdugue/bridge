@@ -251,12 +251,31 @@
       "files": 27,
       "lines": 18769
     },
-    "bootAppLines": 3088,
+    "bootAppLines": 3093,
     "bakeSeamModules": {
       "matching": 52,
       "of": 77
     },
     "upstreamWorkarounds": 8
+  },
+  "browser": {
+    "firstLoad": {
+      "files": 42,
+      "gzip": 1089259,
+      "workers": {
+        "files": 10,
+        "gzip": 33307
+      }
+    },
+    "phone": {
+      "bytes": 119331139,
+      "contents": 4,
+      "machineBound": 2,
+      "tiles": {
+        "terrain_33412_5656_2_sn_l0.glb.gz": 94610268,
+        "terrain_33412_5656_2_sn_l1.glb.gz": 24720871
+      }
+    }
   },
   "recorded": {
     "note": "Recorded, never compared: the buildings' vertices and decoded bytes, and the full wire bytes with the buildings' glTF and the tileset JSONs in them; the near buildings' weld differs by machine until PR #310.",
@@ -549,6 +568,395 @@
           "accessorBytes": 5222664
         }
       }
+    }
+  },
+  "timings": {
+    "note": "Recorded, never compared: timings depend on the machine drawn (SwiftShader on a CI runner varies by a factor of two), the chunk names on every change, three's info.memory on the moment it is read. Read by `bun run ledger -- --browser` at /dresden?scene=lite, a NEXT_PUBLIC_POC_DEBUG=1 production build, at `ready`.",
+    "machine": "Intel(R) Xeon(R) Processor @ 2.10GHz ×4, linux-x64, Bun 1.4.4",
+    "read": "2026-11-16",
+    "browser": "chromium 153.0.8010.12",
+    "adapter": "google / swiftshader",
+    "desktop": {
+      "boot:first-shadow-frame": {
+        "count": 1,
+        "totalMs": 8.6,
+        "maxMs": 8.6
+      },
+      "boot:frame": {
+        "count": 8,
+        "totalMs": 634.3,
+        "maxMs": 507
+      },
+      "boot:light-to-veil": {
+        "count": 1,
+        "totalMs": 608.8,
+        "maxMs": 608.8
+      },
+      "boot:light-wait": {
+        "count": 1,
+        "totalMs": 3000.3,
+        "maxMs": 3000.3
+      },
+      "boot:page-to-viewer": {
+        "count": 1,
+        "totalMs": 1808,
+        "maxMs": 1808
+      },
+      "boot:place": {
+        "count": 1,
+        "totalMs": 367.2,
+        "maxMs": 367.2
+      },
+      "boot:renderer-init": {
+        "count": 1,
+        "totalMs": 663.9,
+        "maxMs": 663.9
+      },
+      "boot:scene-compile": {
+        "count": 1,
+        "totalMs": 3000.2,
+        "maxMs": 3000.2
+      },
+      "boot:setup": {
+        "count": 1,
+        "totalMs": 162.4,
+        "maxMs": 162.4
+      },
+      "boot:spawn-wait": {
+        "count": 1,
+        "totalMs": 5797.9,
+        "maxMs": 5797.9
+      },
+      "boot:tileset": {
+        "count": 1,
+        "totalMs": 0.1,
+        "maxMs": 0.1
+      },
+      "boot:veil-to-loaded": {
+        "count": 1,
+        "totalMs": 4323.1,
+        "maxMs": 4323.1
+      },
+      "dressing:build": {
+        "count": 2,
+        "totalMs": 1051.3,
+        "maxMs": 790.8
+      },
+      "tile:compile": {
+        "count": 4,
+        "totalMs": 12057.8,
+        "maxMs": 3047.5
+      }
+    },
+    "phone": {
+      "boot:first-shadow-frame": {
+        "count": 1,
+        "totalMs": 170.6,
+        "maxMs": 170.6
+      },
+      "boot:frame": {
+        "count": 8,
+        "totalMs": 666.4,
+        "maxMs": 367.1
+      },
+      "boot:light-to-veil": {
+        "count": 1,
+        "totalMs": 604.6,
+        "maxMs": 604.6
+      },
+      "boot:light-wait": {
+        "count": 1,
+        "totalMs": 3000.3,
+        "maxMs": 3000.3
+      },
+      "boot:page-to-viewer": {
+        "count": 1,
+        "totalMs": 1664.2,
+        "maxMs": 1664.2
+      },
+      "boot:place": {
+        "count": 1,
+        "totalMs": 434.9,
+        "maxMs": 434.9
+      },
+      "boot:renderer-init": {
+        "count": 1,
+        "totalMs": 136.3,
+        "maxMs": 136.3
+      },
+      "boot:scene-compile": {
+        "count": 1,
+        "totalMs": 3000.2,
+        "maxMs": 3000.2
+      },
+      "boot:setup": {
+        "count": 1,
+        "totalMs": 109.3,
+        "maxMs": 109.3
+      },
+      "boot:spawn-wait": {
+        "count": 1,
+        "totalMs": 3987.5,
+        "maxMs": 3987.5
+      },
+      "boot:tileset": {
+        "count": 1,
+        "totalMs": 0,
+        "maxMs": 0
+      },
+      "boot:veil-to-loaded": {
+        "count": 1,
+        "totalMs": 4155.2,
+        "maxMs": 4155.2
+      },
+      "dressing:build": {
+        "count": 2,
+        "totalMs": 887.7,
+        "maxMs": 658.5
+      },
+      "tile:compile": {
+        "count": 4,
+        "totalMs": 10847.4,
+        "maxMs": 3022.2
+      }
+    },
+    "phoneCacheBytes": 158979156,
+    "phoneHeld": {
+      "attributes": 605,
+      "attributesSize": 44268265,
+      "geometries": 230,
+      "indexAttributes": 55,
+      "indexAttributesSize": 33497178,
+      "indirectStorageAttributes": 0,
+      "indirectStorageAttributesSize": 0,
+      "programs": 121,
+      "programsSize": 1622022,
+      "readbackBuffers": 0,
+      "readbackBuffersSize": 0,
+      "renderTargets": 8,
+      "storageAttributes": 0,
+      "storageAttributesSize": 0,
+      "textures": 35,
+      "texturesSize": 71405161,
+      "uniformBuffers": 295,
+      "uniformBuffersSize": 73664,
+      "total": 150866290
+    },
+    "firstLoad": [
+      {
+        "url": "/_next/static/chunks/0_kjkspq-lasv.js",
+        "gzip": 90100,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/0_y16_q83yhki.js",
+        "gzip": 15297,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/01wpdlgp96q17.js",
+        "gzip": 415,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/04ly51jz31zro.js",
+        "gzip": 13509,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/0660dhbtjfpye.js",
+        "gzip": 2131,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/07thxtfm0d9r6.js",
+        "gzip": 19956,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/085vsoa7yruch.js",
+        "gzip": 15300,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/0pokzadj4nhop.js",
+        "gzip": 4514,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/0wj0noag-9_fs.js",
+        "gzip": 3602,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/0xnpouu0h4-zl.js",
+        "gzip": 7946,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/0y4v_9o1qaely.js",
+        "gzip": 305,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/177c202jldxdm.js",
+        "gzip": 392,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/1odvw7r25a8tm.js",
+        "gzip": 21833,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/1pcw6gskne7pf.js",
+        "gzip": 2029,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/1sp3a5jueqy4u.js",
+        "gzip": 16533,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/203-91zcag_pv.js",
+        "gzip": 13613,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/26_jj1pp9j5ek.js",
+        "gzip": 10260,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/2dwv7g770jz95.js",
+        "gzip": 175743,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/2fpfuqm3syx4k.js",
+        "gzip": 45383,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/2h4o56ys02c1n.js",
+        "gzip": 1037,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/2ngthuj25x5zl.js",
+        "gzip": 9516,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/2ojg4-7w-pddb.js",
+        "gzip": 11607,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/2ser170149cnh.js",
+        "gzip": 14723,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/2wsjxrkk9_2d7.js",
+        "gzip": 71541,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/31903l951_hv_.js",
+        "gzip": 8228,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/31b8agjwura7i.js",
+        "gzip": 16163,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/372v7qv1pnu01.js",
+        "gzip": 14097,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/37xnpzysr7e_n.js",
+        "gzip": 5910,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/3asbj-w8c7nbn.js",
+        "gzip": 9794,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/3cvxyyxz9soa1.js",
+        "gzip": 2872,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/3i4zt380a34o9.js",
+        "gzip": 314,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/3pbc5mg_end-b.js",
+        "gzip": 15326,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/3r-ml6mc8gxvh.js",
+        "gzip": 8922,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/3w98vd77oe-i7.js",
+        "gzip": 8336,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/3waakjrujj12w.js",
+        "gzip": 285401,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/41henhexz-pyc.js",
+        "gzip": 7242,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/41uc34075vxjs.js",
+        "gzip": 133879,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/turbopack-077hmtqrhcoji.js",
+        "gzip": 4354,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/turbopack-1e5f49zawb_bt.js",
+        "gzip": 175,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/turbopack-2g5eru-v_02tt.js",
+        "gzip": 189,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/turbopack-3d1940mp6uswa.js",
+        "gzip": 175,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/turbopack-worker-1hrsqshz0gfey.js",
+        "gzip": 597,
+        "worker": false
+      }
+    ],
+    "phoneMachineBound": {
+      "city_33412_5656_2_sn_far.c85037b5.glb.gz": 12632382,
+      "city_33412_5656_2_sn.fa5c0c5f.glb.gz": 27015635
     }
   }
 }

@@ -226,6 +226,7 @@ import {
   streamTimings,
   traceRequested,
 } from "./stream-timing";
+import type { TimingStat } from "./stream-timing";
 import { attachInspector } from "./inspector";
 import type { TouchControlsCallbacks } from "./touch-controls";
 import { pageView } from "./page-view";
@@ -347,6 +348,9 @@ export interface GpuDebug {
     loaded: number;
     /** each tile's MB as the cache counts it, "u" when in use */
     sizes: string[];
+    /** each tile's content, as the tileset names it, and its bytes exactly
+     *  (the ledger's phone figures, plan 087) */
+    tiles: { uri: string; bytes: number }[];
   };
 }
 
@@ -756,6 +760,9 @@ export interface SceneApp {
     hitDist: number | null;
     hitName: string | null;
   };
+  /** The boot's and the stream's timings so far, by category
+   *  (stream-timing.ts): the ledger's recorded timings (plan 087). */
+  getTimings: () => Record<string, TimingStat>;
   /** current Building footprint polygons (EPSG) — shrinks when demolishing */
   getFootprints: () => MapFootprints;
   getPose: () => PlayerPose;
@@ -4432,7 +4439,7 @@ async function bootApp(
       const cache = stream.tiles.lruCache as unknown as {
         cachedBytes: number;
         maxBytesSize: number;
-        itemSet: Map<unknown, unknown>;
+        itemSet: Map<{ content?: { uri?: string } }, unknown>;
         usedSet: Set<unknown>;
         loadedSet: Set<unknown>;
         bytesMap: Map<unknown, number>;
@@ -4458,9 +4465,14 @@ async function bootApp(
             (item) =>
               `${Math.round((cache.bytesMap.get(item) ?? 0) / 1_048_576)}${cache.usedSet.has(item) ? "u" : ""}`
           ),
+          tiles: [...cache.itemSet.keys()].map((item) => ({
+            uri: item.content?.uri ?? "",
+            bytes: cache.bytesMap.get(item) ?? 0,
+          })),
         },
       };
     },
+    getTimings: () => streamTimings.summary(),
     getFocusDebug: () => ({
       ...postStack.getFocusInfo(),
       hitDist: focus.last()?.dist ?? null,

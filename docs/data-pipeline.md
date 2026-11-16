@@ -1217,6 +1217,51 @@ less than a set's site figure: streaming loads a tile's content only when it is 
 set. Sources on disk that are never served: the DGM GeoTIFF
 (12.9–15.6 MB a tile) and the CityJSON (2.7–13.6 MB a tile).
 
+### What a browser reads
+
+`bun run ledger -- --browser` (plan 087, phase 2) adds what only a
+browser can say, read by `e2e/ledger.spec.ts` (ignored unless `LEDGER=1`)
+at `/dresden?scene=lite` from a `NEXT_PUBLIC_POC_DEBUG=1` production
+build on SwiftShader, at `ready` — a running `next start` is reused, else
+Playwright builds and starts one. CI's build-check shard runs it with the
+check wherever its e2e half runs.
+
+- **The first load's JavaScript** (`browser.firstLoad`): every
+  `/_next/static/*.js` the page and its workers fetch until `ready`,
+  each gzipped at level 9 (plan 074's method, the same `scene=lite`
+  page), and the share only the workers fetched (the scene's, ADR 0061,
+  and those it starts): a file the page's own resource timing does not
+  name. Gated: the files exactly, the bytes within ±0.5 %
+  (`LEDGER_TOLERANCES`; a read within it keeps the committed figure, so
+  a second run writes the same file). The chunks' names, content hashes
+  that move with any change, are in `timings.firstLoad`, recorded only.
+- **A phone's tile bytes** (`browser.phone`): a context with `isMobile`
+  and `hasTouch`; the tile cache as its budget counts it
+  (`getGpuDebug().tileCache.tiles`, each content's bytes exactly, named
+  by the manifest's logical name). ADR 0047's "a phone's memory must not
+  grow", as a number. The buildings' glTF are counted, their bytes
+  recorded only, for the reason above. Three's `info.memory` at `ready`
+  (`timings.phoneHeld`) is recorded only: two reads of one build differ
+  by a few geometries, textures and programs that come and go.
+- **The timings** (`timings`): `getTimings()` — the scene's
+  `streamTimings.summary()` (`app/_components/stream-timing.ts`) — on the
+  desktop and on the phone: the `boot:*` marks, `dressing:build`,
+  `tile:compile`, and `longtask` where the scene counts it (`?trace=1`,
+  on a thread that reports long tasks). Recorded with the machine, the
+  adapter and the day, never compared: on SwiftShader a timing depends on
+  the runner drawn. Without `--browser` the committed browser figures and
+  timings stay as they are.
+
+Baseline, 2026-11-16 (linux-x64 cloud container, Chromium 153 on
+SwiftShader): the first load fetches 42 scripts, 1 089 259 bytes gzip -9
+(1.09 MB; plan 074 counted 904 619 on 2026-10-10), 10 of them, 33 307
+bytes, by the workers alone. A phone at `ready` holds four contents —
+the spawn tile's two terrain levels, 94.6 MB and 24.7 MB with what they
+carry, and its near and far buildings, 27.0 MB and 12.6 MB — 159.0 MB as
+the cache counts it. Its boot on SwiftShader: `boot:spawn-wait` 3.6–4.5 s,
+`boot:veil-to-loaded` 4.2–4.3 s, `dressing:build` 0.9–1.0 s for two
+tiles, `tile:compile` 9–12 s over four compiles (each capped at 3 s).
+
 ## Provenance
 
 `data/dresden/provenance.json` is the machine-readable record for Dresden:
