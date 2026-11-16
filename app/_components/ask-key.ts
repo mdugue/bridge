@@ -4,7 +4,11 @@
  * on this device (local storage). With it the provider, the model and the
  * token the key check gave. The site's server never stores it.
  */
-import { isAskModel, isAskProvider } from "@/lib/city/ask-city";
+import {
+  ASK_PROVIDER_BY_ID,
+  isAskModel,
+  isAskProvider,
+} from "@/lib/city/ask-city";
 import type { AskProviderId } from "@/lib/city/ask-city";
 import { SESSION_KEYS, STORAGE_KEYS } from "./storage-keys";
 
@@ -27,15 +31,17 @@ function parse(text: string | null, remember: boolean): AskKey | null {
     const v = JSON.parse(text) as Partial<AskKey>;
     if (
       isAskProvider(v.provider) &&
-      typeof v.model === "string" &&
-      isAskModel(v.provider, v.model) &&
       typeof v.key === "string" &&
       typeof v.token === "string" &&
       typeof v.expires === "number"
     ) {
       return {
         provider: v.provider,
-        model: v.model,
+        // a model the picker no longer offers: the provider's first
+        model:
+          typeof v.model === "string" && isAskModel(v.provider, v.model)
+            ? v.model
+            : ASK_PROVIDER_BY_ID[v.provider].models[0].id,
         key: v.key,
         token: v.token,
         expires: v.expires,

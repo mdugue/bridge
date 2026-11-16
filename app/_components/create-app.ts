@@ -82,7 +82,7 @@ import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import { spawnViewpoint, tileExtentOf } from "@/lib/city/site";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
-import { boundsTarget, frameTargets } from "@/lib/city/ask-view";
+import { boundsTarget, frameTargets, streetView } from "@/lib/city/ask-view";
 import type {
   AskTarget,
   FrameContext,
@@ -783,6 +783,12 @@ export interface SceneApp {
     from: { x: number; y: number } | null,
     sun: FrameContext["sun"]
   ) => Framed;
+  /** On foot: the walker before `place`, on the side of `from`, the
+   *  pitch over the terrain's slope (lib/city/ask-view.ts `streetView`). */
+  streetViewOf: (
+    place: AskTarget,
+    from: { x: number; y: number } | null
+  ) => ViewpointGeometry;
   /** Captures the full camera pose for a reproducible snapshot. */
   getCameraState: () => CameraState;
   /**
@@ -3377,6 +3383,10 @@ async function bootApp(
   sightRaycaster.firstHitOnly = true;
   // the first loaded building a sight line meets between two points of
   // the site (EPSG, `z` m a.s.l.); the tiles whose BVH is built only
+  // the terrain's height at a point of the site (EPSG, m a.s.l.), or null
+  // where no ground is loaded: the framing's slopes
+  const siteHeightAt = (x: number, y: number): number | null =>
+    siteGround.heightAt(x, y) ?? groundPlate?.heightAt(x, y) ?? null;
   const sightHit = (from3: SitePoint, point: SitePoint): SitePoint | null => {
     const a = epsgToWorld(from3.x, from3.y, offset);
     const b = epsgToWorld(point.x, point.y, offset);
@@ -4557,7 +4567,15 @@ async function bootApp(
     },
     captureViewpoint: pose.captureViewpoint,
     frameView: (places, from, sun) =>
-      frameTargets(places, { aspect: camera.aspect, from, sun, sightHit }),
+      frameTargets(places, {
+        aspect: camera.aspect,
+        from,
+        sun,
+        sightHit,
+        groundAt: siteHeightAt,
+      }),
+    streetViewOf: (place, from) =>
+      streetView(place, from ?? place, siteHeightAt),
     placeAt: (view) =>
       toSpot(view.epsg.x, view.epsg.y, () => pose.placeAt(view)),
     teleportTo: (x, y) => toSpot(x, y, () => pose.teleportTo(x, y)),

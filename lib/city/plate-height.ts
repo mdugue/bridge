@@ -13,6 +13,13 @@ export interface DrawnPlateTile {
   positions: ArrayLike<number>;
 }
 
+/** Whether a plate tile holds an EPSG position (its edges included). */
+function holds(d: DrawnPlateTile, x: number, y: number): boolean {
+  return (
+    x >= d.bounds[0] && x <= d.bounds[2] && y >= d.bounds[1] && y <= d.bounds[3]
+  );
+}
+
 /**
  * The plate's ground at an EPSG position, bilinear between the four
  * vertices around it; undefined off every tile. Reads the meshes' own
@@ -39,10 +46,24 @@ export function plateHeightAt(
       (heightOf(t, i, j + 1) * (1 - u) + heightOf(t, i + 1, j + 1) * u) * v
     );
   };
+  // the tiles are one grid: a point finds its tile by its cell, not by
+  // asking every tile (the framing of an answer asks thousands of times)
+  const [first] = tiles;
+  const w = first ? first.bounds[2] - first.bounds[0] : 1;
+  const h = first ? first.bounds[3] - first.bounds[1] : 1;
+  const cell = (x: number, y: number) =>
+    `${Math.floor(x / w)},${Math.floor(y / h)}`;
+  const byCell = new Map(
+    tiles.map((t) => [
+      cell((t.bounds[0] + t.bounds[2]) / 2, (t.bounds[1] + t.bounds[3]) / 2),
+      t,
+    ])
+  );
   return (x, y) => {
-    const t = tiles.find(
-      ({ bounds: [x0, y0, x1, y1] }) => x >= x0 && x <= x1 && y >= y0 && y <= y1
-    );
+    const near = byCell.get(cell(x, y));
+    // on a cell's north or east edge the cell beyond may hold nothing
+    const t =
+      near && holds(near, x, y) ? near : tiles.find((d) => holds(d, x, y));
     return t ? bilinear(t, x, y) : undefined;
   };
 }

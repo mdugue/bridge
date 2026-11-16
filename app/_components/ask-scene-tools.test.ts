@@ -3,7 +3,7 @@ import { chat, maxIterations } from "@tanstack/ai";
 import { fakeText } from "@tanstack/ai/testing";
 import { ChatClient, stream } from "@tanstack/ai-client";
 import { lookTool, SCENE_TOOLS } from "@/lib/city/ask-tools";
-import { frameTargets } from "@/lib/city/ask-view";
+import { frameTargets, streetView } from "@/lib/city/ask-view";
 import { AERIAL_REACH, sceneTools, showPlaces } from "./ask-scene-tools";
 import type { AskScene } from "./ask-scene-tools";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -12,6 +12,8 @@ const STUB: AskScene = {
   from: () => null,
   frameView: async (places, from) =>
     await Promise.resolve(frameTargets(places, { aspect: 1.5, from })),
+  streetView: async (place, from) =>
+    await Promise.resolve(streetView(place, from ?? place)),
   haltAnswerGlide: () => {},
   look: async () => ({}),
   moment: () => ({

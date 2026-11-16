@@ -16,7 +16,6 @@ import {
   whereTool,
 } from "@/lib/city/ask-tools";
 import type { TimeChange } from "@/lib/city/ask-tools";
-import { streetView } from "@/lib/city/ask-view";
 import type { AskTarget, Framed } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
@@ -51,6 +50,12 @@ export interface AskScene {
     places: readonly AskTarget[],
     from: { x: number; y: number } | null
   ) => Promise<Framed | null>;
+  /** on foot before `place`, on the side of `from`, as the scene stands
+   *  it on its terrain; null while there is no scene */
+  streetView: (
+    place: AskTarget,
+    from: { x: number; y: number } | null
+  ) => Promise<ViewpointGeometry | null>;
   /** what the first questions read of the moment (plan 085) */
   moment: () => StarterContext;
   /** the player's pose, mode, time, style and layers, for the model */
@@ -131,7 +136,8 @@ export async function showPlaces(
   const all = ask.alle !== false && places.length > 1;
   scene.select(all ? places : [first]);
   if (ask.aus_der_luft === false) {
-    return scene.show(streetView(first, from ?? first))
+    const street = await scene.streetView(first, from);
+    return street && scene.show(street)
       ? { ok: true, gezeigt: [first.name] }
       : LOADING;
   }

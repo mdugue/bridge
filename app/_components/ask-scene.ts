@@ -306,6 +306,8 @@ export function useAskScene(
       },
       within: (x, y) => siteHoldsPoint(site, x, y),
       select: (places) => handleRef.current?.pickPlaces(places),
+      streetView: async (place, from) =>
+        (await handleRef.current?.streetViewOf(place, from)) ?? null,
       frameView: async (places, from) => {
         const h = handleRef.current;
         if (!h) {

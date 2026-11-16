@@ -120,6 +120,7 @@ const ASKED = [
   "pickTargets",
   "releaseGpu",
   "selectCandidate",
+  "streetViewOf",
 ] as const satisfies readonly (keyof SceneApp)[];
 type Asked = (typeof ASKED)[number];
 

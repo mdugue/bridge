@@ -21,9 +21,20 @@ import { fakeModel } from "../frag/env";
 export const maxDuration = 15;
 
 function authHeaders(def: AskProviderDef, key: string): Record<string, string> {
-  return def.check.auth === "anthropic"
-    ? { "x-api-key": key, "anthropic-version": "2023-06-01" }
-    : { Authorization: `Bearer ${key}` };
+  switch (def.check.auth) {
+    case "anthropic": {
+      return { "x-api-key": key, "anthropic-version": "2023-06-01" };
+    }
+    case "google": {
+      return { "x-goog-api-key": key };
+    }
+    case "bearer": {
+      return { Authorization: `Bearer ${key}` };
+    }
+    default: {
+      throw new Error(`unknown auth: ${String(def.check.auth)}`);
+    }
+  }
 }
 
 const answer = (status: number, body: Record<string, unknown>) =>
@@ -80,7 +91,12 @@ export async function POST(request: Request): Promise<Response> {
       `${def.label} ist gerade nicht zu erreichen.`
     );
   }
-  if (status === 401 || status === 403) {
+  // Google answers a key it does not know with 400 (INVALID_ARGUMENT)
+  if (
+    status === 401 ||
+    status === 403 ||
+    (status === 400 && def.check.auth === "google")
+  ) {
     return refuse(
       401,
       "key-rejected",
