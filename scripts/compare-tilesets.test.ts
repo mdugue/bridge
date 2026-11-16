@@ -559,7 +559,10 @@ test("accessors no primitive reads are compared: an animation's output", async (
   // the same values, stored under another name: its storage differs
   const glb = await animated(1);
   const renamed = patched(glb, (json) => {
-    json.accessors.at(-1).name = "rise";
+    const last = json.accessors.at(-1);
+    if (last) {
+      last.name = "rise";
+    }
   });
   const [line] = await glbLines(glb, renamed);
   expect(line).toMatch(/^accessors\.\d+\.name: only in b$/u);
