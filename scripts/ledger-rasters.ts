@@ -47,6 +47,7 @@ import { tileArtifacts, TERRAIN_RASTER_KINDS } from "../lib/city/tile";
 import type { TileArtifactKind } from "../lib/city/tile";
 import type { ContentExtras } from "../lib/city/tileset";
 import { SITES } from "../sites";
+import { trackedFiles } from "./git-tracked";
 import type { SiteId } from "../sites";
 
 // the ledger's kinds are the viewer's, both ways
@@ -97,22 +98,15 @@ export function readySites(root: string): SiteId[] {
  * but for the committed sites) is no site of the ledger, whose figures are
  * functions of the tree. Each must be built — the sections read its
  * published files, and one not built is an error naming it
- * (`publishedFiles`). None where `root` is no work tree.
+ * (`publishedFiles`). Read from git's index (`trackedFiles`): a staged,
+ * uncommitted site counts. None where `root` is no work tree; a git that
+ * fails otherwise is an error.
  */
 export function trackedSites(root: string): SiteId[] {
-  const listed = Bun.spawnSync(["git", "ls-files", "-z", "--", "data"], {
-    cwd: root,
-    stdout: "pipe",
-    stderr: "ignore",
-  });
-  if (listed.exitCode !== 0) {
-    return [];
-  }
   const tracked = new Set(
-    listed.stdout
-      .toString()
-      .split("\u0000")
-      .map((path) => /^data\/(?<site>[^/]+)\//u.exec(path)?.groups?.site)
+    trackedFiles(root, "data").map(
+      (path) => /^data\/(?<site>[^/]+)\//u.exec(path)?.groups?.site
+    )
   );
   return (Object.keys(SITES) as SiteId[]).filter((id) => tracked.has(id));
 }

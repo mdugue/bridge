@@ -44,6 +44,7 @@ import {
   viewerReads,
 } from "./ledger";
 import { measureBakeStore } from "./ledger-bake-store";
+import { gitEnv } from "./git-tracked";
 import { measureDressing } from "./ledger-dressing";
 import { readySites, trackedSites } from "./ledger-rasters";
 
@@ -597,7 +598,9 @@ function track(root: string): void {
     ["init", "-q"],
     ["add", "-A"],
   ]) {
-    expect(Bun.spawnSync(["git", ...args], { cwd: root }).exitCode).toBe(0);
+    expect(
+      Bun.spawnSync(["git", ...args], { cwd: root, env: gitEnv() }).exitCode
+    ).toBe(0);
   }
 }
 
@@ -621,7 +624,10 @@ test("a site fetched here and never committed is no site of the ledger", async (
       "the browser figures were not compared (no --browser)\nqa/ledger.json holds\n",
   });
   expect(ledgerOf(root)).toBe(written);
-  expect((JSON.parse(written) as Ledger).rasters.sites).toEqual({});
+  const ledger = JSON.parse(written) as Ledger;
+  expect(ledger.rasters.sites).toEqual({});
+  // the check keeps the committed blocks: measured anew, they hold too
+  expect(await measureBlocks(root)).toEqual(ledger.blocks);
 }, 60_000);
 
 test("the ledger's sites are those git tracks under the root it is given", async () => {
@@ -642,6 +648,7 @@ test("the ledger's sites are those git tracks under the root it is given", async
   ).toEqual([]);
 });
 
+// (needs this repository's `.git`: a checkout without one has no sites)
 test("the committed ledger's sites are the committed tree's", () => {
   const repo = nodePath.join(import.meta.dir, "..");
   const committed = JSON.parse(

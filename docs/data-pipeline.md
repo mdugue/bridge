@@ -1548,7 +1548,13 @@ holds, for every site whose data git tracks (`data/<site>/`,
 the tree, not the disk: a site fetched and baked here but never committed
 (Berlin's `data/berlin/`, ignored by git) is no site of the ledger and
 moves no figure; a tracked site must be built, and one that is not fails
-the run with its name (`build first`). It decodes each published raster with the viewer's decoder and asks
+the run with its name (`build first`). The list is git's index
+(`scripts/git-tracked.ts`, as for the bake store), so a site staged but not
+yet committed counts; the ledger runs at the repository's top (its `root`),
+with git's own variables (`GIT_DIR`, `GIT_INDEX_FILE`) dropped, and a git
+that fails there is an error in git's words, never an empty list — only a
+root that is no work tree (a test's fixture) has no sites. The test that
+holds the committed ledger's sites to the tree needs the checkout's `.git`. It decodes each published raster with the viewer's decoder and asks
 the viewer's own rules which file a level reads on a tier (`rasterFiles`),
 how its texture is laid out (the kinds table's looks) and what it weighs on
 the GPU (`textureBytes`, and `splatScaleFor` for the colour splat painted
