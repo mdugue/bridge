@@ -21,15 +21,27 @@ were made — add an ADR when you change one.
 
 ## Scene architecture
 
+What has a life of its own leaves `bootApp` as an **owner** (a factory
+over a few objects and callbacks: `scene-capture.ts`, `frame-meter.ts`,
+`tile-memory.ts`, `crosshair-focus.ts`, `load-veil-follow.ts`), not as a
+new block of closure state. A frame's work goes into one of the named
+steps of `frame-steps.ts`, whose order is tested. A new worker is a
+`createWorkerClient` (`worker-client.ts`: the handshake, the line, the
+fallback, one restart), its script posting `{ ready: true }` last.
+
 `app/_components/create-app.ts` is the spine: it builds the renderer, scene, a
 `PerspectiveCamera`, a `world` group (Z-up data frame, rotated −90° about X to
 Y-up), reads the tileset's extras (CRS, recenter offset, tile bounds), starts
-streaming the site and the animation loop, and returns a `CityWalkHandle`
-(the imperative API the React HUD calls) once the spawn tile's buildings and
-any of its terrain levels are on screen — the first frame. The fixed
+streaming the site and the animation loop, and returns a `SceneApp` once
+the spawn tile's buildings and any of its terrain levels are on screen —
+the first frame. It runs in a worker on an `OffscreenCanvas` where it can
+and touches no DOM (ADR 0061): `scene-server.ts` serves it over messages,
+and the HUD drives it through `scene-client.ts`'s `CityWalkHandle`, whose
+getters read a mirror and whose value calls (`getRenderInfo`,
+`getFocusDebug`, `inquireAt`, `design.*`, …) return promises. The fixed
 lamp-light pool and the fog floor are created before the first frame and
 retargeted/lowered as tiles land. The data layers are not wired into
-`bootApp` by hand: they start on their first switch-on (`lazyFeature`,
+`bootApp` by hand: they start on their first switch-on (`startOnce`,
 `data-layers-feature.ts`) and hear the spine through its hooks
 (`feature-seam.ts`: frame, stream change, the look store, the scene's
 clock — a watched value a late starter reads first); a tile's traffic
@@ -42,10 +54,9 @@ wired by hand. The data layers' code stays in the scene chunk: the first `import
 load ≈ 33 KB gz (three leaves the scene's hoisted scope), more than the
 data layers moved (ADR 0040) — measure before splitting one off.
 
-**The renderer** is three r187's `WebGPURenderer` — its WebGPU backend, or
-its WebGL2 backend where the browser has no WebGPU (`?gpu=webgl2` forces it:
-`scene-profile.ts` `forceWebGL`; the preflight is `gpu-support.ts`). One
-path: every material is a **TSL node material**, there is no GLSL, no
+**The renderer** is three r187's `WebGPURenderer` on WebGPU only — a
+browser without an adapter gets the no-WebGPU message (the preflight is
+`gpu-support.ts`, the worker's hello checks the adapter). One path: every material is a **TSL node material**, there is no GLSL, no
 `onBeforeCompile`, no WebGLRenderer
 ([ADR 0027](../../../docs/adr/0027-webgpu-renderer-and-tsl.md)).
 The viewer imports classes and node materials from `three/webgpu`, TSL from
@@ -201,15 +212,22 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   far horizon → `receivedShadowNode`; `lib/city/skyview.ts`, the raster
   shared with the buildings through `tile-rasters.ts`, which hands every
   content root its rasters by kind: the kinds table holds a raster's look,
-  tier twin and gate).
+  tier twin, far twin and gate). A fine level reads the close-range
+  kinds' 1024² twins beyond the detail's reach and swaps sets through
+  the material's slots (`lib/city/ground-reach.ts`,
+  `ground-reach-follow.ts`, terrain-layer.ts `GroundDetail`): a new
+  close-range raster names its `far` twin or stays full at any distance.
 - Buildings: `lib/city/building-tint.ts` (tint, storey height, roofs, at
   bake time), `lib/city/small-buildings.ts` (the scan's sheds as boxes, and
   the canopy points they veto at build time), `scripts/measured-roofs.ts`
   (a LoD2 roof that misses DOM1 — the free-form roofs of complex buildings —
   replaced by what `pipeline/bake/roofs.py` measures: flat levels, and
-  faces where it slopes — planes, an extruded profile, or on a landmark
-  the scan's surface (`roof_planes.py`) — each an error-bounded TIN cut
-  to its outline; ADR 0036).
+  faces where it slopes — the flanks of a pitched roof section by
+  section, planes, an extruded profile, or on a landmark the scan's
+  surface (`roof_planes.py`) — planes as their own polygons, creases
+  straight (`roof_facets.py`), any other face an error-bounded TIN cut
+  to its outline, the outlines turned onto the footprint's walls
+  (`regular_cover`); ADR 0036).
 - Beyond LoD2 (plan 050, ADR 0036): geometry is added only where DOM1
   measures it **and** OSM (or, for a landmark's roof relief, Wikidata)
   names it — never from the surface model alone (cranes). `structures.py`
@@ -228,7 +246,9 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   under a LoD2 roof is LoD2's own (`BUILT_TOWERS`) — no second column. OSM `building:material` / `building:colour` /
   `roof:colour` reach the clay only through `osmColourTint` (hue kept,
   saturation ≤ 0.45, lightness clamped) and the palette families; glass
-  (flag 4) and metal (8) are a cool tint, lower roughness and, on glass, a
+  (flag 4; also where the street photos read a glass front, ADR 0060,
+  `facade_glass.py` → `lib/city/photo-glass.ts`) and metal (8) are a cool
+  tint, lower roughness and, on glass, a
   Fresnel sky sheen (`visual-style.ts`: `osmColour`, `clayGlow`) — no
   panes, no textures (the window grid is vetoed). Landmarks (flag 16) come from Wikidata
   (`landmarks.py`, cached at fetch time), the site's twelve in the
@@ -368,8 +388,7 @@ and therefore what keeps builds out of frames:
   the dolly zoom in runs and for every tile landing while Modell shows;
   `holdCut` holds for Modell's camera. `compileAsync` primes the **main pass only**:
   the shadow pass's pipelines for new casters still build in the frame that
-  first draws them, and the WebGL2 backend compiles synchronously — the
-  price of public API. Measure with a flight before adding machinery.
+  first draws them — the price of public API. Measure with a flight before adding machinery.
 - **Different graphs are different builds.** An optional raster that did
   not load leaves its term out of the terrain's colour node, so that tile
   builds apart; that is fine, but do not branch a graph on per-tile
@@ -382,8 +401,7 @@ and therefore what keeps builds out of frames:
   `castShadowPositionNode ?? positionNode` and discards by `maskNode`: a
   swaying crown casts rigidly through `castShadowPositionNode =
   instancePosition()`; the bare crown thins its shadow through its mask.
-- **Vertex formats.** WebGPU has no 1-component 8/16-bit vertex formats
-  (and the WebGL2 backend rejects them against TSL's float attribute): the
+- **Vertex formats.** WebGPU has no 1-component 8/16-bit vertex formats: the
   feature id is baked as FLOAT (`scripts/tile-glb.ts`); the roof flag
   rides in the windows' snorm16 `_FACADE` (−1 in its third,
   `lib/city/windows.ts` `FACADE_ROOF`).
@@ -392,9 +410,9 @@ and therefore what keeps builds out of frames:
   three requests no more). Each non-interleaved attribute is one buffer,
   `position` and `normal` included (an interleaved instance matrix is
   one). A ninth invalidates the pipeline and the mesh silently draws
-  nothing on a real GPU, while the WebGL2 backend (sixteen) — the
-  headless e2e's — draws it fine: the traffic flows vanished that way
-  with ten single-float attributes. Pack scalars into vec4s and test the
+  nothing, on a real GPU and in the headless e2e alike (WebGPU on
+  SwiftShader's Vulkan): the traffic flows vanished that way with ten
+  single-float attributes. Pack scalars into vec4s and test the
   count.
 - **Points are 1 px on WebGPU**, whatever their size. The lamp halos are
   billboard quads: an `Instances` set under a `PointsNodeMaterial`.
@@ -424,8 +442,8 @@ More traps, each found the hard way:
   inter-stage variables, `front_facing` takes one (and the Ausschnitt's
   clip distances one on the vertex side), and the clay passes thirteen
   of the other fifteen. A new value per building or per vertex rides in
-  a varying it already passes; past fifteen the buildings vanish on
-  WebGPU while WebGL2 still draws them (ADR 0010).
+  a varying it already passes; past fifteen the buildings vanish, in the
+  headless e2e too (ADR 0010).
 - **A TSL `select` is an if/else in the shader.** three builds each arm in
   its own scope: what an arm builds first is built again where it is used
   outside, and a derivative or texture read first built in an arm runs in
@@ -505,8 +523,7 @@ Traps of the rings:
   rings; a tile's change goes through `invalidateShownTiles` (only the rings it
   can fall on, only if what shows changed), a change near the eye through
   `sunRig.invalidateShadow(undefined, finest)`.
-- **`renderer.clear()` on a depth array throws on the WebGL2 backend**; the
-  render's own clear is what draws a layer clean.
+- The render's own clear is what draws a shadow-array layer clean.
 - The stream's square (`lib/city/shadow-fit.ts`, `sunRig.shadowCamera`) only
   loads tiles: `fitShadowRadius` and `shadowFocusAhead` have no say over what
   is shadowed.
@@ -846,7 +863,7 @@ tile adds beyond its glTF must reach the cache's weighing
 (`DressingPlugin.calculateBytesUsed`), and a phone's memory is watched
 by `lib/city/memory-governor.ts` — see docs/rendering.md, "GPU memory on
 a phone". A part that lands after its tile is a `LatePart`
-(`late-parts.ts`: the dressing, the murals, the traffic bodies), which
+(`late-parts.ts`: the dressing, the murals, the traffic bodies, the window niches), which
 weighs it from its build, frees it after its compile and reports for it.
 A content's CPU copies go once its compile has uploaded them
 (`dropCpuCopies` over `cpuDroppable` / `cityCpuDroppable`, ADR 0047; a
@@ -944,10 +961,10 @@ the boot reads it through `parseSnapshot` (a waiting GPU recovery wins,
 `lib/city/gpu-recovery.ts` `arrivalOf`). Another link is another page
 load.
 
-Headless e2e uses SwiftShader through the renderer's WebGL2 backend (headless
-Chromium has no WebGPU adapter) — shadows/AA look nothing like a real GPU, so
-use `--headed` for any lighting work. To check the fallback on a GPU, add
-`?gpu=webgl2` (`SHOTS_QUERY=gpu=webgl2`); to see a lighter page of the
+Headless e2e draws WebGPU over SwiftShader's Vulkan (flags in
+`e2e/city-walk.spec.ts`: without `--use-vulkan=swiftshader` the canvas
+cannot present and the GPU process dies) — shadows/AA look nothing like a
+real GPU, so use `--headed` for any lighting work. To see a lighter page of the
 safety ladder, `?safety=1`–`3` (ADR 0047: pixel ratio, shadow map, tile
 cache and governor a step down; nothing stored). Verify from **oblique** angles (a tree through
 a bridge is invisible looking straight down). Snapshot JSON shape:
@@ -965,11 +982,15 @@ is shaded on the CPU. At the **full** profile this scene costs ~**14 s to boot**
 and ~**4 s per frame** at 1280×720 (measured on four cores). Anything that waits
 on rendered frames — the control walk uses `waitForFrames` — walks straight into
 the per-test timeout if it spends frames carelessly. Playwright runs a single worker on CI for the same reason: parallel
-viewer pages halve each other's frame rate. CI splits the suite over **three
+viewer pages halve each other's frame rate. CI splits the suite over **four
 runners** instead (the `e2e` matrix in `.github/workflows/ci.yml`), by tag: the
 whole site with the shell and `/wissen`; the desktop HUD group
 (`@desktop-hud`) with the phone (`@phone`); the desktop rendering group
-(`@desktop-render`). Each desktop group boots its own page. The required
+(`@desktop-render`: snapshots, inquiry, Modell, designs, demolish); the look
+group (`@desktop-look`: styles, motion quality, the view link). Each desktop
+group boots its own page. Time on CI is SwiftShader's frames, not the driver:
+a lighter headless browser (Lightpanda has no WebGL) or another test runner
+gains nothing, fewer frames per runner do. The required
 status check "E2E (Playwright)" is the small job that reports them all. A new
 spec lands in the whole-site shard unless it carries one of those tags —
 keep the shards within about 1.5 minutes of each other (the workflow's

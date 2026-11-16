@@ -21,6 +21,8 @@ import type {
 } from "three/webgpu";
 import { uniform } from "three/tsl";
 import { fogRangeFor, streamFarFor } from "@/lib/city/atmosphere";
+import { fetchRank } from "@/lib/city/fetch-order";
+import { FLAG_HEIGHT_MAX } from "@/lib/city/furniture";
 import { plateOf } from "@/lib/city/ground-plate";
 import { utmToLatLng } from "@/lib/city/crs";
 import { WALL_CLEARANCE } from "@/lib/city/clearance";
@@ -29,27 +31,16 @@ import { createCoalescer } from "@/lib/city/coalesce";
 import { createMissingPartWord } from "@/lib/city/missing-part-word";
 import { createRecount } from "@/lib/city/recount";
 import {
-  createMemoryGovernor,
-  memoryFloorFor,
-  memoryLimitsFor,
-} from "@/lib/city/memory-governor";
-import type { MemoryStep } from "@/lib/city/memory-governor";
-import {
   REST_SLICE_MS,
   SLICE_MS,
   setSliceBudget,
 } from "@/lib/city/build-steps";
-import { createStillness } from "@/lib/city/frame-pace";
-import type { FramePace } from "@/lib/city/frame-pace";
-import { createFrameTiming } from "@/lib/city/frame-timing";
-import {
-  createResolutionScale,
-  resolutionTargetsFor,
-} from "@/lib/city/resolution-scale";
+import { createFramePace, createStillness } from "@/lib/city/frame-pace";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
 import { shadowTilesStream } from "@/lib/city/gpu-safety";
 import type { GpuLoss, SafetyLevel } from "@/lib/city/gpu-safety";
-import { bootingPose, startOf } from "@/lib/city/boot-start";
+import { TEARDOWN_WAIT_MS } from "./scene-protocol";
+import { bootingPose } from "@/lib/city/boot-start";
 import { createGround } from "@/lib/city/ground";
 import { createPageLifecycle } from "@/lib/city/page-lifecycle";
 import type {
@@ -57,27 +48,15 @@ import type {
   LifecycleSignal,
 } from "@/lib/city/page-lifecycle";
 import type { Landmark } from "@/lib/city/landmarks";
-import {
-  BOOT_VEIL,
-  NO_VEIL,
-  bootFrontier,
-  loadFrontier,
-  stepVeil,
-} from "@/lib/city/load-frontier";
-import type { VeilState } from "@/lib/city/load-frontier";
 import type { LoadStageId, LoadStageUpdate } from "@/lib/city/load-stages";
 import type { LookKey, LookValues } from "@/lib/city/look-controls";
 import type { LookState } from "@/lib/city/look-state";
 import type { BikeCounter } from "@/lib/city/bike-counts";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
-import {
-  nextRenderStyle,
-  RENDER_STYLE_BY_ID,
-  styleInstant,
-} from "@/lib/city/render-style";
+import { RENDER_STYLE_BY_ID, styleInstant } from "@/lib/city/render-style";
 import type { RenderStyle } from "@/lib/city/render-style";
-import { footprintPolys } from "@/lib/city/city-mesh";
-import type { FootprintPoly, MapTile } from "@/lib/city/minimap";
+import { minimapOf } from "@/lib/city/minimap";
+import type { MapFootprints, MapPicture } from "@/lib/city/minimap";
 import {
   footprintCircle,
   MODEL_PRESET_BY_ID,
@@ -97,20 +76,15 @@ import {
   tileArea,
 } from "@/lib/city/shadow-rings";
 import { cutOutFromView } from "@/lib/city/section";
-import { exportScale, exportTiles } from "@/lib/city/image-export";
-import type { ExportTile } from "@/lib/city/image-export";
 import { epsgToWorld, worldToEpsg } from "@/lib/city/ground-clamp";
 import type { CameraState, PlayerPose, Xyz } from "@/lib/city/pose";
-import { toleranceBox } from "@/lib/city/ask-items";
-import { nearestInSets, rayAabb, setsBox } from "@/lib/city/ask-solids";
-import type { Aabb, AskHit } from "@/lib/city/ask-solids";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import { spawnViewpoint, tileExtentOf } from "@/lib/city/site";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
 import { beyondExtents } from "@/lib/city/design-placement";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
-import { parseTilesetExtras, tileTopsOf } from "@/lib/city/tileset";
+import { tileTopsOf } from "@/lib/city/tileset";
 import type { TilesetExtras } from "@/lib/city/tileset";
 import type { Inquiry, InquiryAlong } from "@/lib/city/inquiry";
 import type { WalksExtras } from "@/lib/city/walks";
@@ -125,15 +99,15 @@ import {
 } from "@/lib/city/vegetation-lod";
 import { stopBvhWorker } from "./bvh-client";
 import { stopGroundWorker } from "./ground-prep-client";
+import { stopNicheWorker } from "./window-niche-client";
 import type { GlideOptions } from "./camera-flight";
 import { createCameraPose } from "./camera-pose";
 import type { FollowAim } from "./camera-pose";
-import { canvasSizeFor } from "./canvas-size";
 import { createModelRig } from "./model-rig";
 import type { ModelHud, ModelRig, ViewMode } from "./model-rig";
-import type { ModelCamera } from "./model-camera";
 import { setViewDirection } from "./view-direction";
 import { siteMurals } from "./mural-layer";
+import { createNicheField, NICHE_CAPACITY } from "./window-niche-layer";
 import { createViewLens } from "./view-lens";
 import { setPickRay } from "./view-ray";
 import {
@@ -156,6 +130,7 @@ import {
 import type { OutlineSelection } from "./selection-outline";
 import { trafficMesh } from "./traffic-flow";
 import { createCityCollider } from "./collision";
+import { compilesQueued } from "./compile-lanes";
 import { createDemolitions } from "./demolitions";
 import { createDesignLayer } from "./design-layer";
 import type { DesignLayer, DesignStatus } from "./design-layer";
@@ -163,40 +138,43 @@ import { cutsGround, foldedThing, groundKeptUnderDesign } from "./design-site";
 import { graphOf, setGraph } from "./material-slots";
 import type { CrashTrail } from "./crash-trail";
 import { routeThreeErrors } from "./three-console";
+import type { NameplateDeps } from "./nameplate-layer";
 import { leafLitterAt, seasonAt, seasonShiftFor } from "@/lib/city/tree-season";
 import { crownLeaf, footLitter } from "./tree-foot";
-import {
-  fetchOptionalJson,
-  fetchRequiredJson,
-  isAbortError,
-} from "./fetch-optional";
+import { bootAhead } from "./boot-ahead";
+import type { BootAhead } from "./boot-ahead";
+import { fetchOptionalBinary, isAbortError } from "./fetch-optional";
+import { readFootprints } from "@/lib/city/footprint-pack";
+import type { FootprintPack } from "@/lib/city/footprint-pack";
 import type { MovementMode } from "./fps-movement";
 import { NO_GPU_MESSAGE } from "./gpu-support";
-import { raiseSafety } from "./gpu-safety";
 import { pageLeaving } from "./net-gate";
 import { createSceneFog, installSceneFog, VALLEY_HAZE } from "./height-fog";
-import { attachKeyboardControls } from "./keyboard-controls";
+import type { KeyboardActions } from "./keyboard-controls";
 import { createLampLights, LAMP_LIGHTS } from "./lamp-layer";
 import { createLampReflections, uniqueHeads } from "./lamp-reflections";
-import { createLantern, invalidateLanternShadow } from "./lantern";
+import {
+  createLantern,
+  invalidateLanternShadow,
+  LANTERN_RANGE,
+} from "./lantern";
 import { setFountainTime } from "./monument-layer";
 import { showFurnitureNear } from "./furniture-layer";
 import { setMapAltitude } from "./map-overlay";
 import type { TramCarsStatus } from "./tram-cars";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import {
+  notePocRegressed,
   pocFramesHeld,
   pocFrameTime,
   pocVeil,
   tickPocFrame,
-  updatePocDebug,
-} from "./poc-debug";
+} from "./poc-scene";
 import { createPostStack } from "./post-stack";
 import type { FocusInfo, PostStack } from "./post-stack";
 import { createNameplate } from "./nameplate-layer";
 import {
   cityHides,
-  coverBoxes,
   createNameplateAsk,
   landmarkFactsHref,
 } from "./nameplate-ask";
@@ -205,6 +183,7 @@ import type { SceneCensus } from "./scene-census";
 import { retainOpenSkyTexture } from "./sky-light";
 import {
   aoSamplesFor,
+  inspectRequested,
   postProfileFor,
   pixelRatioFor,
   shadowMapSizeFor,
@@ -212,9 +191,10 @@ import {
   tileCacheBytesFor,
 } from "./scene-profile";
 import type { SceneBudget } from "./scene-profile";
-import { createSunRig, sunStateAt } from "./sun-rig";
+import { createSunRig } from "./sun-rig";
 import { createSceneEnvironment, sceneNight } from "./scene-environment";
-import type { SunState } from "./sun-rig";
+import { sunStateAt } from "@/lib/city/sun";
+import type { SunState } from "@/lib/city/sun";
 import type { GroundUniforms, TerrainLayer } from "./terrain-layer";
 import {
   bufferBytes,
@@ -231,13 +211,14 @@ import {
   createTileStream,
   DRESSING_PART_NAMES,
   DRESSING_PARTS,
+  setStreamDownloads,
 } from "./tile-stream";
 import { withinCompileWait } from "./late-parts";
 import type { CpuBytes, DressingPartName, TileDressing } from "./tile-stream";
 import { loadGroundPlate } from "./ground-plate-layer";
 import type { GroundPlate } from "./ground-plate-layer";
 import { createNetworkWatch } from "./tile-retry";
-import { installMainYield } from "./main-yield";
+import { installMainYield, whenIdle } from "./main-yield";
 import {
   bootFrames,
   printTrace,
@@ -245,20 +226,32 @@ import {
   streamTimings,
   traceRequested,
 } from "./stream-timing";
-import { attachInspector, inspectRequested } from "./inspector";
-import { attachTouchControls } from "./touch-controls";
+import { attachInspector } from "./inspector";
+import type { TouchControlsCallbacks } from "./touch-controls";
+import { pageView } from "./page-view";
+import type { PageEvent } from "./page-view";
+import { setFlagTime } from "./flag-cloth";
 import { createVegetationLod, setCrownTime } from "./vegetation-layer";
 import type { VegetationControl } from "./vegetation-layer";
-import { createStyleResources, setClaySection } from "./visual-style";
+import {
+  createStyleResources,
+  setClayNicheCut,
+  setClaySection,
+} from "./visual-style";
 import { setWaterTime } from "./water-layer";
 import { createModelCuts } from "./model-cuts";
-import * as dataLayersModule from "./data-layers-feature";
-import {
-  createHook,
-  follow,
-  lazyFeature,
-  wantOnSwitchOn,
-} from "./feature-seam";
+import { runCleanups } from "./cleanups";
+import { startDataLayers } from "./data-layers-feature";
+import { createCrosshairFocus } from "./crosshair-focus";
+import { createFrameMeter } from "./frame-meter";
+import { createLoadVeilFollow } from "./load-veil-follow";
+import { frameOf } from "./frame-steps";
+import { createSceneCapture } from "./scene-capture";
+import { createGroundReachFollow, reachViewOf } from "./ground-reach-follow";
+import type { GroundReachFollow } from "./ground-reach-follow";
+import { GOVERN_MS, bindTileMemory } from "./tile-memory";
+import type { CapturedImage } from "./scene-capture";
+import { createHook, follow, startOnce, wantOnSwitchOn } from "./feature-seam";
 import type { SpineHooks } from "./feature-seam";
 
 /**
@@ -270,32 +263,16 @@ const DEFAULT_FOV = 55;
  *  plus a margin, so tiles still loading read as haze, not as an edge. */
 const PARTIAL_WORLD_FOG_FAR = 1100;
 const SKY_COLOR = 0x9f_b6_cc;
-/** How deep under the ground a design may stand for the focus (m): a
- *  site's ground is pressed under the design (design-site.ts), which the
- *  ground's rays do not see — a sunken court, not a design across a hill. */
-const DESIGN_PRESS_M = 5;
 /** The longest step the lens's fade and focus take in one frame (ms). */
 const LENS_STEP_MAX_MS = 100;
 /** How often the crash trail takes a heartbeat (crash-trail.ts). */
 const TRAIL_BEAT_MS = 2000;
-/** How often the GPU's frame time is read back (ms): a few per beat. */
-const GPU_TIME_READ_MS = 250;
 /** How long a memory emergency keeps the shadow camera from streaming. */
 const EMERGENCY_SHADOW_HOLD_MS = 120_000;
-/** How long a capture waits for the shadow rings at most (ms): the view stands
- *  still meanwhile. */
-const CAPTURE_HOLD_MS = 1500;
 /** Allocation failures closer together than this are one emergency. */
 const EMERGENCY_GAP_MS = 5000;
 /** How long a reload waits for the old device to be destroyed. */
 const RELEASE_WAIT_MS = 300;
-/**
- * How long a reload to a heavier page waits for the whole app to be gone
- * (`disposeForReload`): the device reports itself destroyed well within it.
- */
-const TEARDOWN_WAIT_MS = 2000;
-/** How often the memory governor looks at the GPU memory held. */
-const GOVERN_MS = 1000;
 /** How near the camera (m, in plan, to the tile's box) a building tile
  *  gets its BVH before any ray needs it. */
 const BVH_NEAR_M = 400;
@@ -346,7 +323,7 @@ export interface CityWalkStats {
   terrainVertexCount: number;
 }
 
-/** `CityWalkHandle.getGpuDebug`'s report. */
+/** `SceneApp.getGpuDebug`'s report. */
 export interface GpuDebug {
   drawables: number;
   /** distinct index / vertex buffers under the scene, and their bytes */
@@ -421,12 +398,20 @@ function besideTileset(
   return file ? new URL(file, tilesetUrl).href : null;
 }
 
+/** The minimap's picture as the tileset names it, by its URL. */
+function sitePicture(extras: unknown, tilesetUrl: string): MapPicture | null {
+  const map = minimapOf(extras);
+  return map
+    ? { bounds: map.bounds, url: new URL(map.file, tilesetUrl).href }
+    : null;
+}
+
 /** What the HUD knows of the site from the tileset alone (`onSiteInfo`). */
 export type SiteInfo = Pick<
-  CityWalkHandle,
-  | "landcoverTiles"
+  SceneApp,
   | "landmarks"
   | "latLng"
+  | "mapPicture"
   | "provenanceUrl"
   | "terrainBounds"
   | "walksUrl"
@@ -436,6 +421,23 @@ export type SiteInfo = Pick<
   photoCredits: readonly string[];
 };
 
+/** The canvas's CSS size and the device's pixel ratio, as the page
+ *  measures them (scene-host.ts); a size without area is never sent. */
+export interface CanvasSize {
+  dpr: number;
+  height: number;
+  width: number;
+}
+
+/** What the scene writes to the page's crash trail (crash-trail.ts): the
+ *  page keeps it, the scene only notes. */
+export type SceneTrail = Pick<CrashTrail, "beat" | "error" | "note" | "set">;
+
+/**
+ * The scene's options: plain data and callbacks. Where the scene runs in a
+ * worker (ADR 0061) scene-server.ts makes them from the page's init message
+ * and turns every callback into a message to the page.
+ */
 export interface CityWalkOptions {
   /**
    * The render budget (profile, device tier, whether the neighbour tiles
@@ -443,7 +445,11 @@ export interface CityWalkOptions {
    * here takes its numbers from it instead of reading the window.
    */
   budget: SceneBudget;
-  container: HTMLElement;
+  /** what the scene draws into: the page's canvas, or that canvas handed
+   *  to the scene's worker (`transferControlToOffscreen`) */
+  canvas: HTMLCanvasElement | OffscreenCanvas;
+  /** its size when the scene starts (`resize` follows it) */
+  size: CanvasSize;
   /**
    * Where a recovered page's player stood (gpu-recovery.ts, the snapshot's
    * camera): the boot places the camera there before the stream's first
@@ -475,16 +481,21 @@ export interface CityWalkOptions {
    *  network, tile-retry.ts): the HUD's message goes. */
   onErrorCleared?: () => void;
   /**
-   * The GPU is gone for good, or a frame threw and left three's renderer
-   * in a state no later frame draws right (the render stopped) — `how`:
-   * lost in use, reclaimed by iOS while the page was in the background,
-   * or failed — a frame that threw on a GPU still working, a bug
-   * (lib/city/gpu-safety.ts). The reload to run when the page recovers by
-   * itself (gpu-recovery.ts, a reload where the player stood): the scene
-   * runs it once the old device is freed, and once the page is in view.
-   * Null: the HUD says the graphics failed (`onFatal`).
+   * Whether the page recovers by itself from a stop of this kind — the GPU
+   * gone for good, or a frame that threw and left three's renderer in a
+   * state no later frame draws right — `how`: lost in use, reclaimed by
+   * iOS while the page was in the background, or failed — a frame that
+   * threw on a GPU still working, a bug (lib/city/gpu-safety.ts). The
+   * page's answer, asked when the scene boots (gpu-recovery.ts
+   * `wouldRecover`). No: the HUD says the graphics failed (`onFatal`).
    */
-  onGpuLost?: (how: GpuLoss) => (() => void) | null;
+  reloadable?: (how: GpuLoss) => boolean;
+  /** The render stopped and the GPU is freed: the page recovers by a
+   *  reload where the player stood (gpu-recovery.ts), once in view. */
+  onReload?: (how: GpuLoss) => void;
+  /** A memory emergency: the next page starts a level lighter
+   *  (gpu-safety.ts `raiseSafety`, the page's storage). */
+  onRaiseSafety?: () => void;
   /**
    * The render stopped after the first frame and the page did not recover
    * by itself: the graphics failed as a whole, not one layer. `message` is
@@ -498,14 +509,10 @@ export interface CityWalkOptions {
    * stages, style switches and GPU trouble there and beats every couple of
    * seconds, so a page the browser kills leaves a trace.
    */
-  trail?: CrashTrail;
-  /**
-   * The loop's pace while the HUD covers the scene or the scene stands
-   * still (lib/city/frame-pace.ts): the HUD sets the one, the scene the
-   * other, the loop asks it before every frame. Without one every frame
-   * draws.
-   */
-  pace?: FramePace;
+  trail?: SceneTrail;
+  /** the nameplate's letters, drawn by the page in its web faces
+   *  (nameplate-glyphs.ts `plateLetters`) */
+  letters: NameplateDeps["letters"];
   /** Every layer has streamed in (the scene is complete). */
   onLoaded?: () => void;
   /**
@@ -575,6 +582,12 @@ export interface CityWalkOptions {
   site: Site;
   /** the 3D Tiles tileset to stream (lib/city/tileset.ts), a served URL */
   tilesetUrl: string;
+  /** the head start the page made for that tileset and this start
+   *  (boot-ahead.ts); without one the boot makes its own */
+  ahead?: BootAhead;
+  /** the page's `performance.timeOrigin`: a worker's clock starts later,
+   *  and `boot:page-to-viewer` counts from the page's navigation */
+  pageOrigin?: number;
 }
 
 /** The BVH worker's holds on these tiles' indexes. */
@@ -586,17 +599,6 @@ function heldIndexes(cities: Iterable<CityLayer>): Promise<void>[] {
     }
   }
   return held;
-}
-
-/**
- * The imperative surface the HUD (and, in dev/test builds, `window.__poc`)
- * drives. The look values are NOT here: they live in the look store passed in
- * through CityWalkOptions, which the scene subscribes to.
- */
-/** A captured frame and how many of its pixels make a CSS pixel. */
-export interface CapturedImage {
-  canvas: HTMLCanvasElement;
-  imagePxPerCssPx: number;
 }
 
 /** What the HUD drives of the design layer. */
@@ -615,7 +617,30 @@ export type DesignControls = Pick<
   | "status"
 >;
 
-export interface CityWalkHandle {
+/** An HUD panel over the canvas, in NDC: [x0, y0, x1, y1]. */
+export type CoverBox = [number, number, number, number];
+
+/**
+ * The keys the scene acts on (keyboard-controls.ts on the page): R and I
+ * act under the pointer, which the page knows (NDC; the centre without
+ * one); V's style change is the page's own (its look store).
+ */
+export type SceneKeys = Omit<
+  KeyboardActions,
+  "cycleStyle" | "demolish" | "inquire"
+> & {
+  demolish: (ndc?: { x: number; y: number }) => void;
+  inquire: (ndc?: { x: number; y: number }) => void;
+};
+
+/**
+ * The scene's imperative surface, where it runs (scene-server.ts serves it
+ * to the page; the HUD drives it through scene-client.ts's `CityWalkHandle`,
+ * in dev/test builds `window.__poc` too). The look values are NOT here:
+ * they live in the look store passed in through CityWalkOptions, which the
+ * scene subscribes to.
+ */
+export interface SceneApp {
   /** Restores a camera pose captured by getCameraState (snapshot replay). */
   applyCameraState: (state: CameraState) => void;
   /** Removes the inquiry mark (the card was closed). */
@@ -627,7 +652,10 @@ export interface CityWalkHandle {
    * `onDesign`.
    */
   design: DesignControls;
-  dispose: () => void;
+  /** Ends the scene; settles once its teardown is through (a teardown
+   *  error goes to the reports, never rejects): the page's worker is
+   *  ended only after it. */
+  dispose: () => Promise<void>;
   /**
    * Asks what stands at a screen point (NDC; the centre when omitted),
    * marks it and reports it through `onInquiry`; tests and QA call it.
@@ -657,8 +685,25 @@ export interface CityWalkHandle {
   /** The site's walks (lib/city/walks.ts), when the tileset names them:
    *  the Erkunden panel's Spaziergänge. */
   walksUrl: string | null;
-  /** Opt-in pointer-lock mouse-look (desktop); Esc exits natively. */
-  enterImmersive: () => void;
+  /** The canvas's new size (scene-host.ts follows the page's layout). */
+  resize: (size: CanvasSize) => void;
+  /** The HUD's panels over the canvas: the nameplate keeps clear of them. */
+  setCovers: (boxes: readonly CoverBox[]) => void;
+  /** The page's loading veil is gone: `boot:veil-drop` on the trace,
+   *  and the spans it ends and starts (stream-timing.ts). */
+  veilDropped: () => void;
+  /** A still or covered scene draws its next frames: what the page asks
+   *  of it shows (scene-server.ts wakes it for every call). */
+  wake: () => void;
+  /** The HUD covers the scene (a phone's sidebar sheet): it draws only
+   *  what is asked of it, and while it moves (lib/city/frame-pace.ts). */
+  setCovered: (covered: boolean) => void;
+  /** The visitor only listens (the Hörmodus): the scene barely draws. */
+  setListening: (listening: boolean) => void;
+  /** What the page's pointer adapter (touch-controls.ts) drives. */
+  touch: TouchControlsCallbacks;
+  /** What the page's keyboard adapter (keyboard-controls.ts) drives. */
+  keys: SceneKeys;
   /**
    * The page is about to reload after the render stopped (the failure
    * card's buttons): frees the GPU — three's renderer and its device —
@@ -712,7 +757,7 @@ export interface CityWalkHandle {
     hitName: string | null;
   };
   /** current Building footprint polygons (EPSG) — shrinks when demolishing */
-  getFootprints: () => FootprintPoly[];
+  getFootprints: () => MapFootprints;
   getPose: () => PlayerPose;
   /**
    * GPU counters for perf work: the draw calls and triangles of the last
@@ -728,6 +773,10 @@ export interface CityWalkHandle {
      * post passes' first frames, anything a compile missed).
      */
     framedBuilds: { other: number; shadow: number };
+    /** compiles queued or in flight (compile-lanes.ts `compilesQueued`):
+     *  a tile shows after its compile wait even if its compile has not
+     *  had its turn yet, and what it hides until dark builds then */
+    compilesQueued: number;
     /** estimated GPU bytes of geometry + textures + shadow map */
     gpuBytes: number;
     /**
@@ -742,10 +791,11 @@ export interface CityWalkHandle {
   };
   /** the site's most notable landmarks (Wikidata), for the HUD's list */
   landmarks: Landmark[];
-  /** per-tile land-cover class PNGs + their EPSG bounds, for the minimap */
-  landcoverTiles: MapTile[];
   /** the scene's geographic position — the HUD's sunrise/sunset times */
   latLng: { lat: number; lng: number };
+  /** the minimap's picture of the site and the extent it shows
+   *  (lib/city/minimap.ts), or none */
+  mapPicture: MapPicture | null;
   /** recenter offset, lets callers map EPSG coords -> world coords */
   offset: { cx: number; cy: number };
   /** analog altitude-stick input (fly mode): +1 climbs, −1 sinks */
@@ -817,12 +867,13 @@ export interface CityWalkHandle {
 }
 
 /**
- * three's WebGPURenderer: WebGPU where the browser has it, its WebGL2
- * backend otherwise (or on `?gpu=webgl2`, scene-profile.ts). One renderer,
- * one set of node materials either way (ADR 0027).
+ * three's WebGPURenderer on WebGPU, the only backend the viewer draws with
+ * (ADR 0027): where three would fall back to WebGL2 (no adapter), the
+ * scene says the device cannot draw it.
  */
 async function createRenderer(
-  container: HTMLElement,
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  size: CanvasSize,
   budget: SceneBudget,
   /** the heartbeat will take the GPU's frame times (a trail is kept) */
   timed: boolean
@@ -831,27 +882,31 @@ async function createRenderer(
   // carries the AA (post-stack.ts); a multisampled canvas would only be
   // resolved for a full-screen quad.
   const renderer = new WebGPURenderer({
+    // the page's canvas, or that canvas in the scene's worker (ADR 0061):
+    // its CSS box is the page's, so three never styles it
+    canvas,
     antialias: false,
     powerPreference: "high-performance",
-    forceWebGL: budget.forceWebGL,
     // The GPU's time per frame for the heartbeat (lib/city/frame-timing.ts):
     // three asks for `timestamp-query` only where the adapter has it
     // (Chromium; not Safari) and writes two timestamps per pass.
-    trackTimestamp: timed && !budget.forceWebGL,
+    trackTimestamp: timed,
     // Depth from 1 at the near plane to 0 at the far one, in floats: the
     // float's precision then grows with the distance the 1/z mapping loses,
     // so surfaces kilometres off stop fighting. three turns the depth test,
     // the clear, the polygon offsets, the shadow maps and its depth helpers
-    // round itself, and falls back to the plain buffer on a WebGL2 without
-    // EXT_clip_control; what reads raw depth here asks
+    // round itself; what reads raw depth here asks
     // `reversedDepthBuffer` (stylize-effect.ts, view-ray.ts). `?depth=standard`
     // draws with the plain buffer, to compare.
-    reversedDepthBuffer: reversedDepthFromSearch(window.location.search),
+    reversedDepthBuffer: reversedDepthFromSearch(pageView.search),
   });
   try {
-    await renderer.init();
+    await streamTimings.timed(
+      "boot:renderer-init",
+      async () => await renderer.init()
+    );
   } catch (error) {
-    // No adapter and no WebGL2 either (the preflight only sees that
+    // No adapter and no fallback either (the preflight only sees that
     // `navigator.gpu` exists): free what init made, and say why in the
     // HUD's words rather than three's raw backend error (kept as `cause`).
     renderer.dispose().catch(() => {
@@ -860,14 +915,13 @@ async function createRenderer(
     });
     throw new Error(NO_GPU_MESSAGE, { cause: error });
   }
-  // Fallen back to WebGL2 (no adapter): its timer queries would wrap every
-  // pass for nothing — only the WebGPU backend's are read back.
-  const backend = renderer.backend as {
-    isWebGPUBackend?: boolean;
-    trackTimestamp?: boolean;
-  };
-  if (backend.isWebGPUBackend !== true) {
-    backend.trackTimestamp = false;
+  // three fell back to WebGL2 (no adapter after all): not a backend the
+  // viewer draws with
+  if (!(renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend) {
+    renderer.dispose().catch(() => {
+      // the error below says what matters
+    });
+    throw new Error(NO_GPU_MESSAGE);
   }
   // The `lite` profile renders at half linear resolution (a quarter of the
   // pixels) and lets the browser upscale. The canvas fills the viewport and
@@ -876,14 +930,10 @@ async function createRenderer(
   // headless suite, where every pixel is shaded on the CPU. Fill-rate is what
   // the post stack costs, and the post stack is most of a frame.
   renderer.setPixelRatio(
-    pixelRatioFor(
-      budget.profile,
-      budget.tier,
-      window.devicePixelRatio,
-      budget.safety
-    )
+    pixelRatioFor(budget.profile, budget.tier, size.dpr, budget.safety)
   );
-  renderer.setSize(container.clientWidth, container.clientHeight);
+  // (the page sizes the canvas's box: `false` leaves its style alone)
+  renderer.setSize(size.width, size.height, false);
   renderer.shadowMap.enabled = true;
   // getRenderInfo reads the last rendered frame: the loop resets the
   // counters itself, right before it draws (a held frame keeps them).
@@ -899,11 +949,6 @@ async function createRenderer(
   // castShadow:false) and the rig re-renders the map from inside the render
   // loop whenever its camera-following frustum moves. The ~640k-triangle
   // depth pass is what gets skipped.
-  renderer.domElement.style.display = "block";
-  // Touch gestures (look/pinch/double-tap) need the browser to keep its
-  // hands off scrolling and double-tap zoom on the canvas.
-  renderer.domElement.style.touchAction = "none";
-  container.append(renderer.domElement);
   return renderer;
 }
 
@@ -948,11 +993,6 @@ function framedBuildCounter(renderer: WebGPURenderer) {
 }
 
 /**
- * Tells the crash trail what the renderer runs on, and chains its public
- * device-lost and GPU-error callbacks through it (three's own handlers
- * still run: they log and stop the renderer).
- */
-/**
  * Whether a camera moved since the last call (a different camera counts):
  * its position, its turn and its projection (Modell's zoom).
  *
@@ -993,14 +1033,18 @@ function watchMotion(): (view: Camera) => boolean {
   };
 }
 
+/**
+ * Tells the crash trail what the renderer runs on, and chains its public
+ * device-lost and GPU-error callbacks through it (three's own handlers
+ * still run: they log and stop the renderer).
+ */
 function traceRenderer(
   renderer: WebGPURenderer,
-  trail: CrashTrail,
+  trail: SceneTrail,
   safety: SafetyLevel
 ): void {
-  const backend = renderer.backend as { isWebGPUBackend?: boolean };
   trail.set({
-    backend: backend.isWebGPUBackend ? "WebGPU" : "WebGL2",
+    backend: "WebGPU",
     pixelRatio: renderer.getPixelRatio(),
     safety,
   });
@@ -1034,18 +1078,14 @@ interface ProbedDevice {
 
 /**
  * Settles once the renderer's WebGPU device is lost — after its destroy,
- * when the GPU process has taken it — or at once on the WebGL2 backend,
- * which has none. three ignores a loss for `destroyed` (no recovery runs).
+ * when the GPU process has taken it. three ignores a loss for `destroyed`
+ * (no recovery runs).
  */
 async function deviceGone(renderer: WebGPURenderer): Promise<void> {
   const backend = renderer.backend as {
-    isWebGPUBackend?: boolean;
     device?: { lost: Promise<unknown> } | null;
   };
-  const device = backend.isWebGPUBackend ? backend.device : null;
-  if (device) {
-    await device.lost;
-  }
+  await backend.device?.lost;
 }
 
 /**
@@ -1053,14 +1093,11 @@ async function deviceGone(renderer: WebGPURenderer): Promise<void> {
  * submitted. When iOS has taken Safari's GPU process, WebKit throws right
  * here ("Unable to make command encoder", "Unable to finish") — before
  * any device-lost arrives, and before a frame throws the same way. The
- * error's message, or null; the WebGL2 backend has nothing to probe.
+ * error's message, or null.
  */
 function probeGpu(renderer: WebGPURenderer): string | null {
-  const backend = renderer.backend as {
-    isWebGPUBackend?: boolean;
-    device?: ProbedDevice | null;
-  };
-  const device = backend.isWebGPUBackend ? backend.device : null;
+  const backend = renderer.backend as { device?: ProbedDevice | null };
+  const device = backend.device ?? null;
   if (!device) {
     return null;
   }
@@ -1074,18 +1111,18 @@ function probeGpu(renderer: WebGPURenderer): string | null {
 }
 
 /**
- * Frees the GPU before the page reloads. three's dispose first unhooks
- * every geometry's dispose listener — a geometry freed later (a compile
- * settling, the tile cache) can no longer reach three's destroyAttribute
- * with an attribute whose upload failed, which threw — then destroys the
- * device: WebKit otherwise frees its allocations only once the old
- * document is collected, after the new page started allocating in the
- * same process. Settles within RELEASE_WAIT_MS either way.
+ * Frees the GPU before the page reloads: the device goes at once
+ * (`disposeAndDestroy`) — WebKit otherwise frees its allocations only once
+ * the old document is collected, after the new page started allocating in
+ * the same process — and three's dispose unhooks every geometry's dispose
+ * listener, so a geometry freed later (a compile settling, the tile cache)
+ * can no longer reach three's destroyAttribute with an attribute whose
+ * upload failed, which threw. Settles within RELEASE_WAIT_MS either way.
  */
 async function releaseGpu(renderer: WebGPURenderer): Promise<void> {
   let released: Promise<void>;
   try {
-    released = renderer.dispose().catch(() => {
+    released = disposeAndDestroy(renderer).catch(() => {
       // a dispose that fails still lets the reload go on
     });
   } catch {
@@ -1097,24 +1134,6 @@ async function releaseGpu(renderer: WebGPURenderer): Promise<void> {
       setTimeout(resolve, RELEASE_WAIT_MS);
     }),
   ]);
-}
-
-/**
- * Runs `then` now, or once the page is in view again: a page reloaded in
- * the background boots hidden, which is where iOS takes GPUs away.
- */
-function whenVisible(then: () => void): void {
-  if (!document.hidden) {
-    then();
-    return;
-  }
-  const onShow = () => {
-    if (!document.hidden) {
-      document.removeEventListener("visibilitychange", onShow);
-      then();
-    }
-  };
-  document.addEventListener("visibilitychange", onShow);
 }
 
 /**
@@ -1201,15 +1220,38 @@ function siteLatLng(
 
 export async function createCityWalkApp(
   opts: CityWalkOptions
-): Promise<CityWalkHandle> {
+): Promise<SceneApp> {
   // before the first build: WebKit's slices otherwise wait for a clamped
   // timer (main-yield.ts)
   installMainYield();
+  // What the page spent before the viewer's code ran: its HTML, the
+  // hydration, this chunk (on a page opened at the city's route; one come
+  // to from another page counts from that page's load).
+  if (streamTimings.markedAt("boot:viewer-start") === undefined) {
+    const navigation =
+      opts.pageOrigin === undefined
+        ? 0
+        : opts.pageOrigin - performance.timeOrigin;
+    streamTimings.since("boot:page-to-viewer", navigation);
+    streamTimings.markOnce("boot:viewer-start");
+  }
+  // The tileset and the boot tile's first contents, under way while the
+  // renderer starts and the scene is set up (boot-ahead.ts): the page's
+  // own head start when it made one for this tileset, or one from here.
+  const tilesetHref = new URL(opts.tilesetUrl, pageView.href).href;
+  const ahead =
+    opts.ahead?.url === tilesetHref
+      ? opts.ahead
+      : bootAhead(tilesetHref, opts, opts.signal);
   const renderer = await createRenderer(
-    opts.container,
+    opts.canvas,
+    opts.size,
     opts.budget,
     opts.trail !== undefined
-  );
+  ).catch((error: unknown) => {
+    ahead.release();
+    throw error;
+  });
   // three's own errors (a pipeline that failed to build, and why): into
   // the trail, which saw only what came after them (three-console.ts)
   const trailThree = opts.trail
@@ -1234,15 +1276,16 @@ export async function createCityWalkApp(
     trailThree,
     retainSceneMaterials(),
     retainOpenSkyTexture(),
+    ahead.release,
   ];
   // `?trace=1`: the stream's timings on the browser's timeline, the long
   // tasks counted, the summary printed once loaded (stream-timing.ts).
-  const tracing = traceRequested(window.location.search);
+  const tracing = traceRequested(pageView.search);
   if (tracing) {
     cleanups.push(startTrace());
   }
   // `?inspect=1`: three's Inspector over the canvas (inspector.ts)
-  if (inspectRequested(window.location.search)) {
+  if (inspectRequested(pageView.search)) {
     // a QA aid: a chunk that fails to load leaves the boot as it was
     cleanups.push(
       await attachInspector(renderer).catch(() => () => {
@@ -1251,30 +1294,44 @@ export async function createCityWalkApp(
     );
   }
   try {
-    return await bootApp(opts, renderer, scene, cleanups);
+    return await bootApp(opts, renderer, scene, cleanups, ahead);
   } catch (error) {
     // Centralized teardown: covers both abort (StrictMode remount) and real
     // load failures — otherwise the dead canvas would linger in the DOM.
-    void teardown(cleanups, scene, renderer);
+    // The failure goes out only once the renderer is released.
+    await teardown(cleanups, scene, renderer).catch(reportTeardown);
     throw error;
   }
 }
 
+/** A teardown that threw has still released the renderer: the error goes
+ *  to the page's handler (and so to the reports), never unhandled. */
+function reportTeardown(error: unknown): void {
+  globalThis.reportError?.(error);
+}
+
 /**
  * The one teardown of an app, clean or failed: its registered cleanups, the
- * scene's GPU resources, then the renderer with its device (or, on the
- * WebGL2 backend, its context) — the next app (a StrictMode remount, a round
- * trip to /wissen) makes its own canvas, and a browser holds only a handful
- * of contexts; whatever still points at this one draws nothing.
+ * scene's GPU resources, then the renderer with its device — the next app
+ * (a StrictMode remount, a round trip to /wissen) makes its own canvas and
+ * device; whatever still points at this one draws nothing.
  */
 async function teardown(
   cleanups: (() => void)[],
   scene: Scene,
   renderer: WebGPURenderer
 ): Promise<void> {
-  runCleanups(cleanups);
-  disposeObject3D(scene);
-  await releaseRenderer(renderer);
+  try {
+    try {
+      runCleanups(cleanups);
+    } finally {
+      // (`runCleanups` throws what a cleanup threw, after the last one)
+      disposeObject3D(scene);
+    }
+  } finally {
+    // whatever a cleanup threw, the renderer and its device go
+    await releaseRenderer(renderer);
+  }
 }
 
 /**
@@ -1298,8 +1355,11 @@ async function teardownWhole(
   }) => void
 ): Promise<void> {
   try {
-    runCleanups(cleanups);
-    disposeObject3D(scene);
+    try {
+      runCleanups(cleanups);
+    } finally {
+      disposeObject3D(scene);
+    }
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
     });
@@ -1312,7 +1372,7 @@ async function teardownWhole(
   await releaseRenderer(renderer);
 }
 
-/** Before a reload, once the stream is gone: the ground and BVH workers
+/** Before a reload, once the stream is gone: the ground, BVH and niche workers
  *  go, and their heaps with them, not when the old document is collected
  *  (the new page boots in the old one's process). Not in `releaseGpu`:
  *  there the stream lives on (the tiles still parsing send their jobs),
@@ -1321,23 +1381,34 @@ async function teardownWhole(
 function stopWorkers(): void {
   stopGroundWorker();
   stopBvhWorker();
+  stopNicheWorker();
 }
 
-/** The renderer and its device (or its context), and its canvas. */
+/** The renderer and its device (or its context); the canvas is the
+ *  page's (scene-host.ts takes it out). */
 async function releaseRenderer(renderer: WebGPURenderer): Promise<void> {
-  // Async: it destroys the device (or loses the context) at the end.
-  const released = renderer.dispose().catch(() => {
+  await disposeAndDestroy(renderer).catch(() => {
     // a dispose that fails leaves nothing more to free
   });
-  renderer.domElement.remove();
-  await released;
 }
 
-/** Unwinds registered teardowns in reverse creation order. */
-function runCleanups(cleanups: (() => void)[]): void {
-  for (const cleanup of [...cleanups].reverse()) {
-    cleanup();
-  }
+/**
+ * three's dispose with its device destroyed at once — upstream workaround
+ * (docs/rendering.md, "Workarounds for upstream bugs"): three r187 waits
+ * for the GPU's last timestamps before it destroys the device, behind every
+ * queued frame and compile (26 s on SwiftShader), while the device and its
+ * memory stay and the page waits. The device goes first; three's frees run
+ * a turn later, on a destroyed device, where freeing is allowed; the
+ * timestamps' read-back is refused (three logs it once) and three ignores
+ * a loss for `destroyed` (`deviceGone`). Rejects as three's dispose does.
+ */
+async function disposeAndDestroy(renderer: WebGPURenderer): Promise<void> {
+  const disposed = renderer.dispose();
+  const backend = renderer.backend as {
+    device?: { destroy: () => void } | null;
+  };
+  backend.device?.destroy();
+  await disposed;
 }
 
 /** The whole site's extent in EPSG coordinates (the minimap frame). */
@@ -1378,22 +1449,31 @@ const sceneCensusOf = (roots: (Object3D | undefined)[]): SceneCensus =>
 /** Now, as the lifecycle machine's signals carry it. */
 const signalTime = () => ({
   now: performance.now(),
-  hidden: document.hidden,
+  hidden: pageView.hidden,
 });
 
 async function bootApp(
   opts: CityWalkOptions,
   renderer: WebGPURenderer,
   scene: Scene,
-  cleanups: (() => void)[]
-): Promise<CityWalkHandle> {
-  const { container, budget } = opts;
+  cleanups: (() => void)[],
+  ahead: BootAhead
+): Promise<SceneApp> {
+  const { budget } = opts;
+  // the canvas's CSS size, as the page last measured it (`resize`)
+  let viewSize: CanvasSize = opts.size;
   let disposed = false;
+  // A boot that fails or is aborted is torn down without `leave()`: what
+  // still resolves afterwards (a plate, a stats timer, a cut-out) must
+  // find the app gone. First in, so it holds once every cleanup has run.
+  cleanups.push(() => {
+    disposed = true;
+  });
   const framedBuilds = framedBuildCounter(renderer);
 
   const camera = new PerspectiveCamera(
     DEFAULT_FOV,
-    container.clientWidth / Math.max(container.clientHeight, 1),
+    viewSize.width / Math.max(viewSize.height, 1),
     0.3,
     6000
   );
@@ -1465,9 +1545,18 @@ async function bootApp(
 
   stage("buildings", 0);
   // What the viewer needs before any content: the frame and the tile list.
-  const tilesetUrl = new URL(opts.tilesetUrl, window.location.href).href;
-  const tileset = await fetchRequiredJson<unknown>(tilesetUrl, opts.signal);
-  const extras = parseTilesetExtras(tileset);
+  // (asked for before the renderer started: what is left of its wait)
+  const tilesetUrl = ahead.url;
+  const {
+    extras,
+    json: tileset,
+    start: bootStart,
+  } = await streamTimings.timed(
+    "boot:tileset",
+    async () => await ahead.tileset
+  );
+  // everything from here to the wait for the first tiles (`boot:setup`)
+  const setupStarted = streamTimings.now();
   // the walks name their file beside the tileset's own extras (WalksExtras)
   const walksFile = (extras as WalksExtras).walks;
   ensureAlive();
@@ -1475,7 +1564,7 @@ async function bootApp(
   // The tile the boot starts on and waits for: the spawn tile, or the one
   // a recovered page's camera, or a place picked in the HUD while the page
   // was loading, stands on (lib/city/boot-start.ts).
-  const { picked, restored, spawn } = startOf(opts, extras.tiles);
+  const { picked, restored, spawn } = bootStart;
   // Streamed before anything else until the first frame is up
   // (lib/city/stream-order.ts).
   let bootTile: string | null = spawn.id;
@@ -1545,12 +1634,8 @@ async function bootApp(
   const murals = siteMurals(extras, tilesetUrl);
   const siteInfo: SiteInfo = {
     landmarks: extras.landmarks ?? [],
-    landcoverTiles: extras.tiles.map((t) => ({
-      src: new URL(t.minimap, tilesetUrl).href,
-      bounds: t.bounds,
-      bridges: t.bridges ? new URL(t.bridges, tilesetUrl).href : undefined,
-    })),
     latLng,
+    mapPicture: sitePicture(extras, tilesetUrl),
     photoCredits: murals.credits,
     provenanceUrl: besideTileset(extras.provenance, tilesetUrl),
     terrainBounds: siteBounds,
@@ -1607,8 +1692,15 @@ async function bootApp(
   const lampReflections = createLampReflections(budget.tier);
   cleanups.push(() => lampReflections.dispose());
 
-  // The facades share the ground's sun (the same node).
-  const styleResources = createStyleResources(sceneNight, ground.sunDirection);
+  // The facades share the ground's sun (the same node). The near windows
+  // are real niches (window-niche-layer.ts) — not on a phone that ran
+  // short of GPU memory lately; on a desktop up to the first safety level.
+  const niching = budget.safety <= (budget.tier === "mobile" ? 0 : 1);
+  const styleResources = createStyleResources(
+    sceneNight,
+    ground.sunDirection,
+    niching
+  );
 
   // The HUD lets the heavy dressing start after the handover (startStreaming).
   let openGate: (() => void) | undefined;
@@ -1639,6 +1731,29 @@ async function bootApp(
   // scene renders into). It is created a few lines below, before the render
   // loop runs the stream's first update, so no tile lands without it.
   let compileWith: PostStack["compile"] | null = null;
+  let recompileWith: PostStack["recompile"] | null = null;
+  const niches = niching
+    ? createNicheField(styleResources.clayDetail, {
+        capacity: NICHE_CAPACITY[budget.tier],
+        compile: async (object) =>
+          compileWith ? await compileWith(object) : undefined,
+        // a tile near the eye cuts its openings: its clay's other build,
+        // made off the frame where it can be
+        cutOn: (city, on) => {
+          const clay = city.mesh.material as MeshStandardNodeMaterial;
+          // the clay changed in place: compiled again, not skipped as done
+          if (setClayNicheCut(styleResources, clay, on) && recompileWith) {
+            void recompileWith(city.mesh).catch(() => {
+              // built on its first draw then
+            });
+          }
+        },
+      })
+    : null;
+  if (niches) {
+    scene.add(niches.mesh);
+    cleanups.push(() => niches.dispose());
+  }
   // The scene's night, season and clock (scene-environment.ts): the
   // night node every material reads, the season the trees follow (their
   // colour and leaf cover rewritten on a change of calendar day, never per
@@ -1700,6 +1815,7 @@ async function bootApp(
   };
   // each site tile's rectangle (the stream's and the loading veil's)
   const siteTileBounds = new Map(extras.tiles.map((t) => [t.id, t.bounds]));
+  let groundReach: GroundReachFollow | null = null;
   const stream = createTileStream(
     {
       // whether it compiled (a tile drops the CPU copies of what it
@@ -1729,6 +1845,15 @@ async function bootApp(
         missing.layerFailed(`${message} (Kachel ${tile})`);
       },
       onCopiesDropped: () => cpuCount.changed(),
+      // (the follow is made with the capture, further down; a level that
+      // lands before it starts on its full rasters)
+      groundFar: (box) => groundReach?.startsFar(box) ?? false,
+      // (the stream's twin camera: where the tiles are asked from)
+      rasterRank: (bounds) =>
+        fetchRank(bounds, {
+          e: offset.cx + streamCamera.position.x,
+          n: offset.cy - streamCamera.position.z,
+        }),
       dressingGate,
       bootTile: () => bootTile,
       fogColor: sceneFog.color,
@@ -1740,6 +1865,7 @@ async function bootApp(
       environment: env,
       offset,
       murals: murals.source,
+      niches,
       onChange: queueChange,
       renderer,
       styleResources,
@@ -1747,6 +1873,7 @@ async function bootApp(
       tier: budget.tier,
       tileBounds: (id) => siteTileBounds.get(id),
       tilesetUrl,
+      ahead: ahead.take,
       // the data layers' traffic builder (they are set up with the post
       // stack below; a slot asks only once the look has a layer on and
       // its tile has landed)
@@ -1757,8 +1884,8 @@ async function bootApp(
     [
       {
         camera: streamCamera,
-        width: container.clientWidth,
-        height: container.clientHeight,
+        width: viewSize.width,
+        height: viewSize.height,
       },
       // at a resolution for streaming, not the map's: it loads what casts
       // into the view, never a finer terrain level (shadow-fit.ts)
@@ -1771,6 +1898,19 @@ async function bootApp(
   cleanups.push(() => stream.dispose());
   // Between the renderer's tiles-load-start and tiles-load-end: registered
   // before the first update, so no transition is missed.
+  // Coarser tiles in view before the browser takes the GPU away
+  // (tile-memory.ts): the stream's detail and its cache follow what the
+  // renderer holds, from the stream's first update on. A phone's page in
+  // the background keeps no tile it does not use (the resume guard, below).
+  const tileMemory = bindTileMemory({
+    tiles: stream.tiles,
+    tier: budget.tier,
+    safety: budget.safety,
+    held: () => renderer.info.memory.total,
+    shedding: () => budget.tier === "mobile" && pageView.hidden,
+    note: (detail) => opts.trail?.note("memory", detail),
+  });
+  cleanups.push(tileMemory.dispose);
   let tilesIdle = false;
   // everything in view loaded, nothing streaming (checkLoaded, below)
   let sceneSettled = false;
@@ -1996,15 +2136,19 @@ async function bootApp(
   );
   cleanups.push(() => postStack.dispose());
   compileWith = postStack.compile;
+  recompileWith = postStack.recompile;
+  // The HUD's panels over the canvas as the page last sent them
+  // (`setCovers`): the nameplate keeps clear of them.
+  let covers: readonly CoverBox[] = [];
   // The thing asked, named in the city beside it (nameplate-layer.ts):
   // drawn after the frame, onto the canvas.
   const nameplate = createNameplate({
     lens,
     depthTexture: postStack.sceneDepth,
-    fonts: () => opts.container,
+    letters: opts.letters,
     hidden: (view, points) => cityHides(view, points, stream.visibleCities()),
     groundAt: (x, z) => siteGround.underWorld(x, z),
-    hud: () => coverBoxes(renderer.domElement),
+    hud: () => covers,
     phone: budget.tier === "mobile",
     sunDirection,
     sunShadow: sunRig.shadowMap,
@@ -2051,42 +2195,39 @@ async function bootApp(
   // started with the first switch-on of any of them — the tiles' traffic
   // slots wait on the same start — and from then on driven by the spine's
   // hooks (feature-seam.ts). They start only after this synchronous setup
-  // has run (the module's promise resolves later), so what they read below
+  // has run (in a later microtask at the soonest), so what they read below
   // is all there. (Their code ships with the scene: as a chunk of its own
-  // it cost more first-load JS than it moved — feature-seam.ts.)
-  const dataLayers = lazyFeature(
-    () => dataLayersModule,
-    ({ startDataLayers }) =>
-      startDataLayers(hooks, {
-        bikeFeed: opts.site.dataLayers?.bikes?.feed,
-        bounds: unionBounds(extras),
-        bridgeUrls: extras.tiles.flatMap((t) =>
-          t.bridges ? [new URL(t.bridges, tilesetUrl).href] : []
-        ),
-        compile: async (object) =>
-          await postStack.compile(object).catch(() => {
-            // a layer whose compile failed builds when first drawn
-          }),
-        epsg: extras.epsg,
-        ground: { offset, heightAt },
-        onBikeCounts: opts.onBikeCounts,
-        onChange: () => scheduleStats(),
-        // a layer's marks draw themselves through a style's swap: it
-        // gathers them again (paper-scene.ts)
-        onMarksMoved: () => postStack.sceneChanged(),
-        onTramStatus: opts.onTramStatus,
-        onTrafficHour: opts.onTrafficHour,
-        parent: scene,
-        tramTimetableUrl: extras.trams
-          ? new URL(extras.trams, tilesetUrl).href
-          : undefined,
-      })
+  // it moved nothing — feature-seam.ts.)
+  const dataLayers = startOnce(() =>
+    startDataLayers(hooks, {
+      bikeFeed: opts.site.dataLayers?.bikes?.feed,
+      bounds: unionBounds(extras),
+      bridgeUrls: extras.tiles.flatMap((t) =>
+        t.bridges ? [new URL(t.bridges, tilesetUrl).href] : []
+      ),
+      compile: async (object) =>
+        await postStack.compile(object).catch(() => {
+          // a layer whose compile failed builds when first drawn
+        }),
+      epsg: extras.epsg,
+      ground: { offset, heightAt },
+      onBikeCounts: opts.onBikeCounts,
+      onChange: () => scheduleStats(),
+      // a layer's marks draw themselves through a style's swap: it
+      // gathers them again (paper-scene.ts)
+      onMarksMoved: () => postStack.sceneChanged(),
+      onTramStatus: opts.onTramStatus,
+      onTrafficHour: opts.onTrafficHour,
+      parent: scene,
+      tramTimetableUrl: extras.trams
+        ? new URL(extras.trams, tilesetUrl).href
+        : undefined,
+    })
   );
   cleanups.push(() => dataLayers.dispose());
-  // The first switch-on starts them. One that did not start them is noted,
-  // said once like a layer's hole, and the next switch-on asks again (a
-  // module that did not load is loaded again; a start that threw, a bug,
-  // stays failed).
+  // The first switch-on starts them. One that did not start them (a start
+  // that threw: a bug, and it stays failed) is noted and said like a
+  // layer's hole.
   const wantDataLayers = wantOnSwitchOn(dataLayers, (failure: unknown) => {
     const message =
       failure instanceof Error ? failure.message : String(failure);
@@ -2110,12 +2251,17 @@ async function bootApp(
   // When the trees' crown tiers are picked (stepVegetation, below): on the
   // pose tick, and in the next frame when the tiles in view change.
   const crownTiers = createLodSchedule();
-  // The still pace (lib/city/frame-pace.ts): a scene that stands still
-  // draws fewer frames; a look change, like any input, wakes it.
+  // The loop's pace (lib/city/frame-pace.ts): a scene that stands still
+  // draws fewer frames, one the HUD covers only what is asked of it; a
+  // look change, like any input or call, wakes it.
+  const pace = createFramePace();
   const stillness = createStillness();
+  // (a call while the HUD covers the scene draws only its tail: it ends
+  // no stillness, or a still scene would draw on for STILL_AFTER_MS)
   const wakeStill = () => {
-    stillness.wake(performance.now());
-    opts.pace?.setStill(false);
+    if (pace.wake()) {
+      stillness.wake(performance.now());
+    }
   };
   let dataLayersMove = false;
   let sceneStill = false;
@@ -2168,11 +2314,6 @@ async function bootApp(
   // A loaded design (design-layer.ts): walked against like a building. It
   // is created with the minimap's footprints, below.
   let design: DesignLayer | null = null;
-  // what the tile cache leaves to it (the memory governor's section)
-  let designReserve = 0;
-  let reserveCache = (bytes: number) => {
-    designReserve = bytes;
-  };
   const collider = createCityCollider(
     () => [
       ...stream.visibleCities().map((c) => c.mesh),
@@ -2234,8 +2375,8 @@ async function bootApp(
   });
   // Modell (plan 055): the parallel camera and the dolly zooms in and out.
   const viewportCss = () => ({
-    width: container.clientWidth,
-    height: container.clientHeight,
+    width: viewSize.width,
+    height: viewSize.height,
   });
   /** Which camera the tile renderer streams for, and what the frame looks like. */
   const swapCamera = (parallel: boolean) => {
@@ -2467,9 +2608,10 @@ async function bootApp(
       ...(dataLayers.current()?.asks() ?? []),
       ...(design?.asks() ?? []),
     ],
+    // the page's CSS size: an OffscreenCanvas has no layout of its own
     viewport: () => ({
-      width: renderer.domElement.clientWidth || 1,
-      height: renderer.domElement.clientHeight || 1,
+      width: Math.max(viewSize.width, 1),
+      height: Math.max(viewSize.height, 1),
     }),
     toSite: (p) => [p.x + offset.cx, offset.cy - p.z],
     // an instance a design's site folded away is not there to be asked
@@ -2555,7 +2697,8 @@ async function bootApp(
   };
   // Modell's pinch zooms by the change since the last event.
   let lastPinch = 1;
-  const canvasControls = attachTouchControls(renderer.domElement, {
+  // The pointer's gestures on the canvas (touch-controls.ts on the page).
+  const touch: TouchControlsCallbacks = {
     // A click asks (a drag looks, a double click glides there); a finger's
     // tap does not — on glass a tap is too easily a missed drag.
     onTap: (ndcX, ndcY, pointerType) => {
@@ -2638,8 +2781,7 @@ async function bootApp(
         pose.travelTo(hit);
       }
     },
-  });
-  cleanups.push(canvasControls.detach);
+  };
 
   let fps = 0;
   // Geometry + tracked textures + the shadow map; the post stack's screen
@@ -2705,57 +2847,97 @@ async function bootApp(
       clearTimeout(statsTimer);
     }
   });
-  // Every tile's building footprints for the minimap, independent of what
-  // has streamed in (a few hundred KB for the site): the map shows the whole
-  // city once the player has it (they load after the handover, not against
-  // the spawn tile's glTF), and demolished buildings via `demolitions`.
+  // The buildings' footprints, packed (lib/city/footprint-pack.ts), per
+  // tile and only where a building's outline is asked for: a demolished
+  // one painted over on the minimap, a design's cover. The minimap shows
+  // the build's picture of them (scripts/bake-minimap.ts): Dresden's every
+  // footprint was ≈ 2 MB gzipped and 4 MB held.
   const demolitions = createDemolitions(stream);
-  const footprints = new Map<string, [number, number][][][]>();
-  // The flattened list the minimap draws, rebuilt only when a file lands or
-  // a building goes (either drops it): the same array otherwise, so React
-  // bails out and the minimap does not repaint its static layer on every
-  // tile event.
-  let flattened: FootprintPoly[] | null = null;
-  const currentFootprints = (): FootprintPoly[] => {
-    if (!flattened) {
-      flattened = [...footprints].flatMap(([tile, polys]) => {
-        const gone = demolitions.goneOn(tile);
-        const replaced = design?.hiddenFor(tile);
-        return footprintPolys(
-          polys,
-          (i) => gone?.has(i) !== true && replaced?.has(i) !== true
-        );
-      });
-      // the design's plan, drawn as a building
-      const planOutline = design?.outline();
-      if (planOutline) {
-        flattened.push({ pts: planOutline });
-      }
-    }
-    return flattened;
-  };
+  const footprints = new Map<string, FootprintPack>();
+  /** the tiles whose footprints were asked for (here or on their way) */
+  const footprintsAsked = new Set<string>();
+  /** the footprint files on their way */
+  const footprintLoads = new Set<Promise<void>>();
+  // What the minimap draws, rebuilt only when a file lands or a building
+  // goes (either drops it): the same object otherwise, so React bails out
+  // and the minimap does not repaint its static layer on every tile event.
+  let mapped: MapFootprints | null = null;
   const loadTileFootprints = async (tile: (typeof extras.tiles)[number]) => {
     try {
-      const polys = await fetchOptionalJson<[number, number][][][]>(
+      const bytes = await fetchOptionalBinary(
         new URL(tile.footprints, tilesetUrl).href,
         opts.signal
       );
-      if (polys && !disposed) {
-        footprints.set(tile.id, polys);
-        flattened = null;
-        // a design loaded before the tile's footprints came
+      const pack = bytes ? readFootprints(bytes) : null;
+      if (pack && !disposed) {
+        footprints.set(tile.id, pack);
+        mapped = null;
+        // a design that asked for them
         design?.refresh();
         scheduleStats();
       }
     } catch {
-      // a footprint file that fails leaves the minimap without that tile
+      // a footprint file that fails leaves its gaps out of the map
     }
   };
-  function loadFootprints(): void {
-    for (const tile of extras.tiles) {
-      void loadTileFootprints(tile);
+  /** Asks for a tile's footprints, once. */
+  const askFootprints = (tile: (typeof extras.tiles)[number]): void => {
+    if (!footprintsAsked.has(tile.id)) {
+      footprintsAsked.add(tile.id);
+      const loading = loadTileFootprints(tile);
+      footprintLoads.add(loading);
+      void loading.finally(() => {
+        footprintLoads.delete(loading);
+      });
     }
-  }
+  };
+  const currentFootprints = (): MapFootprints => {
+    if (!mapped) {
+      // the design's plan, drawn as a building
+      const planOutline = design?.outline();
+      const tiles: MapFootprints["tiles"][number][] = [];
+      for (const tile of extras.tiles) {
+        const gone = demolitions.goneOn(tile.id);
+        const replaced = design?.hiddenFor(tile.id);
+        if (!(gone?.size || replaced?.size)) {
+          continue;
+        }
+        // a tile with gaps: its outlines paint them over on the picture
+        const pack = footprints.get(tile.id);
+        if (pack) {
+          tiles.push({
+            gone: new Set([...(gone ?? []), ...(replaced ?? [])]),
+            pack,
+          });
+        } else {
+          askFootprints(tile);
+        }
+      }
+      mapped = {
+        outlines: planOutline ? [{ pts: planOutline }] : [],
+        tiles,
+      };
+    }
+    return mapped;
+  };
+  const footprintsIn = (
+    box: readonly [number, number, number, number]
+  ): ReadonlyMap<string, FootprintPack> => {
+    const out = new Map<string, FootprintPack>();
+    for (const tile of extras.tiles) {
+      const [x0, y0, x1, y1] = tile.bounds;
+      if (x1 < box[0] || x0 > box[2] || y1 < box[1] || y0 > box[3]) {
+        continue;
+      }
+      const pack = footprints.get(tile.id);
+      if (pack) {
+        out.set(tile.id, pack);
+      } else {
+        askFootprints(tile);
+      }
+    }
+    return out;
+  };
 
   // A planner's design (design-layer.ts, ADR 0054): nothing is built until
   // a file is loaded. The buildings it stands in for leave every loaded
@@ -2820,6 +3002,10 @@ async function bootApp(
         uploadIndex(layer);
       }
     }
+    if (changed) {
+      // what a design stands in for loses its niches
+      niches?.invalidate();
+    }
     return changed;
   };
   design = createDesignLayer({
@@ -2841,13 +3027,16 @@ async function bootApp(
     },
     pose: () => pose.getPose(),
     compile: async (object) => await postStack.compile(object),
-    footprints: () => footprints,
+    footprintsIn,
+    footprintsSettled: async () => {
+      await Promise.all(footprintLoads);
+    },
     changed: () => {
       if (disposed) {
         return;
       }
       hideReplaced();
-      flattened = null;
+      mapped = null;
       probe.refresh();
       postStack.sceneChanged();
       invalidateShadows();
@@ -2864,7 +3053,7 @@ async function bootApp(
         });
       }
     },
-    reserve: (bytes) => reserveCache(bytes),
+    reserve: tileMemory.reserve,
     report: (status) => opts.onDesign?.(status),
   });
   cleanups.push(() => design?.dispose());
@@ -2913,7 +3102,7 @@ async function bootApp(
     siteGround.setSources(terrains);
     // a building level that landed under the design steps aside too
     if (hideReplaced()) {
-      flattened = null;
+      mapped = null;
     }
     groundPlate?.showUnder(new Set(terrains.map((t) => t.tile)));
     // a tile whose other building level landed or took over keeps the mark
@@ -2955,7 +3144,9 @@ async function bootApp(
     if (!(chosen && demolitions.demolish(chosen.layer, chosen.objectIndex))) {
       return;
     }
-    flattened = null;
+    // the demolished house's niches go with it
+    niches?.invalidate();
+    mapped = null;
     invalidateShadows();
     scheduleStats();
     // a tile whose index the BVH worker had takes the demolish once it is
@@ -2964,7 +3155,7 @@ async function bootApp(
     if (held.length > 0) {
       void Promise.all(held).then(() => {
         if (!disposed) {
-          flattened = null;
+          mapped = null;
           invalidateShadows();
         }
         return null;
@@ -2973,90 +3164,48 @@ async function bootApp(
   };
   const demolishAtCrosshair = () => demolishAt();
 
-  // Where the mouse rests over the scene: `I` and `R` act on what is
-  // under the pointer, as a hover shortcut does — there is no dot in the
-  // middle to aim with. Without a pointer there (a touch screen, the
-  // pointer off the canvas or locked in immersive mode) they act at the
-  // centre. Kept in client pixels and turned into NDC when a key asks, so
-  // a canvas resized or locked since the last move is read as it is now.
-  let hover: { x: number; y: number } | undefined;
-  const canvas = renderer.domElement;
-  const onHover = (e: PointerEvent) => {
-    hover =
-      e.pointerType === "mouse" ? { x: e.clientX, y: e.clientY } : undefined;
-  };
-  const onLeave = () => {
-    hover = undefined;
-  };
-  const aim = (): { x: number; y: number } | undefined => {
-    if (!hover || document.pointerLockElement === canvas) {
-      return undefined;
-    }
-    const r = canvas.getBoundingClientRect();
-    return {
-      x: ((hover.x - r.left) / r.width) * 2 - 1,
-      y: -(((hover.y - r.top) / r.height) * 2 - 1),
-    };
-  };
-  canvas.addEventListener("pointermove", onHover);
-  canvas.addEventListener("pointerleave", onLeave);
-  cleanups.push(
-    () => {
-      canvas.removeEventListener("pointermove", onHover);
-      canvas.removeEventListener("pointerleave", onLeave);
+  // The keys (keyboard-controls.ts on the page): `I` and `R` act under
+  // the pointer, which the page knows (NDC; the centre without one).
+  const keys: SceneKeys = {
+    // Modell takes the keys while it owns the frame (pan, turn, scale)
+    press: (code) =>
+      modelRig.owns() ? modelRig.press(code) : pose.press(code),
+    release: (code) => {
+      pose.release(code);
+      modelRig.release(code);
     },
-    attachKeyboardControls(
-      { document, window },
-      {
-        // Modell takes the keys while it owns the frame (pan, turn, scale)
-        press: (code) =>
-          modelRig.owns() ? modelRig.press(code) : pose.press(code),
-        release: (code) => {
-          pose.release(code);
-          modelRig.release(code);
-        },
-        releaseAll: () => {
-          pose.releaseAll();
-          modelRig.releaseAll();
-        },
-        toggleMode: () =>
-          modelRig.owns() ? modelRig.leave("fly") : pose.toggleMode(),
-        toggleModel: () =>
-          modelRig.owns() ? modelRig.leave() : modelRig.enter(),
-        demolish: () => demolishAt(aim()),
-        // I asks under the pointer, or at the centre in pointer lock,
-        // where there is no pointer to click with.
-        inquire: () => {
-          inquireAt(aim());
-        },
-        cycleStyle: () =>
-          opts.look.set({ style: nextRenderStyle(opts.look.get().style) }),
-        viewpoint: (index) => {
-          const view = opts.site.viewpoints[index];
-          if (!view) {
-            return;
-          }
-          if (modelRig.owns()) {
-            modelRig.centreOn(vantageTarget(view));
-          } else {
-            pose.flyToViewpoint(view);
-          }
-        },
+    releaseAll: () => {
+      pose.releaseAll();
+      modelRig.releaseAll();
+    },
+    toggleMode: () =>
+      modelRig.owns() ? modelRig.leave("fly") : pose.toggleMode(),
+    toggleModel: () => (modelRig.owns() ? modelRig.leave() : modelRig.enter()),
+    demolish: (ndc) => demolishAt(ndc),
+    inquire: (ndc) => {
+      inquireAt(ndc);
+    },
+    viewpoint: (index) => {
+      const view = opts.site.viewpoints[index];
+      if (!view) {
+        return;
       }
-    )
-  );
+      if (modelRig.owns()) {
+        modelRig.centreOn(vantageTarget(view));
+      } else {
+        pose.flyToViewpoint(view);
+      }
+    },
+  };
 
-  const resizeObserver = new ResizeObserver(() => {
-    // a container without area keeps the last size (canvas-size.ts)
-    const canvasSize = canvasSizeFor(container);
-    if (!canvasSize) {
-      return;
-    }
-    const { width, height } = canvasSize;
+  /** The canvas's new size, from the page (scene-host.ts). */
+  const resize = (size: CanvasSize) => {
+    viewSize = size;
+    const { width, height } = size;
     wakeStill();
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setSize(width, height);
+    renderer.setSize(width, height, false);
     postStack.setSize();
     modelRig.resize();
     stream.tiles.setResolution(
@@ -3064,122 +3213,23 @@ async function bootApp(
       width,
       height
     );
-  });
-  resizeObserver.observe(container);
-  cleanups.push(() => resizeObserver.disconnect());
+  };
 
-  // Crosshair autofocus for the photographic DoF (throttled like the pose):
-  // every visible tile's buildings (their BVHs), the ground by marching its
-  // height grid, and the things the probe can ask (trees, lamps, …) — the
-  // nearest hit wins.
-  const focusRaycaster = new Raycaster();
-  focusRaycaster.firstHitOnly = true;
-  focusRaycaster.far = 6000;
-  const focusCrosshair = new Vector2(0, 0);
-  let lastFocusHit: { dist: number; name: string } | null = null;
-  const focusAt = new Vector3();
-  // What the probe can ask that the lens can focus on, without a copy ten
-  // times a second: the built ask sets of every visible tile whose sets'
-  // box the ray enters before `far` (the box kept while a tile's list
-  // stays as long), and a design's. Not glass, which writes no depth —
-  // focused on, the thing aimed at would blur: a set in the tiles' lists
-  // drawn as glass says so (`AskSet.glass`, the traffic flows), and the
-  // data layers' counters are never in them (one hung there takes the
-  // flag).
-  const focusBoxes = new WeakMap<object, { count: number; box: Aabb | null }>();
-  function* focusSets(o: Xyz, d: Xyz, far: number) {
-    for (const dressing of stream.visibleDressings()) {
-      const sets = dressing.asks;
-      if (!sets) {
-        continue;
+  // Crosshair autofocus for the photographic DoF (crosshair-focus.ts),
+  // throttled like the pose (`tickFocus`).
+  const focus = createCrosshairFocus({
+    camera,
+    cities: stream.visibleCities,
+    *tileAsks() {
+      for (const dressing of stream.visibleDressings()) {
+        yield dressing.asks;
       }
-      let kept = focusBoxes.get(sets);
-      if (kept?.count !== sets.length) {
-        kept = { count: sets.length, box: setsBox(sets) };
-        focusBoxes.set(sets, kept);
-      }
-      const enter = kept.box ? rayAabb(o, d, kept.box) : null;
-      if (enter !== null && enter <= far) {
-        yield* sets;
-      }
-    }
-  }
-  // what the lens may focus on of what a ray met: not a box the probe
-  // tolerates round a landing stage or a playground's outline (it stands
-  // over the surface drawn), nor what a design's site folded away
-  const focusable = (t: AskHit<FeatureInquiry>) =>
-    !toleranceBox(t) &&
-    !folded(t.target, focusRaycaster.ray.at(t.distance, focusAt));
-  // The trees, lamps, furniture and monuments the probe can ask (their
-  // sets come in idle time, a mesh's BVH with a question: the focus never
-  // builds either) before `far`: a tree in the middle of the view is what
-  // the lens focuses on, not the facade behind it. A design stands on
-  // ground pressed under it, which the ground's rays do not know: it may
-  // lie behind the ground they meet by as far as the ray runs to sink
-  // `DESIGN_PRESS_M` (far at a walker's grazing angle), never behind a
-  // building (`buildingFar`).
-  const focusThing = (far: number, buildingFar: number) => {
-    const { origin, direction } = focusRaycaster.ray;
-    const tileThing = nearestInSets(
-      origin,
-      direction,
-      focusSets(origin, direction, far),
-      far,
-      focusable
-    );
-    const designThing = nearestInSets(
-      origin,
-      direction,
-      design?.asks() ?? [],
-      tileThing?.distance ??
-        Math.min(
-          buildingFar,
-          far + DESIGN_PRESS_M / Math.max(-direction.y, 1e-3)
-        )
-    );
-    return designThing ?? tileThing;
-  };
-  const updateFocus = () => {
-    focusRaycaster.setFromCamera(focusCrosshair, camera);
-    // Only the tiles whose BVH is built: the focus never builds one (ten
-    // times a second), and a far tile without one lies past the lens's
-    // depth anyway.
-    const hit = nearestCityHit(
-      focusRaycaster,
-      stream.visibleCities(),
-      false
-    )?.hit;
-    const groundAt = groundAlong(
-      focusRaycaster,
-      hit?.distance ?? focusRaycaster.far
-    );
-    const thing = focusThing(
-      groundAt ?? hit?.distance ?? focusRaycaster.far,
-      hit?.distance ?? focusRaycaster.far
-    );
-    if (thing) {
-      const point = focusRaycaster.ray.at(thing.distance, new Vector3());
-      lastFocusHit = { dist: thing.distance, name: thing.target.kind };
-      postStack.setFocusTarget(point);
-      return;
-    }
-    if (groundAt !== null && (!hit || groundAt < hit.distance)) {
-      const point = focusRaycaster.ray.at(groundAt, new Vector3());
-      lastFocusHit = {
-        dist: camera.position.distanceTo(point),
-        name: "terrain",
-      };
-      postStack.setFocusTarget(point);
-      return;
-    }
-    lastFocusHit = hit
-      ? {
-          dist: camera.position.distanceTo(hit.point),
-          name: hit.object.name || hit.object.type,
-        }
-      : null;
-    postStack.setFocusTarget(hit?.point ?? null);
-  };
+    },
+    designAsks: () => design?.asks() ?? [],
+    groundAlong,
+    folded,
+    focusOn: (point) => postStack.setFocusTarget(point),
+  });
 
   // The building tiles near the camera get their BVH ahead of a ray, one
   // at a time, built in the BVH worker (city-layer.ts `prepareBvh`): a
@@ -3218,51 +3268,20 @@ async function bootApp(
       });
   };
 
-  // The loading frontier (lib/city/load-frontier.ts): what is still on its
-  // way, as a ring around the camera that walks outward as the city fills.
-  let loadVeil: VeilState = BOOT_VEIL;
-  // the first load is through (`checkLoaded`)
-  let bootLoaded = false;
-  // the last frame drew it (the frame pacer)
-  let veilShown = false;
-  const stepLoadVeil = (
-    dt: number,
-    { exporting, model }: { exporting: boolean; model: boolean }
-  ) => {
-    const at = streamCamera.position;
-    // Modell after the boot: no veil, nor any measuring (from Modell's
-    // camera the state would come back stale to the walker's view).
-    if (model && bootLoaded) {
-      loadVeil = NO_VEIL;
-      veilShown = false;
-      postStack.setLoadVeil(NO_VEIL, at.x, at.z);
-      return;
-    }
-    // Until the first load is through, the ring walks out with the last
-    // two stages' progress instead: the tile underfoot would hold it at
-    // the feet until its own details are built, then let it jump. Nor does
-    // a moment with nothing in flight mid-boot (between two stages) sweep
-    // it out and lift it: only the end of the load does.
-    const frontier = bootLoaded
-      ? loadFrontier(
-          siteTileBounds,
-          stream.pendingSiteTiles(),
-          at.x + offset.cx,
-          offset.cy - at.z
-        )
-      : bootFrontier(
-          ((stageFractions.get("surroundings") ?? 0) +
-            (stageFractions.get("details") ?? 0)) /
-            2
-        );
-    loadVeil = stepVeil(loadVeil, frontier, dt);
-    // an exported image is the city, not its loading (nor is Modell's
-    // drawing, booting)
-    const asked = exporting || model ? { strength: 0 } : pocVeil();
-    const drawn = asked ? { ...loadVeil, ...asked } : loadVeil;
-    veilShown = drawn.strength > 0;
-    postStack.setLoadVeil(drawn, at.x, at.z);
-  };
+  // The loading frontier (load-veil-follow.ts): what is still on its way,
+  // as a ring around the stream's eye.
+  const loadVeil = createLoadVeilFollow({
+    at: streamCamera.position,
+    offset,
+    tileBounds: siteTileBounds,
+    pending: () => stream.pendingSiteTiles(),
+    bootProgress: () =>
+      ((stageFractions.get("surroundings") ?? 0) +
+        (stageFractions.get("details") ?? 0)) /
+      2,
+    asked: pocVeil,
+    show: (state, x, z) => postStack.setLoadVeil(state, x, z),
+  });
 
   // Motion-keyed quality regression. Derived from the CAMERA, not the input
   // layer: WASD, the joystick, pointer-lock mouse-look, touch look and the
@@ -3279,7 +3298,7 @@ async function bootApp(
     postStack.setRegressed(regressed);
     if (regressed !== regressedNow) {
       regressedNow = regressed;
-      updatePocDebug({ regressed });
+      notePocRegressed(regressed);
     }
   };
 
@@ -3305,12 +3324,39 @@ async function bootApp(
   const vegetationLod = createVegetationLod();
   const richTrees =
     budget.tier === "mobile" ? PHONE_RICH_TREE_BUDGET : RICH_TREE_BUDGET;
+  /** How far the lantern's hand and a mast's top may lie off the eye and
+   *  the cells' box, which spans the pieces' feet (m): the tallest mast
+   *  and the hand's few metres. */
+  const LANTERN_SLACK_M = FLAG_HEIGHT_MAX + 5;
+  /** The frame's furniture flips: the eye they are measured from (none in
+   *  Modell), the world box they span (the rings it can fall on redraw,
+   *  once a frame however many sets flipped: a flagpole's cell flips 800 m
+   *  out, not every ring need) and whether one lay within the lantern's
+   *  light (held at the hand, a little off the eye: LANTERN_SLACK_M). */
+  const cellFlips = {
+    eye: null as Vector3 | null,
+    box: new Box3(),
+    lantern: false,
+  };
+  const cellFlipped = (box: Readonly<Box3>) => {
+    const { eye } = cellFlips;
+    if (!eye || box.distanceToPoint(eye) <= LANTERN_RANGE + LANTERN_SLACK_M) {
+      cellFlips.lantern = true;
+    }
+    cellFlips.box.union(box);
+  };
   /** `eye`: where the tiers are measured from (Modell: above the pivot);
    *  `tick`: the frame's pose tick is due. */
   const stepVegetation = (elapsed: number, eye: Vector3, tick: boolean) => {
     // one wind clock for every crown, the coarse ones standing in on a
     // bare fine level too
     setCrownTime(elapsed);
+    setFlagTime(elapsed);
+    // the real window niches around the eye (window-niche-layer.ts), not
+    // in Modell: every frame (cheap until it moves or what is shown
+    // changes), so a full tile swapped for its parent takes its boxes
+    // along at once
+    niches?.update(modelRig.owns() ? null : eye, stream.visibleCities());
     if (!crownTiers.due(tick, eye)) {
       return;
     }
@@ -3329,18 +3375,29 @@ async function bootApp(
     }
     // the street furniture's cells near the eye (furniture-layer.ts)
     // (none hidden in Modell: its views and exports draw one scale)
-    const furnitureEye = modelRig.owns() ? null : eye;
-    let cellChanged = false;
+    cellFlips.eye = modelRig.owns() ? null : eye;
+    cellFlips.lantern = false;
+    const flipped = cellFlips.box.makeEmpty();
     for (const d of shown) {
       for (const part of [d.furniture, d.tram]) {
-        if (part && showFurnitureNear(part, furnitureEye)) {
-          cellChanged = true;
+        if (part) {
+          showFurnitureNear(part, cellFlips.eye, cellFlipped);
         }
       }
     }
-    if (cellChanged) {
+    if (cellFlips.lantern) {
       invalidateLanternShadow(lantern);
-      sunRig.invalidateShadow(undefined, NEAR_CHANGE_RINGS);
+    }
+    if (!flipped.isEmpty()) {
+      sunRig.invalidateShadow(
+        {
+          minX: flipped.min.x,
+          maxX: flipped.max.x,
+          minZ: flipped.min.z,
+          maxZ: flipped.max.z,
+        },
+        NEAR_CHANGE_RINGS
+      );
     }
   };
 
@@ -3514,22 +3571,15 @@ async function bootApp(
   // pure machine (lib/city/page-lifecycle.ts, ADR 0047): the renderer,
   // the stream and the document feed it signals, and `runLifecycle`
   // carries out the effects it answers with, in the trail's order.
-  // `onGpuLost` is asked once per stop; its reload waits for the effect.
-  // One that throws is no reload: the machine catches it, so the render
-  // still stops and the page says the GPU failed ("recovery failed").
-  let reloadNow: (() => void) | null = null;
-  // the governor's forced step, for the emergency's applyStep that follows
-  let forcedStep: MemoryStep | null = null;
+  // The page said at the boot which stops it recovers from by a reload
+  // (`reloadable`); the reload is the page's, once the GPU is freed.
   let shadowResume: ReturnType<typeof setTimeout> | undefined;
   cleanups.push(() => clearTimeout(shadowResume));
   const lifecycle = createPageLifecycle({
     emergencyGapMs: EMERGENCY_GAP_MS,
     shadowHoldMs: EMERGENCY_SHADOW_HOLD_MS,
-    mayReload: (how) => {
-      reloadNow = opts.onGpuLost?.(how) ?? null;
-      return reloadNow !== null;
-    },
-    hiddenAt: document.hidden ? Date.now() : null,
+    mayReload: (how) => opts.reloadable?.(how) ?? false,
+    hiddenAt: pageView.hidden ? Date.now() : null,
   });
   type Effects = {
     [K in LifecycleEffect["kind"]]: (
@@ -3540,12 +3590,10 @@ async function bootApp(
     note: (e) => opts.trail?.note(e.event, e.detail),
     stopRender: () => {
       void renderer.setAnimationLoop(null);
+      capture.drop();
     },
-    reload: () => {
-      const reload = reloadNow;
-      if (reload) {
-        void releaseGpu(renderer).then(() => whenVisible(reload));
-      }
+    reload: ({ how }) => {
+      void releaseGpu(renderer).then(() => opts.onReload?.(how));
     },
     fatal: (e) => {
       if (!e.beforeFirstFrame) {
@@ -3556,13 +3604,8 @@ async function bootApp(
       bootFailure ??= new Error(failed);
     },
     shed: () => shedUnusedTiles(stream.tiles.lruCache),
-    governorForce: (e) => {
-      forcedStep = governor.force(3, renderer.info.memory.total, e.now);
-    },
-    applyStep: () => {
-      applyStep(forcedStep ?? governor.step());
-      forcedStep = null;
-    },
+    governorForce: (e) => tileMemory.force(e.now),
+    applyStep: tileMemory.apply,
     holdShadows: (e) => {
       shadowHeldUntil = Math.max(shadowHeldUntil, e.untilNow);
       streamShadowTiles(sunUp);
@@ -3572,9 +3615,7 @@ async function bootApp(
         EMERGENCY_SHADOW_HOLD_MS + GOVERN_MS
       );
     },
-    raiseSafety: () => {
-      raiseSafety(budget.safety, { by: opts.trail?.startedAt });
-    },
+    raiseSafety: () => opts.onRaiseSafety?.(),
   };
   const runLifecycle = (signal: LifecycleSignal): void => {
     for (const effect of lifecycle.dispatch(signal)) {
@@ -3626,136 +3667,34 @@ async function bootApp(
       ...signalTime(),
     });
   };
-  // Bild speichern: one tile per frame, read in the frame's own task right
-  // after its render (the canvas's picture is only readable until the task
-  // ends). One per frame because three's screen passes (SMAA, GTAO) render
-  // once per animation frame: a second render in the same frame would reuse
-  // the first one's antialiased picture.
   let lastEquivalent = 600;
-  interface CaptureRequest {
-    resolve: (image: CapturedImage) => void;
-    reject: (error: unknown) => void;
-  }
-  const captureQueue: CaptureRequest[] = [];
-  let capture: {
-    request: CaptureRequest;
-    view: ModelCamera | PerspectiveCamera;
-    tiles: ExportTile[];
-    next: number;
-    fullW: number;
-    fullH: number;
-    w: number;
-    h: number;
-    out: HTMLCanvasElement;
-    ctx: CanvasRenderingContext2D;
-    imagePxPerCssPx: number;
-  } | null = null;
-  // The picture is saved at the tier's resolution, not at the one the
-  // frame rate took (rescale, below, takes it back after the export).
-  const basePixelRatio = renderer.getPixelRatio();
-  const fullResolution = () => {
-    if (renderer.getPixelRatio() !== basePixelRatio) {
-      renderer.setPixelRatio(basePixelRatio);
-      postStack.setSize();
-    }
-  };
-  // since when a capture waits for the rings
-  let captureHeldFrom: number | null = null;
-  const beginCapture = (request: CaptureRequest) => {
-    const view = activeCamera() as ModelCamera | PerspectiveCamera;
-    const { width: w, height: h } = renderer.domElement;
-    const scale = exportScale(
-      renderer.getPixelRatio(),
-      budget.tier,
-      modelRig.parallel(),
-      w * h
-    );
-    const fullW = Math.round(w * scale);
-    const fullH = Math.round(h * scale);
-    const out = document.createElement("canvas");
-    out.width = fullW;
-    out.height = fullH;
-    const ctx = out.getContext("2d");
-    if (!ctx) {
-      request.reject(new Error("2D canvas unsupported"));
-      return;
-    }
-    capture = {
-      request,
-      view,
-      tiles: exportTiles(fullW, fullH, w, h),
-      next: 0,
-      fullW,
-      fullH,
-      w,
-      h,
-      out,
-      ctx,
-      imagePxPerCssPx: renderer.getPixelRatio() * scale,
-    };
-  };
-  /** Before the render: the frustum slides over the larger picture. A capture
-   *  starts once the rings have drawn what they were asked (a study's new sun:
-   *  one a frame), or after a bounded wait: a stream of landing tiles never
-   *  holds it for good. */
-  const aimCaptureTile = () => {
-    // the shadow rings redrawn, and the lens grown in and focused
-    const waiting =
-      !capture &&
-      captureQueue.length > 0 &&
-      (sunRig.shadowBusy() || !postStack.getFocusInfo().settled);
-    captureHeldFrom = waiting ? (captureHeldFrom ?? performance.now()) : null;
-    if (
-      captureHeldFrom !== null &&
-      performance.now() - captureHeldFrom < CAPTURE_HOLD_MS
-    ) {
-      return;
-    }
-    captureHeldFrom = null;
-    const nextCapture = capture ? undefined : captureQueue.shift();
-    if (nextCapture) {
-      fullResolution();
-      beginCapture(nextCapture);
-    }
-    const c = capture;
-    if (!c || c.tiles.length < 2) {
-      return;
-    }
-    const t = c.tiles[c.next];
-    c.view.setViewOffset(c.fullW, c.fullH, t.offsetX, t.offsetY, c.w, c.h);
-  };
-  /** After the render: the tile's middle into the picture. */
-  const takeCaptureTile = () => {
-    const c = capture;
-    if (!c) {
-      return;
-    }
-    const t = c.tiles[c.next];
-    try {
-      c.ctx.drawImage(
-        renderer.domElement,
-        t.srcX,
-        t.srcY,
-        t.w,
-        t.h,
-        t.dstX,
-        t.dstY,
-        t.w,
-        t.h
-      );
-    } catch (error) {
-      c.next = c.tiles.length;
-      c.request.reject(error);
-    }
-    c.next += 1;
-    if (c.tiles.length > 1) {
-      c.view.clearViewOffset();
-    }
-    if (c.next >= c.tiles.length) {
-      capture = null;
-      c.request.resolve({ canvas: c.out, imagePxPerCssPx: c.imagePxPerCssPx });
-    }
-  };
+  // Bild speichern (scene-capture.ts): asked for through the handle, drawn
+  // by the frame, one tile a frame. A capture waits for the shadow rings
+  // redrawn and the lens grown in and focused.
+  const capture = createSceneCapture({
+    renderer,
+    tier: budget.tier,
+    camera: activeCamera,
+    parallel: () => modelRig.parallel(),
+    unsettled: () => sunRig.shadowBusy() || !postStack.getFocusInfo().settled,
+    resized: () => postStack.setSize(),
+  });
+  cleanups.push(capture.drop);
+  // Each fine ground level on the rasters its distance asks for: the full
+  // paving, edges, sports grounds and markings near the camera, their
+  // 1024² twins beyond the detail's reach (lib/city/ground-reach.ts).
+  groundReach = createGroundReachFollow({
+    details: () =>
+      [...stream.terrains].flatMap((t) => (t.detail ? [t.detail] : [])),
+    onSwap: () => postStack.sceneChanged(),
+    view: () =>
+      reachViewOf(
+        activeCamera(),
+        renderer,
+        capture.basePixelRatio,
+        budget.tier
+      ),
+  });
   /**
    * The boot's wait for the start pose's first shadow map (the light
    * stage, below): ended by the frame that draws it — three builds the
@@ -3778,118 +3717,28 @@ async function bootApp(
     });
   // One frame: the scene steps, streams and renders.
   const timeBootFrame = bootFrames(streamTimings);
-  // Where each frame's time goes, for the heartbeat (below).
-  const frameTiming = createFrameTiming();
-  // The GPU's time, read back from three's timestamp queries a few times a
-  // second (one readback at a time: a slow GPU's answer is waited for).
+  // The GPU's time comes from three's timestamp queries. Not under three's
+  // Inspector (`?inspect=1`): it turns the timestamps on and resolves them
+  // every frame itself, so a readback here would get its leftovers and
+  // steer the resolution by them.
   const timedBackend = renderer.backend as {
     isWebGPUBackend?: boolean;
     trackTimestamp?: boolean;
   };
-  // Not under three's Inspector (`?inspect=1`): it turns the timestamps on
-  // and resolves them every frame itself, so a readback here would get its
-  // leftovers and steer the resolution by them.
-  const timesGpu =
-    timedBackend.isWebGPUBackend === true &&
-    timedBackend.trackTimestamp === true &&
-    !inspectRequested(window.location.search);
-  let gpuReadDue = 0;
-  let gpuReading = false;
-  // three hands back its last value when nothing new resolved (the map
-  // busy, no pass since, a failed readback): the same number again is
-  // not a new frame's.
-  let lastGpuMs = Number.NaN;
-  const readGpuTime = (now: number) => {
-    if (!timesGpu || gpuReading || now < gpuReadDue) {
-      return;
-    }
-    gpuReading = true;
-    gpuReadDue = now + GPU_TIME_READ_MS;
-    void renderer
-      .resolveTimestampsAsync("render")
-      .then((ms) => {
-        if (typeof ms === "number" && ms !== lastGpuMs) {
-          lastGpuMs = ms;
-          frameTiming.gpu(ms);
-          resolution?.gpu(ms);
-        }
-        return null;
-      })
-      .catch(() => {
-        // a read that failed: the next one is due soon
-      })
-      .finally(() => {
-        gpuReading = false;
-      });
-  };
-  // The render's resolution as the frame rate allows
-  // (lib/city/resolution-scale.ts): fewer pixels while a GPU-bound page
-  // cannot hold its tier's rate, the browser scaling the canvas up. Not in
-  // the lite profile (the tests' fixed half resolution).
-  const resolution =
-    budget.profile === "lite"
-      ? null
-      : createResolutionScale(resolutionTargetsFor(budget.tier));
-  const rescale = (now: number) => {
-    if (!resolution) {
-      return;
-    }
-    // an export's frames are not the scene's, and it draws at full
-    // resolution (fullResolution, above)
-    if (capture !== null || captureQueue.length > 0) {
-      resolution.reset();
-      return;
-    }
-    const changed = resolution.update(now, sceneStill);
-    const ratio = basePixelRatio * resolution.scale();
-    if (renderer.getPixelRatio() !== ratio) {
-      renderer.setPixelRatio(ratio);
-      postStack.setSize();
-    }
-    if (changed !== undefined) {
-      opts.trail?.note("resolution", String(changed));
-    }
-  };
-  let lastDrawnAt: number | undefined;
-  /**
-   * A drawn frame's times: its callback from `cpuStart`, the render call,
-   * and the interval since the frame before — none across frames the pace
-   * or the e2e hold kept back (a held gap is no measure of the display).
-   */
-  const timeFrame = (
-    time: number,
-    cpuStart: number,
-    renderStart: number,
-    renderEnd: number
-  ) => {
-    const held = lastDrawnAt === undefined || opts.pace?.heldBefore() === true;
-    const interval = held ? undefined : time - (lastDrawnAt ?? time);
-    frameTiming.frame(renderEnd - cpuStart, renderEnd - renderStart, interval);
-    if (interval !== undefined) {
-      resolution?.frame(interval, renderEnd - cpuStart);
-    }
-    rescale(time);
-    lastDrawnAt = time;
-    readGpuTime(renderEnd);
-  };
-  // Input wakes a still scene for the very next frame (the pose steps only
-  // in drawn frames, the hover's outline follows the pointer).
-  // A pointer moving over the HUD is not the scene's (its hover outline
-  // reads the canvas alone).
-  const wakeEvents = ["pointerdown", "wheel", "keydown", "touchstart"] as const;
-  for (const type of wakeEvents) {
-    window.addEventListener(type, wakeStill, { capture: true, passive: true });
-  }
-  renderer.domElement.addEventListener("pointermove", wakeStill, {
-    passive: true,
-  });
-  cleanups.push(() => {
-    for (const type of wakeEvents) {
-      window.removeEventListener(type, wakeStill, { capture: true });
-    }
-    renderer.domElement.removeEventListener("pointermove", wakeStill);
-    // the pace outlives this app (the HUD's): the next starts awake
-    opts.pace?.setStill(false);
+  // Where each frame's time goes (for the heartbeat, below) and the
+  // render's resolution as the frame rate allows (frame-meter.ts).
+  const meter = createFrameMeter({
+    renderer,
+    tier: budget.tier,
+    scales: budget.profile !== "lite",
+    timesGpu:
+      timedBackend.isWebGPUBackend === true &&
+      timedBackend.trackTimestamp === true &&
+      !inspectRequested(pageView.search),
+    basePixelRatio: capture.basePixelRatio,
+    pace,
+    resized: () => postStack.setSize(),
+    note: (step) => opts.trail?.note("resolution", step),
   });
   const viewMoved = watchMotion();
   let cameraMovedAt = Number.NEGATIVE_INFINITY;
@@ -3912,9 +3761,6 @@ async function bootApp(
     const resting =
       time - cameraMovedAt >= CAMERA_REST_MS && !exporting && !dataLayersMove;
     setSliceBudget(resting ? REST_SLICE_MS : SLICE_MS, SLICE_BUDGET_HOLD_MS);
-    if (!opts.pace) {
-      return;
-    }
     // (the loading veil breathes, sweeps and lifts at the full rate)
     // (a lens still growing in or pulling focus draws at the full rate:
     // paced, it steps in jumps)
@@ -3924,10 +3770,10 @@ async function bootApp(
       !sceneSettled ||
       !postStack.getFocusInfo().settled ||
       dataLayersMove ||
-      veilShown ||
+      loadVeil.shown() ||
       sunRig.shadowBusy();
     sceneStill = stillness.frame(time, busy);
-    opts.pace.setStill(sceneStill);
+    pace.setStill(sceneStill);
   };
   // A ray through the buildings and a march over the ground, ten times a
   // second: only where there is a lens blur to focus (not on a phone),
@@ -3938,119 +3784,182 @@ async function bootApp(
   // for a few frames (`FOCUS_SNAP_MS`).
   let lensWasWanted = false;
   const tickFocus = (poseTick: boolean) => {
-    const wanted = postStack.lensWanted() && capture === null;
+    const wanted = postStack.lensWanted() && !capture.drawing();
     const back = wanted && !lensWasWanted;
     lensWasWanted = wanted;
     if (wanted && !walkMovedNow && (poseTick || back)) {
-      updateFocus();
+      focus.update();
     }
   };
-  const frame = (time: number) => {
-    const frameStart = streamTimings.now();
+  /** One frame's state, from its clock on (the later steps fill the rest). */
+  interface Frame {
+    time: number;
+    /** when the frame's callback began (the stream timings' clock) */
+    start: number;
+    /** the step since the last frame (s), and the same capped at 50 ms */
+    frameDt: number;
+    dt: number;
+    elapsed: number;
+    /** the 10 Hz tick is due (the minimap's pose, the BVHs near, the
+     *  focus, the tree tiers) */
+    poseTick: boolean;
+    /** a picture export holds the view still */
+    exporting: boolean;
+    /** the camera drawing this frame */
+    view: Camera;
+    shadowRendered: boolean;
+    renderStart: number;
+  }
+  const beginFrame = (time: number): Frame => {
+    const start = streamTimings.now();
     timer.update(pocFrameTime(time));
     const frameDt = timer.getDelta();
-    const dt = Math.min(frameDt, 0.05);
     const elapsed = timer.getElapsed();
-    // The 10 Hz tick (the minimap's pose, the BVHs near, the focus, the
-    // tree tiers): read here, as the trees step before it is spent.
-    const poseTick = elapsed >= tickDue;
-    // (not over a gap the pace held: the HUD's readout, in the very sheet
-    // that paces the loop, would read the pace)
-    if (dt > 0 && opts.pace?.heldBefore() !== true) {
-      fps = fps === 0 ? 1 / dt : fps * 0.9 + (1 / dt) * 0.1;
-    }
-    // Modell owns the frame while it is on (and through its dolly zooms);
-    // an export in progress holds the view still.
-    const exporting = capture !== null || captureQueue.length > 0;
-    if (!(modelRig.owns() || exporting)) {
-      pose.step(dt);
-    }
-    if (!exporting) {
-      modelRig.step(dt);
-    }
-    if (modelRig.owns()) {
-      applyFog();
-    }
-    // on the lens's clock: a paced frame brings it back as soon as it
-    // grows it in
-    updateRegression(Math.min(frameDt, LENS_STEP_MAX_MS / 1000));
-    // What to stream, from where the cameras look now.
-    const view = activeCamera();
-    view.updateMatrixWorld();
-    syncStreamCamera();
-    stream.tiles.update();
-    // what the update brought into view or took out, before this frame
-    // draws it (the shadow map, the lamp pool, the styles' gathering)
-    streamChange.flush();
-    // (Modell's parallel camera draws a model, not the walker's view)
-    stepLoadVeil(dt, { exporting, model: modelRig.owns() });
-    // Advance every tile's water ripple and glitter (its sky tint is the
-    // fog colour's node, in lockstep with the sun by construction).
-    setWaterTime(elapsed);
-    const equivalent = followView(elapsed, poseTick);
-    lastEquivalent = equivalent ?? 600;
-    updateCuts();
-    aimCaptureTile();
-    // What the post passes and the scene's materials know of the camera
-    // drawing this frame.
-    lens.update(view, lastEquivalent);
-    setViewDirection(view);
-    // The fountains' jets and water shimmer (one shared uniform).
-    setFountainTime(elapsed);
-    // The features that hook the frame (the data layers' light, the
-    // timetable trams), once they are here.
-    frameHook.emit(elapsed, performance.now());
-    if (poseTick) {
-      tickDue = elapsed + 0.1;
-      prepareBvhNear();
-      if (modelRig.owns()) {
-        tickModel();
-      } else {
-        tickModelOff();
-        opts.onPose?.(pose.getPose());
-      }
-    }
-    tickFocus(poseTick);
-    // FPS at ~2 Hz on its own channel — must NOT churn the heavier stats
-    // emit (a whole-scene walk; it also hands the HUD the footprints).
-    if (timer.getElapsed() >= fpsDue) {
-      fpsDue = timer.getElapsed() + 0.5;
-      opts.onFps?.(fps);
-    }
-    // Read the flag BEFORE the render: three clears it once the map is drawn.
-    const shadowRendered = sunRig.shadowPending();
-    // The counters cover this frame's passes only (autoReset is off: the
-    // loop's own reset also ran on held frames, which read back as zero).
-    renderer.info.reset();
-    // the plate's placing (its rays, a few times a second) is CPU work
-    // before the render, not render time
-    nameplate.setNight(sceneNight.value);
-    // the canvas's CSS size as the renderer was last sized (no layout
-    // read in the frame), and only while a plate is asked
-    nameplate.update(
-      view,
-      () => {
-        const css = renderer.getSize(plateSize);
-        return { width: css.x || 1, height: css.y || 1 };
-      },
-      exporting
-    );
-    const renderStart = streamTimings.now();
-    // the lens's fade and focus on the clock up to `LENS_STEP_MAX_MS`, not
-    // the capped step: a paced frame (Hörmodus, 2 fps) grows it in within
-    // a few frames, and a stall as the stream lands still does not pop it
-    framedBuilds.draw(() =>
-      postStack.render(Math.min(frameDt * 1000, LENS_STEP_MAX_MS))
-    );
-    const renderEnd = streamTimings.now();
-    takeCaptureTile();
-    frames += 1;
-    timeFrame(time, frameStart, renderStart, renderEnd);
-    noteStill(time, view, exporting);
-    tickPocFrame(shadowRendered);
-    timeBootFrame(frameStart, shadowRendered);
-    shadowFrameSeen?.(shadowRendered);
+    return {
+      time,
+      start,
+      frameDt,
+      dt: Math.min(frameDt, 0.05),
+      elapsed,
+      // read here, as the trees step before it is spent
+      poseTick: elapsed >= tickDue,
+      exporting: capture.exporting(),
+      view: activeCamera(),
+      shadowRendered: false,
+      renderStart: start,
+    };
   };
+  // One frame: the scene steps, streams and renders — its steps in the
+  // order frame-steps.ts gives and explains.
+  const frame = frameOf<Frame>(beginFrame, {
+    clock: ({ dt }) => {
+      // (not over a gap the pace held: the HUD's readout, in the very
+      // sheet that paces the loop, would read the pace)
+      if (dt > 0 && !pace.heldBefore()) {
+        fps = fps === 0 ? 1 / dt : fps * 0.9 + (1 / dt) * 0.1;
+      }
+    },
+    move: ({ dt, frameDt, exporting }) => {
+      // Modell owns the frame while it is on (and through its dolly
+      // zooms); an export in progress holds the view still.
+      if (!(modelRig.owns() || exporting)) {
+        pose.step(dt);
+      }
+      if (!exporting) {
+        modelRig.step(dt);
+      }
+      if (modelRig.owns()) {
+        applyFog();
+      }
+      // on the lens's clock: a paced frame brings it back as soon as it
+      // grows it in
+      updateRegression(Math.min(frameDt, LENS_STEP_MAX_MS / 1000));
+    },
+    stream: (f) => {
+      // What to stream, from where the cameras look now.
+      f.view = activeCamera();
+      f.view.updateMatrixWorld();
+      syncStreamCamera();
+      stream.tiles.update();
+      // what the update brought into view or took out, before this frame
+      // draws it (the shadow map, the lamp pool, the styles' gathering)
+      streamChange.flush();
+    },
+    follow: ({ dt, elapsed, exporting, poseTick }) => {
+      // (Modell's parallel camera draws a model, not the walker's view)
+      loadVeil.step(dt, { exporting, model: modelRig.owns() });
+      // Advance every tile's water ripple and glitter (its sky tint is the
+      // fog colour's node, in lockstep with the sun by construction).
+      setWaterTime(elapsed);
+      lastEquivalent = followView(elapsed, poseTick) ?? 600;
+      updateCuts();
+    },
+    view: ({ elapsed, view }) => {
+      capture.aim();
+      // What the post passes and the scene's materials know of the camera
+      // drawing this frame.
+      lens.update(view, lastEquivalent);
+      setViewDirection(view);
+      // The fountains' jets and water shimmer (one shared uniform).
+      setFountainTime(elapsed);
+      // The features that hook the frame (the data layers' light, the
+      // timetable trams), once they are here.
+      frameHook.emit(elapsed, performance.now());
+    },
+    tick: ({ elapsed, poseTick }) => {
+      if (poseTick) {
+        tickDue = elapsed + 0.1;
+        prepareBvhNear();
+        groundReach?.tick();
+        if (modelRig.owns()) {
+          tickModel();
+        } else {
+          tickModelOff();
+          opts.onPose?.(pose.getPose());
+        }
+      }
+      tickFocus(poseTick);
+      // FPS at ~2 Hz on its own channel — must NOT churn the heavier stats
+      // emit (a whole-scene walk; it also hands the HUD the footprints).
+      if (timer.getElapsed() >= fpsDue) {
+        fpsDue = timer.getElapsed() + 0.5;
+        opts.onFps?.(fps);
+      }
+    },
+    overlay: ({ exporting, view }) => {
+      // the plate's placing (its rays, a few times a second) is CPU work
+      // before the render, not render time
+      nameplate.setNight(sceneNight.value);
+      // the canvas's CSS size as the renderer was last sized (no layout
+      // read in the frame), and only while a plate is asked
+      nameplate.update(
+        view,
+        () => {
+          const css = renderer.getSize(plateSize);
+          return { width: css.x || 1, height: css.y || 1 };
+        },
+        exporting
+      );
+    },
+    render: (f) => {
+      // Read the flag BEFORE the render: three clears it once the map is
+      // drawn.
+      f.shadowRendered = sunRig.shadowPending();
+      // The counters cover this frame's passes only (autoReset is off: the
+      // loop's own reset also ran on held frames, which read back as zero).
+      renderer.info.reset();
+      f.renderStart = streamTimings.now();
+      // the lens's fade and focus on the clock up to `LENS_STEP_MAX_MS`,
+      // not the capped step: a paced frame (Hörmodus, 2 fps) grows it in
+      // within a few frames, and a stall as the stream lands still does
+      // not pop it (the motion blur on the step the camera moved by, `dt`)
+      framedBuilds.draw(() =>
+        postStack.render(
+          Math.min(f.frameDt * 1000, LENS_STEP_MAX_MS),
+          f.dt * 1000
+        )
+      );
+    },
+    after: ({ time, start, renderStart, exporting, view, shadowRendered }) => {
+      const renderEnd = streamTimings.now();
+      capture.take();
+      frames += 1;
+      meter.drawn({
+        time,
+        cpuStart: start,
+        renderStart,
+        renderEnd,
+        // (as the meter asks now, the capture's last tile taken: the
+        // resolution follows the frame rate again from this frame on)
+        exporting: capture.exporting(),
+        still: sceneStill,
+      });
+      noteStill(time, view, exporting);
+      tickPocFrame(shadowRendered);
+      timeBootFrame(start, shadowRendered);
+      shadowFrameSeen?.(shadowRendered);
+    },
+  });
   // (It resolves once the loop is installed: nothing to wait for.) The
   // whole frame is guarded, not the render alone: three asks for the next
   // frame before it runs this one, so a throw out of the pose, the stream
@@ -4061,12 +3970,13 @@ async function bootApp(
     // Paused by the e2e specs around HUD-only steps (poc-debug.ts); on resume
     // the clamp in the frame keeps the skipped time from jumping the scene.
     if (pocFramesHeld()) {
-      lastDrawnAt = undefined;
+      meter.held();
       return;
     }
-    // Held back while the phone's sidebar covers the scene, still while it
-    // scrolls (lib/city/frame-pace.ts); the same clamp covers the gap.
-    if (opts.pace && !opts.pace.draws(time)) {
+    // Held back while the scene stands still, and while the phone's
+    // sidebar covers it to what is asked of it (lib/city/frame-pace.ts);
+    // the same clamp covers the gap.
+    if (!pace.draws(time)) {
       return;
     }
     try {
@@ -4097,13 +4007,13 @@ async function bootApp(
       const rate = ((frames - beatFrames) * 1000) / Math.max(now - beatAt, 1);
       beatFrames = frames;
       beatAt = now;
-      const timing = frameTiming.take();
+      const timing = meter.timing.take();
       const drawn = renderer.getDrawingBufferSize(beatSize);
       trail.beat({
         frames,
         fps: rate,
         // a rate the pace held down is not the device's
-        paced: opts.pace?.takePaced() === true ? true : undefined,
+        paced: pace.takePaced() ? true : undefined,
         gpuMB: gpuBytes() / 1_048_576,
         rasterMB: trackedTextureBytes() / 1_048_576,
         heldMB: renderer.info.memory.total / 1_048_576,
@@ -4115,7 +4025,7 @@ async function bootApp(
         cities: stream.visibleCities().length,
         dressings: stream.dressings.size,
         ...streamByKind(stream),
-        online: navigator.onLine,
+        online: pageView.onLine,
         style: lastStyle,
         mode: pose.getMode(),
         heightM: camera.position.y - groundUnderCamera(),
@@ -4131,72 +4041,28 @@ async function bootApp(
     }, TRAIL_BEAT_MS);
     cleanups.push(() => clearInterval(beat));
   }
-  // Coarser tiles in view before the browser takes the GPU away
-  // (lib/city/memory-governor.ts): the error target and the cache's lower
-  // bound follow what the renderer holds. A page at a raised safety level
-  // (lib/city/gpu-safety.ts) has lower lines and starts further down, at
-  // its floor — already for the stream's first update, in the next frame.
-  const governor = createMemoryGovernor(
-    memoryLimitsFor(budget.tier, budget.safety),
-    memoryFloorFor(budget.tier, budget.safety)
-  );
-  const baseError = stream.tiles.errorTarget;
-  const baseMin = stream.tiles.lruCache.minBytesSize;
-  const baseMax = stream.tiles.lruCache.maxBytesSize;
-  // A phone's page in the background keeps no tile it does not use (the
-  // resume guard, below): its lower bound is 0 until it is shown again,
-  // whatever step the governor takes meanwhile.
-  const shedding = () => budget.tier === "mobile" && document.hidden;
-  const applyStep = (step: MemoryStep) => {
-    stream.tiles.errorTarget = baseError * step.errorScale;
-    // a loaded design's bytes come out of the cache (ADR 0054): the page
-    // holds no more with it than without
-    stream.tiles.lruCache.minBytesSize = shedding()
-      ? 0
-      : Math.max(0, baseMin * step.minScale - designReserve);
-    stream.tiles.lruCache.maxBytesSize = Math.max(
-      stream.tiles.lruCache.minBytesSize,
-      baseMax - designReserve
-    );
-  };
-  reserveCache = (bytes) => {
-    designReserve = bytes;
-    applyStep(governor.step());
-  };
-  applyStep(governor.step());
-  const govern = setInterval(() => {
-    const held = renderer.info.memory.total;
-    const step = governor.update(held, performance.now());
-    if (!step) {
-      return;
-    }
-    applyStep(step);
-    opts.trail?.note(
-      "memory",
-      `level ${step.level} at ${Math.round(held / 1_048_576)} MB`
-    );
-  }, GOVERN_MS);
-  cleanups.push(() => clearInterval(govern));
-
   // --- the resume guard -------------------------------------------------
   // Hidden, a phone's page lets go of every tile not in use; shown again,
   // it gets its cache back and probes the GPU before the next frame draws
   // (page-lifecycle.ts). The time away is the wall clock's: iOS stops
-  // `performance.now()` while the device sleeps.
-  const onVisibility = () =>
+  // `performance.now()` while the device sleeps. It is the page's, stamped
+  // on its event: a worker's message after a sleep lands late.
+  const onVisibility = (event: PageEvent) => {
+    const wall = event.wall ?? Date.now();
     runLifecycle(
-      document.hidden
-        ? { kind: "hidden", wall: Date.now(), phone: budget.tier === "mobile" }
+      pageView.hidden
+        ? { kind: "hidden", wall, phone: budget.tier === "mobile" }
         : {
             kind: "shown",
-            wall: Date.now(),
+            wall,
             now: performance.now(),
             gpuFailure: () => probeGpu(renderer),
           }
     );
-  document.addEventListener("visibilitychange", onVisibility);
+  };
+  pageView.addEventListener("visibilitychange", onVisibility);
   cleanups.push(() =>
-    document.removeEventListener("visibilitychange", onVisibility)
+    pageView.removeEventListener("visibilitychange", onVisibility)
   );
 
   // The load after the first frame (lib/city/boot-phases.ts): declared
@@ -4214,6 +4080,8 @@ async function bootApp(
     city: stream.visibleCities().some((c) => startsOn(c.tile)),
     terrain: stream.visibleTerrains().some((t) => startsOn(t.tile)),
   });
+  streamTimings.since("boot:setup", setupStarted);
+  const waitStarted = streamTimings.now();
   await new Promise<void>((resolve, reject) => {
     const poll = () => {
       if (disposed || opts.signal?.aborted) {
@@ -4235,8 +4103,13 @@ async function bootApp(
     };
     poll();
   });
+  streamTimings.since("boot:spawn-wait", waitStarted);
   firstFrameShown = true;
   bootTile = null;
+  // (the line was the spawn tile's until here)
+  setStreamDownloads(stream.tiles, budget.tier, false);
+  // what the stream did not take, it will not: the boot is over
+  ahead.release();
   lifecycle.dispatch({ kind: "firstFrame" });
   onChange();
   flushStats();
@@ -4259,6 +4132,7 @@ async function bootApp(
   // over the fallback floor). Its buildings' BVH is built here, as the
   // placing's rays reach them (ADR 0032: never inside a building) — after
   // the tile's ground has landed, not inside the parse that landed them.
+  ensureAlive();
   bvhOnDemand = true;
   streamTimings.timedSync("boot:place", () => placeStart());
   streamTimings.markOnce("boot:placed");
@@ -4272,6 +4146,7 @@ async function bootApp(
     "boot:light-wait",
     async () => await withinCompileWait(firstShadowFrame())
   );
+  ensureAlive();
   // The sun rig, the shadow map and the clay materials are up: this is the
   // first renderable frame, and the point the HUD hands over to the pill.
   stage("light", 1);
@@ -4283,9 +4158,10 @@ async function bootApp(
   // moment after the gate at which nothing is loading and nothing waits to
   // be dressed.
 
-  // The picture styles' programs compile once the scene has loaded and the
-  // browser is idle, so the first switch to a style does not hitch — at no
-  // cost to the boot, which never draws a style the viewer did not pick.
+  // The picture styles' programs compile once the scene has loaded and its
+  // thread is idle (`whenIdle`), so the first switch to a style does not
+  // hitch — at no cost to the boot, which never draws a style the viewer
+  // did not pick.
   let stylesWarming = false;
   const warm = () => {
     if (!disposed) {
@@ -4298,11 +4174,7 @@ async function bootApp(
       return;
     }
     stylesWarming = true;
-    if (typeof requestIdleCallback === "function") {
-      requestIdleCallback(warm, { timeout: 4000 });
-    } else {
-      setTimeout(warm, 1000);
-    }
+    whenIdle(warm, 4000);
   }
 
   /** "Loaded" on the trace: the time since the veil dropped, and the
@@ -4316,7 +4188,7 @@ async function bootApp(
       streamTimings.since("boot:veil-to-loaded", veil);
     }
     streamTimings.markOnce("boot:loaded");
-    if (!traceRequested(window.location.search)) {
+    if (!traceRequested(pageView.search)) {
       return;
     }
     printTrace("loaded");
@@ -4352,7 +4224,7 @@ async function bootApp(
     }
     if (step.loaded) {
       sceneSettled = true;
-      bootLoaded = true;
+      loadVeil.bootLoaded();
       flushStats();
       opts.trail?.note("loaded");
       worldPartial = false;
@@ -4383,7 +4255,6 @@ async function bootApp(
     // dressing, not in the frames before it.
     opts.trail?.note("dressing gate");
     openGate?.();
-    loadFootprints();
     checkLoaded();
   };
 
@@ -4447,7 +4318,32 @@ async function bootApp(
       return inquireAt(ndc);
     },
     nameplateShown: () => nameplate.shown(),
-    enterImmersive: canvasControls.lockPointer,
+    resize,
+    setCovers: (boxes) => {
+      covers = boxes;
+    },
+    veilDropped: () => {
+      // how late the veil's timer fired after the light stage: what a
+      // busy page shows as a load frozen at 52 % (stream-timing.ts)
+      streamTimings.markOnce("boot:veil-drop");
+      const light = streamTimings.markedAt("boot:light-done");
+      if (light !== undefined) {
+        streamTimings.since("boot:light-to-veil", light);
+      }
+    },
+    wake: wakeStill,
+    setCovered: (covered) => {
+      pace.setCovered(covered);
+      wakeStill();
+    },
+    setListening: (listening) => {
+      pace.setListening(listening);
+      wakeStill();
+    },
+    // input wakes a still scene for the very next frame (the pose steps
+    // only in drawn frames): scene-server wakes it before every call
+    touch,
+    keys,
     releaseGpu: async () => await releaseGpu(renderer),
     flyTo: (position, lookAt) => {
       wakeStill();
@@ -4527,6 +4423,7 @@ async function bootApp(
       passes: renderer.info.render.frameCalls,
       triangles: renderer.info.render.triangles,
       framedBuilds: { ...framedBuilds.counts },
+      compilesQueued: compilesQueued(renderer),
       // counted now: a debug read, on demand
       gpuBytes: gpuBytesWith(estimateGeometryBytes(scene)),
       memory: { ...renderer.info.memory },
@@ -4566,8 +4463,8 @@ async function bootApp(
     },
     getFocusDebug: () => ({
       ...postStack.getFocusInfo(),
-      hitDist: lastFocusHit?.dist ?? null,
-      hitName: lastFocusHit?.name ?? null,
+      hitDist: focus.last()?.dist ?? null,
+      hitName: focus.last()?.name ?? null,
     }),
     setMovementMode: (mode) =>
       modelRig.owns() ? modelRig.leave(mode) : pose.setMovementMode(mode),
@@ -4582,10 +4479,7 @@ async function bootApp(
     },
     getViewMode: () => viewMode,
     setCutOut,
-    captureImage: async () =>
-      await new Promise<CapturedImage>((resolve, reject) => {
-        captureQueue.push({ resolve, reject });
-      }),
+    captureImage: capture.request,
     toggleModel: () => (modelRig.owns() ? modelRig.leave() : modelRig.enter()),
     setModelPreset: (preset) =>
       modelRig.owns() ? modelRig.setPreset(preset) : modelRig.enter(preset),
@@ -4609,12 +4503,12 @@ async function bootApp(
     getFootprints: currentFootprints,
     ...siteInfo,
     offset,
-    dispose: () => {
+    dispose: async () => {
       if (leave()) {
         // Same list, same order as a failed boot unwinds: animation loop ->
         // resize observer -> listeners -> touch -> post stack -> stream ->
         // lights -> sun rig.
-        void teardown(cleanups, scene, renderer);
+        await teardown(cleanups, scene, renderer).catch(reportTeardown);
       }
     },
     disposeForReload: async () => {

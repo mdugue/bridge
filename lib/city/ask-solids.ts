@@ -119,6 +119,27 @@ export function insideRingXz(
   return inside;
 }
 
+/** The ring's extent in x and z: a loop, no spread — a worker's stack
+ *  takes no argument list a ring's length (ADR 0061). */
+export function ringBoxXz(ring: readonly (readonly [number, number])[]): {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+} {
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minZ = Number.POSITIVE_INFINITY;
+  let maxZ = Number.NEGATIVE_INFINITY;
+  for (const [x, z] of ring) {
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minZ = Math.min(minZ, z);
+    maxZ = Math.max(maxZ, z);
+  }
+  return { minX, maxX, minZ, maxZ };
+}
+
 /** Distance along the ray (unit `d`) to the prism, or null; 0 inside. */
 export function rayPrism(o: Xyz, d: Xyz, p: Prism): number | null {
   if (o.y >= p.y0 && o.y <= p.y1 && insideRingXz(p.ring, o.x, o.z)) {
@@ -294,11 +315,10 @@ function solidBox(s: AskSolid): Aabb {
     };
   }
   const p = "prism" in s ? s.prism : s.slab;
-  const xs = p.ring.map(([x]) => x);
-  const zs = p.ring.map(([, z]) => z);
+  const box = ringBoxXz(p.ring);
   return {
-    min: { x: Math.min(...xs), y: p.y0, z: Math.min(...zs) },
-    max: { x: Math.max(...xs), y: p.y1, z: Math.max(...zs) },
+    min: { x: box.minX, y: p.y0, z: box.minZ },
+    max: { x: box.maxX, y: p.y1, z: box.maxZ },
   };
 }
 

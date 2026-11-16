@@ -1,5 +1,5 @@
 /**
- * Passages through buildings — the pure half of scripts/bake-city-mesh.ts
+ * Passages through buildings — the pure half of scripts/city-passages.ts
  * `withPassages`. OSM maps a gateway into a courtyard, a city gate or a
  * passage under a hall as a way tagged `tunnel=building_passage`
  * (pipeline/bake/passages.py, which writes the axis it runs on through

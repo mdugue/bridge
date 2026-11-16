@@ -148,6 +148,31 @@ describe("readDxf", () => {
     expect(lawn?.kind === "area" && lawn.rings.length).toBe(2);
   });
 
+  // The plan is read in the scene's worker, whose stack is a fraction of
+  // the page's: a path's points go into its ring without an argument
+  // list of them. A million is past what a spread takes here too.
+  test("a hatch path of a million points is read without a spread", () => {
+    const n = 1_000_000;
+    const head =
+      "0 SECTION 2 ENTITIES 0 HATCH 8 L-RASEN 91 1 92 2 72 0 73 1 93";
+    const lines = [...head.split(" "), String(n)];
+    for (let k = 0; k < n; k += 1) {
+      const t = (2 * Math.PI * k) / n;
+      lines.push(
+        "10",
+        String(100 * Math.cos(t)),
+        "20",
+        String(100 * Math.sin(t))
+      );
+    }
+    lines.push("97", "0", "0", "ENDSEC", "0", "EOF");
+    const { features } = readDxf(`${lines.join("\n")}\n`);
+    const lawn = features.find((f) => f.kind === "area" && f.cls === "lawn");
+    expect(lawn?.kind === "area" && lawn.rings[0]?.length).toBeGreaterThan(
+      n - 2
+    );
+  });
+
   test("a closed polyline is an area only on a layer that names a class", () => {
     const r = readDxf(plan());
     const paving = r.features.filter(

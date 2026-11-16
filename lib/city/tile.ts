@@ -100,7 +100,7 @@ export function cityMeshSourceFiles(
 export interface TileArtifact {
   /** for a downsampled raster: the committed full-size file it is baked
    *  from (under data/<site>/dlm/) and its edge (px) */
-  bakedFrom?: { file: string; raster: number };
+  bakedFrom?: { channels?: 2 | 4; file: string; raster: number };
   /** made by prepare-data.ts from other side files: nothing committed */
   built?: true;
   /** file name under public/data (before content hashing) */
@@ -119,9 +119,10 @@ export interface TerrainNaming {
   with?: readonly string[];
 }
 
-/** The edge of the class raster the minimap reads (it paints 256² per
- *  tile). */
-export const SMALL_RASTER_PX = 512;
+/** The edge of the rasters a fine level reads while it is far from the
+ *  camera (lib/city/ground-reach.ts): the paving, the edge
+ *  distances and the sports grounds at a quarter of their texels. */
+export const FAR_RASTER_PX = 1024;
 
 /**
  * One row per side file. Besides its name, a row says where the viewer
@@ -137,7 +138,12 @@ export const SMALL_RASTER_PX = 512;
  */
 interface ArtifactSpec {
   ask?: true;
-  bakedFrom?: { file: (tile: string) => string; raster: number };
+  bakedFrom?: {
+    /** the raster's interleaved channels (a PNG that many times as wide) */
+    channels?: 2 | 4;
+    file: (tile: string) => string;
+    raster: number;
+  };
   built?: true;
   /** named in the coarse terrain's extras: what that level is dressed with */
   coarse?: true;
@@ -174,12 +180,6 @@ const ARTIFACTS = {
     bakedFrom: { file: named("landcover", "png"), raster: COARSE_RASTER_PX },
     terrain: { levels: { 1: ["landcover", "landcoverLow"] } },
   },
-  // The minimap's class raster: 1/16 of the phone raster's pixels.
-  landcoverSmall: {
-    file: (tile) => `landcover_${tile}.r${SMALL_RASTER_PX}.png`,
-    required: true,
-    bakedFrom: { file: named("landcover", "png"), raster: SMALL_RASTER_PX },
-  },
   vegrows: {
     file: named("vegrows", "geojson"),
     required: true,
@@ -197,16 +197,49 @@ const ARTIFACTS = {
     file: named("surface", "png"),
     terrain: { levels: { 0: ["surface"] } },
   },
+  // The same at FAR_RASTER_PX for a fine level far from the camera, where
+  // the patterns have faded and only the paving's kind still shows:
+  // 4 MiB on the GPU instead of 16. Downsampled (NEAREST) by prepare-data.
+  surfaceFar: {
+    file: (tile) => `surface_${tile}.r${FAR_RASTER_PX}.png`,
+    bakedFrom: {
+      channels: 4,
+      file: named("surface", "png"),
+      raster: FAR_RASTER_PX,
+    },
+    terrain: { levels: { 0: ["surfaceFar"] }, with: ["surface"] },
+  },
   // Optional: the smoothed road/meadow edge distances
   // (pipeline/bake/edges.py); without them the shader reads the class
   // texels (kerb band only, no parking lanes).
   edges: { file: named("edges", "png"), terrain: { levels: { 0: ["edges"] } } },
+  // Its twin for a fine level far from the camera (2 MiB instead of 8).
+  edgesFar: {
+    file: (tile) => `edges_${tile}.r${FAR_RASTER_PX}.png`,
+    bakedFrom: {
+      channels: 2,
+      file: named("edges", "png"),
+      raster: FAR_RASTER_PX,
+    },
+    terrain: { levels: { 0: ["edgesFar"] }, with: ["edges"] },
+  },
   // Optional: the OSM sports grounds (pipeline/bake/sport.py) — the index
   // raster and the table of grounds it names; without them the ground
   // under a pitch is its land-cover class.
   sport: {
     file: named("sport", "png"),
     terrain: { levels: { 0: ["sport"], 1: ["sport"] }, with: ["sportTable"] },
+  },
+  // Its twin for a fine level far from the camera (4 MiB instead of 16):
+  // the same rows of the same table.
+  sportFar: {
+    file: (tile) => `sport_${tile}.r${FAR_RASTER_PX}.png`,
+    bakedFrom: {
+      channels: 4,
+      file: named("sport", "png"),
+      raster: FAR_RASTER_PX,
+    },
+    terrain: { levels: { 0: ["sportFar"] }, with: ["sport", "sportTable"] },
   },
   sportTable: {
     file: named("sport", "json"),
@@ -407,6 +440,9 @@ export function tileArtifacts(
             bakedFrom: {
               file: spec.bakedFrom.file(tile),
               raster: spec.bakedFrom.raster,
+              ...(spec.bakedFrom.channels
+                ? { channels: spec.bakedFrom.channels }
+                : {}),
             },
           }
         : {}),

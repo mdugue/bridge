@@ -317,6 +317,8 @@ def run(tile: Tile) -> None:
     out = tile.out("dlm", f"mly_{tile.id}.geojson")
     path = cache_path(tile)
     if not tile.mapillary_objects or not path.exists():
+        if tile.mapillary_objects and tile.raw_absent(out, "no Mapillary cache (v2) here"):
+            return
         if tile.mapillary_objects:
             print(f"{tile.id}: no Mapillary cache (v2) — the lamps are OSM's alone")
         write_geojson(out, [], tile.epsg, ATTRIBUTION)

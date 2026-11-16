@@ -21,6 +21,16 @@
  */
 const turns = new WeakMap<object, Promise<void>>();
 
+/** How many compiles each renderer has queued or in flight. */
+const queued = new WeakMap<object, number>();
+
+/** The compiles queued or in flight on `renderer` (a debug read: on a
+ *  slow GPU a tile shows after its compile wait while its compile still
+ *  waits for its turn). */
+export function compilesQueued(renderer: object): number {
+  return queued.get(renderer) ?? 0;
+}
+
 /**
  * Runs `start` once every compile queued before it on `renderer` has
  * settled, and resolves as the compile it starts does. `start` makes the
@@ -53,7 +63,12 @@ export async function compileInTurn(
       // runs whether or not this one failed
     })
   );
-  await compiling;
+  queued.set(renderer, compilesQueued(renderer) + 1);
+  try {
+    await compiling;
+  } finally {
+    queued.set(renderer, compilesQueued(renderer) - 1);
+  }
 }
 
 /** A drawable's step as the record holds it: the material it compiled

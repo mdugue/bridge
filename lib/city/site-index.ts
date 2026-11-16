@@ -23,6 +23,10 @@ export interface SiteIndexEntry {
   /** the map picture's served path (`/data/<id>/site-map.<hash>.webp`), when
    *  the land cover was there to paint it */
   map?: string;
+  /** the whole site's tileset as served (`/data/<id>/tileset.<hash>.json`:
+   *  what every profile but `?scene=lite` and a safety fallback streams),
+   *  which the site's page preloads */
+  tileset?: string;
 }
 
 export interface SiteIndex {

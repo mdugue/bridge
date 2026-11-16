@@ -67,6 +67,7 @@ from .common import (
     column,
     dgm_paths,
     dlm_tunnels,
+    dom_paths,
     feature,
     geometry_json,
     mosaic,
@@ -344,7 +345,7 @@ class Ground:
             raise SystemExit(f"{tile.id}: no DGM1 under {tile.data / 'dgm'}")
         self.dom = None  # decks fall back to the DGM ramp
         if tile.raw_raster("dom1").exists():
-            dom, dom_transform = mosaic(sorted((tile.raw / "dom1").glob("*.tif")), self.bounds)
+            dom, dom_transform = mosaic(dom_paths(tile, self.bounds), self.bounds)
             if dom is not None and dom.shape == self.dgm.shape and dom_transform == self.transform:
                 self.dom = dom
         if networks is None:  # the Basis-DLM's networks

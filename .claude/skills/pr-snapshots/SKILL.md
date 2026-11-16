@@ -80,7 +80,9 @@ inside a building (AGENTS.md, *Verify renders from oblique angles*).
 
 `bun run shots` (`e2e/snapshot-shot.spec.ts`, headed, a real GPU) turns
 the same snapshots into plates when a GPU is at hand. In the cloud
-container there is none: a SwiftShader render of the full profile takes
+container there is none: with `SHOTS_SMALL=1` the harness draws WebGPU
+on SwiftShader's Vulkan (`e2e/swiftshader-webgpu.ts`), and a SwiftShader
+render of the full profile takes
 minutes per view and leaves out night lamps and late trees, so post such
 images in the conversation if at all, marked as SwiftShader, and never
 hold the PR for them.

@@ -38,7 +38,7 @@ const BootScreen = () => (
   </div>
 );
 
-// three.js needs a real browser (WebGPU or WebGL2, pointer lock) — never
+// three.js needs a real browser (WebGPU, pointer lock) — never
 // prerender it.
 // `ssr: false` is only allowed inside a Client Component, hence this wrapper.
 // (The import stays written out inside dynamic(): Next matches the call to

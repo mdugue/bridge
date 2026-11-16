@@ -100,6 +100,58 @@ export default defineConfig({
       rules: { "oxc/erasing-op": "off" },
     },
     {
+      // The scene runs in a worker where it can (ADR 0061), which has no
+      // document, window or page address: scene code reads the page
+      // through page-view.ts. The .tsx are the page's.
+      files: ["app/_components/*.ts", "lib/**/*.ts"],
+      rules: {
+        "no-restricted-globals": [
+          "error",
+          {
+            name: "document",
+            message:
+              "the scene runs in a worker (ADR 0061): read the page through page-view.ts",
+          },
+          {
+            name: "window",
+            message:
+              "the scene runs in a worker (ADR 0061): read the page through page-view.ts",
+          },
+          {
+            name: "location",
+            message:
+              "the scene runs in a worker (ADR 0061): read the page through page-view.ts",
+          },
+        ],
+      },
+    },
+    {
+      // The page's own modules: the scene's host, the crash trail, the
+      // input and export; page-view.ts is the one door to the document,
+      // and the page halves of nameplate-glyphs.ts (the letters),
+      // scene-profile.ts (the budget) and gpu-support.ts (the probe) run
+      // only there.
+      files: [
+        "app/_components/ask-voice.ts",
+        "app/_components/crash-reports.ts",
+        "app/_components/crash-trail.ts",
+        "app/_components/device-orientation.ts",
+        "app/_components/gpu-safety.ts",
+        "app/_components/gpu-support.ts",
+        "app/_components/image-export.ts",
+        "app/_components/nameplate-glyphs.ts",
+        "app/_components/page-view.ts",
+        "app/_components/page-visible.ts",
+        "app/_components/poc-debug.ts",
+        "app/_components/scene-client.ts",
+        "app/_components/scene-host.ts",
+        "app/_components/scene-profile.ts",
+        "app/_components/use-coarse-pointer.ts",
+        "**/*.test.ts",
+      ],
+      rules: { "no-restricted-globals": "off" },
+    },
+    {
       files: ["**/*.{test,spec}.{ts,tsx}", "e2e/**"],
       rules: {
         complexity: "off",

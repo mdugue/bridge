@@ -38,6 +38,9 @@
         "osmBuildings": {
           "dataAsOf": "2026-10-31 (re-baked 2026-11-01 with every step from the BBBike city extract Muenchen.osm.pbf, Last-Modified 2026-10-31 16:37 UTC)"
         },
+        "furniture": {
+          "dataAsOf": "2026-11-07 (furniture re-baked 2026-11-10 with flagpoles from the BBBike city extract Muenchen.osm.pbf, Last-Modified 2026-11-07 16:42 UTC)"
+        },
         "all": {
           "dataAsOf": "2026-10-31 (re-baked 2026-11-01 with every step from the BBBike city extract Muenchen.osm.pbf, Last-Modified 2026-10-31 16:37 UTC)"
         }

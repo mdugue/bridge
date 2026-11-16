@@ -40,7 +40,6 @@ import {
   textureLoad,
   uniform,
   varying,
-  vec2,
   vec3,
   vec4,
 } from "three/tsl";
@@ -54,7 +53,7 @@ import { dataPosition } from "./shader-chunks";
 import type { Live, V3, V4 } from "./shader-chunks";
 import { sceneNight } from "./scene-environment";
 import { viewDirection } from "./view-direction";
-import { shopOf, wallEaveUp } from "./visual-style";
+import { wallEaveUp } from "./visual-style";
 
 /**
  * The Papier style's scene half (lib/city/render-style.ts `paperScene`):
@@ -188,16 +187,13 @@ const windowGlow = Fn((builder: NodeBuilder) => {
       dataPosition().z.sub(a.w)
     )
   );
-  // flat: they seed and pack
-  const word = varying(vec2(c.z, c.w)).setInterpolation(
-    InterpolationSamplingType.FLAT
-  );
+  // flat: it seeds the windows' hashes
+  const seed = varying(c.z).setInterpolation(InterpolationSamplingType.FLAT);
   const windows = clayWindows({
     eave: build.z,
     facade: varying(mix(facade, vec4(0, 0, FACADE_ROOF, NO_DOOR), roof)),
     h: max(build.w, 0),
-    seed: word.x,
-    shop: shopOf(word.y),
+    seed,
     spec: varying(band(3)).setInterpolation(InterpolationSamplingType.FLAT),
     storey: build.y,
     strength: float(1),
@@ -428,11 +424,18 @@ function needsStandIn(m: Material): boolean {
 
 /** What makes a stand-in of a source material, shared by all that match. */
 function standInKey(base: Material, source: Material): string {
-  const { positionNode } = source as { positionNode?: Node | null };
+  const { positionNode, castShadowPositionNode, receivedShadowPositionNode } =
+    source as {
+      castShadowPositionNode?: Node | null;
+      positionNode?: Node | null;
+      receivedShadowPositionNode?: Node | null;
+    };
   return [
     base.id,
     source.side,
     positionNode?.id,
+    castShadowPositionNode?.id,
+    receivedShadowPositionNode?.id,
     source.alphaTest,
     (source as MeshStandardNodeMaterial).alphaMap?.id,
     ...displacementOf(source),
@@ -551,6 +554,9 @@ export function createPaperScene(
     const from = source as MeshStandardNodeMaterial;
     made.side = source.side;
     made.positionNode = from.positionNode;
+    // a moving sheet casts and looks its shadow up at rest (flag-cloth.ts)
+    made.castShadowPositionNode = from.castShadowPositionNode;
+    made.receivedShadowPositionNode = from.receivedShadowPositionNode;
     made.transparent = false;
     made.alphaTest = from.alphaTest;
     made.alphaMap = from.alphaMap;
