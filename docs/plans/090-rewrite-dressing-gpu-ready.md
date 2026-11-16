@@ -916,7 +916,7 @@ count rose.
 **The ledger's gated figures that moved** (`qa/ledger.json`, regenerated
 on linux-x64 with the pinned Bun, all seven sites built, `--browser`):
 `browser.phoneLiteSpawnCache.bytes` 158 979 087 → 155 942 579 (−3.0 MB);
-`browser.firstLoad.gzip` 1 103 214 → 1 102 580; `bytes.fine.spawn`
+`browser.firstLoad.gzip` 1 105 320 → 1 104 760; `bytes.fine.spawn`
 5 448 502 → 5 387 136, 29 → 27 files (every `bytes` set falls, by the
 tree files and two requests a fine level; the site 193.62 → 192.37 MB,
 641 → 611 files); the `dressing` tiles as the table above;
