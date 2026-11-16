@@ -480,8 +480,8 @@ The fixtures are the clay's texts, `lib/city/__fixtures__/wgsl-budget/`
 - The e2e test "limits: every build is within WebGPU's limits, the clay
   two variables short" (`@desktop-render`): the lite scene at the spawn
   (`clay|niches`), from far off (`clay`, the far level), and inside the
-  Modell test under the parallel camera (`clay`); a second test enters
-  the Schnitt for `clay|double` (the preset's `poche` turns the clay
+  Modell test under the parallel camera (`clay`), which on its way out
+  switches to the Schnitt for `clay|double` (the preset's `poche` turns the clay
   two-sided through `setClaySection`; only `setCutOut` makes the
   `ClippingGroup`, so the Schnitt is readable). The budget is
   `CLAY_SPARE_VARIABLES` (2, parallel 3) and `CLAY_VERTEX_BUFFERS` (4) in
@@ -493,6 +493,13 @@ The fixtures are the clay's texts, `lib/city/__fixtures__/wgsl-budget/`
   (`pipeline-budget.test.ts`: eight buffers pass, the ninth is a
   breach) — a real ninth buffer in the scene would log a failed
   pipeline and trip the spec's error watch before the count.
+
+- What it costs the `@desktop-render` shard (headless, four cores
+  here): the limits test 1.1 min — the far flight and its compiles —
+  and about 0.5 min in the Modell test, on a shard of about 3.2 min
+  before. No test was retried on CI. If the shards' balance asks for
+  it, the far flight is the part to give up: the far level wears the
+  same `clay` build Modell reads.
 
 **Open after phases 0–1**
 
