@@ -1127,16 +1127,21 @@ bytes, "the build publishes 0 new files" is its proof. Where it gives
 them up (plan 092 moves the hand-over format and cuts tiles at
 publishing), `bun scripts/compare-tilesets.ts <site-a> <site-b>` compares
 two sites by content: a `public/data/<site>` folder (its manifest and
-every file beside it) or one manifest (what it names); files are matched
-by logical name. Everything is compared exactly, and a file that cannot
+every file beside it; the manifest alone says which file a logical name
+is, so a stray file never stands in for one) or one manifest (what it
+names); files are matched by logical name. Everything is compared exactly, and a file that cannot
 be read as its kind is an error (exit 2) even where both sides hold the
-same bytes. A glb's storage is content — each accessor's component type,
+same bytes. A glb's storage is content — every accessor's, whoever
+reads it (a primitive, an animation, an instancing extension): its
+component type,
 normalisation, count, `min` and `max`, the node transforms — and so are
 its stored integers, morph targets and nodes outside any scene; another
 quantisation is a difference. A tolerance is the caller's, never the
 file's: `--within <m>` (and `--within-unit <d>` for normals and
 tangents) compares POSITION, NORMAL and TANGENT placed in the world,
-checks the winding, and prints the largest deviation found, which the
+checks the winding, a tangent's handedness and a normal's length (all
+exact or within the same tolerances), and prints the largest deviation
+found, which the
 PR that accepts it names. The order of a JSON object's keys is free; the
 order of every array is content, a GeoJSON's features included
 (`treefacts_<tile>.json` is a column over the trees' features, a

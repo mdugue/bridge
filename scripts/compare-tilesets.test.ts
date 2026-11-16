@@ -4,6 +4,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
 import { Document, NodeIO } from "@gltf-transform/core";
+import type {
+  Accessor,
+  Node as GltfNode,
+  Primitive,
+} from "@gltf-transform/core";
 import {
   EXTMeshoptCompression,
   KHRMeshQuantization,
@@ -133,6 +138,14 @@ function withStats(n: number) {
   writeFileSync(path.join(dir, "site-stats.20261116.json"), text(n));
   return readSite(dir);
 }
+
+test("a stray file named like a logical name never stands in for it", async () => {
+  const a = publishedDir({ "tileset.json": text({ x: 1 }) });
+  const b = publishedDir({ "tileset.json": text({ x: 2 }) });
+  writeFileSync(path.join(b, "tileset.json"), text({ x: 1 }));
+  const result = await compareSites(readSite(a), readSite(b));
+  expect(result.differs.get("tileset.json")).toEqual(["x: 1 → 2"]);
+});
 
 test("a folder's site is its manifest and every file beside it", async () => {
   const result = await compareSites(withStats(1), withStats(2));
@@ -265,8 +278,18 @@ test("an unhashed name is not the served file it would resolve to", async () => 
 
 // --- glb ------------------------------------------------------------------------
 
+/** What a test may add to the plain glb before it is written. */
+interface Parts {
+  acc: (array: Stored, type: "SCALAR" | "VEC3" | "VEC4") => Accessor;
+  doc: Document;
+  node: GltfNode;
+  prim: Primitive;
+}
+
 interface Prim {
   code?: number;
+  /** a last change to the document before it is written */
+  more?: (parts: Parts) => void;
   extras?: Record<string, unknown>;
   /** metres a stored position step is worth (positions as snorm16) */
   grid?: number;
@@ -312,7 +335,7 @@ function positions(p: Prim): { array: Stored; scale: number } {
 async function glbOf(p: Prim = {}): Promise<Uint8Array> {
   const doc = new Document();
   const buffer = doc.createBuffer();
-  const acc = (array: Stored, type: "SCALAR" | "VEC3") =>
+  const acc = (array: Stored, type: "SCALAR" | "VEC3" | "VEC4") =>
     doc.createAccessor().setType(type).setArray(array).setBuffer(buffer);
   const { array, scale } = positions(p);
   const position = acc(array, "VEC3").setNormalized(p.grid !== undefined);
@@ -363,11 +386,12 @@ async function glbOf(p: Prim = {}): Promise<Uint8Array> {
       );
     doc.createNode("lost").setMesh(doc.createMesh("lost").addPrimitive(lost));
   }
+  p.more?.({ acc, doc, node, prim });
   return await new NodeIO().writeBinary(doc);
 }
 
 interface EditableGltf {
-  accessors: { max?: number[] }[];
+  accessors: { max?: number[]; name?: string }[];
   extensions: {
     EXT_structural_metadata: {
       schema: { classes: Record<string, { description?: string }> };
@@ -412,8 +436,10 @@ test("a normal one step apart differs, unless a unit tolerance is asked for", as
   expect(await glbLines(a, b)).toEqual([
     "mesh 0#0 NORMAL: 1 values differ (first at 8: 127 → 126)",
   ]);
-  const result = await same(glbFile(a), glbFile(b), { withinUnit: 0.001 });
-  expect(report(result)).toContain("within 0.001 for unit vectors (largest");
+  const result = await same(glbFile(a), glbFile(b), { withinUnit: 0.01 });
+  expect(report(result)).toContain(
+    "within 0.01 for unit vectors (largest 0.00787)"
+  );
 });
 
 test("NaN is equal only to NaN, exact or placed", async () => {
@@ -493,6 +519,135 @@ test("a member nobody named is compared: extensions, material index, root extras
   expect(await glbLines(glb, extended)).toEqual([
     "nodes[0].extensions: only in b",
   ]);
+});
+
+/** The triangle's positions replaced (float). */
+const placedAt =
+  (xyz: number[], lift = 0): Prim["more"] =>
+  ({ acc, node, prim }) => {
+    prim.setAttribute("POSITION", acc(new Float32Array(xyz), "VEC3"));
+    node.setTranslation([0, lift, 0]);
+  };
+
+const TRIANGLE = [0, 0, 0, 4, 0, 0, 0, 4, 0];
+
+const animated = async (z: number) =>
+  await glbOf({
+    more: ({ acc, doc, node }) => {
+      const sampler = doc
+        .createAnimationSampler()
+        .setInput(acc(new Float32Array([0, 1]), "SCALAR"))
+        .setOutput(acc(new Float32Array([0, 0, 0, 0, 0, z]), "VEC3"));
+      doc
+        .createAnimation("rise")
+        .addSampler(sampler)
+        .addChannel(
+          doc
+            .createAnimationChannel()
+            .setTargetNode(node)
+            .setTargetPath("translation")
+            .setSampler(sampler)
+        );
+    },
+  });
+
+test("accessors no primitive reads are compared: an animation's output", async () => {
+  const lines = await glbLines(await animated(1), await animated(1000));
+  expect(lines.some((l) => /^accessor \d+: 1 values differ/u.test(l))).toBe(
+    true
+  );
+  // the same values, stored under another name: its storage differs
+  const glb = await animated(1);
+  const renamed = patched(glb, (json) => {
+    json.accessors.at(-1).name = "rise";
+  });
+  const [line] = await glbLines(glb, renamed);
+  expect(line).toMatch(/^accessors\.\d+\.name: only in b$/u);
+});
+
+test("within a tolerance: the distance is Euclidean, over each vertex", async () => {
+  // 4 mm on each axis: 6.9 mm apart
+  const a = await glbOf({ more: placedAt(TRIANGLE) });
+  const b = await glbOf({
+    more: placedAt([0, 0, 0, 4, 0, 0, 0.004, 4.004, 0.004]),
+  });
+  const [line] = await glbLines(a, b, { within: 0.005 });
+  expect(line).toStartWith("node 0#0 POSITION: 1 vertices beyond 0.005");
+});
+
+test("within a tolerance: the node's translation places the vertices", async () => {
+  // b lifts its node 2 m and its positions 2 m down: the same world
+  const a = await glbOf({ more: placedAt(TRIANGLE) });
+  const b = await glbOf({
+    more: placedAt([0, -2, 0, 4, -2, 0, 0, 2, 0], 2),
+  });
+  await same(glbFile(a), glbFile(b), { within: 0.001 });
+  const lifted = await glbOf({ more: placedAt(TRIANGLE, 2) });
+  const [line] = await glbLines(a, lifted, { within: 0.001 });
+  expect(line).toStartWith("node 0#0 POSITION: 3 vertices beyond 0.001");
+});
+
+test("within a tolerance: every other value is still exact", async () => {
+  const lines = await glbLines(await glbOf(), await glbOf({ code: 3 }), {
+    within: 1,
+    withinUnit: 1,
+  });
+  expect(lines).toEqual([
+    "mesh 0#0 _FACADE: 1 values differ (first at 2: 2 → 3)",
+  ]);
+});
+
+test("within a tolerance: NaN per component, a tangent's handedness, a normal's length", async () => {
+  const placed = { within: 0.01, withinUnit: 0.01 };
+  const nan = async (y: number) =>
+    await glbOf({ more: placedAt([Number.NaN, y, 0, 4, 0, 0, 0, 4, 0]) });
+  const [nanLine] = await glbLines(await nan(0), await nan(1000), placed);
+  expect(nanLine).toStartWith("node 0#0 POSITION: 1 vertices beyond 0.01");
+  const tangent = async (w: number) =>
+    await glbOf({
+      more: ({ acc, prim }) => {
+        prim.setAttribute(
+          "TANGENT",
+          acc(new Float32Array([1, 0, 0, w, 1, 0, 0, w, 1, 0, 0, w]), "VEC4")
+        );
+      },
+    });
+  expect(await glbLines(await tangent(1), await tangent(-1), placed)).toEqual([
+    "node 0#0 TANGENT.w: 3 values differ (first at 0: 1 → -1)",
+  ]);
+  const short = await glbLines(
+    await glbOf(),
+    await glbOf({ normalZ: 64 }),
+    placed
+  );
+  expect(short).toEqual([
+    "node 0#0 NORMAL length: 1 vertices beyond 0.01 (vertex 2: (1) → (0.5039))",
+  ]);
+});
+
+const unused = async (z: number) =>
+  await glbOf({
+    more: ({ acc, doc }) => {
+      doc
+        .createMesh("spare")
+        .addPrimitive(
+          doc
+            .createPrimitive()
+            .setAttribute(
+              "POSITION",
+              acc(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, z]), "VEC3")
+            )
+        );
+    },
+  });
+
+test("within a tolerance: a mesh no node draws is compared exactly", async () => {
+  const lines = await glbLines(await unused(0), await unused(1000), {
+    within: 0.01,
+  });
+  expect(
+    lines.some((l) => l.startsWith("mesh 1#0 POSITION: 1 values differ"))
+  ).toBe(true);
 });
 
 test("one quantisation step off on the same grid differs", async () => {
@@ -909,6 +1064,8 @@ test("the command's tolerance flags reach the comparison", async () => {
   expect(run(fine, coarse)).toBe(1);
   expect(run(fine, coarse, "--within", "0.005")).toBe(1);
   expect(run(fine, coarse, "--within", "0.01")).toBe(0);
+  // a unit tolerance is no tolerance for positions
+  expect(run(fine, coarse, "--within-unit", "0.01")).toBe(1);
 });
 
 test("the command exits 0 when the same, 1 on a difference, 2 when it cannot read", () => {

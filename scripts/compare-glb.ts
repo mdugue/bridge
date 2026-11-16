@@ -4,22 +4,27 @@
  * test never sets one.
  *
  * Exact (the default): the whole JSON chunk but for what is decoded and
- * compared on its own — every accessor a primitive reads stands as its
- * storage (component type, normalised, type, count, min, max, sparse
- * count), so another quantisation is a difference; the node transforms as
- * they are; the encoding extensions (meshopt, quantisation) and the
- * generator left out. Then every mesh's stored values, attributes and
- * morph targets and indices, number for number (NaN equal only to NaN):
- * the same content baked twice stores the same integers. The
- * EXT_structural_metadata tables row by row; the images' bytes.
+ * compared on its own. Every accessor stands as its storage (component
+ * type, normalised, type, count, min, max, sparse count) — where a
+ * primitive reads it, there; any other (an animation's, an instancing
+ * extension's) by its index — so another quantisation is a difference;
+ * the node transforms as they are; the encoding extensions (meshopt,
+ * quantisation) and the generator left out. Then every accessor's stored
+ * values, number for number (NaN equal only to NaN): the same content
+ * baked twice stores the same integers. The EXT_structural_metadata
+ * tables row by row; the images' bytes.
  *
  * With `within` (metres) and `withinUnit` (a distance between unit
- * vectors): POSITION, NORMAL and TANGENT of every node's mesh — a node in
- * no scene included — are compared placed in the world, each vertex
- * within its tolerance (0 when not given), the winding by the sign of the
- * node's determinant; their accessors' storage and the transforms of the
- * nodes that carry a mesh are then not compared, everything else still
- * exactly. The largest deviation found is kept for the verdict.
+ * vectors): POSITION, NORMAL and TANGENT of every mesh a node draws — a
+ * node in no scene included — are compared placed in the world, each
+ * vertex within its tolerance (0 when not given) by the Euclidean
+ * distance over the components that are numbers on both sides (NaN only
+ * against NaN); a normal's and a tangent's stored length within
+ * `withinUnit`, a tangent's handedness (w, as the world sees it) and the
+ * winding (the sign of the node's determinant) exactly. Those accessors'
+ * storage and the transforms of the nodes that carry a mesh are then not
+ * compared; everything else still exactly, a mesh no node draws included.
+ * The largest deviation found is kept for the verdict.
  *
  * A glb that cannot be read throws (the caller reports it as unreadable).
  * Build-time only.
@@ -119,12 +124,55 @@ function attributesStorage(raw: RawGltf, attrs: unknown, placed: boolean) {
   );
 }
 
+/** The meshes some node draws: only those are placed. */
+function drawnMeshes(raw: RawGltf): Set<number> {
+  return new Set(
+    listOf(raw.nodes)
+      .map((node) => node.mesh)
+      .filter((m): m is number => typeof m === "number")
+  );
+}
+
+/** The accessors a mesh primitive reads (attributes, indices, targets). */
+function primitiveAccessors(raw: RawGltf): Set<number> {
+  const out = new Set<number>();
+  const add = (v: unknown) => {
+    if (typeof v === "number") {
+      out.add(v);
+    }
+  };
+  for (const mesh of listOf(raw.meshes)) {
+    for (const p of listOf(mesh.primitives)) {
+      for (const v of [
+        ...Object.values((p.attributes ?? {}) as Json),
+        p.indices,
+        ...listOf(p.targets).flatMap((t) => Object.values(t)),
+      ]) {
+        add(v);
+      }
+    }
+  }
+  return out;
+}
+
+/** Every accessor no primitive reads (an animation's, an extension's),
+ *  as its storage by index: compared exactly whoever reads it. */
+function otherAccessors(raw: RawGltf): Json {
+  const read = primitiveAccessors(raw);
+  return Object.fromEntries(
+    (raw.accessors ?? []).flatMap((_, i) =>
+      read.has(i) ? [] : [[String(i), storage(raw, i)]]
+    )
+  );
+}
+
 function meshesStructure(raw: RawGltf, placed: boolean): Json[] {
-  return listOf(raw.meshes).map((mesh) => ({
+  const drawn = drawnMeshes(raw);
+  return listOf(raw.meshes).map((mesh, m) => ({
     ...mesh,
     primitives: listOf(mesh.primitives).map((p) => ({
       ...p,
-      attributes: attributesStorage(raw, p.attributes, placed),
+      attributes: attributesStorage(raw, p.attributes, placed && drawn.has(m)),
       indices: storage(raw, p.indices),
       ...(p.targets === undefined
         ? {}
@@ -159,11 +207,13 @@ function metadataStructure(ext: unknown): unknown {
 
 /**
  * A glb's JSON chunk without what is decoded and compared on its own: the
- * accessors stand as their storage where a primitive reads them, the
+ * accessors stand as their storage (where a primitive reads them, there;
+ * the rest by index, so an animation's or an instancing extension's are
+ * compared too), the
  * buffer views and buffers go (their bytes are the values, tables and
  * images), the encoding extensions and the generator go. Placed (a
- * tolerance asked for), the placed attributes' storage and the transforms
- * of the nodes that carry a mesh go too.
+ * tolerance asked for), the placed attributes' storage of every mesh a
+ * node draws and the transforms of the nodes that carry a mesh go too.
  */
 export function glbStructure(raw: RawGltf, placed = false): unknown {
   const extensions = isRecord(raw.extensions)
@@ -176,6 +226,7 @@ export function glbStructure(raw: RawGltf, placed = false): unknown {
     : raw.extensions;
   return {
     ...without(raw, ["accessors", "bufferViews", "buffers"]),
+    accessors: otherAccessors(raw),
     asset: without(raw.asset, ["generator"]),
     extensions,
     extensionsRequired: withoutEncodings(raw.extensionsRequired),
@@ -291,6 +342,8 @@ const determinant = (m: M4): number =>
   m[4] * (m[1] * m[10] - m[2] * m[9]) +
   m[8] * (m[1] * m[6] - m[2] * m[5]);
 
+const term = (k: number, v: number): number => (k === 0 ? 0 : k * v);
+
 /** Each vertex's xyz through a 3×3 (column-major) plus `offset`,
  *  normalised when `unit`. */
 function through(
@@ -305,8 +358,13 @@ function through(
   for (let i = 0, o = 0; i < v.length; i += size, o += 3) {
     const [x, y, z] = [v[i], v[i + 1], v[i + 2]];
     for (let r = 0; r < 3; r += 1) {
+      // a zero coefficient takes nothing of its component: a NaN in x
+      // must not make y NaN too (0 × NaN is NaN)
       out[o + r] =
-        m[r] * x + m[stride + r] * y + m[2 * stride + r] * z + offset[r];
+        term(m[r], x) +
+        term(m[stride + r], y) +
+        term(m[2 * stride + r], z) +
+        offset[r];
     }
     const n = unit ? Math.hypot(out[o], out[o + 1], out[o + 2]) : 1;
     for (let r = 0; r < 3; r += 1) {
@@ -317,10 +375,23 @@ function through(
 }
 
 interface Placed {
+  /** values compared exactly: a tangent's handedness in the world */
+  exact: Map<string, Float64Array>;
+  /** a normal's or tangent's stored length, within the unit tolerance */
+  lengths: Map<string, Float64Array>;
   /** the sign of the node's determinant: its winding */
   winding: number;
   where: string;
   vectors: Map<string, Float64Array>;
+}
+
+/** Each vertex's xyz length (of `size` components a vertex). */
+function lengthsOf(v: Float64Array, size: number): Float64Array {
+  const out = new Float64Array(v.length / size);
+  for (let i = 0; i < out.length; i += 1) {
+    out[i] = Math.hypot(v[i * size], v[i * size + 1], v[i * size + 2]);
+  }
+  return out;
 }
 
 /** Every node's mesh placed in the world, a node in no scene included. */
@@ -339,8 +410,11 @@ function placedPrimitive(node: Node, prim: Primitive, where: string): Placed {
   const m = node.getWorldMatrix();
   const nm = normalMatrix(m);
   const vectors = new Map<string, Float64Array>();
+  const lengths = new Map<string, Float64Array>();
+  const exact = new Map<string, Float64Array>();
+  const winding = Math.sign(determinant(m));
   const position = prim.getAttribute("POSITION");
-  const normal = prim.getAttribute("NORMAL");
+  const normal = decoded(prim.getAttribute("NORMAL"));
   const tangent = prim.getAttribute("TANGENT");
   if (position) {
     vectors.set(
@@ -348,51 +422,76 @@ function placedPrimitive(node: Node, prim: Primitive, where: string): Placed {
       through(decoded(position), 3, m, 4, [m[12], m[13], m[14]], false)
     );
   }
-  if (normal) {
-    vectors.set("NORMAL", through(decoded(normal), 3, nm, 3, [0, 0, 0], true));
+  if (normal.length > 0) {
+    vectors.set("NORMAL", through(normal, 3, nm, 3, [0, 0, 0], true));
+    lengths.set("NORMAL", lengthsOf(normal, 3));
   }
   if (tangent) {
-    vectors.set(
-      "TANGENT",
-      through(decoded(tangent), tangent.getElementSize(), m, 4, [0, 0, 0], true)
+    const size = tangent.getElementSize();
+    const t = decoded(tangent);
+    vectors.set("TANGENT", through(t, size, m, 4, [0, 0, 0], true));
+    lengths.set("TANGENT", lengthsOf(t, size));
+    // the handedness, as the world sees it
+    exact.set(
+      "TANGENT.w",
+      Float64Array.from({ length: t.length / size }, (_, i) =>
+        size === 4 ? t[i * 4 + 3] * winding : 0
+      )
     );
   }
-  return { winding: Math.sign(determinant(m)), where, vectors };
+  return { exact, lengths, winding, where, vectors };
 }
 
-/** Two placed vector lists within `tol`; the largest distance found. */
+/** The Euclidean distance between two vertices of `dims` components, over
+ *  the components that are numbers on both sides; NaN when a component is
+ *  NaN on one side only (NaN against NaN is the same). */
+function distance(a: Float64Array, b: Float64Array, i: number, dims: number) {
+  let sum = 0;
+  for (let k = i; k < i + dims; k += 1) {
+    const [x, y] = [Number.isNaN(a[k]), Number.isNaN(b[k])];
+    if (x !== y) {
+      return Number.NaN;
+    }
+    sum += x ? 0 : (a[k] - b[k]) ** 2;
+  }
+  return Math.sqrt(sum);
+}
+
+/** Two placed lists (vectors of `dims` components) within `tol`; the
+ *  largest distance found. */
 function vectorsLine(
   name: string,
   a: Float64Array,
   b: Float64Array,
-  tol: number
+  tol: number,
+  dims = 3
 ): { lines: string[]; most: number } {
   if (a.length !== b.length) {
     return {
-      lines: [`${name}: ${a.length / 3} vertices in a, ${b.length / 3} in b`],
+      lines: [
+        `${name}: ${a.length / dims} vertices in a, ${b.length / dims} in b`,
+      ],
       most: 0,
     };
   }
   let most = 0;
   let count = 0;
   let first = -1;
-  for (let i = 0; i < a.length; i += 3) {
-    const d = Math.hypot(a[i] - b[i], a[i + 1] - b[i + 1], a[i + 2] - b[i + 2]);
-    // NaN against a number is a difference; NaN against NaN is not
-    const nan = Number.isNaN(d) && !(Number.isNaN(a[i]) && Number.isNaN(b[i]));
-    if (nan || d > tol) {
+  for (let i = 0; i < a.length; i += dims) {
+    const d = distance(a, b, i, dims);
+    if (Number.isNaN(d) || d > tol) {
       count += 1;
       first = first < 0 ? i : first;
     }
     most = Number.isNaN(d) ? most : Math.max(most, d);
   }
   const at = (v: Float64Array) =>
-    `(${Array.from(v.subarray(first, first + 3), (x) => +x.toFixed(4)).join(", ")})`;
+    `(${Array.from(v.subarray(first, first + dims), (x) => +x.toFixed(4)).join(", ")})`;
   const lines =
     count === 0
       ? []
       : [
-          `${name}: ${count} vertices beyond ${tol} (vertex ${first / 3}: ${at(a)} → ${at(b)})`,
+          `${name}: ${count} vertices beyond ${tol} (vertex ${first / dims}: ${at(a)} → ${at(b)})`,
         ];
   return { lines, most };
 }
@@ -442,6 +541,8 @@ async function glbReader(): Promise<NodeIO> {
 }
 
 export interface GlbContent {
+  /** the stored values of the accessors no primitive reads, by index */
+  accessors: Map<number, Float64Array>;
   images: string[];
   /** per mesh, per primitive: the stored arrays by name */
   meshes: Map<string, Float64Array>[][];
@@ -459,16 +560,29 @@ export async function readGlbContent(
   const io = await glbReader();
   const doc = await io.readBinary(toExtMeshopt(glb));
   const meshes = doc.getRoot().listMeshes();
-  if (meshes.length !== listOf(json.meshes).length) {
-    throw new Error("glb: the decoded meshes are not the JSON's");
+  const accessors = doc.getRoot().listAccessors();
+  if (
+    meshes.length !== listOf(json.meshes).length ||
+    accessors.length !== (json.accessors ?? []).length
+  ) {
+    throw new Error("glb: the decoded meshes or accessors are not the JSON's");
   }
+  const drawn = drawnMeshes(json);
+  const read = primitiveAccessors(json);
   return {
+    accessors: new Map(
+      accessors.flatMap((a, i) =>
+        read.has(i) ? [] : [[i, stored(a)] as const]
+      )
+    ),
     images: doc
       .getRoot()
       .listTextures()
       .map((t) => Buffer.from(t.getImage() ?? []).toString("base64")),
-    meshes: meshes.map((mesh) =>
-      mesh.listPrimitives().map((p) => primitiveValues(p, tolerant))
+    meshes: meshes.map((mesh, m) =>
+      mesh
+        .listPrimitives()
+        .map((p) => primitiveValues(p, tolerant && drawn.has(m)))
     ),
     placed: tolerant ? placedOf(doc) : [],
     structure: glbStructure(json, tolerant),
@@ -498,6 +612,57 @@ function meshLines(a: GlbContent, b: GlbContent): string[] {
   return out;
 }
 
+function accessorLines(a: GlbContent, b: GlbContent): string[] {
+  const out: string[] = [];
+  for (const [i, x] of a.accessors) {
+    const y = b.accessors.get(i);
+    out.push(...(y ? storedLine(`accessor ${i}`, x, y) : []));
+  }
+  return out;
+}
+
+/** One placed primitive against another. */
+function placedPair(
+  pa: Placed,
+  pb: Placed,
+  t: Tolerance,
+  deviation: Deviation
+): string[] {
+  const out: string[] = [];
+  if (pa.winding !== pb.winding) {
+    out.push(`${pa.where}: the winding turns over`);
+  }
+  const lists: [
+    Map<string, Float64Array>,
+    Map<string, Float64Array>,
+    number,
+  ][] = [
+    [pa.vectors, pb.vectors, 3],
+    [pa.lengths, pb.lengths, 1],
+  ];
+  for (const [ma, mb, dims] of lists) {
+    for (const name of new Set([...ma.keys(), ...mb.keys()])) {
+      const [x, y] = [ma.get(name), mb.get(name)];
+      const label = `${pa.where} ${name}${dims === 1 ? " length" : ""}`;
+      if (!(x && y)) {
+        out.push(`${label}: only in ${x ? "a" : "b"}`);
+        continue;
+      }
+      const unit = name !== "POSITION";
+      const tol = (unit ? t.withinUnit : t.within) ?? 0;
+      const { lines, most } = vectorsLine(label, x, y, tol, dims);
+      out.push(...lines);
+      const key = unit ? "unit" : "position";
+      deviation[key] = Math.max(deviation[key], most);
+    }
+  }
+  for (const [name, x] of pa.exact) {
+    const y = pb.exact.get(name) ?? new Float64Array(0);
+    out.push(...storedLine(`${pa.where} ${name}`, x, y));
+  }
+  return out;
+}
+
 function placedLines(
   a: GlbContent,
   b: GlbContent,
@@ -509,29 +674,7 @@ function placedLines(
       `${a.placed.length} placed primitives in a, ${b.placed.length} in b`,
     ];
   }
-  const out: string[] = [];
-  for (const [i, pa] of a.placed.entries()) {
-    const pb = b.placed[i];
-    if (pa.winding !== pb.winding) {
-      out.push(`${pa.where}: the winding turns over`);
-    }
-    for (const name of new Set([...pa.vectors.keys(), ...pb.vectors.keys()])) {
-      const [x, y] = [pa.vectors.get(name), pb.vectors.get(name)];
-      if (!(x && y)) {
-        out.push(`${pa.where} ${name}: only in ${x ? "a" : "b"}`);
-        continue;
-      }
-      const unit = name !== "POSITION";
-      const tol = (unit ? t.withinUnit : t.within) ?? 0;
-      const { lines, most } = vectorsLine(`${pa.where} ${name}`, x, y, tol);
-      out.push(...lines);
-      deviation[unit ? "unit" : "position"] = Math.max(
-        deviation[unit ? "unit" : "position"],
-        most
-      );
-    }
-  }
-  return out;
+  return a.placed.flatMap((pa, i) => placedPair(pa, b.placed[i], t, deviation));
 }
 
 /** Two glbs compared by content; the largest placed deviation goes into
@@ -556,6 +699,7 @@ export async function compareGlbs(
     ...(ca.meshes.length === cb.meshes.length
       ? meshLines(ca, cb)
       : [`${ca.meshes.length} meshes in a, ${cb.meshes.length} in b`]),
+    ...accessorLines(ca, cb),
     ...(placed ? placedLines(ca, cb, t, deviation) : []),
     ...rowsLine("images: ", ca.images, cb.images, "images")
   );

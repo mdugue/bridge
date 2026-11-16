@@ -120,8 +120,13 @@ export function readSite(where: string): PublishedSite {
   if (!isFile) {
     const served = new Set(files.values());
     for (const file of readdirSync(dir)) {
+      // a stray file named like a logical name never stands in for the
+      // manifest's file: the manifest alone says which file a name is
       const beside =
-        file !== MANIFEST_FILE && !served.has(file) && !file.endsWith(".part");
+        file !== MANIFEST_FILE &&
+        !served.has(file) &&
+        !files.has(file) &&
+        !file.endsWith(".part");
       if (beside && statSync(path.join(dir, file)).isFile()) {
         files.set(file, file);
       }
