@@ -855,10 +855,12 @@ test("the written ledger is the fresh figures, the heading first", () => {
     "dressing",
   ]);
   // a further section is written where it was measured, and gated
-  const more = { ...fresh, browser: { scripts: 1 } };
+  const more = { ...fresh, browser: BROWSER };
   expect(Object.keys(datedLedger(more, null, "x")).at(-1)).toBe("browser");
-  expect(datedLedger(more, null, "x").browser).toEqual({ scripts: 1 });
-  expect(ledgerDiff(LEDGER, more)).toEqual(["browser.scripts: (none) → 1"]);
+  expect(datedLedger(more, null, "x").browser).toEqual(BROWSER);
+  expect(ledgerDiff(LEDGER, more)).toContain(
+    "browser.firstLoad.files: (none) → 2"
+  );
 });
 
 test("a tile that names a file no set counts is refused", () => {
@@ -929,13 +931,12 @@ test("the files a tile names that no visit fetches", () => {
 test("a path the check does not compare, with everything under it", () => {
   const was = { dated: "a", browser: { readWith: { v: 1 }, scripts: 1 } };
   const now = { dated: "b", browser: { readWith: { v: 2 }, scripts: 2 } };
-  expect(ledgerDiff(was, now)).toEqual([
+  expect(ledgerDiff(was, now, ["dated"])).toEqual([
     "browser.readWith.v: 1 → 2",
     "browser.scripts: 1 → 2",
   ]);
-  expect(ledgerDiff(was, now, ["dated", "browser.readWith"])).toEqual([
-    "browser.scripts: 1 → 2",
-  ]);
+  // the default: the browser it was read with is never compared
+  expect(ledgerDiff(was, now)).toEqual(["browser.scripts: 1 → 2"]);
   // by its whole path: the same key elsewhere is compared
   expect(
     ledgerDiff({ a: { readWith: 1 } }, { a: { readWith: 2 } }, [
@@ -944,7 +945,12 @@ test("a path the check does not compare, with everything under it", () => {
     ])
   ).toEqual(["a.readWith: 1 → 2"]);
   expect(ledgerDiff(was, now, [])).toContain('dated: "a" → "b"');
-  expect([...UNCOMPARED]).toEqual(["dated", "dressing.recorded"]);
+  expect([...UNCOMPARED]).toEqual([
+    "dated",
+    "dressing.recorded",
+    "timings",
+    "browser.readWith",
+  ]);
 });
 
 test("a name in a tileset that the site does not serve", () => {
@@ -994,4 +1000,45 @@ test("a name in a tileset that the site does not serve", () => {
   ).toEqual(["old-trams.json"]);
   expect(unservedNames("x.json", served)).toEqual(["x.json"]);
   expect(unservedNames(null, served)).toEqual([]);
+});
+
+/** A browser section, as lib/city/ledger-browser.ts writes it. */
+const BROWSER: NonNullable<Ledger["browser"]> = {
+  readWith: "chromium 153, google / swiftshader",
+  firstLoad: {
+    note: "n",
+    files: 2,
+    gzip: 100_000,
+    workerOnly: { files: 1, gzip: 40_000 },
+  },
+  phoneLiteSpawnCache: { note: "n", bytes: 300, contents: { t: 300 } },
+};
+
+test("the browser's figures are compared exactly; its browser and the timings never", () => {
+  const was = { ...LEDGER, browser: BROWSER };
+  const other = {
+    ...was,
+    browser: {
+      ...BROWSER,
+      readWith: "chromium 156, google / swiftshader",
+      firstLoad: { ...BROWSER.firstLoad, gzip: 100_001 },
+    },
+    timings: { machine: "elsewhere" },
+  };
+  expect(ledgerDiff(was, other)).toEqual([
+    "browser.firstLoad.gzip: 100000 → 100001",
+  ]);
+});
+
+test("the browser's sections are written where they were measured", () => {
+  const { dated: _, ...fresh } = LEDGER;
+  const today = "2027-01-01";
+  const kept = datedLedger(
+    { ...fresh, browser: BROWSER },
+    { ...LEDGER, browser: BROWSER },
+    today
+  );
+  expect(kept.browser).toEqual(BROWSER);
+  expect(kept.dated).toBe("2026-11-16");
+  expect(datedLedger(fresh, LEDGER, today)).not.toHaveProperty("browser");
 });

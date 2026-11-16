@@ -1,9 +1,9 @@
 /**
  * scene-client.ts: how a scene worker's error before its hello is read —
- * a script or chunk that did not arrive is the network's.
+ * a script or chunk that did not arrive is the network's; which calls answer.
  */
 import { describe, expect, test } from "bun:test";
-import { errorOutcome } from "./scene-client";
+import { ASKED, errorOutcome } from "./scene-client";
 
 describe("errorOutcome", () => {
   test("a bare error event before alive: the script did not load", () => {
@@ -31,5 +31,12 @@ describe("errorOutcome", () => {
     expect(errorOutcome(true, "Uncaught NetworkError: failed to load")).toBe(
       "threw"
     );
+  });
+});
+
+describe("ASKED", () => {
+  test("the timings are a value call: the ledger awaits them (plan 087)", () => {
+    expect(ASKED).toContain("getTimings");
+    expect(ASKED).toContain("getGpuDebug");
   });
 });
