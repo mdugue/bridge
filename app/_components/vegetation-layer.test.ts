@@ -143,6 +143,41 @@ test("a dense chunk's far tier keeps every other tree", () => {
   expect(chunk.far.drawCount).toBe(400);
 });
 
+test("the far tier's crowns wear the tints of the trees it keeps", () => {
+  // lush and dry by turns of three, so a kept tree's tint is not the tint
+  // of the tree at its place in the thinned set
+  const forest = placed(
+    Array.from({ length: 800 }, (_, i) =>
+      canopy((i % 40) * 5, 12, 10 + Math.floor(i / 40) * 5)
+    )
+  ).map((p, i) => ({ ...p, ndvi: [0.05, 0.5, 0.95][i % 3] }));
+  const [chunk] = buildVegetation({ trees: forest }, ctx).chunks;
+  const mid = chunk.mid.instanceTints?.array as Float32Array;
+  const far = chunk.far.instanceTints?.array as Float32Array;
+  const midWords = chunk.mid.stands?.buffer.array as Uint16Array;
+  const farWords = chunk.far.stands?.buffer.array as Uint16Array;
+  const at = new Map<string, number>();
+  for (let i = 0; i < chunk.mid.drawCount; i += 1) {
+    at.set(`${midWords[i * 10]} ${midWords[i * 10 + 2]}`, i);
+  }
+  let moved = 0;
+  for (let j = 0; j < chunk.far.drawCount; j += 1) {
+    // the kept tree, by where it stands (the tiers' tables share a step;
+    // both origins are whole metres)
+    const slot = at.get(`${farWords[j * 10]} ${farWords[j * 10 + 2]}`);
+    expect(slot).toBeDefined();
+    const k = (slot ?? 0) * 3;
+    expect([far[j * 3], far[j * 3 + 1], far[j * 3 + 2]]).toEqual([
+      mid[k],
+      mid[k + 1],
+      mid[k + 2],
+    ]);
+    moved += mid[k] === mid[j * 3] ? 0 : 1;
+  }
+  // the test would pass a copy by place in the set otherwise
+  expect(moved).toBeGreaterThan(100);
+});
+
 test("trunks and the near crowns share one table of records", () => {
   const built = buildVegetation({ trees: placed([canopy(5, 12)]) }, ctx);
   const [chunk] = built.chunks;

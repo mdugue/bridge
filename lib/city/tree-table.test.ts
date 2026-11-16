@@ -72,6 +72,43 @@ describe("a canopy tree's record", () => {
     expect(sx % TREE_SLOPE_STEP).toBe(0);
   });
 
+  test("a bank steeper than the byte holds keeps its side, at the steepest step, and is counted", () => {
+    const steepest = Math.floor(127 / TREE_SLOPE_STEP) * TREE_SLOPE_STEP;
+    for (const [sx, sz] of [
+      [0.98, 0],
+      [1, -1],
+      [-1, 1],
+      [3.5, -7],
+      [0, -0.99],
+    ]) {
+      const words = new Uint16Array(TREE_WORDS);
+      const report: { clamped: number; steep?: number } = { clamped: 0 };
+      writeTree(words, 0, { ...fact, slope: [sx, sz] }, origin, report);
+      const back = treeAt(words, 0, origin, offset).p.slope ?? [0, 0];
+      expect(back).toEqual([
+        Math.sign(sx) * (sx === 0 ? 0 : steepest),
+        Math.sign(sz) * (sz === 0 ? 0 : steepest),
+      ]);
+      // a bank is that steep: counted, and no failure of the build
+      expect(report.clamped).toBe(0);
+      expect(report.steep).toBe((sx === 0 ? 0 : 1) + (sz === 0 ? 0 : 1));
+    }
+    // the steepest slope a byte holds as it is: not counted
+    const held = { clamped: 0 } as { clamped: number; steep?: number };
+    const words = new Uint16Array(TREE_WORDS);
+    writeTree(words, 0, { ...fact, slope: [0.94, -0.94] }, origin, held);
+    expect(held.steep).toBeUndefined();
+    expect(treeAt(words, 0, origin, offset).p.slope).toEqual([
+      steepest,
+      -steepest,
+    ]);
+  });
+
+  test("a measured height under half a decimetre stays measured", () => {
+    const back = oneTree({ ...fact, h: 0.03 });
+    expect(back.measured).toBeCloseTo(0.1, 6);
+  });
+
   test("a broadleaf of the surface model: no radius, no leaves told", () => {
     const back = oneTree({
       e: 412_100.5,

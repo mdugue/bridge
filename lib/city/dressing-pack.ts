@@ -322,7 +322,7 @@ const isSection = (name: string): name is SectionName =>
  * The pack of a file's bytes, or null for anything that is not one: a
  * wrong magic, a section this table does not know or one whose record is
  * of another size (a file of another build), records or runs that leave
- * the buffer. A section the file lacks is empty.
+ * the buffer, records that start inside the directory or the runs. A section the file lacks is empty.
  */
 export function unpackDressing(buffer: ArrayBuffer): DressingPack | null {
   if (buffer.byteLength < HEADER_BYTES) {
@@ -338,6 +338,15 @@ export function unpackDressing(buffer: ArrayBuffer): DressingPack | null {
   let runAt = HEADER_BYTES + sections * ENTRY_BYTES;
   if (runAt > buffer.byteLength) {
     return null;
+  }
+  // the records start after the directory and every section's runs
+  let recordsFrom = runAt;
+  for (let index = 0; index < sections; index += 1) {
+    recordsFrom +=
+      view.getUint32(
+        HEADER_BYTES + index * ENTRY_BYTES + NAME_BYTES + 12,
+        true
+      ) * RUN_BYTES;
   }
   const pack = emptyPack([
     view.getFloat64(8, true),
@@ -355,6 +364,7 @@ export function unpackDressing(buffer: ArrayBuffer): DressingPack | null {
       !isSection(name) ||
       DRESSING_SECTIONS[name].words !== words ||
       offset % 4 !== 0 ||
+      offset < recordsFrom ||
       offset + count * words * 2 > buffer.byteLength ||
       runAt + runCount * RUN_BYTES > buffer.byteLength
     ) {

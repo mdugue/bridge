@@ -329,7 +329,8 @@ export interface TileStreamContext {
    */
   onAllocationFailure?: (error: unknown, where: string) => void;
   /** a dressing whose build threw (not an abort, not an allocation
-   *  failure — those go to `onAllocationFailure`): the tile stays bare */
+   *  failure — those go to `onAllocationFailure`): the tile stays bare;
+   *  or one whose tree table did not come or is not one: built without */
   onDressingFailed?: (error: unknown, tile: string) => void;
   /**
    * A content's CPU copies went once its compile had uploaded them
@@ -883,16 +884,30 @@ function* tileVegetationSteps(
 }
 
 /** A dressing file's tables (lib/city/dressing-pack.ts), or none where
- *  the level names none or the file is not one. */
+ *  the level names none. A file the level names that does not come or is
+ *  not one (another build's, cut short) is none too, and said (`lost`):
+ *  the tile's trees are a hole, never a silence. */
 async function fetchPack(
   file: string | undefined,
   url: (file: string) => string,
+  lost: () => void,
   signal?: AbortSignal
 ): Promise<DressingPack[]> {
-  const buffer = file ? await fetchOptionalBinary(url(file), signal) : null;
+  if (!file) {
+    return [];
+  }
+  const buffer = await fetchOptionalBinary(url(file), signal);
   const pack = buffer ? unpackDressing(buffer) : null;
+  if (!pack) {
+    lost();
+  }
   return pack ? [pack] : [];
 }
+
+/** Says a tile's tree table is missing through the dressing's failure hook
+ *  (the trail's `dressing failed`, the HUD's hole); the rest is built. */
+const treesLost = (ctx: TileStreamContext, tile: string) => (): void =>
+  ctx.onDressingFailed?.(new Error("Bäume: Tabelle nicht lesbar"), tile);
 
 /** A tree of the tile's table as its card knows it (lib/city/ask-items.ts). */
 function askedTree(t: ReturnType<typeof placedTrees>[number]): AskedTree {
@@ -1149,7 +1164,7 @@ async function buildCoarseDressing(
   const [traffic, bridges, packs] = await Promise.all([
     fetchKind<TrafficFeature>(files.traffic),
     fetchKind<BridgeFeature>(files.bridge),
-    fetchPack(files.dressingCoarse, url, signal),
+    fetchPack(files.dressingCoarse, url, treesLost(ctx, tile), signal),
   ]);
   // the same bridges as the fine level draws (its decks are measured, the
   // piers stand on the ground in reach), the same owner per seam
@@ -1307,8 +1322,8 @@ async function buildDressing(
     // level's own file and its coarse level's, which holds the third of
     // them that level draws and is loaded before this one shows.
     treePacks: Promise.all([
-      fetchPack(extras.coarseDressing, url, signal),
-      fetchPack(d.dressing, url, signal),
+      fetchPack(extras.coarseDressing, url, treesLost(ctx, tile), signal),
+      fetchPack(d.dressing, url, treesLost(ctx, tile), signal),
     ]),
     lamps: get<LampFeature>("lamps"),
     monuments: get<MonumentFeature>("monuments"),
@@ -2947,6 +2962,12 @@ export function orderStreaming(
   bootTile: () => string | null
 ): void {
   const order = streamOrder(bootTile);
+  // A tile's coarse level loads with or before its fine one: the fine
+  // level's dressing reads the coarse level's file too (the third of the
+  // tile's trees that level draws), fetched once for both — which is how
+  // the ledger counts it (lib/city/ledger-dressing.ts `visit`). The
+  // renderer's default, held here so a change of it is a decision.
+  tiles.loadAncestors = true;
   const parse = new PriorityQueue();
   parse.maxJobs =
     tier === "mobile" ? PHONE_STREAM.parses : tiles.parseQueue.maxJobs;

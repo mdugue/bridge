@@ -37,6 +37,15 @@ export interface DressingTile {
   coarse: DressingLevel;
   fine: DressingLevel;
   tile: string;
+  /**
+   * What a visit to the fine level fetches of the dressing: its own files
+   * and the coarse level's dressing file it reads too (`coarseDressing`:
+   * the third of the tile's trees that level draws; tile-stream.ts
+   * `buildDressing`). The gate of plan 090's "a fine level's bytes not
+   * larger" is this sum, not `fine` alone: a tree moved from one of the
+   * two files to the other moves nothing here.
+   */
+  visit: { bytes: number; files: number };
   what: string;
 }
 
@@ -72,14 +81,17 @@ export function dressingTile(
   wire: (file: string) => number
 ): DressingTile {
   const fine = tile.terrain[0].extras;
+  const own = { ...record(fine.dressing), sportTable: fine.sportTable };
+  const visit = dressingLevel(
+    { ...own, coarseDressing: fine.coarseDressing },
+    wire
+  );
   return {
     tile: tile.id,
     what,
-    fine: dressingLevel(
-      { ...record(fine.dressing), sportTable: fine.sportTable },
-      wire
-    ),
+    fine: dressingLevel(own, wire),
     coarse: dressingLevel(record(tile.terrain[1].extras.coarse), wire),
+    visit: { bytes: visit.bytes, files: visit.files },
   };
 }
 

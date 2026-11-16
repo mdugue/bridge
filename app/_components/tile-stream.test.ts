@@ -769,6 +769,13 @@ test("a phone parses fewer contents at once, on queues of their own in our order
   expect(DEFAULT_DOWNLOAD_QUEUE.maxJobsPerOrigin).toBeGreaterThan(
     STREAM_DOWNLOADS.desktop
   );
+  // a tile's coarse level loads with or before its fine one, on every
+  // tier: the fine level's dressing reads the coarse level's tree table
+  // too, and the ledger counts that file once a visit
+  // (lib/city/ledger-dressing.ts `visit`)
+  phone.loadAncestors = false;
+  orderStreaming(phone, "mobile", () => null);
+  expect([phone.loadAncestors, desktop.loadAncestors]).toEqual([true, true]);
   // not the renderer's error order: a tile's coarse ground before its
   // buildings
   for (const queue of [phone.parseQueue, desktop.downloadQueue]) {

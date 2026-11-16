@@ -286,6 +286,32 @@ test("a tree a record cannot hold fails the build", () => {
   );
 });
 
+test("a tree on a bank at the slope's limit keeps the way the ground falls", () => {
+  // the steepest slope the ground hands over (groundSlope holds it to ± 1)
+  const onBank = (slope: readonly [number, number], dx: number) => ({
+    x: dx,
+    y: 100,
+    z: -5,
+    reach: [10, 2] as const,
+    fact: { e: minX + 600 + dx, n: minY + 5, ground: 100, h: 10, slope },
+  });
+  const { fine, coarse } = packTrees(
+    {
+      trees: [onBank([1, -1], 0), onBank([-1, 1], 7), onBank([0.98, 0], 14)],
+      register: [],
+    },
+    [minX, minY]
+  );
+  const slopes = placedTrees([unpack(coarse), unpack(fine)], offset)
+    .toSorted((a, b) => a.p.x - b.p.x)
+    .map((t) => t.p.slope);
+  expect(slopes).toEqual([
+    [120, -120],
+    [-120, 120],
+    [120, 0],
+  ]);
+});
+
 // Bake where a thing stands, never how it looks (plan 086, joint 3): the
 // dressing's bakers reach no colour, season, age's look or style, so a
 // change of any re-bakes nothing.

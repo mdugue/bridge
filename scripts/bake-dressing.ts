@@ -361,7 +361,7 @@ export function packTrees(
   const fine = packDressing(treePack(split(false), origin, report));
   if (report.clamped > 0) {
     throw new Error(
-      `dressing: ${report.clamped} fields of the trees' records do not fit (a tree outside the tile's box, a height or a width past 102 m, an index past 65 535)`
+      `dressing: ${report.clamped} fields of the trees' records do not fit (a tree outside the tile's box, a height or a width past 102 m, a step between two rows past 65 535)`
     );
   }
   return { coarse, fine };

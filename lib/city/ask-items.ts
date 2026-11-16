@@ -114,7 +114,7 @@ const NEEDLE_ARCHETYPES: ReadonlySet<TreeArchetype> = new Set([
 interface TreeTable {
   crown: Float32Array;
   /** each tree's row among the tile's tree facts (its file's row) */
-  index: Uint16Array;
+  index: Uint32Array;
   /** bit 1 OSM, bit 2 conifer (NEEDLE_ARCHETYPES), bit 4 orchard, bit 8
    *  measured (an orchard tree DOM1 measured), bit 16 drawn as the cone */
   flags: Uint8Array;
@@ -252,7 +252,7 @@ export function treeSets(
     trunk: new Float32Array(n),
     genus: new Uint8Array(n),
     flags: new Uint8Array(n),
-    index: new Uint16Array(n),
+    index: new Uint32Array(n),
   };
   const target = (i: number) => treeInquiry(table, i, ctx.tile);
   return packedCylinderSets(

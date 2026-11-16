@@ -132,6 +132,9 @@ const SOURCES = [undefined, "osm", "orchard"] as const;
  *  box, a height past its bits): a build fails on any. */
 export interface TreePackReport {
   clamped: number;
+  /** slopes steeper than their byte holds, kept at its steepest step: no
+   *  failure, a bank is that steep */
+  steep?: number;
 }
 
 /** The ground a tree stands on, as the build read it. */
@@ -172,12 +175,34 @@ function field(v: number, max: number, report: TreePackReport): number {
   return Math.min(Math.max(Number.isFinite(rounded) ? rounded : 0, 0), max);
 }
 
-const slopeByte = (s: number): number => {
-  const byte = Math.round(
-    (Math.min(Math.max(s, -1), 1) * 127) / TREE_SLOPE_STEP
+/** The most steps a slope's byte holds either way: ± 15 of
+ *  `TREE_SLOPE_STEP` round 128, so the byte stays a byte (16 would be 256). */
+const SLOPE_STEPS = Math.floor(127 / TREE_SLOPE_STEP);
+
+/** A height in decimetres; a measured one under half a decimetre stays
+ *  one decimetre, since 0 says "not measured". */
+function heightField(h: number, report: TreePackReport): number {
+  if (!Number.isFinite(h)) {
+    return 0;
+  }
+  return h > 0 ? Math.max(field(h * 10, HEIGHT_MAX, report), 1) : 0;
+}
+
+/** A slope as its byte: steps of `TREE_SLOPE_STEP` of 127 round 128. A bank
+ *  steeper than the byte holds (about 0.945, 43°) keeps its side at the
+ *  steepest step and is counted (`steep`): the feet drape as far as they
+ *  go, the way the ground falls. */
+function slopeByte(s: number, report: TreePackReport): number {
+  const steps = Math.round((s * 127) / TREE_SLOPE_STEP);
+  const held = Math.min(
+    Math.max(Number.isFinite(steps) ? steps : 0, -SLOPE_STEPS),
+    SLOPE_STEPS
   );
-  return byte * TREE_SLOPE_STEP + 128;
-};
+  if (held !== steps) {
+    report.steep = (report.steep ?? 0) + 1;
+  }
+  return held * TREE_SLOPE_STEP + 128;
+}
 
 const ndviByte = (ndvi: number | undefined): number =>
   ndvi === undefined || !Number.isFinite(ndvi)
@@ -205,8 +230,10 @@ function writeStanding(
   words[at + 2] = field((s.n - origin[1]) / STEP_M, WORD_MAX, report);
 }
 
-const slopeWord = (slope: readonly [number, number]): number =>
-  slopeByte(slope[0]) | (slopeByte(slope[1]) << 8);
+const slopeWord = (
+  slope: readonly [number, number],
+  report: TreePackReport
+): number => slopeByte(slope[0], report) | (slopeByte(slope[1], report) << 8);
 
 /** Writes `tree` as record `index` of a `trees` section. */
 export function writeTree(
@@ -220,7 +247,7 @@ export function writeTree(
   writeStanding(words, at + T.place, tree, origin, report);
   const drawn = tree.row ? tree.row.s * BASE_TREE_H : tree.h;
   words[at + T.height] =
-    (Number.isFinite(drawn) ? field(drawn * 10, HEIGHT_MAX, report) : 0) |
+    heightField(drawn, report) |
     (tree.evergreen ? EVERGREEN : 0) |
     (tree.evergreen && tree.pine ? PINE : 0) |
     (tree.c ? ROAD : 0) |
@@ -232,7 +259,7 @@ export function writeTree(
       // height, lib/city/tree-placement.ts `canopyCrownWidth`)
       Math.min(Math.max(Math.round((tree.r ?? 0) * 10), 0), 255);
   words[at + T.crown] = low | (ndviByte(tree.ndvi) << 8);
-  words[at + T.slope] = slopeWord(tree.slope);
+  words[at + T.slope] = slopeWord(tree.slope, report);
 }
 
 /** Writes `tree` as record `index` of a `register` section; `before` is
@@ -263,7 +290,7 @@ export function writeRegister(
   words[at + R.index] = field(tree.index - before, WORD_MAX, report);
   words[at + R.leaves] =
     field(p.gn ?? 0, 255, report) | (ndviByte(tree.ndvi) << 8);
-  words[at + R.slope] = slopeWord(tree.slope);
+  words[at + R.slope] = slopeWord(tree.slope, report);
 }
 
 const ndviOf = (byte: number): number | undefined =>
