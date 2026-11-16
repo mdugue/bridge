@@ -2,6 +2,7 @@
 provider-grid helper, the XYZ gridding, the OSM class mapping, the flight
 dates and the spec."""
 
+import hashlib
 import json
 import urllib.error
 from datetime import date
@@ -363,14 +364,38 @@ END
 """
 
 
+_SPEC = {
+    "site": "x",
+    "provider": "sn",
+    "epsg": 25833,
+    "products": {"dom": True, "dop": "rgbi", "dlm": True, "lsc": False},
+    "credit": "Quelle: GeoSN, dl-de/by-2-0",
+    "raw": "raw",
+    "data": "data",
+    "osm": "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf",
+}
+
+
+def _tile_json(e: int, n: int) -> dict:
+    return {"id": "t_sn", "bounds": [e * 1000, n * 1000, e * 1000 + 2000, n * 1000 + 2000]}
+
+
 def _fetch_run(
-    tmp_path, monkeypatch, fail: str, dlm: bool = False, fallback: str | None = None, cell=None
+    tmp_path,
+    monkeypatch,
+    fail: str,
+    dlm: bool = False,
+    fallback: str | None = None,
+    cell=None,
+    raw=None,
 ):
     """`fetch.run` over one tile with a fake adapter whose `fail` product
-    raises ("osm": the OSM extract's download from Geofabrik, "osm-404":
-    the same as a 404; "dlm": the Basis-DLM, which the spec asks for with
-    `dlm`); `fallback` the BBBike extract's URL; `cell` the tile's
-    south-west corner (km). Nothing touches the network."""
+    raises ("osm": Geofabrik's extract cannot be reached, "osm-404": it is
+    a 404, "osm-md5": its download fails the published md5; "dlm": the
+    Basis-DLM, which the spec asks for with `dlm`); `fallback` the BBBike
+    extract's URL; `cell` the tile's south-west corner (km); `raw` the
+    provider's raw folder (shared by a Land's sites). Nothing touches the
+    network."""
     from types import SimpleNamespace
 
     from bake import fetch
@@ -384,7 +409,7 @@ def _fetch_run(
                 "epsg": 25833,
                 "products": {"dom": True, "dop": "rgbi", "dlm": dlm, "lsc": False},
                 "credit": "Quelle: GeoSN, dl-de/by-2-0",
-                "raw": str(tmp_path / "raw"),
+                "raw": str(raw or tmp_path / "raw"),
                 "data": str(tmp_path / "data"),
                 "osm": "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf",
                 "tiles": [
@@ -417,13 +442,20 @@ def _fetch_run(
         geofabrik = "geofabrik" in url
         tried.append("osm" if geofabrik else "bbbike")
         if geofabrik and fail == "osm":
-            raise OSError("osm unavailable")
+            raise urllib.error.URLError(ConnectionResetError(104, "Connection reset by peer"))
         if geofabrik and fail == "osm-404":
             raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+        if geofabrik and fail == "osm-md5":
+            raise OSError(f"{url}: md5 abc, published def")
         assert md5_url == f"{url}.md5"
         touch(dest)
 
-    monkeypatch.setattr(fetch, "fetch_text", lambda url: DRESDEN_POLY)
+    def fake_text(url):
+        if url.endswith(".md5"):
+            return f"{hashlib.md5(b'x').hexdigest()}  extract.osm.pbf"
+        return DRESDEN_POLY
+
+    monkeypatch.setattr(fetch, "fetch_text", fake_text)
     monkeypatch.setattr(fetch, "OSM_PAUSE_S", 0.0)
     monkeypatch.setattr(fetch.osm_source, "last_modified", lambda url: "2026-11-14T16:51:10+00:00")
 
@@ -458,12 +490,15 @@ def test_an_unreachable_geofabrik_falls_back_on_a_bbbike_extract_that_covers_the
     tmp_path, monkeypatch, capsys
 ):
     tried, _, spec = _fetch_run(tmp_path, monkeypatch, "osm", dlm=True, fallback=BBBIKE)
-    # Geofabrik three times, then BBBike's, under its own name
+    # Geofabrik three times, then BBBike's, under its own name, its
+    # boundary kept beside it
     assert tried.count("osm") == fetch.OSM_TRIES and tried.count("bbbike") == 1
     assert spec.osm == tmp_path / "raw" / "osm" / "Dresden.osm.pbf"
     record = json.loads((tmp_path / "raw" / "osm" / "Dresden.osm.pbf.source.json").read_text())
     assert record["source"] == "BBBike" and record["url"] == BBBIKE
     assert record["lastModified"].startswith("2026-11-14")
+    assert record["md5"] == record["publishedMd5"] == hashlib.md5(b"x").hexdigest()
+    assert (tmp_path / "raw" / "osm" / "Dresden.poly").read_text() == DRESDEN_POLY
     out = capsys.readouterr().out
     assert "Dresden.osm.pbf from BBBike" in out and "data as of 2026-11-14" in out
 
@@ -476,16 +511,47 @@ def test_a_bbbike_extract_short_of_the_site_is_not_taken(tmp_path, monkeypatch, 
     out = capsys.readouterr().out
     assert "does not cover x" in out and "west by 0.02" in out
     assert not (tmp_path / "raw" / "osm" / "Dresden.osm.pbf").exists()
-    # a provider with a Basis-DLM still bakes, its OSM steps skipping, and
-    # the line warns that some of them rewrite committed files with less
-    assert "its OSM steps skip, but some rewrite committed files" in out
+    # the line says the bake refuses its OSM steps without an extract
+    assert "the bake refuses its OSM steps without it" in out
 
 
 def test_a_geofabrik_404_is_a_wrong_config_not_an_outage(tmp_path, monkeypatch, capsys):
     with pytest.raises(SystemExit):
         tried, _, _ = _fetch_run(tmp_path, monkeypatch, "osm-404", dlm=True, fallback=BBBIKE)
-    assert "Geofabrik has no such file" in capsys.readouterr().out
+    assert "no fallback" in capsys.readouterr().out
     assert not (tmp_path / "raw" / "osm" / "Dresden.osm.pbf").exists()
+
+
+def test_a_failed_checksum_is_no_outage_and_takes_no_fallback(tmp_path, monkeypatch, capsys):
+    with pytest.raises(SystemExit):
+        tried, _, _ = _fetch_run(tmp_path, monkeypatch, "osm-md5", dlm=True, fallback=BBBIKE)
+    assert "no fallback" in capsys.readouterr().out
+    assert not (tmp_path / "raw" / "osm" / "Dresden.osm.pbf").exists()
+
+
+def test_another_sites_extract_on_disk_is_checked_for_this_site(tmp_path, monkeypatch, capsys):
+    # Dresden fetched BBBike's Dresden extract into the Land's shared raw
+    # folder; Meißen, which it does not cover, must not take it
+    raw = tmp_path / "raw"
+    _fetch_run(tmp_path / "dresden", monkeypatch, "osm", dlm=True, fallback=BBBIKE, raw=raw)
+    assert (raw / "osm" / "Dresden.osm.pbf").exists()
+    capsys.readouterr()
+    with pytest.raises(SystemExit):
+        _, _, spec = _fetch_run(
+            tmp_path / "meissen",
+            monkeypatch,
+            "osm",
+            dlm=True,
+            fallback=BBBIKE,
+            cell=(392, 5668),
+            raw=raw,
+        )
+    out = capsys.readouterr().out
+    assert "does not cover x" in out and "west by 0.02" in out
+    # the file stays for Dresden, and Meißen's bake does not read it
+    assert (raw / "osm" / "Dresden.osm.pbf").exists()
+    meissen = parse(json.dumps({**_SPEC, "raw": str(raw), "tiles": [_tile_json(392, 5668)]}))
+    assert not fetch.osm_source.resolve(meissen, BBBIKE, say=lambda _: None).osm.exists()
 
 
 def test_a_failed_required_product_fails_the_fetch_after_the_rest(tmp_path, monkeypatch):

@@ -38,6 +38,10 @@
  *                                     thing OSM maps in the site (pipeline/
  *                                     bake/coverage.py); fails on one seen
  *                                     3+ times that nobody decided about
+ *   bun run bake <site> --without-osm run the OSM steps with no extract
+ *                                     that covers the site (refused
+ *                                     otherwise: some rewrite committed
+ *                                     files with less)
  *   bun run bake <site> --force       run every step again, even one whose
  *                                     code and inputs did not change (a
  *                                     step is otherwise skipped then:
@@ -106,7 +110,7 @@ export function fallbackArgs(site: Site): string[] {
 /** The options each command takes (`--step` and `--jobs` need a value). */
 const OPTIONS = {
   fetch: ["--lsc"],
-  bake: ["--step", "--research", "--jobs", "--force"],
+  bake: ["--step", "--research", "--jobs", "--force", "--without-osm"],
   coverage: [],
 } as const;
 const VALUED = new Set(["--step", "--jobs"]);
@@ -164,7 +168,11 @@ if (import.meta.main) {
       ...(jobs === -1 ? [] : ["--jobs", args[jobs + 1] ?? ""]),
       ...(tiles.length > 0 ? ["--tile", ...tiles] : []),
       ...args.filter(
-        (a) => a === "--lsc" || a === "--research" || a === "--force"
+        (a) =>
+          a === "--lsc" ||
+          a === "--research" ||
+          a === "--force" ||
+          a === "--without-osm"
       ),
     ],
     { stdio: "inherit", env: { ...process.env, PYTHONPATH: "pipeline" } }

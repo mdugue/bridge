@@ -50,7 +50,9 @@ current ones into the tiles that record none, right after a fetch.
    `bbbike` extract by itself where it covers the site — not Meißen's,
    docs/data-pipeline.md), never dodge a re-bake — so say plainly when one
    is due. The age is read from every `dataAsOf` under `openstreetmap`,
-   the bake's own `baked.<step>` records included.
+   the bake's own `baked.<step>.<tile>` records included; one that says
+   `unknown` (an extract with no day) is a finding of its own, never the
+   bake's day.
 5. **Editions no record holds:** list them once (they stay until someone
    records them); recording them (`--record`) is the maintainer's, after
    a fetch.

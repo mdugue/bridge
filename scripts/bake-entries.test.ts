@@ -18,6 +18,7 @@ const ROOT = nodePath.join(import.meta.dir, "..");
  */
 const NOT_A_BAKE: Record<string, string> = {
   "lib/city/provenance.ts": "published uncached every run",
+  "lib/city/provenance-file.ts": "checked uncached every run",
   "lib/city/tram-timetable.ts": "published uncached every run",
   "lib/city/landmark-facts.ts": "published uncached every run",
   "lib/city/landmark-facts-file.ts": "checked uncached every run",

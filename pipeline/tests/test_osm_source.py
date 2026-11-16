@@ -4,13 +4,19 @@ record beside the extract and the provenance a bake writes from it — and
 that no bake reads OSM farther beyond a tile than that margin."""
 
 import ast
+import dataclasses
+import errno
 import json
+import re
+import urllib.error
 from pathlib import Path
 
 import pytest
 
+from bake import __main__ as bake_main
 from bake import osm_source
 from bake.common import Tile
+from bake.spec import parse
 
 BAKE = Path(__file__).resolve().parent.parent / "bake"
 # BBBike's Dresden boundary as published (Dresden.poly, 2026-11-16)
@@ -48,23 +54,134 @@ def test_bbbikes_dresden_covers_dresden_but_not_meissen():
     assert short is not None and short.startswith("west by 0.02")
 
 
-def test_the_record_names_the_source_and_day_and_provenance_takes_it(tmp_path):
+def test_the_record_names_the_source_and_day_and_provenance_takes_it_per_tile(tmp_path):
     pbf = tmp_path / "Leipzig.osm.pbf"
     pbf.write_text("x")
     url = "https://download.bbbike.org/osm/bbbike/Leipzig/Leipzig.osm.pbf"
-    osm_source.write_record(pbf, url, "2026-11-14T16:39:33+00:00", "abc")
+    osm_source.write_record(pbf, url, "2026-11-14T16:39:33+00:00", "abc", "abc")
     assert "from BBBike" in osm_source.describe(pbf) and "2026-11-14" in osm_source.describe(pbf)
     provenance = tmp_path / "provenance.json"
     provenance.write_text(json.dumps({"openstreetmap": {"licence": "ODbL"}}))
-    osm_source.record_bake(provenance, pbf, ["walls", "lamps"])
+    osm_source.record_bake(provenance, pbf, [("walls", "a"), ("lamps", "a"), ("walls", "b")])
     osm = json.loads(provenance.read_text())["openstreetmap"]
     assert osm["licence"] == "ODbL"
-    assert list(osm["baked"]) == ["lamps", "walls"]
-    # the data's day first: the Open-Data-Wächter reads the age from it
-    assert osm["baked"]["walls"]["dataAsOf"].startswith("2026-11-14 (BBBike extract")
-    # an extract placed by hand has no day to claim
-    (tmp_path / "Leipzig.osm.pbf.source.json").unlink()
-    assert osm_source.provenance_line(None, pbf, "2026-11-16").startswith("unknown")
+    assert list(osm["baked"]) == ["lamps", "walls"] and list(osm["baked"]["walls"]) == ["a", "b"]
+    # the data's day first: the Open-Data-Wächter reads the age from it;
+    # the bake's own day apart, where no reader takes it for the data's
+    entry = osm["baked"]["walls"]["a"]
+    assert entry["dataAsOf"].startswith("2026-11-14 (BBBike extract")
+    assert "baked" not in entry["dataAsOf"] and len(entry["on"]) == 10
+
+
+def test_an_extract_without_a_day_is_unknown_not_the_day_of_the_bake(tmp_path):
+    pbf = tmp_path / "sachsen-latest.osm.pbf"
+    for record in (None, {"source": "Geofabrik", "url": "u", "lastModified": None}):
+        entry = osm_source.provenance_entry(record, pbf, "2026-11-16")
+        assert entry["dataAsOf"].startswith("unknown")
+        assert not re.search(r"20\d\d-\d\d-\d\d", entry["dataAsOf"])
+
+
+def test_only_a_failure_to_reach_the_server_counts_as_unreachable():
+    reset = urllib.error.URLError(ConnectionResetError(104, "Connection reset by peer"))
+    assert osm_source.unreachable(reset)
+    assert osm_source.unreachable(urllib.error.HTTPError("u", 503, "x", None, None))
+    assert osm_source.unreachable(OSError("u: 100 of 2000 bytes"))
+    assert not osm_source.unreachable(urllib.error.HTTPError("u", 404, "x", None, None))
+    assert not osm_source.unreachable(OSError("u: md5 abc, published def"))
+    assert not osm_source.unreachable(OSError(errno.ENOSPC, "No space left on device"))
+
+
+def _spec(tmp_path: Path, e: int, n: int):
+    return parse(
+        json.dumps(
+            {
+                "site": "s",
+                "provider": "sn",
+                "epsg": 25833,
+                "products": {"dom": True, "dop": None, "dlm": True, "lsc": False},
+                "credit": "c",
+                "raw": str(tmp_path),
+                "data": str(tmp_path / "data"),
+                "osm": "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf",
+                "tiles": [
+                    {"id": "t", "bounds": [e * 1000, n * 1000, e * 1000 + 2000, n * 1000 + 2000]}
+                ],
+            }
+        )
+    )
+
+
+BBBIKE = "https://download.bbbike.org/osm/bbbike/Dresden/Dresden.osm.pbf"
+
+
+def _bbbike_on_disk(tmp_path: Path, content: bytes = b"x") -> Path:
+    pbf = tmp_path / "osm" / "Dresden.osm.pbf"
+    pbf.parent.mkdir(parents=True, exist_ok=True)
+    pbf.write_bytes(content)
+    osm_source.poly_path(pbf).write_text(DRESDEN)
+    md5 = osm_source.file_md5(pbf)
+    osm_source.write_record(pbf, BBBIKE, "2026-11-14T16:51:10+00:00", md5, md5)
+    return pbf
+
+
+def test_the_bake_takes_a_fallback_on_disk_only_where_it_covers_the_site(tmp_path):
+    pbf = _bbbike_on_disk(tmp_path)
+    said: list[str] = []
+    dresden = osm_source.resolve(_spec(tmp_path, 412, 5656), BBBIKE, say=said.append)
+    assert dresden.osm == pbf and dresden.tiles[0].osm == pbf
+    meissen = osm_source.resolve(_spec(tmp_path, 392, 5668), BBBIKE, say=said.append)
+    assert not meissen.osm.exists() and meissen.tiles[0].osm_extract() is None
+    assert "does not cover s" in said[-1]
+    # a file that is not the one its record names is not taken either
+    pbf.write_bytes(b"y")
+    assert not osm_source.resolve(_spec(tmp_path, 412, 5656), BBBIKE, say=said.append).osm.exists()
+    assert "md5 differs" in said[-1]
+
+
+def test_which_extract_a_step_read_is_in_its_cache_key(tmp_path):
+    spec = _spec(tmp_path, 412, 5656)
+    primary = spec.osm
+    # no extract, then BBBike's, then Geofabrik's: three keys for lamps
+    none = osm_source.identity(spec, primary)
+    pbf = _bbbike_on_disk(tmp_path)
+    bbbike = osm_source.identity(osm_source.resolve(spec, BBBIKE), primary)
+    primary.write_text("geofabrik")
+    geofabrik = osm_source.identity(osm_source.resolve(spec, BBBIKE), primary)
+    assert none == "none" and bbbike["file"] == pbf.name and geofabrik is None
+    keys = [bake_main.step_key("lamps", False, "h", osm) for osm in (none, bbbike, geofabrik)]
+    assert len({json.dumps(k, sort_keys=True) for k in keys}) == 3
+    # on the provider's own extract the key is the one every recorded run
+    # already has: nothing runs again for this change
+    assert "osm" not in keys[2] and set(keys[2]) == {"step", "code", "spec", "research"}
+    # a step that reads no OSM keeps one key whatever the extract
+    no_osm = [s for s in bake_main.STEPS if not bake_main.reads_osm(s)]
+    if no_osm:
+        assert bake_main.step_key(no_osm[0], False, "h", bbbike) == bake_main.step_key(
+            no_osm[0], False, "h", None
+        )
+
+
+def test_a_bake_without_a_covering_extract_is_refused_unless_asked(tmp_path):
+    spec = _spec(tmp_path, 392, 5668)
+    with pytest.raises(SystemExit) as stop:
+        bake_main.refuse_without_extract(spec, ["landcover", "trees"], without_osm=False)
+    assert "--without-osm" in str(stop.value.code)
+    bake_main.refuse_without_extract(spec, ["landcover", "trees"], without_osm=True)
+
+
+def test_a_bake_that_fails_midway_keeps_what_its_finished_tiles_ran(tmp_path, monkeypatch):
+    spec = _spec(tmp_path, 412, 5656)
+    tiles = [spec.tiles[0], dataclasses.replace(spec.tiles[0], id="t2")]
+
+    def run(spec, step, tile, *args):
+        if tile.id == "t2":
+            raise RuntimeError("tile two fails")
+
+    monkeypatch.setattr(bake_main, "recorded_tile", run)
+    bake = bake_main.Bake(spec, 1, False, "h", "off")
+    with pytest.raises(RuntimeError):
+        bake.step("walls", tiles)
+    assert bake.ran == {("walls", "t")}
 
 
 # The functions that read OSM around a tile, and the index of their margin

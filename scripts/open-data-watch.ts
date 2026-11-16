@@ -88,13 +88,17 @@ export function snKachel(cell: { e: number; n: number }): string {
 
 /**
  * The OSM data the bakes use, by the first day of every `dataAsOf` in the
- * record (the day of the data, not of a re-bake), past the `overpass`
- * history: the oldest and the newest, or null where none is recorded.
+ * record (the day of the data, not of a re-bake: the bake's own records
+ * keep that apart, as `on`), past the `overpass` history: the oldest and
+ * the newest, and how many say `unknown` (an extract that named no day:
+ * placed by hand, or its server sent no `Last-Modified`). Null where
+ * nothing is recorded.
  */
 export function osmDataDays(
   record: unknown
-): { newest: string; oldest: string } | null {
+): { newest?: string; oldest?: string; unknown: number } | null {
   const days: string[] = [];
+  let unknown = 0;
   const walk = (value: unknown, key: string) => {
     if (key === "overpass") {
       return;
@@ -103,6 +107,8 @@ export function osmDataDays(
       const day = /\b20\d\d-\d\d-\d\d\b/u.exec(value)?.[0];
       if (day) {
         days.push(day);
+      } else if (value.startsWith("unknown")) {
+        unknown += 1;
       }
     } else if (value && typeof value === "object") {
       for (const [k, v] of Object.entries(value)) {
@@ -112,8 +118,10 @@ export function osmDataDays(
   };
   walk(record, "");
   days.sort((a, b) => a.localeCompare(b));
-  const newest = days.at(-1);
-  return newest === undefined ? null : { oldest: days[0], newest };
+  if (days.length === 0 && unknown === 0) {
+    return null;
+  }
+  return { oldest: days[0], newest: days.at(-1), unknown };
 }
 
 /** Whole days from `from` (YYYY-MM-DD) to `now`. */
@@ -350,7 +358,15 @@ async function basisDlmFinding(): Promise<Finding> {
 async function osmFindings(site: SiteId, now: Date): Promise<Finding[]> {
   const out: Finding[] = [];
   const days = osmDataDays(provenanceOf(site)?.openstreetmap);
-  if (days) {
+  if (days && days.unknown > 0) {
+    out.push({
+      site,
+      kind: "osm",
+      act: true,
+      text: `OSM-Stand unbekannt für ${days.unknown} gebackene Schritt-Kachel(n): der Auszug nannte keinen Tag (von Hand abgelegt oder ohne Last-Modified)`,
+    });
+  }
+  if (days?.oldest !== undefined && days.newest !== undefined) {
     const age = daysSince(days.oldest, now);
     out.push({
       site,
@@ -358,7 +374,7 @@ async function osmFindings(site: SiteId, now: Date): Promise<Finding[]> {
       act: age > OSM_STALE_DAYS,
       text: `OSM-Daten der Bakes: ältester Stand ${days.oldest} (${age} Tage alt), neuester ${days.newest}`,
     });
-  } else {
+  } else if (!days) {
     out.push({
       site,
       kind: "osm",

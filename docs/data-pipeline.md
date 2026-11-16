@@ -400,39 +400,58 @@ falls back on BBBike's city extract the site names (`Site.bbbike`):
 `pipeline/bake/osm_source.py`. The rules:
 
 - **Only on an outage.** Geofabrik is tried three times (`OSM_TRIES`,
-  10 s and 20 s apart); a cut connection or a timeout then counts as
-  unreachable. A 404 or 410 is a wrong `osm` in the config, not an outage:
-  no fallback, the fetch says so.
-- **Only where it covers the site.** BBBike publishes each extract's
-  boundary (`<City>.poly`, an Osmosis polygon). The fetch reads it and
-  takes the extract only if it covers every tile of the site with the
-  widest margin a bake reads OSM beyond a tile, `MAX_MARGIN_DEG` = 0.05°
-  (the monorail's whole chain, `rail_osm.py`); `test_osm_source.py` holds
-  every margin a bake passes to the OSM readers to it. An extract cut
-  inside that margin would bake a seam's walls, ways and lamps from half
-  the data without a word. Short of it, the fetch says on which side and
-  by how much and takes nothing; the fetch then exits 1, and a provider
-  with a Basis-DLM still bakes, its OSM steps skipping with a note —
-  though some rewrite their committed files with less (the OSM extract's
-  row in [portability.md](./portability.md#degradation-matrix)), so the
-  fetch's line says to re-bake a committed site only with an extract.
-- **Each under its own name.** BBBike's extract lands as
-  `data/_raw/<provider>/osm/<City>.osm.pbf` beside Geofabrik's, so two
-  sites of one Land never read each other's city. The bakes read
-  Geofabrik's where it is there, else the site's BBBike one
-  (`osm_source.resolve`); the fallback's URL travels beside the spec
-  (`--osm-fallback`), not in it, and is resolved outside `spec.py`, so no
-  step's cache key changes with it (which file a step read is in its
-  record anyway).
+  10 s and 20 s apart) while it cannot be reached — a cut connection, a
+  timeout, a 5xx (`osm_source.unreachable`); only then does the fetch
+  fall back. A 404 or 410 is a wrong `osm` in the config, a download that
+  fails its published md5 or a full disk would fail the same on any
+  source: no fallback, the fetch says so.
+- **Only where it covers the site, every time.** BBBike publishes each
+  extract's boundary (`<City>.poly`, an Osmosis polygon); the fetch keeps
+  it beside the extract. An extract is taken only if that boundary covers
+  every tile of the site about to read it with the widest margin a bake
+  reads OSM beyond a tile, `MAX_MARGIN_DEG` = 0.05° (the monorail's whole
+  chain, `rail_osm.py`); `test_osm_source.py` holds every margin a bake
+  passes to the OSM readers to it. An extract cut inside that margin
+  would bake a seam's walls, ways and lamps from half the data without a
+  word. The check is made by the fetch and again by every bake
+  (`osm_source.usable`), whoever fetched the file: a Land's sites share
+  one raw folder, so Dresden's `Dresden.osm.pbf` is on disk when Meißen,
+  which it does not cover, asks — Meißen's fetch and bake refuse it, and
+  it stays for Dresden. Short of the margin, the fetch says on which side
+  and by how much and takes nothing; the fetch then exits 1.
+- **A bake needs a covering extract.** A `bake` whose steps read OSM
+  stops before its first step when no extract covers the site
+  (`refuse_without_extract`): those steps would skip, but some rewrite
+  their committed files with less (the OSM extract's row in
+  [portability.md](./portability.md#degradation-matrix)). `--without-osm`
+  runs them anyway, for a new site or a test.
+- **Each under its own name, and checked.** BBBike's extract lands as
+  `data/_raw/<provider>/osm/<City>.osm.pbf` beside Geofabrik's. The bakes
+  read Geofabrik's where it is there, else the site's BBBike one where it
+  covers the site (`osm_source.resolve`). A file whose md5 is not the one
+  its record names is not taken (and the fetch fetches it again). The
+  fallback's URL travels beside the spec (`--osm-fallback`), not in it,
+  and is resolved outside `spec.py`, so no step's code key changes with
+  it. Which extract a step read is in its cache key all the same
+  (`osm_source.identity`, `step_key`'s `osm`): a step baked on BBBike's
+  runs again when Geofabrik's comes, one baked with none when any comes,
+  so sources never mix within a site. On the provider's own Geofabrik
+  extract the key is the one every recorded run already has.
 - **Never silent.** Each extract the fetch writes gets
   `<extract>.source.json` beside it: source, URL, `Last-Modified` (the
-  day its data is as of), md5, the day it was fetched. The fetch's log
-  and every `bake` start with one line naming the extract, its source and
-  that day; an extract placed by hand has no record and says so. After a
-  bake, every step that ran and reads OSM is recorded in the site's
-  `provenance.json` as `openstreetmap.baked.<step>.dataAsOf` — the day
-  first, then the source, URL and the bake's day — where the
-  Open-Data-Wächter reads how old the committed OSM data is.
+  day its data is as of), the file's md5 and the one its server
+  publishes, the day it was fetched. The fetch's log and every `bake`
+  start with one line naming the extract, its source and that day; an
+  extract placed by hand has no record and says so. Every step that reads
+  OSM is recorded per tile it finished — a failed bake's too — in the
+  site's `provenance.json` as `openstreetmap.baked.<step>.<tile>`:
+  `dataAsOf`, the data's day first, then source and URL, and `on`, the
+  bake's day, apart. An extract with no day (placed by hand, or no
+  `Last-Modified`) is recorded as `unknown`, never as the bake's day. The
+  Open-Data-Wächter reads the age there (an `unknown` is a finding of its
+  own), and the inquiry card's OSM editions come from it, the oldest day
+  over the site's tiles (`provenance.ts` `bakedStand`); the file has its
+  schema, `lib/city/provenance-file.ts`.
 
 Which BBBike extract covers which site, with the 0.05° margin, from
 BBBike's published boundaries on 2026-11-16 (the room is what is left
@@ -451,17 +470,17 @@ beyond the margin on the tightest side):
 
 Meißen therefore needs Geofabrik (or a custom BBBike extract, a request
 by hand on extract.bbbike.org) to re-bake its OSM layers in the cloud;
-its bake there runs to the end (every step, 2026-11-16), but rewrites
-its trees, rails, monuments, kerbs and NDVI with less, so it is not one
-to commit. Its
+its bake there stops before the first step unless `--without-osm`
+(which ran every step on 2026-11-16, and rewrote its trees, rails,
+monuments, kerbs and NDVI with less: not a bake to commit). Its
 committed bakes were made from BBBike's Dresden extract before this check
 existed, under the Geofabrik name. BBBike rebuilds its city extracts
 weekly from the planet (`Last-Modified` 2026-11-14 for all six on
 2026-11-16). Its extracts are OpenStreetMap data under the ODbL, as its
-download index says ("All Data from OpenStreetMap is licensed under the
-OpenStreetMap License", <https://download.bbbike.org/osm/bbbike/>): the
-credit stays "© OpenStreetMap-Mitwirkende (ODbL)"; BBBike asks for none
-of its own.
+download index says: "All Data from OpenStreetMap is licensed under the
+OpenStreetMap License" (<https://download.bbbike.org/osm/bbbike/>). The
+credit the HUD and NOTICE give OSM, "© OpenStreetMap-Mitwirkende (ODbL)",
+is the one that licence asks for.
 
 ### Reading the OSM extract
 
@@ -1339,7 +1358,8 @@ every committed Saxon site is baked from since 2026-11-05), recorded as
 reached the site's BBBike city extract that covers it (see "Where the OSM
 extract comes from"). The fetch records each one's source and
 `Last-Modified` in `<extract>.source.json`, and each bake writes the day
-into `provenance.json` per step it ran (`openstreetmap.baked`). Before
+into `provenance.json` per step and tile it ran (`openstreetmap.baked`;
+`unknown` where the extract names no day). Before
 the fetch fell back by itself, the extract was placed by hand under the
 Geofabrik name the spec expects: BBBike's city extracts (Dresden for
 Dresden and Meißen, Leipzig for Leipzig and Grimma, Hamburg, München) and

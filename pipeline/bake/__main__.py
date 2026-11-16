@@ -203,10 +203,13 @@ def run_tile(step: str, tile, site_tiles, research: bool = False) -> None:
         STEPS[step](tile)
 
 
-def step_key(step: str, research: bool, spec_hash: str) -> dict:
+def step_key(step: str, research: bool, spec_hash: str, osm=None) -> dict:
     """What a step's recorded run is valid for besides its files: its code
     (its module and every bake module it reaches, the locked packages), the
-    site spec, the flags — and the year, for a step that reads the date."""
+    site spec, the flags — the year, for a step that reads the date — and,
+    for a step that reads OSM, which extract it read where that is not the
+    provider's own (`osm_source.identity`: a BBBike extract, or none), so
+    a change of source runs it again rather than mixing sources."""
     module = STEPS[step].__module__
     key = {
         "step": step,
@@ -216,6 +219,8 @@ def step_key(step: str, research: bool, spec_hash: str) -> dict:
     }
     if step_cache.dated(module):
         key["year"] = datetime.date.today().year
+    if osm is not None and reads_osm(step):
+        key["osm"] = osm
     return key
 
 
@@ -268,19 +273,25 @@ def warm(spec, step: str, tiles, jobs: int) -> None:
 class Bake:
     """The bake's run settings and the site's recorded runs."""
 
-    def __init__(self, spec, jobs: int, research: bool, spec_hash: str, mode: str) -> None:
+    def __init__(
+        self, spec, jobs: int, research: bool, spec_hash: str, mode: str, osm=None
+    ) -> None:
         self.spec, self.jobs, self.research = spec, jobs, research
         self.spec_hash = spec_hash
+        # which extract the OSM steps read, for their keys (`step_key`)
+        self.osm = osm
         # "cache": skip what is unchanged; "force": run all, record it;
         # "off": run all, record nothing
         self.mode = mode
         self.ledger = step_cache.Ledger(spec.raw, spec.site, list(STEPS))
         self.tiles = {t.id: t for t in spec.tiles}
-        # the steps that ran in this bake (not skipped as unchanged)
-        self.ran: set[str] = set()
+        # each (step, tile) that ran in this bake and finished
+        self.ran: set[tuple[str, str]] = set()
+
+    def _key(self, step: str) -> dict:
+        return step_key(step, self.research, self.spec_hash, self.osm)
 
     def _run(self, step: str, tiles) -> None:
-        self.ran.add(step)
         started = time.perf_counter()
         try:
             self._run_tiles(step, tiles)
@@ -289,21 +300,22 @@ class Bake:
             print(f"{self.spec.site}: {step} over {len(tiles)} tile(s) took {took:.1f} s")
 
     def _run_tiles(self, step: str, tiles) -> None:
-        key = step_key(step, self.research, self.spec_hash)
-        args = (self.research, key, self.mode != "off")
+        args = (self.research, self._key(step), self.mode != "off")
         if self.jobs <= 1 or len(tiles) <= 1:
             for tile in tiles:
                 recorded_tile(self.spec, step, tile, *args)
                 self.ledger.done(step, tile.id)
+                self.ran.add((step, tile.id))
             return
         warm(self.spec, step, tiles, self.jobs)
         # fork: the workers share the parent's loaded modules (and what
         # `warm` measured), and no dataset is open between two steps
         context = multiprocessing.get_context("fork")
         with ProcessPoolExecutor(min(self.jobs, len(tiles)), mp_context=context) as pool:
-            runs = [pool.submit(recorded_tile, self.spec, step, t, *args) for t in tiles]
-            for done in runs:
+            runs = [(t, pool.submit(recorded_tile, self.spec, step, t, *args)) for t in tiles]
+            for t, done in runs:
                 done.result()
+                self.ran.add((step, t.id))
         for tile in tiles:
             self.ledger.done(step, tile.id)
 
@@ -316,7 +328,7 @@ class Bake:
         if self.mode != "cache":
             self._run(step, tiles)
             return
-        key = step_key(step, self.research, self.spec_hash)
+        key = self._key(step)
         todo = []
         for tile in tiles:
             if self.ledger.unchanged(step, tile.id, key):
@@ -343,6 +355,24 @@ class Bake:
 def reads_osm(step: str) -> bool:
     """Whether a step's code reaches the OSM reader (`osm.py`)."""
     return "bake.osm" in step_cache.closure(STEPS[step].__module__)
+
+
+def refuse_without_extract(spec, steps: list[str], without_osm: bool) -> None:
+    """Stops a bake that would run OSM steps with no extract that covers the
+    site, unless asked to (`--without-osm`): those steps skip, but some
+    rewrite their committed files with less (trees, rails, monuments,
+    kerbs, the NDVI's scale: docs/portability.md). One check before the
+    first step, so no step's code changes for it."""
+    if spec.osm.exists() or without_osm:
+        return
+    osm_steps = [s for s in steps if reads_osm(s)]
+    if osm_steps:
+        raise SystemExit(
+            f"{spec.site}: no OSM extract that covers the site — {len(osm_steps)} step(s) "
+            f"read OSM ({', '.join(osm_steps[:4])}{', …' if len(osm_steps) > 4 else ''}), and "
+            "some would rewrite committed files with less. `bun run fetch` first, or pass "
+            "--without-osm to bake without one."
+        )
 
 
 def main() -> None:
@@ -374,12 +404,19 @@ def main() -> None:
         "read where it is the one there",
     )
     parser.add_argument(
+        "--without-osm",
+        action="store_true",
+        help="bake: run the OSM steps without an extract that covers the site (they skip, "
+        "but some rewrite committed files with less: docs/portability.md)",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="bake: run every step, even one whose inputs and code are unchanged",
     )
     args = parser.parse_args()
-    spec = osm_source.resolve(parse(args.spec), args.osm_fallback)
+    parsed = parse(args.spec)
+    spec = osm_source.resolve(parsed, args.osm_fallback)
     unknown = set(args.tile) - {t.id for t in spec.tiles}
     if unknown:
         parser.error(f"not a tile of {spec.site}: {', '.join(sorted(unknown))}")
@@ -399,23 +436,31 @@ def main() -> None:
         run_site_step(spec, args.step)
         return
     steps = list(STEPS) if args.step == "all" else [args.step]
+    refuse_without_extract(spec, steps, args.without_osm)
     mode = "off" if os.environ.get("BAKE_CACHE") == "0" else "force" if args.force else "cache"
     bake = Bake(
-        spec, args.jobs, args.research, hashlib.sha256(args.spec.encode()).hexdigest(), mode
+        spec,
+        args.jobs,
+        args.research,
+        hashlib.sha256(args.spec.encode()).hexdigest(),
+        mode,
+        osm_source.identity(spec, parsed.osm),
     )
     # Step by step over the tiles, not tile by tile: ndvi, roof-colour and
     # sport read every tile of the site (its class rasters, the anchors of
     # its one flight), which the steps before them must have baked first.
-    for step in steps:
-        bake.step(step, tiles)
-    if spec.osm.exists():
-        # which extract the steps that read OSM were baked from, for the
-        # site's provenance (the Open-Data-Wächter reads its age there)
-        osm_source.record_bake(
-            spec.data / "provenance.json",
-            spec.osm,
-            [s for s in bake.ran if reads_osm(s)],
-        )
+    try:
+        for step in steps:
+            bake.step(step, tiles)
+    finally:
+        if spec.osm.exists():
+            # which extract each OSM step was baked from on each tile it
+            # finished, a failed bake's too (the Wächter reads the age there)
+            osm_source.record_bake(
+                spec.data / "provenance.json",
+                spec.osm,
+                [(s, t) for s, t in bake.ran if reads_osm(s)],
+            )
     if args.step == "all" and not args.tile:
         for step in SITE_STEPS:
             run_site_step(spec, step)
