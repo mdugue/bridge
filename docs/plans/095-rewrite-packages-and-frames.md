@@ -327,7 +327,9 @@ reported, not repaired here.
       test passes)
 - [ ] `oxlint.config.ts` holds no list of page modules
 - [ ] A cold bake after A1 publishes no new file
-- [ ] `bootApp` is under 1 000 lines; each owner has a unit test
+- [ ] `bootApp` is under 1 000 lines of code as the ledger counts them
+      (`counters.longestFunction`: no comment, no blank line; 2 354 on
+      2026-11-16); each owner has a unit test
 - [ ] `AGENTS.md`, the `city-walker` skill, ADR 0002 and ADR 0061 name
       the packages; ADR 0005 names `frames.ts`; the row in
       `docs/plans/README.md` is updated
