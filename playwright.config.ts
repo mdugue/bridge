@@ -79,12 +79,16 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    command: serverCommand(),
-    url: baseURL,
-    ignoreHTTPSErrors: devServer,
-    reuseExistingServer: !process.env.CI,
-    // A cold local production build has to fit in here too.
-    timeout: 240_000,
-  },
+  // The compared plates serve each commit themselves, on a port of its
+  // own (scripts/plates.ts sets PLATES_DIR and PORT).
+  webServer: process.env.PLATES_DIR
+    ? undefined
+    : {
+        command: serverCommand(),
+        url: baseURL,
+        ignoreHTTPSErrors: devServer,
+        reuseExistingServer: !process.env.CI,
+        // A cold local production build has to fit in here too.
+        timeout: 240_000,
+      },
 });

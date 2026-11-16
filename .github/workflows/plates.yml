@@ -1,0 +1,152 @@
+name: Plates
+
+# The compared plates, tier 1 (plan 087, ADR 0018): the QA views that hold
+# on the runner's software renderer, rendered for the pull request's base
+# and for its head by this one runner, and diffed (scripts/plates.ts). A
+# tripwire for a change nobody meant: it says *changed*, never *good* —
+# SwiftShader's light, shadow and anti-aliasing are not a visitor's. No
+# reference image is stored; a faster or slower runner, or a browser bump,
+# moves both sides alike.
+#
+# A pull request whose description has a `## Snapshots` section claims a
+# visible change: the job reports the differing views and passes. One
+# without claims none: a differing view fails it. Not a required check.
+
+on:
+  pull_request:
+    # What can move a pixel: the viewer, what it is built and baked from,
+    # the views and the harness itself.
+    paths:
+      - app/**
+      - components/**
+      - hooks/**
+      - lib/**
+      - public/**
+      - types/**
+      - scripts/**
+      - data/**
+      - sites/**
+      - patches/**
+      - qa/views/**
+      - e2e/snapshot-shot.spec.ts
+      - e2e/swiftshader-webgpu.ts
+      - playwright.config.ts
+      - next.config.ts
+      - package.json
+      - bun.lock
+      - .github/workflows/plates.yml
+  # By hand, a branch's tip against main's tip (not its merge base: the
+  # clone is shallow, so what landed on main since counts too).
+  workflow_dispatch:
+    inputs:
+      claims_change:
+        description: The branch means to change the picture (report, do not fail)
+        type: boolean
+        default: false
+
+concurrency:
+  group: plates-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  tier1:
+    name: Plates (tier 1, software renderer)
+    # Branches of this repository only, never a fork's code: the same job
+    # is to run on a machine with a GPU one day (tier 2).
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # Measured 2026-11-16 (plan 087, Findings): two builds and two renders
+    # of the tier's views. A budget that cancels reports nothing at all.
+    timeout-minutes: 45
+    steps:
+      # A pull request's checkout is its merge with the base's tip, so the
+      # base's tip against HEAD is exactly what the pull request changes.
+      - uses: actions/checkout@v7
+      - name: Runner CPU
+        run: lscpu | grep -E '^(Model name|CPU\(s\)):'
+      - name: Fetch the base commit
+        id: base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -z "$BASE_SHA" ]; then
+            git fetch --no-tags --depth=1 origin main
+            BASE_SHA=$(git rev-parse FETCH_HEAD)
+          else
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          fi
+          echo "sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+      # The description as it is now, not as the event carried it: a re-run
+      # after adding the section passes. Its text is only searched.
+      - name: Does the pull request claim a visible change?
+        id: claim
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          CLAIMS: ${{ inputs.claims_change }}
+        run: |
+          if [ -n "$PR" ]; then
+            if gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '.body // ""' \
+                | tr -d '\r' | grep -qE '^## Snapshots[[:space:]]*$'; then
+              CLAIMS=true
+            fi
+          fi
+          if [ "$CLAIMS" = "true" ]; then
+            echo "flag=--claims-change" >> "$GITHUB_OUTPUT"
+            echo "A \`## Snapshots\` section: differing views are reported."
+          else
+            echo "flag=" >> "$GITHUB_OUTPUT"
+            echo "No \`## Snapshots\` section: a differing view fails."
+          fi
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile
+      # The caches the e2e shards restore (ci.yml explains their keys);
+      # this job saves none. The base's build starts from the same bake
+      # cache: it bakes only what the pull request changed.
+      - uses: actions/cache/restore@v6
+        with:
+          path: .cache/prepare-data
+          key: prepare-data-${{ runner.os }}-${{ hashFiles('data/**', 'scripts/**', 'lib/**', 'sites/**', 'patches/**', 'bun.lock') }}
+          restore-keys: |
+            prepare-data-${{ runner.os }}-
+      - uses: actions/cache/restore@v6
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-plates
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-
+            nextjs-${{ runner.os }}-
+      - uses: actions/cache/restore@v6
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-shell-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - name: Install Playwright's headless shell
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: bunx playwright install --only-shell chromium
+      # Builds the head here and the base in a worktree (plates/src/), each
+      # with the debug hook and the reference site alone, serves each and
+      # renders it with the head's harness.
+      - name: Render the base and the head, and compare
+        run: bun run plates -- --base "$BASE_SHA" --summary "$GITHUB_STEP_SUMMARY" $CLAIM
+        env:
+          SHOTS_SMALL: "1"
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          CLAIM: ${{ steps.claim.outputs.flag }}
+      # Base, head and difference image of each differing view, and the
+      # report; every plate of both sides beside them.
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: plates-report
+          path: |
+            plates/report/
+            plates/tier1/
+          retention-days: 7

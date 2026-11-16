@@ -36,6 +36,8 @@ bun run test            # units in lib/, app/_components/, scripts/
 bun run test:e2e        # playwright against a production build
                         # (E2E_DEV=1: against bun dev)
 bun run shots           # real-GPU plates of shots/*.json (headed)
+bun run plates          # the QA views of the merge base against the head's,
+                        # diffed (SHOTS_SMALL=1: CI's tier on SwiftShader)
 bun run site <site>     # where a site stands (--all: every site)
 bun run fetch <site>    # downloads → data/_raw/<provider>/, sources → data/<site>/
 bun run bake <site>     # offline bakes [tile…] [--step X] [--jobs N] [--force]
@@ -176,7 +178,13 @@ uploaded; nothing it names is fetched (ADR 0054).
 ## QA: self-verify, don't ask for screenshots
 
 - A PR that changes what the viewer shows carries JSON snapshots in its
-  description (`pr-snapshots` skill).
+  description (`pr-snapshots` skill). CI compares every PR's QA views
+  with its base's on the runner's software renderer (the *Plates* job,
+  ADR 0018): with a `## Snapshots` section a differing view is reported,
+  without one it fails. It says *changed*, never *good*.
+- What holds a frame still for a plate is a probe of the debug hook
+  (`__poc.still`, `poc-scene.ts`): something new that animates reads the
+  frame's `phase` or TSL `time`, or the plates flake.
 - Visual work is judged on a real GPU: drop a snapshot JSON into `shots/`
   and run `bun run shots`; read the plate and iterate. Verify from oblique
   angles, not head-on.

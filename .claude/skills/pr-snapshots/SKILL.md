@@ -12,6 +12,39 @@ what the viewer shows is not ready for review until its description has a
 slow and lies about light and shadow, so add them only when they are cheap
 and say that they are SwiftShader. The JSON is the deliverable.
 
+## The plates hold you to it
+
+CI compares every pull request of this repository with its base
+(`.github/workflows/plates.yml`, ADR 0018, tier 1): the QA views that
+hold on the runner's software renderer, rendered for both by the same
+runner, and diffed.
+
+- **A description with a `## Snapshots` section claims a visible
+  change.** The job reports which views differ and passes. List those
+  views by name under the section, each with a word on why it moved; a
+  differing view you did not mean is a finding, not noise.
+- **A description without one claims the picture is the same.** A
+  differing view fails the job: name the change in a Snapshots section,
+  or find what moved. Base, head and difference image of each differing
+  view are in the run's `plates-report` artifact; the table is in the
+  job's summary. After editing the description, re-run the job.
+- The plates say *changed*, never *good*: SwiftShader's light is not a
+  visitor's. A passing job is no review of a look.
+
+The same comparison by hand, before pushing:
+
+```bash
+SHOTS_SMALL=1 bun run plates                  # merge base with origin/main against the head
+SHOTS_SMALL=1 bun run plates -- --views oblique-400,shore-eye
+SHOTS_SMALL=1 bun run plates -- --claims-change   # report, exit 0
+bun run plates                                # tier 2: headed, this machine's GPU, every view
+```
+
+It builds the base in a worktree under the gitignored `plates/` and
+writes `plates/report/` (`report.md`, and per differing view
+`<view>.base.png`, `.head.png`, `.diff.png`). In the cloud container add
+`PW_CHROMIUM=/opt/pw-browsers/chromium`.
+
 ## What counts as visual
 
 Anything a reviewer would judge by eye: a scene material or shader term, a

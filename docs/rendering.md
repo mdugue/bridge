@@ -2038,8 +2038,45 @@ heal calls `resetFailedTiles()` alone. Not reported yet.
 
 Headless CI runs the lite profile under SwiftShader and asserts *presence*
 (a per-layer scene census on `__poc.stats.layerStats`, frame counts,
-shadow re-render counts), never looks. Anything visual is judged on a real
-GPU with the snapshot harness: drop a Snapshot JSON into `shots/` and run
-`bun run shots`. Judge from oblique angles. The streaming tuning (error
-thresholds, cache budget, tile seams, the painted shoreline) is still
-waiting for that look: [plan 019](./plans/019-gpu-verification.md).
+shadow re-render counts), never looks. Whether a picture is good is judged
+on a real GPU with the snapshot harness: drop a Snapshot JSON into
+`shots/` and run `bun run shots`. Judge from oblique angles. The streaming
+tuning (error thresholds, cache budget, tile seams, the painted shoreline)
+is still waiting for that look:
+[plan 019](./plans/019-gpu-verification.md).
+
+Whether a picture *changed* is compared by a machine
+([ADR 0018](./adr/0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md),
+[plan 087](./plans/087-rewrite-measuring-stick.md)): `bun run plates`
+(`scripts/plates.ts`) builds the base commit in a worktree under the
+gitignored `plates/`, serves base and head each on a port of its own,
+renders the QA views of both with the head's harness
+(`e2e/snapshot-shot.spec.ts`, every view from one booted page) and diffs
+each pair (`lib/city/plate-diff.ts`: per pixel the largest channel
+difference; a pixel differs above a level, a view above a share). No
+reference image is stored. Two tiers share that code:
+
+| | Tier 1 | Tier 2 |
+|---|---|---|
+| Where | CI, every pull request of this repository (`.github/workflows/plates.yml`); `SHOTS_SMALL=1 bun run plates` by hand | a machine with a GPU: `bun run plates` (headed) — not in CI; where it runs is the maintainer's choice |
+| Renderer | WebGPU on SwiftShader's Vulkan, 800 × 500, `?scene=lite` (the spawn tile alone) | the browser's own adapter, the full profile, 1600 × 1000 @2× |
+| Views | eight that stand on the spawn tile (`TIER1_VIEWS`): 25–55 s each there | all of `qa/views/` |
+| Says | *changed*, as a tripwire — never *good* | *changed*, in the light a visitor sees |
+| Tolerance | `TIER1_TOLERANCE`: ten same-commit pairs moved no pixel | its own floor, still to measure |
+
+A frame repeats because the harness holds it. `__poc.still` lets no time
+pass in what animates: the scene's phase clock (water, crowns, flags,
+fountains, the lamps' reflections) and three's TSL `time` (the clouds,
+the film grain, Sin City's rain) read one instant, while the loop's own
+clock runs on, at `__poc.frameMs` a frame, so the lens, the regression
+and the eye still settle (`poc-scene.ts`). Without it two renders of one
+build differed in five of nine views — the clouds over 6–7 % of a plate,
+the crowns' sway along their edges. Both probes exist only in a build
+with `NEXT_PUBLIC_POC_DEBUG`. The harness applies a view, waits for the
+scene to have heard it (`handle.sync()`), and takes the plate once the
+stream, the shadow rings and the lens have been quiet for three frames
+on end.
+
+A PR whose description has a `## Snapshots` section claims a visible
+change and the job reports its differing views; one without claims none,
+and a differing view fails it (the `pr-snapshots` skill).

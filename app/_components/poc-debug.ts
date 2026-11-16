@@ -51,6 +51,12 @@ export interface PocDebugInfo {
    * SwiftShader took to draw them.
    */
   frameMs?: number;
+  /**
+   * While set, no time passes in what animates — water, crowns, clouds,
+   * grain, rain — though the loop draws and settles on (poc-scene.ts
+   * `still`): the compared plates' frame that repeats (plan 087).
+   */
+  still?: boolean;
   /** The HUD's look store: `look.set(...)` is exactly what a slider does. */
   look?: LookState;
   ready: boolean;
@@ -98,7 +104,7 @@ const counted = (key: "frames" | "regressed" | "shadowRenders") => ({
 });
 
 /** A probe the specs set on the hook, sent on to the scene. */
-const probed = (key: "frameMs" | "hold" | "veil") => ({
+const probed = (key: "frameMs" | "hold" | "still" | "veil") => ({
   enumerable: true,
   get: () => probe[key],
   set: (value: unknown) => {
@@ -121,6 +127,7 @@ function pocInfo(): PocDebugInfo {
     regressed: counted("regressed"),
     hold: probed("hold"),
     frameMs: probed("frameMs"),
+    still: probed("still"),
     veil: probed("veil"),
     step: {
       enumerable: true,
@@ -154,5 +161,10 @@ export function connectPocScene(next: PocScene | null): void {
   scene = next;
   // the boot carried them, a step among them: these are the ones set
   // since, and a step set before would be asked twice
-  next?.probe({ hold: probe.hold, frameMs: probe.frameMs, veil: probe.veil });
+  next?.probe({
+    hold: probe.hold,
+    frameMs: probe.frameMs,
+    still: probe.still,
+    veil: probe.veil,
+  });
 }
