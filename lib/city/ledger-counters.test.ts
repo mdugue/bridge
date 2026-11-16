@@ -814,6 +814,36 @@ test("the boot's lines, however it is written or wrapped", () => {
     )
   ).toEqual([]);
   expect(names("export default traced(() => {\n});\n")).toEqual(["traced 2"]);
+  // a class as a value; a word that only holds `class` or `function`
+  expect(names("const A = class {\n};\n")).toEqual(["A 2"]);
+  expect(
+    names(
+      ts(
+        "const x = calc(1);",
+        "const y = myfunction (1);",
+        "const z = o.function (1) + o.class (2);",
+        "const w = subclass (3);"
+      )
+    )
+  ).toEqual([]);
+  // a constant without a value: its type's arrow is no function
+  expect(names("let cb: () => void;\nlet d: (a: number) => void;\n")).toEqual(
+    []
+  );
+  expect(names("const h: (a: number) => void = wrap;\n")).toEqual([]);
+  // a default inside a pattern is not the constant's value
+  expect(
+    names(
+      ts(
+        "const { a = () => 1 } = o;",
+        "const [b = () => 2] = p;",
+        "const { c = 1, d: [e = 2] } = make(() => {",
+        "});",
+        "const [f = 1] = make(function () {",
+        "});"
+      )
+    )
+  ).toEqual(["(destructured) 2", "(destructured) 2"]);
 });
 
 test("a closing brace ends a statement only before code at a line's start", () => {

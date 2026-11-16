@@ -58,7 +58,8 @@ export interface TopFunction {
 
 const DECLARED =
   /^\s*(?:export\s+)?(?:default\s+)?(?:(?:async\s+)?function\b\s*\*?\s*(?<fn>[\w$]*)|(?:abstract\s+)?class\b\s*(?<cls>[\w$]*))/u;
-const ASSIGNED = /^\s*(?:export\s+)?(?:const|let|var)\s+(?<name>[\w$]+)/u;
+const ASSIGNED =
+  /^\s*(?:export\s+)?(?:const|let|var)\s+(?:(?<name>[\w$]+)|[{[])/u;
 /** Statements that hold no function of their own. */
 const NO_VALUE =
   /^\s*(?:import\b|export\s*[{*]|(?:export\s+)?(?:declare\s+)?(?:type|interface|enum|namespace|module)\b)/u;
@@ -95,15 +96,16 @@ function holdsFunction(bare: string, from: number): boolean {
   return false;
 }
 
-/** Where a constant's value starts: after its first `=` outside every
- *  bracket that is no arrow's and no comparison's (-1: it has none). */
+/** Where a constant's value starts: after its first `=` that is no
+ *  arrow's or comparison's and no default's inside a destructuring
+ *  pattern (-1: it has none). */
 function valueStart(bare: string): number {
   let depth = 0;
   for (let i = 0; i < bare.length; i += 1) {
     const c = bare[i] ?? "";
-    if ("([{<".includes(c)) {
+    if (c === "{" || c === "[") {
       depth += 1;
-    } else if (")]}".includes(c) || (c === ">" && bare[i - 1] !== "=")) {
+    } else if (c === "}" || c === "]") {
       depth -= 1;
     } else if (depth === 0 && c === "=" && !"=>".includes(bare[i + 1] ?? "")) {
       return i + 1;
@@ -127,10 +129,12 @@ function functionName(bare: string): string | null {
     const { fn, cls } = declared.groups ?? {};
     return [fn, cls].find(Boolean) ?? "(anonymous)";
   }
-  const assigned = ASSIGNED.exec(bare)?.groups?.name;
-  if (assigned !== undefined) {
+  const assigned = ASSIGNED.exec(bare);
+  if (assigned) {
     const from = valueStart(bare);
-    return from !== -1 && holdsFunction(bare, from) ? assigned : null;
+    return from !== -1 && holdsFunction(bare, from)
+      ? (assigned.groups?.name ?? "(destructured)")
+      : null;
   }
   const called = CALLED.exec(bare)?.groups?.name;
   return called !== undefined && holdsFunction(bare, 0) ? called : null;
