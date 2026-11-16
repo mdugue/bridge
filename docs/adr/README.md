@@ -18,7 +18,7 @@ how it is built.
 | [0009](./0009-shadow-recipe.md) | Light, shadows and post: soft PCF redrawn on demand, four concentric rings, a baked horizon for the far field, a fixed lamp pool, DoF dropped while moving, AO never |
 | [0010](./0010-opaque-clay-buildings-only.md) | The look: opaque clay on a painted ground, colours within one palette, windows drawn by the shader, detail soft, water matte |
 | [0012](./0012-openstreetmap-for-what-official-data-lacks.md) | Sources: official data first, OSM and Wikidata for what it lacks, named stand-ins marked per city, no look switch per city |
-| [0018](./0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md) | Headless tests run a lite profile and count frames; visuals are judged on a real GPU; the Snapshot is a validated contract |
+| [0018](./0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md) | Headless tests run a lite profile and count frames; a picture is judged on a real GPU, and compared with its base in two tiers (CI's software renderer as a tripwire, a real GPU); the Snapshot is a validated contract |
 | [0021](./0021-docs-published-under-wissen-with-prerendered-diagrams.md) | docs/ is published as /wissen, and its diagrams are prerendered SVG |
 | [0024](./0024-site-streams-as-3d-tiles.md) | The build bakes each city into a 3D Tiles tileset that streams around the camera, content-hashed, its bytes the same from every machine, first frame before the rest |
 | [0027](./0027-webgpu-renderer-and-tsl.md) | WebGPURenderer and TSL node materials, one path, public API only |

@@ -167,6 +167,7 @@ import {
   notePocRegressed,
   pocFramesHeld,
   pocFrameTime,
+  pocPhase,
   pocVeil,
   tickPocFrame,
 } from "./poc-scene";
@@ -3897,8 +3898,8 @@ async function bootApp(
       loadVeil.step(dt, { exporting, model: modelRig.owns() });
       // Advance every tile's water ripple and glitter (its sky tint is the
       // fog colour's node, in lockstep with the sun by construction).
-      setWaterTime(elapsed);
-      lastEquivalent = followView(elapsed, poseTick) ?? 600;
+      setWaterTime(pocPhase(elapsed));
+      lastEquivalent = followView(pocPhase(elapsed), poseTick) ?? 600;
       updateCuts();
     },
     view: ({ elapsed, view }) => {
@@ -3908,10 +3909,10 @@ async function bootApp(
       lens.update(view, lastEquivalent);
       setViewDirection(view);
       // The fountains' jets and water shimmer (one shared uniform).
-      setFountainTime(elapsed);
+      setFountainTime(pocPhase(elapsed));
       // The features that hook the frame (the data layers' light, the
       // timetable trams), once they are here.
-      frameHook.emit(elapsed, performance.now());
+      frameHook.emit(pocPhase(elapsed), performance.now());
     },
     tick: ({ elapsed, poseTick }) => {
       if (poseTick) {
