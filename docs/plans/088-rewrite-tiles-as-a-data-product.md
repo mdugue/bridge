@@ -471,7 +471,7 @@ file never getting larger than it is today. Sizes are in MB (10⁶ bytes).
 
 | Bracketed total (JSON today = gzip 9 … brotli 11) | files | today | brotli 11 | zstd 19 | brotli saves | zstd saves |
 |---|--:|--:|--:|--:|--:|--:|
-| spawn tile `33412_5656_2_sn`: every file named for it, both levels and the buildings | 44 | 13.83 … 13.77 | 12.89 | 13.16 … 13.15 | 6.8 … 6.4 % | 4.8 … 4.5 % |
+| spawn tile `33412_5656_2_sn`: every file named for it, both levels and the buildings¹ | 44 | 13.83 … 13.77 | 12.89 | 13.16 … 13.15 | 6.8 … 6.4 % | 4.8 … 4.5 % |
 | the spawn tile's fine level: terrain L0 and every file its extras name in `tileset.json` | 35 | 7.99 … 7.96 | 7.64 | 7.76 … 7.75 | 4.4 … 4.0 % | 3.0 … 2.6 % |
 
 **The verdict on the plan's 3 % line.**
@@ -482,8 +482,9 @@ file never getting larger than it is today. Sizes are in MB (10⁶ bytes).
 - **Zstd 19 clears it only for the site and the spawn tile** (4.4–4.8 %).
   On a fine level it sits on the line (2.6–3.0 %), and it is behind
   brotli on every kind.
-- **Phase 5 is to be built, with brotli** as the one transport encoding,
-  provided the store passes it through (decision 1).
+- **Brotli clears the plan's 3 % bar.** Whether phase 5 is built
+  follows from the plan's rule and from the maintainer's choice of store:
+  the store must pass a stored `Content-Encoding` through (decision 1).
 - **The gain is in the meshes and the point packs.** `.glb` brotli is
   10 % smaller than its gzip, and the packed points 18 %. PNGs gain 1.5–2 %
   and stay as they are; plan 091 decides their future. WebP gains
@@ -491,8 +492,15 @@ file never getting larger than it is today. Sizes are in MB (10⁶ bytes).
 - **What phase 5 can claim over today is the `.gz` kinds alone.** On
   JSON the gain over the host's own on-the-fly brotli is unknown, between
   0 and 25 %.
-- **The ledger gets these figures once 087 has created it.** It does not
-  exist yet (`qa/ledger.json`).
+- **These figures go into PR #307's ledger** (plan 087) once it is on
+  this branch. Its spawn tile counts 43 files where the table above
+  counts 44 (¹): the 44th is the tile's Stadtwissen
+  (`stadtwissen_33412_5656_2_sn.<hash>.json`), which the bake publishes
+  under the tile's name but `tileset.json` does not name. The ledger
+  counts what the tileset names; this table counts every published file
+  with the tile in its name. It is 0.31 MB before gzip; over the 43
+  files the ledger counts, brotli saves 6.4–6.7 % (13.74–13.78 MB today,
+  12.86 MB with brotli).
 
 **Side observations.**
 
@@ -508,7 +516,8 @@ file never getting larger than it is today. Sizes are in MB (10⁶ bytes).
 
 Decisions 1–3 rest on the providers' documentation, read on 2026-11-16,
 with the page cited. "Not documented" means the cited pages say nothing
-about it; nothing below is asserted from memory. **The plan's ten-file
+about it; "documented, not tried" means a page says so and nobody here
+has tried it. Nothing below is asserted from memory. **The plan's ten-file
 trial has not been run.** It needs an account on each candidate, which
 this step was not to create. Each "not documented" below is something
 that trial must answer.
@@ -534,12 +543,34 @@ that trial must answer.
 - **Vercel Blob fails the `immutable` criterion as documented.** It also
   cannot be shown to keep a stored encoding, and Hobby's limits would
   lock it for 30 days once passed.
-- **R2 is the only candidate whose documentation answers all four
-  criteria,** if a Cache Rule covers JSON and `.glb`. It is also the
-  only one that documents a 404, and its egress is free.
-- **Bunny is the cheapest per GB and EU-based, but documents least.** Its
-  CDN's own brotli or zstd might make phase 5 unnecessary; the trial
-  would tell.
+- **R2's documentation answers the most criteria, not all.**
+  - Documented, not tried: a stored `Content-Encoding` and
+    `Cache-Control` on each object, kept at the edge for br and gzip
+    (with a Cache Rule for JSON and `.glb`); HTTP/3; a token limited to
+    the bucket.
+  - Not documented: what a missing object answers on the custom domain
+    (the 404 is documented for the S3 API only), and what the edge does
+    with a stored zstd.
+- **A 404 is documented on an API, never on the public URL.** That holds
+  for R2's S3 API and for GitHub's assets API alike. No candidate
+  documents the status a browser gets for a missing object; the trial
+  must.
+- **Storage and egress, each from its page:**
+  - Vercel Blob: $0.025/GB-month, Blob Data Transfer $0.05/GB in fra1
+    ([fra1](https://vercel.com/docs/pricing/regional-pricing/fra1)).
+  - R2: $0.015/GB-month, egress free
+    ([R2 pricing](https://developers.cloudflare.com/r2/pricing/)).
+  - Bunny: storage $0.01/GB in one region
+    ([storage pricing](https://bunny.net/pricing/storage/)), CDN traffic
+    in Europe $0.01/GB ([CDN pricing](https://bunny.net/pricing/cdn/)).
+  - Hetzner: €6.49 a month including 1 TB storage and 1 TB egress
+    ([product](https://www.hetzner.com/storage/object-storage/)).
+
+  Bunny stores for less; R2 sends for nothing. Which is cheaper depends
+  on the ratio of traffic to stored bytes, which 087's ledger and the
+  host's traffic figures give.
+- **Bunny is EU-based but documents least.** Its CDN's own brotli or
+  zstd might make phase 5 unnecessary; the trial would tell.
 - **A recommendation, for the maintainer to accept or not:** R2 behind a
   custom domain, with Bunny as the alternative the ten-file trial is also
   run on.
@@ -549,9 +580,9 @@ that trial must answer.
 - **Forwarding `/data/*` through the site's host.** A Vercel external
   rewrite honours the upstream's `Cache-Control` and `CDN-Cache-Control`
   "for projects created on or after April 6, 2026"
-  ([rewrites](https://vercel.com/docs/routing/rewrites), 2026-08-11). The
-  project `city-walk` was created in June 2026, so that holds without
-  further setting.
+  ([rewrites](https://vercel.com/docs/routing/rewrites), 2026-08-11).
+  Whether the project falls under that date, or needs
+  `x-vercel-enable-rewrite-caching`, the trial checks.
 - **What Vercel does not document about forwarding.** Its pages say
   nothing on:
   - whether the upstream's `Content-Encoding` is passed through or redone;
@@ -565,8 +596,8 @@ that trial must answer.
   fra1 ([fra1](https://vercel.com/docs/pricing/regional-pricing/fra1)), on
   top of whatever the store bills.
 - **Where forwarding hits the STOP conditions.** "Forwarding not cached
-  at the edge, or bills the bytes twice": the first is documented as
-  met, the second is open. "The store drops the `Content-Encoding`": open.
+  at the edge, or bills the bytes twice": the first is documented, not
+  tried; the second is open. "The store drops the `Content-Encoding`": open.
   The ten-file trial has to answer all three before forwarding is chosen.
 - **The checkpoint above applies to forwarded files too.** A forwarded
   `/data/*` stays behind Vercel's checkpoint, as the files are today. A
@@ -594,8 +625,12 @@ that trial must answer.
 
 - **The plan's recommendation stands:** a CI job with the write
   credential, and `bun scripts/publish-data.ts` as the way out.
-- **No candidate documents GitHub OIDC** for its writes. The credential
-  is therefore a long-lived token in a repository or environment secret:
+- **I found no page documenting GitHub Actions OIDC** for writes to any
+  candidate, on the pages cited in decision 1's table. Vercel Blob
+  documents an OIDC token for code that runs on Vercel, and for "a CI
+  job" outside Vercel names the read-write token instead
+  ([Blob](https://vercel.com/docs/vercel-blob)). The credential is
+  therefore a long-lived token in a repository or environment secret:
   - Blob: the store's token;
   - R2: a token limited to the bucket;
   - Bunny: the zone's password;
