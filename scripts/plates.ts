@@ -19,8 +19,11 @@
  *   bun run plates                       # merge base with origin/main against the head
  *   bun run plates -- --base <ref>       # another base
  *   bun run plates -- --views a,b        # these views only
- *   bun run plates -- --claims-change    # report differing views, exit 0
- *                                        # (a PR with a `## Snapshots` section)
+ *   bun run plates -- --claims a,b       # these views are meant to differ:
+ *                                        # reported, not failed
+ *   bun run plates -- --claims-file <f>  # the same, read from a PR's
+ *                                        # description: the views named
+ *                                        # under its `## Snapshots`
  *   bun run plates -- --summary <file>   # append the report (Markdown) there
  *   bun run plates -- --no-build         # the head's .next is built already
  *                                        # (with NEXT_PUBLIC_POC_DEBUG=1)
@@ -28,10 +31,13 @@
  *                                        # head, n same-commit pairs
  *   bun run plates -- diff <a> <b>       # two rendered folders compared
  *
- * Exit 1 when a view differs (unless `--claims-change`), 2 on a run that
- * could not be compared.
+ * Exit 1 when a view differs that no claim names; 2 on a run that could
+ * not be compared — a render failed, a side was not held `still`, a
+ * plate is blank. The one exception is a base from before the plates
+ * existed, which cannot be held: reported as not compared, exit 0.
  */
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -39,7 +45,6 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import nodePath from "node:path";
@@ -47,6 +52,7 @@ import sharp from "sharp";
 import {
   diffImage,
   diffPlates,
+  plateBlank,
   plateDiffers,
   TIER1_TOLERANCE,
   TIER2_TOLERANCE,
@@ -224,6 +230,9 @@ async function waitForServer(port: number): Promise<void> {
 /** What a render wrote beside its plates (e2e/snapshot-shot.spec.ts). */
 interface RunInfo {
   adapter: string;
+  /** what rendered it: the harness's files, the views', the tier's page
+   *  (`harnessKey`); written here, after the render */
+  harness?: string;
   /** the served build knows the `still` probe (poc-scene.ts) */
   held: boolean;
   ms: Record<string, number>;
@@ -265,7 +274,41 @@ async function render(
       },
     }
   );
-  return readRun(out);
+  const info = { ...readRun(out), harness: harnessKey(tier, views) };
+  writeFileSync(
+    nodePath.join(out, "run.json"),
+    `${JSON.stringify(info, null, 2)}\n`
+  );
+  return info;
+}
+
+/** The files that decide how a plate is taken, beside the build served. */
+const HARNESS_FILES = [
+  "e2e/snapshot-shot.spec.ts",
+  "e2e/swiftshader-webgpu.ts",
+  "playwright.config.ts",
+];
+
+/**
+ * What a render was taken with: the harness's files, the views' own
+ * (all of them, when none is named) and the tier's page. Kept base
+ * plates are only used again by a render that would take them the same
+ * way.
+ */
+function harnessKey(tier: Tier, views: readonly string[] | null): string {
+  const hash = createHash("sha256");
+  const viewFiles = (
+    views ??
+    readdirSync(nodePath.join(ROOT, "qa", "views"))
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => f.slice(0, -5))
+      .toSorted()
+  ).map((v) => `qa/views/${v}.json`);
+  for (const file of [...HARNESS_FILES, ...viewFiles]) {
+    hash.update(file).update(readFileSync(nodePath.join(ROOT, file)));
+  }
+  hash.update(JSON.stringify([tier.env, tier.args]));
+  return hash.digest("hex").slice(0, 16);
 }
 
 function readRun(dir: string): RunInfo {
@@ -302,6 +345,8 @@ export interface ViewResult {
   /** pixels over the level, their share, the largest channel difference */
   differing: number;
   max: number;
+  /** the mean over the pixels of each one's largest channel difference */
+  mean: number;
   share: number;
   view: string;
 }
@@ -315,6 +360,38 @@ function platesIn(dir: string): string[] {
 }
 
 /**
+ * A rendered folder's plates, decoded — and refused when it shows a
+ * harness that did not work rather than a city: no plate, a blank one,
+ * or two views with the very same pixels (a pose that was not applied
+ * draws the view before it). Base and head are driven by one harness, so
+ * a comparison alone would find such a pair "the same".
+ */
+async function readSide(dir: string): Promise<Map<string, Plate>> {
+  const views = platesIn(dir);
+  if (views.length === 0) {
+    throw new Error(`${dir}: no plate was rendered`);
+  }
+  const plates = new Map<string, Plate>();
+  const seen = new Map<string, string>();
+  for (const view of views) {
+    const plate = await readPlate(nodePath.join(dir, `qa-${view}.png`));
+    if (plateBlank(plate)) {
+      throw new Error(`${dir}: the plate of ${view} is blank`);
+    }
+    const digest = createHash("sha256").update(plate.data).digest("hex");
+    const twin = seen.get(digest);
+    if (twin) {
+      throw new Error(
+        `${dir}: ${twin} and ${view} are the same picture — a view was not applied`
+      );
+    }
+    seen.set(digest, view);
+    plates.set(view, plate);
+  }
+  return plates;
+}
+
+/**
  * Every view of `base` and `head` compared; for a view that differs, its
  * base, head and difference image go to `report` (when given).
  */
@@ -324,28 +401,31 @@ export async function compare(
   tolerance: PlateTolerance,
   report: string | null
 ): Promise<ViewResult[]> {
-  const views = platesIn(head);
-  const missing = platesIn(base).filter((v) => !views.includes(v));
-  if (missing.length > 0 || views.length === 0) {
+  const [bases, heads] = [await readSide(base), await readSide(head)];
+  const uneven = [...bases.keys(), ...heads.keys()].filter(
+    (v) => !(bases.has(v) && heads.has(v))
+  );
+  if (uneven.length > 0) {
     throw new Error(
-      `the two renders do not hold the same views (${missing.join(", ") || "none rendered"})`
+      `the two renders do not hold the same views (${uneven.join(", ")})`
     );
   }
   const results: ViewResult[] = [];
-  for (const view of views) {
-    const file = `qa-${view}.png`;
-    const [a, b] = await Promise.all([
-      readPlate(nodePath.join(base, file)),
-      readPlate(nodePath.join(head, file)),
-    ]);
+  for (const [view, b] of heads) {
+    const a = bases.get(view);
+    if (!a) {
+      // (`uneven` is empty: the base has every view of the head)
+      continue;
+    }
     const diff = diffPlates(a, b, tolerance.level);
-    const differs = plateDiffers(diff, tolerance.share);
+    const differs = plateDiffers(diff, tolerance);
     results.push({
       view,
       differs,
       differing: diff.differing,
       share: diff.share,
       max: diff.max,
+      mean: diff.mean,
     });
     if (differs && report) {
       mkdirSync(report, { recursive: true });
@@ -362,7 +442,116 @@ export async function compare(
   return results;
 }
 
+/** The heading a PR's description claims a visible change under. */
+const SNAPSHOTS_HEADING = /^## Snapshots[ \t]*$/u;
+
+/**
+ * The views a PR's description names as changed: those of `views` whose
+ * name stands under its `## Snapshots` section (up to the next heading
+ * of that level or above), as a word of its own. Null without the
+ * section — the PR claims the picture is the same. The heading alone
+ * names nothing: a view that differs unnamed is a change nobody owned.
+ */
+export function claimedViews(
+  body: string,
+  views: readonly string[]
+): string[] | null {
+  const lines = body.replaceAll("\r", "").split("\n");
+  const from = lines.findIndex((line) => SNAPSHOTS_HEADING.test(line));
+  if (from === -1) {
+    return null;
+  }
+  const rest = lines.slice(from + 1);
+  const end = rest.findIndex((line) => /^##? /u.test(line));
+  const section = (end === -1 ? rest : rest.slice(0, end)).join("\n");
+  return views.filter((view) =>
+    new RegExp(`(^|[^\\w-])${view}($|[^\\w-])`, "u").test(section)
+  );
+}
+
+/** The differing views no claim names: what fails a run. */
+export function unclaimed(
+  results: readonly ViewResult[],
+  claimed: readonly string[] | null
+): string[] {
+  return results
+    .filter((r) => r.differs && !(claimed ?? []).includes(r.view))
+    .map((r) => r.view);
+}
+
+/** A run's exit code: 1 when a view differs that no claim names. */
+export function exitOf(
+  results: readonly ViewResult[],
+  claimed: readonly string[] | null
+): number {
+  return unclaimed(results, claimed).length > 0 ? 1 : 0;
+}
+
+/**
+ * Whether two renders can be compared at all. Each side has to have been
+ * held `still`, or the comparison reports the weather. An unheld head is
+ * a broken probe or harness: an error. An unheld base is an error too,
+ * once the base knows the plates (it has `lib/city/plate-diff.ts`) — the
+ * probe was lost on the way — and only a base from before them is let
+ * through, uncompared.
+ */
+export function comparability(sides: {
+  headHeld: boolean;
+  baseHeld: boolean;
+  baseKnowsPlates: boolean;
+}): { compare: true } | { compare: false; exit: 0 | 2; why: string } {
+  if (!sides.headHeld) {
+    return {
+      compare: false,
+      exit: 2,
+      why: "the head was not held still: its build does not know the `still` probe (poc-scene.ts), or the harness did not set it",
+    };
+  }
+  if (sides.baseHeld) {
+    return { compare: true };
+  }
+  return sides.baseKnowsPlates
+    ? {
+        compare: false,
+        exit: 2,
+        why: "the base was not held still although it has the plates: the `still` probe was lost on the way to it",
+      }
+    : {
+        compare: false,
+        exit: 0,
+        why: "the base predates the plates (plan 087) and cannot be held still, so nothing was compared",
+      };
+}
+
 const percent = (share: number): string => `${(share * 100).toFixed(3)} %`;
+
+/** A view's word in the report. */
+function standing(r: ViewResult, claimed: readonly string[] | null): string {
+  if (!r.differs) {
+    return "same";
+  }
+  return (claimed ?? []).includes(r.view)
+    ? "differs, named"
+    : "**differs, not named**";
+}
+
+/** The report's sentence on what the differing views mean for the run. */
+function verdictOf(
+  results: readonly ViewResult[],
+  claimed: readonly string[] | null
+): string {
+  const loose = unclaimed(results, claimed);
+  if (!results.some((r) => r.differs)) {
+    return "the picture is the same.";
+  }
+  if (loose.length === 0) {
+    return "every differing view is named under the PR's `## Snapshots`: reported, not failed.";
+  }
+  const names = loose.map((v) => `\`${v}\``).join(", ");
+  return claimed === null
+    ? `the PR claims no change (no \`## Snapshots\` section): **failed** on ${names}. Name each there and show it, or find what moved.`
+    : `**failed**: ${names} differ${loose.length === 1 ? "s" : ""} and ${loose.length === 1 ? "is" : "are"} not named under \`## Snapshots\`. Name each there, or find what moved.`;
+}
 
 /** The report as Markdown: the verdict, then a row a view. */
 export function reportOf(
@@ -373,33 +562,28 @@ export function reportOf(
     tier: Tier["name"];
     adapter: string;
     tolerance: PlateTolerance;
-    claimsChange: boolean;
+    /** the views the PR names as changed; null: it claims no change */
+    claimed: readonly string[] | null;
     seconds?: number;
   }
 ): string {
   const differing = results.filter((r) => r.differs);
-  let verdict = "the picture is the same.";
-  if (differing.length > 0) {
-    verdict = opts.claimsChange
-      ? "the PR claims a visible change (`## Snapshots`): reported, not failed. List these views under that section."
-      : "the PR claims none (no `## Snapshots` section): **failed**. Name the change there, or find what moved.";
-  }
   const lines = [
     `## Plates, ${opts.tier}: ${differing.length} of ${results.length} views differ`,
     "",
-    `\`${opts.base}\` against \`${opts.head}\` on *${opts.adapter}* — ${verdict}`,
+    `\`${opts.base}\` against \`${opts.head}\` on *${opts.adapter}* — ${verdictOf(results, opts.claimed)}`,
     "",
-    `A pixel differs above ${opts.tolerance.level} of 255 in a channel, a view above ${percent(opts.tolerance.share)} of its pixels. This says *changed*, never *good* (ADR 0018).${
+    `A pixel differs above ${opts.tolerance.level} of 255 in a channel; a view differs above ${percent(opts.tolerance.share)} of its pixels, or above ${opts.tolerance.mean} of 255 on average. This says *changed*, never *good* (ADR 0018), and only of the views below.${
       opts.seconds === undefined
         ? ""
         : ` Rendered and compared in ${Math.round(opts.seconds)} s.`
     }`,
     "",
-    "| View | | Pixels over the level | Share | Largest difference |",
-    "|---|---|---:|---:|---:|",
+    "| View | | Pixels over the level | Share | Largest difference | Mean |",
+    "|---|---|---:|---:|---:|---:|",
     ...results.map(
       (r) =>
-        `| \`${r.view}\` | ${r.differs ? "**differs**" : "same"} | ${r.differing} | ${percent(r.share)} | ${r.max} |`
+        `| \`${r.view}\` | ${standing(r, opts.claimed)} | ${r.differing} | ${percent(r.share)} | ${r.max} | ${r.mean.toFixed(3)} |`
     ),
     "",
   ];
@@ -414,7 +598,10 @@ export function reportOf(
 
 interface Args {
   base: string | null;
-  claimsChange: boolean;
+  /** the views meant to differ; null: none is claimed */
+  claims: string[] | null;
+  /** a PR's description to read them from */
+  claimsFile: string | null;
   command: "compare" | "diff" | "pairs";
   noBuild: boolean;
   rest: string[];
@@ -425,7 +612,8 @@ interface Args {
 function parseArgs(argv: string[]): Args {
   const args: Args = {
     base: null,
-    claimsChange: false,
+    claims: null,
+    claimsFile: null,
     command: "compare",
     noBuild: false,
     rest: [],
@@ -443,8 +631,12 @@ function parseArgs(argv: string[]): Args {
     } else if (arg === "--summary") {
       i += 1;
       args.summary = argv[i] ?? null;
-    } else if (arg === "--claims-change") {
-      args.claimsChange = true;
+    } else if (arg === "--claims") {
+      i += 1;
+      args.claims = (argv[i] ?? "").split(",").filter(Boolean);
+    } else if (arg === "--claims-file") {
+      i += 1;
+      args.claimsFile = argv[i] ?? null;
     } else if (arg === "--no-build") {
       args.noBuild = true;
     } else if (arg === "pairs" || arg === "diff") {
@@ -460,9 +652,14 @@ function parseArgs(argv: string[]): Args {
 
 /**
  * The base commit's plates: from `plates/<tier>/<sha>/` when this machine
- * rendered them before with the same adapter and views, else built in a
- * worktree (`plates/src/<sha>`, with the head's bake cache, removed once
+ * rendered them before on the same adapter, with the same harness, views
+ * and page; else built in a worktree (`plates/src/<sha>`, removed once
  * rendered) and rendered.
+ *
+ * The base bakes into a cache of its own, cold: sharing the head's would
+ * hand it whatever the head just baked under a key that misses a changed
+ * input, and an under-keyed bake would then show on neither side. It
+ * costs the base's build the reference site's bake (plan 087, Findings).
  */
 async function basePlates(
   tier: Tier,
@@ -473,12 +670,7 @@ async function basePlates(
   const out = nodePath.join(PLATES_DIR, tier.name, sha);
   if (existsSync(nodePath.join(out, "run.json"))) {
     const kept = readRun(out);
-    const wanted =
-      views ?? platesIn(nodePath.join(PLATES_DIR, tier.name, "head"));
-    if (
-      kept.adapter === headRun.adapter &&
-      wanted.every((v) => existsSync(nodePath.join(out, `qa-${v}.png`)))
-    ) {
+    if (kept.adapter === headRun.adapter && kept.harness === headRun.harness) {
       log(`base ${sha.slice(0, 8)}: plates kept from an earlier run`);
       return out;
     }
@@ -489,18 +681,91 @@ async function basePlates(
     sh("git", ["worktree", "add", "--detach", "--force", src, sha]);
   }
   await run("bun", ["install", "--frozen-lockfile"], { cwd: src });
-  // Any earlier bake cache is a sound start (every artifact is keyed by
-  // its inputs): the base bakes only what differs from the head.
-  const cache = nodePath.join(ROOT, ".cache");
-  if (existsSync(cache) && !existsSync(nodePath.join(src, ".cache"))) {
-    symlinkSync(cache, nodePath.join(src, ".cache"));
-  }
   log(`base ${sha.slice(0, 8)}: building`);
   await build(src);
   await served(src, async (port) => await render(tier, port, out, views));
   // its plates are kept; the checkout (a gigabyte of data) is not
   sh("git", ["worktree", "remove", "--force", src]);
   return out;
+}
+
+/** Whether a commit has the plates: the marker `comparability` asks for. */
+function knowsPlates(sha: string): boolean {
+  return (
+    spawnSync("git", ["cat-file", "-e", `${sha}:lib/city/plate-diff.ts`], {
+      cwd: ROOT,
+    }).status === 0
+  );
+}
+
+/** The views a run's claims name, of the ones it rendered. */
+function claimsOf(args: Args, views: readonly string[]): string[] | null {
+  const named = args.claims
+    ? views.filter((v) => args.claims?.includes(v))
+    : [];
+  const read = args.claimsFile
+    ? claimedViews(readFileSync(args.claimsFile, "utf-8"), views)
+    : null;
+  return args.claims || read ? [...new Set([...named, ...(read ?? [])])] : null;
+}
+
+/**
+ * Two rendered folders brought to a verdict: the report and the exit
+ * code. `report`: where a differing view's three images go.
+ */
+export async function conclude(opts: {
+  base: string;
+  head: string;
+  baseName: string;
+  headName: string;
+  baseKnowsPlates: boolean;
+  tier: Pick<Tier, "name" | "tolerance">;
+  claims: (views: readonly string[]) => string[] | null;
+  report: string | null;
+  seconds?: number;
+}): Promise<{ exit: number; markdown: string }> {
+  const [baseRun, headRun] = [readRun(opts.base), readRun(opts.head)];
+  const able = comparability({
+    headHeld: headRun.held,
+    baseHeld: baseRun.held,
+    baseKnowsPlates: opts.baseKnowsPlates,
+  });
+  if (!able.compare) {
+    return {
+      exit: able.exit,
+      markdown: `## Plates, ${opts.tier.name}: not compared${able.exit === 0 ? "" : " — **failed**"}\n\n\`${opts.baseName}\` against \`${opts.headName}\`: ${able.why}.\n`,
+    };
+  }
+  const results = await compare(
+    opts.base,
+    opts.head,
+    opts.tier.tolerance,
+    opts.report
+  );
+  const claimed = opts.claims(results.map((r) => r.view));
+  return {
+    exit: exitOf(results, claimed),
+    markdown: reportOf(results, {
+      base: opts.baseName,
+      head: opts.headName,
+      tier: opts.tier.name,
+      adapter: headRun.adapter,
+      tolerance: opts.tier.tolerance,
+      claimed,
+      seconds: opts.seconds,
+    }),
+  };
+}
+
+/** A report where a run's readers look: the folder, stdout, the summary. */
+function say(markdown: string, summary: string | null): void {
+  const report = nodePath.join(PLATES_DIR, "report");
+  mkdirSync(report, { recursive: true });
+  writeFileSync(nodePath.join(report, "report.md"), markdown);
+  process.stdout.write(markdown);
+  if (summary) {
+    appendFileSync(summary, markdown);
+  }
 }
 
 async function comparePlates(args: Args, tier: Tier): Promise<number> {
@@ -513,48 +778,43 @@ async function comparePlates(args: Args, tier: Tier): Promise<number> {
   ]);
   const dirty = sh("git", ["status", "--porcelain", "--untracked-files=no"]);
   const headName = `${headSha.slice(0, 8)}${dirty ? "+changes" : ""}`;
-  if (!args.noBuild) {
-    log(`head ${headName}: building`);
-    await build(ROOT);
-  }
-  const head = nodePath.join(PLATES_DIR, tier.name, "head");
-  const headRun = await served(
-    ROOT,
-    async (port) => await render(tier, port, head, views)
-  );
-  const base = await basePlates(tier, baseSha, views, headRun);
   const report = nodePath.join(PLATES_DIR, "report");
   rmSync(report, { recursive: true, force: true });
-  mkdirSync(report, { recursive: true });
-  const say = (markdown: string) => {
-    writeFileSync(nodePath.join(report, "report.md"), markdown);
-    process.stdout.write(markdown);
-    if (args.summary) {
-      appendFileSync(args.summary, markdown);
+  try {
+    if (!args.noBuild) {
+      log(`head ${headName}: building`);
+      await build(ROOT);
     }
-  };
-  // A base from before the `still` probe (plan 087) cannot be held: its
-  // clouds drift and its crowns sway between any two renders, so a
-  // comparison with it would report the weather.
-  if (!readRun(base).held) {
-    say(
-      `## Plates, ${tier.name}: not compared\n\nThe base \`${baseSha.slice(0, 8)}\` predates the \`still\` probe (plan 087): its plates cannot be held still, so nothing was compared. Its plates and the head's are in \`plates/${tier.name}/\`.\n`
+    const head = nodePath.join(PLATES_DIR, tier.name, "head");
+    const headRun = await served(
+      ROOT,
+      async (port) => await render(tier, port, head, views)
     );
-    return 0;
+    const base = await basePlates(tier, baseSha, views, headRun);
+    const { exit, markdown } = await conclude({
+      base,
+      head,
+      baseName: baseSha.slice(0, 8),
+      headName,
+      baseKnowsPlates: knowsPlates(baseSha),
+      tier,
+      claims: (rendered) => claimsOf(args, rendered),
+      report,
+      seconds: (Date.now() - started) / 1000,
+    });
+    say(markdown, args.summary);
+    return exit;
+  } catch (error) {
+    // A run that ends without a verdict says so where the verdict would
+    // stand: a build that failed, a view that did not settle (the
+    // harness names it above), a blank plate.
+    const why = error instanceof Error ? error.message : String(error);
+    say(
+      `## Plates, ${tier.name}: not compared — **failed**\n\n\`${baseSha.slice(0, 8)}\` against \`${headName}\` after ${Math.round((Date.now() - started) / 1000)} s: ${why}. The step's log names the view.\n`,
+      args.summary
+    );
+    throw error;
   }
-  const results = await compare(base, head, tier.tolerance, report);
-  const markdown = reportOf(results, {
-    base: baseSha.slice(0, 8),
-    head: headName,
-    tier: tier.name,
-    adapter: headRun.adapter,
-    tolerance: tier.tolerance,
-    claimsChange: args.claimsChange,
-    seconds: (Date.now() - started) / 1000,
-  });
-  say(markdown);
-  const differs = results.some((r) => r.differs);
-  return differs && !args.claimsChange ? 1 : 0;
 }
 
 /**
@@ -630,19 +890,19 @@ async function diffFolders(args: Args, tier: Tier): Promise<number> {
   if (!(a && b)) {
     throw new Error("diff takes two rendered folders");
   }
-  const report = nodePath.join(PLATES_DIR, "report");
-  const results = await compare(a, b, tier.tolerance, report);
-  process.stdout.write(
-    reportOf(results, {
-      base: a,
-      head: b,
-      tier: tier.name,
-      adapter: readRun(b).adapter,
-      tolerance: tier.tolerance,
-      claimsChange: args.claimsChange,
-    })
-  );
-  return results.some((r) => r.differs) && !args.claimsChange ? 1 : 0;
+  const { exit, markdown } = await conclude({
+    base: a,
+    head: b,
+    baseName: a,
+    headName: b,
+    // two folders rendered by hand: both are held, or it is an error
+    baseKnowsPlates: true,
+    tier,
+    claims: (rendered) => claimsOf(args, rendered),
+    report: nodePath.join(PLATES_DIR, "report"),
+  });
+  process.stdout.write(markdown);
+  return exit;
 }
 
 if (import.meta.main) {

@@ -2068,7 +2068,14 @@ reference image is stored. Two tiers share that code:
 | Renderer | WebGPU on SwiftShader's Vulkan, 800 × 500, `?scene=lite` (the spawn tile alone) | the browser's own adapter, the full profile, 1600 × 1000 @2× |
 | Views | eight that stand on the spawn tile (`TIER1_VIEWS`): 25–55 s each there | all of `qa/views/` |
 | Says | *changed*, as a tripwire — never *good* | *changed*, in the light a visitor sees |
-| Tolerance | `TIER1_TOLERANCE`: ten same-commit pairs moved no pixel | its own floor, still to measure |
+| Tolerance | `TIER1_TOLERANCE`: a pixel differs above 3 of 255; a view above 4 such pixels, or 0.1 of 255 on average. The floor: ten same-commit pairs moved no pixel, two builds of one commit 3 pixels by one step | its own floor, still to measure |
+
+Tier 1 draws at `lite`'s pixel ratio of 0.5: a plate is 400 × 250 drawn
+pixels shown twice as large. It never sees the other 42 views, any tile
+but the spawn's, the full profile's shadows, AO and resolution, the data
+layers, a view's page query, or late parts landing after the scene
+reports itself settled; and it does not run on a draft or on a PR
+outside the workflow's `paths`.
 
 A frame repeats because the harness holds it. `__poc.still` lets no time
 pass in what animates: the scene's phase clock (water, crowns, flags,
@@ -2081,11 +2088,13 @@ the crowns' sway along their edges. Both probes exist only in a build
 with `NEXT_PUBLIC_POC_DEBUG`. The harness applies a view, waits for the
 scene to have heard it (`handle.sync()`), and takes the plate once the
 stream, the shadow rings and the lens have been quiet for three frames
-on end.
+on end and the camera stands where the snapshot says.
 
-A PR whose description has a `## Snapshots` section claims a visible
-change and the job reports its differing views; one without claims none,
-and a differing view fails it (the `pr-snapshots` skill).
+A PR names the views it means to change under `## Snapshots` in its
+description: those are reported. A differing view that is not named
+fails the job, as does a side that was not held still, a view that does
+not settle in three minutes, a pose that was not applied, a blank plate
+or two views with the same pixels (the `pr-snapshots` skill).
 
 **WebGPU's per-pipeline limits are counted** (plan 094). A pipeline with
 a ninth vertex buffer, a seventeenth attribute or more inter-stage

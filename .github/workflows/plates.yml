@@ -8,12 +8,22 @@ name: Plates
 # reference image is stored; a faster or slower runner, or a browser bump,
 # moves both sides alike.
 #
-# A pull request whose description has a `## Snapshots` section claims a
-# visible change: the job reports the differing views and passes. One
-# without claims none: a differing view fails it. Not a required check.
+# What it sees is narrow, and it is no review of a look: eight of the 50
+# QA views, all on the spawn tile, in the `lite` profile at 400 × 250
+# drawn pixels (scripts/plates.ts, `TIER1_VIEWS`). The other 42 views,
+# every other tile, the full profile's shadows, AO and resolution, the
+# data layers and a view's page query are tier 2's.
+#
+# A pull request names the views it means to change under a `## Snapshots`
+# section of its description: those are reported. A differing view that
+# is not named there fails the job, with or without the section. Not a
+# required check.
 
 on:
   pull_request:
+    # Not while a draft: the job renders for a quarter of an hour, and a
+    # draft is pushed to often. Marking it ready runs it.
+    types: [opened, synchronize, reopened, ready_for_review]
     # What can move a pixel: the viewer, what it is built and baked from,
     # the views and the harness itself.
     paths:
@@ -39,10 +49,10 @@ on:
   # clone is shallow, so what landed on main since counts too).
   workflow_dispatch:
     inputs:
-      claims_change:
-        description: The branch means to change the picture (report, do not fail)
-        type: boolean
-        default: false
+      claims:
+        description: The views the branch means to change, comma-separated (reported, not failed)
+        type: string
+        default: ""
       pairs:
         description: Instead, measure this runner's noise floor over so many same-commit pairs (0 = compare)
         type: number
@@ -61,11 +71,16 @@ jobs:
     name: Plates (tier 1, software renderer)
     # Branches of this repository only, never a fork's code: the same job
     # is to run on a machine with a GPU one day (tier 2).
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      !github.event.pull_request.draft)
     runs-on: ubuntu-latest
-    # Measured 2026-11-16 (plan 087, Findings): two builds and two renders
-    # of the tier's views. A budget that cancels reports nothing at all.
-    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.pairs > 0 && 180 || 45 }}
+    # Measured on this runner, 2026-11-16 (plan 087, Findings): 16 min
+    # 17 s with the base's bake warm; the base bakes cold since, which
+    # adds the reference site's bake. A view that will not settle fails
+    # by its name after three minutes, so the budget is not for waiting.
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.pairs > 0 && 180 || 30 }}
     steps:
       # A pull request's checkout is its merge with the base's tip, so the
       # base's tip against HEAD is exactly what the pull request changes.
@@ -85,34 +100,32 @@ jobs:
           fi
           echo "sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
       # The description as it is now, not as the event carried it: a re-run
-      # after adding the section passes. Its text is only searched.
-      - name: Does the pull request claim a visible change?
+      # after naming a view passes. Its text is only read for view names
+      # (scripts/plates.ts, `claimedViews`).
+      - name: Read the pull request's description
         id: claim
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-          CLAIMS: ${{ inputs.claims_change }}
+          CLAIMS: ${{ inputs.claims }}
         run: |
+          mkdir -p plates
           if [ -n "$PR" ]; then
-            if gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '.body // ""' \
-                | tr -d '\r' | grep -qE '^## Snapshots[[:space:]]*$'; then
-              CLAIMS=true
-            fi
-          fi
-          if [ "$CLAIMS" = "true" ]; then
-            echo "flag=--claims-change" >> "$GITHUB_OUTPUT"
-            echo "A \`## Snapshots\` section: differing views are reported."
+            gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '.body // ""' > plates/description.md
+            echo "flags=--claims-file plates/description.md" >> "$GITHUB_OUTPUT"
+          elif [ -n "$CLAIMS" ]; then
+            printf '## Snapshots\n%s\n' "$CLAIMS" | tr ',' ' ' > plates/description.md
+            echo "flags=--claims-file plates/description.md" >> "$GITHUB_OUTPUT"
           else
-            echo "flag=" >> "$GITHUB_OUTPUT"
-            echo "No \`## Snapshots\` section: a differing view fails."
+            echo "flags=" >> "$GITHUB_OUTPUT"
           fi
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
       # The caches the e2e shards restore (ci.yml explains their keys);
-      # this job saves none. The base's build starts from the same bake
-      # cache: it bakes only what the pull request changed.
+      # this job saves none. The head's build starts from the bake cache;
+      # the base's bakes cold into its own (scripts/plates.ts says why).
       - uses: actions/cache/restore@v6
         with:
           path: .cache/prepare-data
@@ -139,11 +152,11 @@ jobs:
       # renders it with the head's harness.
       - name: Render the base and the head, and compare
         if: github.event_name != 'workflow_dispatch' || inputs.pairs == 0
-        run: bun run plates -- --base "$BASE_SHA" --summary "$GITHUB_STEP_SUMMARY" $CLAIM
+        run: bun run plates -- --base "$BASE_SHA" --summary "$GITHUB_STEP_SUMMARY" $CLAIM_FLAGS
         env:
           SHOTS_SMALL: "1"
           BASE_SHA: ${{ steps.base.outputs.sha }}
-          CLAIM: ${{ steps.claim.outputs.flag }}
+          CLAIM_FLAGS: ${{ steps.claim.outputs.flags }}
       # Plan 087's gate for this tier, on the runner it runs on: n + 1
       # renders of the head, every pair of neighbours compared. Eleven
       # renders took an hour in the cloud container, hence the budget.

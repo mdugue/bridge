@@ -508,47 +508,72 @@ reads `pocFrameTime`: in a build without `NEXT_PUBLIC_POC_DEBUG` the
 phase is the elapsed time (`poc-scene.test.ts`).
 
 **The noise floor.** With the hold, ten same-commit pairs of the eight
-views (eleven renders, each a page of its own): 0 views
-differed, and no pixel moved by a single step (the largest channel
-difference was 0 in all 80 comparisons). Without it
-(`PLATES_STILL=0`), one pair of nine views: five differed. The tolerance
-is therefore a margin, not a floor (`TIER1_TOLERANCE`): a pixel differs
-above 24 of 255, a view above 0.005 % of its pixels (20 of 400 000).
-Seeded changes are named: `fogPct` 20 → 60 in `across-400` differed in
-43.6 % of its pixels, the sun three hours later in `rooftops` in 33.4 %.
-(The plan's own seed, the fog in `rooftops`, moved no pixel: that view
-is 300 m deep and `lite` has no farther tile to haze.) One margin is
-used: `rooftops` rendered alone, not seventh in the row, differed from
-the row's plate by up to 19 of 255 in 276 pixels, none over the level —
-a plate depends a little on the views before it, which is why both
-sides render the same row in the same order.
+views (eleven renders, each a page of its own): 0 views differed, and no
+pixel moved by a single step (the largest channel difference was 0 in
+all 80 comparisons). Between two builds of one commit, or two servers of
+one build: 3 pixels of `across-400` by one step, nothing else. Without
+the hold (`PLATES_STILL=0`), one pair of nine views: five differed.
 
-Whether another CPU's SwiftShader draws the same pixels was not measured
-and does not need to hold: base and head are rendered by one runner in
-one job. **Open, tier 1's own gate:** the same ten pairs on the hosted
-runner. The workflow measures them when started by hand with `pairs: 10`
-(`workflow_dispatch`), which GitHub allows once the file is on the
-default branch; until then the floor above is the container's.
+**The tolerance** (`TIER1_TOLERANCE`) is that floor and a small margin:
+a pixel differs above 3 of 255; a view differs above 4 such pixels
+(`lite` draws at pixel ratio 0.5, so a plate is 400 × 250 drawn pixels
+and four of its pixels are one drawn), or above 0.1 of 255 on average
+over the plate — the broad small shift no pixel of which reaches the
+level. The first numbers, 24 of 255 and 20 pixels, were the
+flicker-probe's and far too wide for a renderer that repeats exactly:
+the independent review showed them passing a whole frame 9 % brighter,
+a 20-pixel object and the sun five minutes later in `rooftops`. Those
+are fixtures of `plate-diff.test.ts` now. Seeded on real renders: the
+sun five minutes later in `rooftops` differs in 10 322 pixels (2.6 %,
+mean 0.62) and in no other view; `fogPct` 20 → 60 in `across-400` in
+43.6 % of its pixels under the first level already. (The plan's own
+seed, the fog in `rooftops`, moved no pixel: that view is 300 m deep and
+`lite` has no farther tile to haze.) A plate depends on the views before
+it — `rooftops` rendered alone, not seventh in the row, differed by up
+to 19 of 255 in 276 pixels — so both sides render the same row in the
+same order, and a kept base plate is used again only for the same row,
+harness and page (`harnessKey`).
 
-Tier 1's other gate — stop if fewer than half of the views hold — is
-met as its limit, not passed: 25 of 50 can be shown at all (`lite`
-streams one tile) and 8 fit a job. Tier 1 is those eight.
+**What a run refuses.** Base and head are driven by one harness, so a
+harness that fails draws the same wrong picture twice. A run therefore
+ends without a verdict, exit 2 and a summary that says why, when: a
+side was not held still (the head always; the base once it has
+`lib/city/plate-diff.ts` — only a base from before the plates is
+reported as *not compared* and passes, which was true of this plan's own
+pull request); a view does not settle within three minutes (named); the
+settled camera is not at the snapshot's pose; a plate is blank; two
+views of a side have the same pixels; a view is missing on a side.
 
 **The job.** `.github/workflows/plates.yml`, on a pull request of this
-repository that touches what can move a pixel: it builds the head and,
-in a worktree, the base (each `PREPARE_SITES=dresden`, the base from the
-head's bake cache), renders both with the head's harness and compares.
-In the container the whole command took 14 min 43 s — two builds (about
-100 s each, the bake cache warm) and two renders of 5½ min — and found 0
-of 8 views differing between a commit and itself built twice. A hosted
-runner has been half as fast as that for the e2e shards (`ci.yml`), so
-the job's budget is 45 min; its first runs give the real figure. A `## Snapshots` section in the
-description (read when the job runs, so a re-run sees an edit) makes it
-report; without one a differing view fails it. Base, head and difference
-image of each differing view are the `plates-report` artifact; the table
-is the job's summary. A base from before the probe cannot be held and is
-reported as *not compared* — true of this plan's own pull request, whose
-base is main without it.
+repository, whatever its base, that is not a draft and touches what can
+move a pixel: it builds the head and, in a worktree, the base (each
+`PREPARE_SITES=dresden`), renders both with the head's harness and
+compares. The base bakes cold into a cache of its own: with the head's,
+a bake keyed without a changed input would show on neither side. On the
+hosted runner the first run took 16 min 17 s (15 min 26 s of it
+building and rendering, the base's bake still warm); in the container
+14 min 20 s with the cold bake. The budget is 30 min. A PR names the
+views it means to change under `## Snapshots` (read when the job runs,
+so a re-run sees an edit): those are reported; a differing view not
+named there fails, with the section or without.
+
+**What tier 1 does not see**, so that a green job is not taken for
+more: 42 of the 50 views; every tile but the spawn's, and so every
+seam; the full profile's shadow rings, AO and resolution (a plate is
+400 × 250 drawn pixels); the data layers; a view's page query
+(`?safety=3`, `?trail=1`); late parts (murals, window niches) that land
+after the scene reports itself settled, which the harness does not
+count; drafts, and PRs outside the workflow's `paths`.
+
+**Open, tier 1's own gates.** The noise floor on the hosted runner: the
+ten pairs above are the container's. The workflow measures them when
+started by hand with `pairs: 10` (`workflow_dispatch`), which GitHub
+allows once the file is on the default branch. "Stop if fewer than half
+of the views hold" is met as its limit, not passed: 25 of 50 can be
+shown at all (`lite` streams one tile) and 8 fit a job. Tier 1 is those
+eight. `bun run shots` shares the settle loop and was not run on a GPU
+here: a shot that never goes quiet within its budget is still written,
+with an annotation.
 
 ### What is left for tier 2
 
@@ -559,9 +584,9 @@ machine's own adapter, and keeps the base's plates under
 because no GPU was at hand:
 
 1. **Its own noise floor.** `bun run plates -- pairs 10` on the chosen
-   machine; write the level and share into `TIER2_TOLERANCE` (it holds
-   tier 1's numbers until then, which a GPU's dither and anti-aliasing
-   may not meet). Expect what tier 1 could not show: the order tiles
+   machine; write the level, share and mean into `TIER2_TOLERANCE` (it
+   holds tier 1's numbers until then, which a GPU's dither and
+   anti-aliasing will hardly meet). Expect what tier 1 could not show: the order tiles
    land in across fifteen tiles, the late parts, the data layers'
    clock, the views with a page query (`?safety=3`, `?trail=1` — the
    harness boots one page and ignores a view's query).
@@ -575,6 +600,8 @@ because no GPU was at hand:
 4. **Minutes.** Unknown: a real GPU draws a frame in milliseconds, so
    the settle (eight frames, then three quiet) is no longer the cost;
    the stream of fifteen tiles is.
+5. **The late parts.** At the full profile murals and window niches
+   land after "settled"; tier 2 counts them or masks them.
 
 ## Test plan
 

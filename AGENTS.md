@@ -193,10 +193,15 @@ uploaded; nothing it names is fetched (ADR 0054).
 ## QA: self-verify, don't ask for screenshots
 
 - A PR that changes what the viewer shows carries JSON snapshots in its
-  description (`pr-snapshots` skill). CI compares every PR's QA views
-  with its base's on the runner's software renderer (the *Plates* job,
-  ADR 0018): with a `## Snapshots` section a differing view is reported,
-  without one it fails. It says *changed*, never *good*.
+  description (`pr-snapshots` skill). CI compares a PR with its base on
+  the runner's software renderer (the *Plates* job, ADR 0018) and fails
+  on a differing view the PR does not name under `## Snapshots`. It
+  says *changed*, never *good*, and it sees little: 8 of the 50 QA
+  views, all on the spawn tile, in `lite` at 400 × 250 drawn pixels, on
+  PRs that are not drafts and touch what can move a pixel. The other
+  views, every other tile, the full profile's shadows, AO and
+  resolution, the data layers and a view's page query it never sees: a
+  green job is no licence to skip the snapshots or the GPU.
 - What holds a frame still for a plate is a probe of the debug hook
   (`__poc.still`, `poc-scene.ts`): something new that animates takes its
   time through `pocPhase` or TSL `time`, or the plates flake.

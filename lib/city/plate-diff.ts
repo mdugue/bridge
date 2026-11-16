@@ -18,28 +18,42 @@ export interface Plate {
   width: number;
 }
 
-/** The level and the share a tier compares with. */
+/** What a tier compares with: a view differs when either test says so. */
 export interface PlateTolerance {
   /** a pixel differs when a channel is further apart than this (of 255) */
   level: number;
+  /**
+   * a view differs when the mean over its pixels of the largest channel
+   * difference is above this (of 255): the broad small shift no pixel of
+   * which reaches the level — a whole plate a step brighter
+   */
+  mean: number;
   /** a view differs when more than this share of its pixels does */
   share: number;
 }
 
 /**
  * Tier 1: SwiftShader's Vulkan, 800 × 500 at 1×, the `lite` profile, the
- * scene held `still` (scripts/plates.ts). The level is the flicker-probe
- * skill's, 24 of 255. Measured in the cloud container on 2026-11-16 (plan
- * 087, Findings): in ten same-commit pairs of the tier's eight views no
- * pixel differed by even one step — a software renderer on a still scene
- * is a function of its input. So neither number is a floor; both are
- * margins. The level keeps out what a plate owes to the views rendered
- * before it (one view alone against the same view seventh in the row: up
- * to 19 of 255 in 276 pixels) and a rounding step of another CPU's
- * SwiftShader; the share, 20 of a plate's 400 000 pixels, keeps a flipped
- * edge pixel from being a changed view while a moved kerb still is.
+ * scene held `still` (scripts/plates.ts). `lite` draws at pixel ratio
+ * 0.5, so a plate is 400 × 250 drawn pixels shown twice as large: four
+ * of a plate's pixels are one drawn.
+ *
+ * The floor, measured in the cloud container on 2026-11-16 (plan 087,
+ * Findings): in ten same-commit pairs of the tier's eight views no pixel
+ * differed by one step; between two builds of one commit, 3 pixels of one
+ * view by 1 step. Base and head render the same row of views on one
+ * runner, so nothing else has to be let through. The numbers are that
+ * floor and a small margin: a pixel differs above 3 of 255; a view
+ * differs above 4 such pixels (one drawn pixel; 1e-5 of 400 000), or
+ * when its pixels differ by more than a tenth of a step on average — a
+ * tenth of the plate one step brighter. plate-diff.test.ts pins them
+ * with the changes that must not pass.
  */
-export const TIER1_TOLERANCE: PlateTolerance = { level: 24, share: 5e-5 };
+export const TIER1_TOLERANCE: PlateTolerance = {
+  level: 3,
+  mean: 0.1,
+  share: 1e-5,
+};
 
 /**
  * Tier 2, a real GPU: not measured yet (plan 087, "What is left for tier
@@ -56,6 +70,8 @@ export interface PlateDiff {
   levels: Uint8Array;
   /** the largest difference of any channel of any pixel */
   max: number;
+  /** the mean over the pixels of each one's largest channel difference */
+  mean: number;
   pixels: number;
   /** `differing / pixels` */
   share: number;
@@ -82,6 +98,7 @@ export function diffPlates(a: Plate, b: Plate, level: number): PlateDiff {
   const levels = new Uint8Array(pixels);
   let differing = 0;
   let max = 0;
+  let sum = 0;
   for (let p = 0; p < pixels; p += 1) {
     const i = p * a.channels;
     const j = p * b.channels;
@@ -91,6 +108,7 @@ export function diffPlates(a: Plate, b: Plate, level: number): PlateDiff {
       Math.abs(a.data[i + 2] - b.data[j + 2])
     );
     levels[p] = d;
+    sum += d;
     if (d > level) {
       differing += 1;
     }
@@ -98,12 +116,37 @@ export function diffPlates(a: Plate, b: Plate, level: number): PlateDiff {
       max = d;
     }
   }
-  return { differing, levels, max, pixels, share: differing / pixels };
+  return {
+    differing,
+    levels,
+    max,
+    mean: sum / pixels,
+    pixels,
+    share: differing / pixels,
+  };
 }
 
-/** Whether a view differs: more than the share of its pixels do. */
-export function plateDiffers(diff: PlateDiff, share: number): boolean {
-  return diff.share > share;
+/** Whether a view differs: more than the share of its pixels do, or
+ *  all of them together by more than the mean. */
+export function plateDiffers(
+  diff: PlateDiff,
+  tolerance: Pick<PlateTolerance, "mean" | "share">
+): boolean {
+  return diff.share > tolerance.share || diff.mean > tolerance.mean;
+}
+
+/** A plate that shows nothing: every pixel within two steps of the
+ *  first — a page that never drew, not a view. */
+export function plateBlank(plate: Plate): boolean {
+  const { channels, data } = plate;
+  for (let i = 0; i < data.length; i += channels) {
+    for (let c = 0; c < 3; c += 1) {
+      if (Math.abs(data[i + c] - data[c]) > 2) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 /**

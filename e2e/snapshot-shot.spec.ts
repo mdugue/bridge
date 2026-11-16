@@ -145,15 +145,22 @@ const PLATES_VIEWS = (process.env.PLATES_VIEWS ?? "")
 /** `PLATES_STILL=0` lets time run: how the noise floor was read without
  *  the hold (plan 087, Findings). */
 const PLATES_STILL = process.env.PLATES_STILL !== "0";
-/** A view's budget: on SwiftShader a far view streams for minutes. */
-const PLATE_VIEW_MS = SHOTS_SMALL ? 600_000 : 60_000;
 /**
- * Frames a plate waits at the least — the stream has seen the view — and
- * for a shadow map by night, when none is drawn; and the loop's step a frame while it does (ms): the largest the loop takes
- * (it clamps a step to 50 ms), so that what settles by the clock (the
- * regression's recovery, the lens's fade, the eye onto the ground) needs
- * a third of the frames of a 60 Hz step. With `still` nothing animates by
- * it, and a SwiftShader frame takes seconds.
+ * How long a plate's view may take to settle: three minutes on
+ * SwiftShader, where the tier's slowest took 55 s (plan 087, Findings),
+ * one on a GPU. A view that takes longer fails the run by its name, well
+ * inside the job's budget, instead of being waited for until the job is
+ * cancelled without a word.
+ */
+const PLATE_VIEW_MS = SHOTS_SMALL ? 180_000 : 60_000;
+/**
+ * Frames a plate waits at the least (the stream has seen the view), and
+ * for a shadow map by night, when none is drawn. And the loop's step a
+ * frame while it waits (ms): the largest the loop takes (it clamps a step
+ * to 50 ms), so that what settles by the clock (the regression's
+ * recovery, the lens's fade, the eye onto the ground) needs a third of
+ * the frames of a 60 Hz step. With `still` nothing animates by it, and a
+ * SwiftShader frame takes seconds.
  */
 const PLATE_SETTLE = { settle: 8, shadowless: 12 };
 const PLATE_FRAME_MS = 50;
@@ -187,8 +194,47 @@ function snapshotFiles(): { path: string; name: string }[] {
 
 /** Frames on end the scene has to say it is settled before a plate. */
 const SETTLE_QUIET_FRAMES = 3;
-/** How long a view may take to settle. */
-const SETTLE_MS = READY_MS + 60_000;
+/** How long a single shot's view may take to settle. */
+const SHOT_SETTLE_MS = READY_MS + 60_000;
+
+/** Where a settled camera may stand off its snapshot (m, degrees): the
+ *  walker's eye settles onto the ground, the rest is rounding. */
+const POSE_SLACK = { m: 0.5, eyeM: 3, deg: 0.5 };
+
+/** The angle between two headings (degrees, 0–180). */
+const turn = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
+
+/**
+ * What of the scene's camera is not the snapshot's, or null: a plate of
+ * a pose that was not applied is a picture of something else, and base
+ * and head, driven by one harness, would agree on it.
+ */
+function poseFault(
+  want: Snapshot["camera"],
+  got: Snapshot["camera"]
+): string | null {
+  if (got.mode !== want.mode) {
+    return `mode ${got.mode}, not ${want.mode}`;
+  }
+  if ((got.model?.preset ?? null) !== (want.model?.preset ?? null)) {
+    return `Modell ${got.model?.preset ?? "off"}, not ${want.model?.preset ?? "off"}`;
+  }
+  if (want.model) {
+    // Modell frames by its pivot and scale: the eye is the rig's
+    return null;
+  }
+  const off = [
+    Math.abs(got.pos.x - want.pos.x) > POSE_SLACK.m,
+    Math.abs(got.pos.z - want.pos.z) > POSE_SLACK.m,
+    Math.abs(got.pos.y - want.pos.y) >
+      (want.mode === "walk" ? POSE_SLACK.eyeM : POSE_SLACK.m),
+    turn(got.headingDeg, want.headingDeg) > POSE_SLACK.deg,
+    Math.abs(got.pitchDeg - want.pitchDeg) > POSE_SLACK.deg,
+  ];
+  return off.some(Boolean)
+    ? `camera at ${JSON.stringify(got.pos)} heading ${got.headingDeg} pitch ${got.pitchDeg}, not ${JSON.stringify(want.pos)} heading ${want.headingDeg} pitch ${want.pitchDeg}`
+    : null;
+}
 
 /** A snapshot file, validated: a broken one fails loudly instead of
  *  silently rendering the defaults. */
@@ -223,13 +269,22 @@ async function bootPage(page: Page, url: string): Promise<void> {
  * on a clock (a slow GPU took longer than any fixed sleep). By night no
  * shadow map is drawn, so after `shadowless` frames the plate is taken
  * without one. `settle`: the frames the stream needs to see the new view
- * at all.
+ * at all; `budgetMs`: how long it may take. Says whether it settled.
+ *
+ * "Settled" is what the scene reports: the stream idle with every
+ * dressing tried (boot-phases.ts), the shadow rings drawn, the lens
+ * still. A tile's late parts (murals, window niches: late-parts.ts) are
+ * not counted — they land when they land.
  */
 async function applyAndSettle(
   page: Page,
   snap: Snapshot,
-  { settle, shadowless }: { settle: number; shadowless: number }
-): Promise<void> {
+  {
+    settle,
+    shadowless,
+    budgetMs,
+  }: { settle: number; shadowless: number; budgetMs: number }
+): Promise<boolean> {
   // The same codec (and the same minute-floored instant) the HUD's Apply
   // button uses, against the same store the sliders write — a new look
   // control needs no edit here.
@@ -255,7 +310,7 @@ async function applyAndSettle(
   await page.evaluate(hideOverlays);
   // One loop inside the page, awaited: `waitForFunction` on an interval
   // takes an async predicate's promise for its answer, and so never waited.
-  await page.evaluate(
+  const settled = await page.evaluate(
     async ({ frames, shadows, least, nightly, quiet, budget }) => {
       const until = performance.now() + budget;
       let busyAt = 0;
@@ -285,25 +340,26 @@ async function applyAndSettle(
           drawn - busyAt >= quiet &&
           ((poc?.shadowRenders ?? 0) > shadows || drawn >= nightly)
         ) {
-          return;
+          return true;
         }
         await new Promise((resolve) => {
           setTimeout(resolve, 100);
         });
       }
-      throw new Error("the view never settled");
+      return false;
     },
     {
       ...before,
       least: settle,
       nightly: shadowless,
       quiet: SETTLE_QUIET_FRAMES,
-      budget: SETTLE_MS,
+      budget: budgetMs,
     }
   );
   // Again: a notice raised after the move ("Umgebung lädt") was not
   // there to hide the first time.
   await page.evaluate(hideOverlays);
+  return settled;
 }
 
 if (PLATES_DIR) {
@@ -311,7 +367,8 @@ if (PLATES_DIR) {
   // page, in the table's order, on the held clock.
   test("plates", async ({ page }) => {
     const views = plateViews();
-    test.setTimeout(READY_MS + views.length * PLATE_VIEW_MS);
+    // (each view its budget and its screenshot; the boot before them)
+    test.setTimeout(READY_MS + views.length * (PLATE_VIEW_MS + 30_000));
     mkdirSync(PLATES_DIR, { recursive: true });
     const times: Record<string, number> = {};
     const started = Date.now();
@@ -352,7 +409,25 @@ if (PLATES_DIR) {
     const canvas = page.locator("canvas[data-engine]");
     for (const { path: file, name } of views) {
       const viewStarted = Date.now();
-      await applyAndSettle(page, readSnapshot(file), PLATE_SETTLE);
+      const snap = readSnapshot(file);
+      const settled = await applyAndSettle(page, snap, {
+        ...PLATE_SETTLE,
+        budgetMs: PLATE_VIEW_MS,
+      });
+      if (!settled) {
+        throw new Error(
+          `plates: ${name} did not settle within ${PLATE_VIEW_MS / 1000} s`
+        );
+      }
+      const stands = await page.evaluate(() =>
+        window.__poc?.handle?.getCameraState()
+      );
+      const fault = stands
+        ? poseFault(snap.camera, stands)
+        : "the scene gave no camera";
+      if (fault) {
+        throw new Error(`plates: ${name} is not at its pose: ${fault}`);
+      }
       await canvas.screenshot({
         path: nodePath.join(PLATES_DIR, `${name}.png`),
       });
@@ -366,11 +441,24 @@ if (PLATES_DIR) {
 } else {
   for (const { path: file, name } of snapshotFiles()) {
     test(`snapshot: ${name}`, async ({ page }) => {
-      test.setTimeout(READY_MS + 150_000);
+      // the boot, the settle, and the screenshot of a large canvas
+      test.setTimeout(READY_MS + SHOT_SETTLE_MS + 60_000);
       const snap = readSnapshot(file);
       await bootPage(page, shotUrl(snap));
       // settle: frames for the stream to see the new view at all
-      await applyAndSettle(page, snap, { settle: 10, shadowless: 30 });
+      const settled = await applyAndSettle(page, snap, {
+        settle: 10,
+        shadowless: 30,
+        budgetMs: SHOT_SETTLE_MS,
+      });
+      // A shot is for looking at: one that never went quiet is still
+      // written, and says so.
+      if (!settled) {
+        test.info().annotations.push({
+          type: "unsettled",
+          description: `${name} was still busy after ${SHOT_SETTLE_MS / 1000} s`,
+        });
+      }
       const canvas = page.locator("canvas[data-engine]");
       await expect(canvas).toBeVisible();
       const tag = SHOTS_TAG ? `.${SHOTS_TAG}` : "";
