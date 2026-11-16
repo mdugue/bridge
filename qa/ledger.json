@@ -4295,6 +4295,200 @@
       }
     }
   },
+  "blocks": {
+    "rule": "The sky view (svf) of every tile that has one, as the PNG the viewer reads and as the GPU blocks with their mip chain a build with SVF_BLOCKS=1 publishes beside it (lib/city/block-raster.ts), encoded here from the published PNG by the build's own encoder (scripts/block-encode.ts `publishedBlockFile`), so no flagged build is needed. Read with --blocks only (about two minutes), else the committed figures stand. wire: the PNG as published, the blocks pre-gzipped. gpu: the texture's bytes, the PNG's as the viewer lays it out (one byte a texel, a third more for the GPU's mips), the blocks' as uploaded (half a byte a texel, the chain in the file). error: |decoded block − PNG byte| in byte steps by the formats' nominal decode (scripts/block-encode.ts `decodeLevel`), not a GPU's read (SwiftShader reads up to 0.86 below it for BC4, 0.12 for EAC: scripts/eval/block-raster-probe.ts) — over level 0: the mean over the site's texels, the largest tile p99, the largest texel; mipsMax the largest texel of levels 1 on against the box-filtered chain.",
+    "sites": {
+      "dresden": {
+        "tiles": 15,
+        "png": {
+          "gpu": 20971515,
+          "wire": 8240833
+        },
+        "bc4": {
+          "gpu": 10485960,
+          "wire": 9173233,
+          "error": {
+            "mean": 0.738,
+            "p99": 4.571,
+            "max": 14.6,
+            "mipsMax": 15.714
+          }
+        },
+        "eac": {
+          "gpu": 10485960,
+          "wire": 9076308,
+          "error": {
+            "mean": 0.77,
+            "p99": 4.89,
+            "max": 16.919,
+            "mipsMax": 21.985
+          }
+        }
+      },
+      "grimma": {
+        "tiles": 2,
+        "png": {
+          "gpu": 2796202,
+          "wire": 930677
+        },
+        "bc4": {
+          "gpu": 1398128,
+          "wire": 1084443,
+          "error": {
+            "mean": 0.607,
+            "p99": 4.857,
+            "max": 12.857,
+            "mipsMax": 14.6
+          }
+        },
+        "eac": {
+          "gpu": 1398128,
+          "wire": 1068947,
+          "error": {
+            "mean": 0.642,
+            "p99": 4.931,
+            "max": 17.066,
+            "mipsMax": 16.879
+          }
+        }
+      },
+      "hamburg": {
+        "tiles": 4,
+        "png": {
+          "gpu": 5592404,
+          "wire": 1904905
+        },
+        "bc4": {
+          "gpu": 2796256,
+          "wire": 2246757,
+          "error": {
+            "mean": 0.576,
+            "p99": 4,
+            "max": 13.6,
+            "mipsMax": 16
+          }
+        },
+        "eac": {
+          "gpu": 2796256,
+          "wire": 2231647,
+          "error": {
+            "mean": 0.619,
+            "p99": 3.974,
+            "max": 14.03,
+            "mipsMax": 18.933
+          }
+        }
+      },
+      "leipzig": {
+        "tiles": 4,
+        "png": {
+          "gpu": 5592404,
+          "wire": 2346956
+        },
+        "bc4": {
+          "gpu": 2796256,
+          "wire": 2629513,
+          "error": {
+            "mean": 0.801,
+            "p99": 4.143,
+            "max": 12,
+            "mipsMax": 15
+          }
+        },
+        "eac": {
+          "gpu": 2796256,
+          "wire": 2609668,
+          "error": {
+            "mean": 0.834,
+            "p99": 4.139,
+            "max": 15.821,
+            "mipsMax": 17.909
+          }
+        }
+      },
+      "meissen": {
+        "tiles": 1,
+        "png": {
+          "gpu": 1398101,
+          "wire": 612615
+        },
+        "bc4": {
+          "gpu": 699064,
+          "wire": 655062,
+          "error": {
+            "mean": 0.905,
+            "p99": 4.714,
+            "max": 13.143,
+            "mipsMax": 14.6
+          }
+        },
+        "eac": {
+          "gpu": 699064,
+          "wire": 649825,
+          "error": {
+            "mean": 0.922,
+            "p99": 4.9,
+            "max": 15.782,
+            "mipsMax": 16.755
+          }
+        }
+      },
+      "muenchen": {
+        "tiles": 4,
+        "png": {
+          "gpu": 5592404,
+          "wire": 2344385
+        },
+        "bc4": {
+          "gpu": 2796256,
+          "wire": 2642622,
+          "error": {
+            "mean": 0.762,
+            "p99": 4,
+            "max": 11.286,
+            "mipsMax": 14
+          }
+        },
+        "eac": {
+          "gpu": 2796256,
+          "wire": 2621222,
+          "error": {
+            "mean": 0.798,
+            "p99": 4.057,
+            "max": 12.078,
+            "mipsMax": 19.013
+          }
+        }
+      },
+      "unna": {
+        "tiles": 2,
+        "png": {
+          "gpu": 2796202,
+          "wire": 1103683
+        },
+        "bc4": {
+          "gpu": 1398128,
+          "wire": 1217333,
+          "error": {
+            "mean": 0.864,
+            "p99": 4.857,
+            "max": 13.4,
+            "mipsMax": 14
+          }
+        },
+        "eac": {
+          "gpu": 1398128,
+          "wire": 1209362,
+          "error": {
+            "mean": 0.878,
+            "p99": 4.934,
+            "max": 14.806,
+            "mipsMax": 14.968
+          }
+        }
+      }
+    }
+  },
   "dressing": {
     "tiles": {
       "spawn": {
@@ -9687,11 +9881,11 @@
     "readWith": "chromium 153.0.8010.12, google / swiftshader",
     "firstLoad": {
       "note": "Every /_next/static/*.js the page or the workers ground, niches, scene fetched themselves (each one's resource timing) at /dresden?scene=lite (a NEXT_PUBLIC_POC_DEBUG=1 production build), cut at: ready, those workers running, then 5 s without a new script; a second read 5 s later must equal it. The BVH worker's own scripts are left out: it starts only if the spawn's buildings have no BVH yet. Each raw body gzipped at level 9 by the pinned Bun, exact. workerOnly: the files those workers fetched and the page did not — not the scene's JavaScript, which the page shares.",
-      "files": 42,
-      "gzip": 1103214,
+      "files": 43,
+      "gzip": 1105320,
       "workerOnly": {
-        "files": 8,
-        "gzip": 34828
+        "files": 9,
+        "gzip": 35836
       }
     },
     "phoneLiteSpawnCache": {
@@ -10125,53 +10319,53 @@
     "desktop": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 5.1,
-        "maxMs": 5.1
+        "totalMs": 6.9,
+        "maxMs": 6.9
       },
       "boot:frame": {
-        "count": 8,
-        "totalMs": 564.6,
-        "maxMs": 501.1
+        "count": 9,
+        "totalMs": 472.3,
+        "maxMs": 391.4
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 620.7,
-        "maxMs": 620.7
+        "totalMs": 605.1,
+        "maxMs": 605.1
       },
       "boot:light-wait": {
         "count": 1,
-        "totalMs": 1005.9,
-        "maxMs": 1005.9
+        "totalMs": 1399.8,
+        "maxMs": 1399.8
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 1594.1,
-        "maxMs": 1594.1
+        "totalMs": 1481.3,
+        "maxMs": 1481.3
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 367.5,
-        "maxMs": 367.5
+        "totalMs": 342,
+        "maxMs": 342
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 835.1,
-        "maxMs": 835.1
+        "totalMs": 358.3,
+        "maxMs": 358.3
       },
       "boot:scene-compile": {
         "count": 1,
-        "totalMs": 3000.5,
-        "maxMs": 3000.5
+        "totalMs": 3000.2,
+        "maxMs": 3000.2
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 110,
-        "maxMs": 110
+        "totalMs": 102.1,
+        "maxMs": 102.1
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 7502.9,
-        "maxMs": 7502.9
+        "totalMs": 4588.1,
+        "maxMs": 4588.1
       },
       "boot:tileset": {
         "count": 1,
@@ -10180,35 +10374,35 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4379.6,
-        "maxMs": 4379.6
+        "totalMs": 4213.5,
+        "maxMs": 4213.5
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 1114.5,
-        "maxMs": 891.7
+        "totalMs": 943.3,
+        "maxMs": 696.4
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 12001.6,
-        "maxMs": 3000.5
+        "totalMs": 12000.8,
+        "maxMs": 3000.3
       }
     },
     "phone": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 137.6,
-        "maxMs": 137.6
+        "totalMs": 20.4,
+        "maxMs": 20.4
       },
       "boot:frame": {
-        "count": 8,
-        "totalMs": 759.5,
-        "maxMs": 525.6
+        "count": 9,
+        "totalMs": 623.7,
+        "maxMs": 343.2
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 606,
-        "maxMs": 606
+        "totalMs": 605.8,
+        "maxMs": 605.8
       },
       "boot:light-wait": {
         "count": 1,
@@ -10217,33 +10411,33 @@
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 1520.3,
-        "maxMs": 1520.3
+        "totalMs": 1176.2,
+        "maxMs": 1176.2
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 377.8,
-        "maxMs": 377.8
+        "totalMs": 136.4,
+        "maxMs": 136.4
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 98.2,
-        "maxMs": 98.2
+        "totalMs": 141.7,
+        "maxMs": 141.7
       },
       "boot:scene-compile": {
         "count": 1,
-        "totalMs": 3000.5,
-        "maxMs": 3000.5
+        "totalMs": 3000.4,
+        "maxMs": 3000.4
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 85.6,
-        "maxMs": 85.6
+        "totalMs": 68.7,
+        "maxMs": 68.7
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 4578,
-        "maxMs": 4578
+        "totalMs": 3380.9,
+        "maxMs": 3380.9
       },
       "boot:tileset": {
         "count": 1,
@@ -10252,30 +10446,30 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4268.8,
-        "maxMs": 4268.8
+        "totalMs": 4135.2,
+        "maxMs": 4135.2
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 983,
-        "maxMs": 751.9
+        "totalMs": 867.5,
+        "maxMs": 660.5
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 10308,
-        "maxMs": 3000.4
+        "totalMs": 11209.7,
+        "maxMs": 3027.7
       }
     },
     "phoneHeld": {
-      "attributes": 1119,
-      "attributesSize": 47231494,
-      "geometries": 448,
+      "attributes": 1402,
+      "attributesSize": 47624810,
+      "geometries": 548,
       "indexAttributes": 133,
       "indexAttributesSize": 33979704,
       "indirectStorageAttributes": 0,
       "indirectStorageAttributesSize": 0,
-      "programs": 166,
-      "programsSize": 1995990,
+      "programs": 167,
+      "programsSize": 2135843,
       "readbackBuffers": 0,
       "readbackBuffersSize": 0,
       "renderTargets": 10,
@@ -10283,16 +10477,11 @@
       "storageAttributesSize": 0,
       "textures": 63,
       "texturesSize": 71615312,
-      "uniformBuffers": 543,
-      "uniformBuffersSize": 140288,
-      "total": 154962788
+      "uniformBuffers": 646,
+      "uniformBuffersSize": 158416,
+      "total": 155514085
     },
     "firstLoad": [
-      {
-        "url": "/_next/static/chunks/0_kjkspq-lasv.js",
-        "gzip": 90216,
-        "worker": false
-      },
       {
         "url": "/_next/static/chunks/0_y16_q83yhki.js",
         "gzip": 15225,
@@ -10314,24 +10503,14 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/08wa39oqfutdb.js",
-        "gzip": 134059,
-        "worker": false
-      },
-      {
-        "url": "/_next/static/chunks/0dqqem97cgfoi.js",
-        "gzip": 8412,
+        "url": "/_next/static/chunks/0h714px1utsjh.js",
+        "gzip": 417,
         "worker": false
       },
       {
         "url": "/_next/static/chunks/0h785u-h-7aqq.js",
         "gzip": 1743,
         "worker": false
-      },
-      {
-        "url": "/_next/static/chunks/0iu_x5fsq6oa_.js",
-        "gzip": 8958,
-        "worker": true
       },
       {
         "url": "/_next/static/chunks/0oo697a5jcpj1.js",
@@ -10344,19 +10523,34 @@
         "worker": false
       },
       {
+        "url": "/_next/static/chunks/0z6zmjb1hrk4e.js",
+        "gzip": 771,
+        "worker": true
+      },
+      {
         "url": "/_next/static/chunks/0zehf7azb3u_7.js",
         "gzip": 13674,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1acvom898pdb5.js",
-        "gzip": 10385,
+        "url": "/_next/static/chunks/1577em244902s.js",
+        "gzip": 90263,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1kgvfy450pybk.js",
-        "gzip": 16157,
+        "url": "/_next/static/chunks/176ppimva53vx.js",
+        "gzip": 9093,
         "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/18a6mf65_nx5n.js",
+        "gzip": 134058,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/1o23kkyw8hhly.js",
+        "gzip": 10918,
+        "worker": false
       },
       {
         "url": "/_next/static/chunks/1pcw6gskne7pf.js",
@@ -10374,28 +10568,18 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1v3j7ip4nz0ud.js",
-        "gzip": 11666,
+        "url": "/_next/static/chunks/1tj0o_9842cwz.js",
+        "gzip": 291820,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1x-k_x482wv48.js",
-        "gzip": 392,
-        "worker": false
+        "url": "/_next/static/chunks/1w-2v-zkb7vku.js",
+        "gzip": 9007,
+        "worker": true
       },
       {
         "url": "/_next/static/chunks/26_jj1pp9j5ek.js",
         "gzip": 10253,
-        "worker": false
-      },
-      {
-        "url": "/_next/static/chunks/281j3q-dm00mk.js",
-        "gzip": 291305,
-        "worker": false
-      },
-      {
-        "url": "/_next/static/chunks/2a_zar-boijnz.js",
-        "gzip": 417,
         "worker": false
       },
       {
@@ -10434,6 +10618,11 @@
         "worker": false
       },
       {
+        "url": "/_next/static/chunks/35u_ux8x79379.js",
+        "gzip": 8411,
+        "worker": false
+      },
+      {
         "url": "/_next/static/chunks/372v7qv1pnu01.js",
         "gzip": 14026,
         "worker": false
@@ -10459,6 +10648,11 @@
         "worker": false
       },
       {
+        "url": "/_next/static/chunks/3n3jk_j020a7d.js",
+        "gzip": 11670,
+        "worker": false
+      },
+      {
         "url": "/_next/static/chunks/3r-ml6mc8gxvh.js",
         "gzip": 8946,
         "worker": false
@@ -10469,9 +10663,14 @@
         "worker": true
       },
       {
-        "url": "/_next/static/chunks/3yozywo6a5cbd.js",
-        "gzip": 772,
+        "url": "/_next/static/chunks/3xbwm77hp6uul.js",
+        "gzip": 8024,
         "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/4097se666s6v-.js",
+        "gzip": 393,
+        "worker": false
       },
       {
         "url": "/_next/static/chunks/turbopack-077hmtqrhcoji.js",
@@ -10479,13 +10678,13 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/turbopack-1e5f49zawb_bt.js",
-        "gzip": 176,
+        "url": "/_next/static/chunks/turbopack-09s_0gl4614ew.js",
+        "gzip": 192,
         "worker": true
       },
       {
-        "url": "/_next/static/chunks/turbopack-2m-4g4r53h0p8.js",
-        "gzip": 192,
+        "url": "/_next/static/chunks/turbopack-1e5f49zawb_bt.js",
+        "gzip": 176,
         "worker": true
       },
       {

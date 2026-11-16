@@ -1,10 +1,13 @@
 import {
+  CompressedTexture,
   DataArrayTexture,
   DataTexture,
   LinearFilter,
   LinearMipmapLinearFilter,
   NearestFilter,
   NoColorSpace,
+  R11_EAC_Format,
+  RED_RGTC1_Format,
   RedFormat,
   RGBAFormat,
   RGFormat,
@@ -12,6 +15,8 @@ import {
   UnsignedByteType,
 } from "three/webgpu";
 import type { WebGPURenderer } from "three/webgpu";
+import { parseBlockRaster } from "@/lib/city/block-raster";
+import type { BlockFormat } from "@/lib/city/block-raster";
 import { OPTIONAL_FETCH_BUDGET_MS } from "@/lib/city/fetch-retry";
 import { decodeGreyPng } from "@/lib/city/png-raster";
 import type { GreyRaster } from "@/lib/city/png-raster";
@@ -82,11 +87,14 @@ const fetchGate = createTaskGate(RASTER_FETCHES);
  */
 export async function fetchRasterBytes(
   url: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /** inflate a pre-gzipped file (a block raster's `.gz`) */
+  gunzip = false
 ): Promise<Uint8Array<ArrayBuffer>> {
   const got = await fetchBytes(url, {
     signal,
     budgetMs: OPTIONAL_FETCH_BUDGET_MS,
+    gunzip,
   });
   if (!got.ok) {
     throw new Error(`Failed to fetch ${url}: HTTP ${got.status}`);
@@ -97,7 +105,7 @@ export async function fetchRasterBytes(
 /** Runs a raster's decode and upload in its turn (see `rasterGate`);
  *  rejects with the abort when `signal` fires while it waits. */
 export async function inRasterTurn<T>(
-  task: () => Promise<T>,
+  task: () => Promise<T> | T,
   signal?: AbortSignal
 ): Promise<T> {
   return await rasterGate.run(task, signal);
@@ -341,6 +349,109 @@ export async function loadDataRaster(
         streamTimings.since("raster:decode", started);
       }
     }, signal);
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    return null;
+  }
+}
+
+/** The compressed format of each block format (three r187 maps them to
+ *  WebGPU's `bc4-r-unorm` and `eac-r11unorm`). */
+const BLOCK_TEXTURE_FORMAT = {
+  bc4: RED_RGTC1_Format,
+  eac: R11_EAC_Format,
+} as const satisfies Record<BlockFormat, number>;
+
+/** Whether a published raster is a block raster (lib/city/block-raster.ts:
+ *  `.bc4.gz`, `.eac.gz`) rather than a PNG. */
+export function isBlockRasterUrl(url: string): boolean {
+  return /\.(?:bc4|eac)(?:\.[^./]+)?\.gz$/u.test(url);
+}
+
+/** The texture of a block raster's file, on the GPU (see
+ *  `loadBlockRaster`); throws on a malformed file or a GPU that refuses
+ *  it (freed). */
+function blockTexture(
+  bytes: Uint8Array,
+  renderer: WebGPURenderer,
+  anisotropy: number | undefined,
+  signal: AbortSignal | undefined
+): LoadedRaster {
+  signal?.throwIfAborted();
+  const raster = parseBlockRaster(bytes);
+  const mipmaps = raster.levels.map((level) => ({
+    data: level.data,
+    width: level.width,
+    height: level.height,
+  }));
+  const map = new CompressedTexture(
+    mipmaps,
+    raster.width,
+    raster.height,
+    BLOCK_TEXTURE_FORMAT[raster.format],
+    UnsignedByteType
+  );
+  map.magFilter = LinearFilter;
+  map.minFilter = mipmaps.length > 1 ? LinearMipmapLinearFilter : LinearFilter;
+  map.generateMipmaps = false;
+  map.colorSpace = NoColorSpace;
+  map.flipY = false;
+  if (anisotropy) {
+    map.anisotropy = anisotropy;
+  }
+  map.needsUpdate = true;
+  trackTexture(
+    map,
+    raster.levels.reduce((sum, level) => sum + level.data.length, 0)
+  );
+  try {
+    renderer.initTexture(map);
+  } catch (error) {
+    map.dispose();
+    throw error;
+  }
+  // the blocks are on the GPU: the file's bytes are dead weight
+  map.mipmaps = [];
+  return { texture: map, width: raster.width, height: raster.height };
+}
+
+/**
+ * A SOFT one-channel raster published as GPU blocks with its mip chain
+ * (plan 091 phase 2's trial; lib/city/block-raster.ts): a
+ * `CompressedTexture` of the file's levels, LINEAR between texels and
+ * levels, uploaded at once on every tier (a write of the blocks as they
+ * are: no decode, no mips made on the GPU), its CPU copy dropped at the
+ * upload. Null where the file is absent, malformed or refused by the GPU
+ * (a device without the format's feature: the caller asks only where the
+ * renderer has it). Rejects with an abort. In its turn, as a PNG is.
+ */
+export async function loadBlockRaster(
+  url: string,
+  opts: {
+    anisotropy?: number;
+    rank?: number;
+    renderer: WebGPURenderer;
+    signal?: AbortSignal;
+  }
+): Promise<LoadedRaster | null> {
+  const { anisotropy, rank, renderer, signal } = opts;
+  try {
+    const bytes = await fetchGate.run(
+      async () =>
+        await streamTimings.timed(
+          "raster:fetch",
+          async () => await fetchRasterBytes(url, signal, true)
+        ),
+      signal,
+      rank
+    );
+    // (synchronous in its turn: a parse and a write of the blocks)
+    return await inRasterTurn(
+      () => blockTexture(bytes, renderer, anisotropy, signal),
+      signal
+    );
   } catch (error) {
     if (isAbortError(error)) {
       throw error;

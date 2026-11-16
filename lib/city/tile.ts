@@ -258,6 +258,20 @@ const ARTIFACTS = {
     file: named("svf", "png"),
     terrain: { levels: { 0: ["svf"], 1: ["svf"] } },
   },
+  // The sky view as GPU blocks with their mip chain (plan 091 phase 2's
+  // trial, lib/city/block-raster.ts): BC4 and EAC R11, encoded by the
+  // build from the PNG (`publishSvfBlocks`): no committed source. Read
+  // only behind `?svf=blocks` while the trial is open.
+  svfBc4: {
+    file: (tile) => `svf_${tile}.bc4.gz`,
+    built: true,
+    terrain: { levels: { 0: ["svfBc4"], 1: ["svfBc4"] }, with: ["svf"] },
+  },
+  svfEac: {
+    file: (tile) => `svf_${tile}.eac.gz`,
+    built: true,
+    terrain: { levels: { 0: ["svfEac"], 1: ["svfEac"] }, with: ["svf"] },
+  },
   horizon: {
     file: named("horizon", "png"),
     terrain: { levels: { 0: ["horizon"], 1: ["horizon"] } },

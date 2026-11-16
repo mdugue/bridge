@@ -1,12 +1,14 @@
 /**
  * The side files step 1 of scripts/prepare-data.ts bakes (side-files.ts
- * publishes the rest as they are): the colony crops, the packed canopy and
- * the downsampled class rasters. Their entries name this module
- * (bake-entries.ts `colonies`, `canopy`, `classRaster`), which imports no
+ * publishes the rest as they are): the colony crops, the packed canopy,
+ * the downsampled class rasters and the sky view's blocks. Their entries
+ * name this module (bake-entries.ts `colonies`, `canopy`, `classRaster`,
+ * `svfBlocks`), which imports no
  * other step: a change to the lines re-bakes none of them.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { parseBakeFile } from "../../lib/city/bake-file";
+import type { BlockFormat } from "../../lib/city/block-raster";
 import type { CanopyFeature, FeatureCollection } from "../../lib/city/features";
 import { tileExtentOf } from "../../lib/city/site";
 import { SMALL_BUILDINGS_FILE } from "../../lib/city/small-buildings-file";
@@ -25,8 +27,11 @@ import {
   sideFileSource,
   tileArtifacts,
 } from "../../lib/city/tile";
+import { decodeGreyPng } from "../../lib/city/png-raster";
 import type { CityJsonDocument } from "../../lib/city/types";
 import { BAKE_ENTRIES } from "../bake-entries";
+import { publishedBlockFile } from "../block-encode";
+import type { Grey } from "../block-encode";
 import { cropColonyRaster } from "../crop-raster";
 import type { ColonyCrop } from "../crop-raster";
 import {
@@ -186,4 +191,35 @@ export async function publishClassRaster(
       : await downsampleClassRaster(src, raster)
   );
   return publish(file, bytes);
+}
+
+/**
+ * The sky view's GPU blocks (plan 091 phase 2's trial): the committed PNG
+ * encoded as BC4 and as EAC R11 with its mip chain
+ * (scripts/block-encode.ts), pre-gzipped like the glTF (static hosts do
+ * not compress binary types), published beside the PNG. The viewer reads
+ * them only behind `?svf=blocks`.
+ */
+export async function publishSvfBlocks(
+  tile: string
+): Promise<{ svfBc4: string; svfEac: string }> {
+  const artifacts = tileArtifacts(tile);
+  const src = at(sideFileSource(SITE, artifacts.svf.file));
+  const key = cacheKey([src], BAKE_ENTRIES.svfBlocks);
+  let decoding: Promise<Grey> | null = null;
+  const grey = async () => {
+    decoding ??= decodeGreyPng(readFileSync(src));
+    return await decoding;
+  };
+  const encoded = async (format: BlockFormat, file: string) =>
+    publish(
+      file,
+      await cached(file, key, async () =>
+        publishedBlockFile(await grey(), format)
+      )
+    );
+  return {
+    svfBc4: await encoded("bc4", artifacts.svfBc4.file),
+    svfEac: await encoded("eac", artifacts.svfEac.file),
+  };
 }
