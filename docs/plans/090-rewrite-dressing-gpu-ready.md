@@ -704,6 +704,38 @@ the whole builder — ballast, platforms, levels, sleepers.
   drawn ground, not the 2 cm the builder adds — the line's baked profile
   (`lz`, on the DGM) against the fine level's triangles.
 
+**Binding for Phase 1 — the record's bytes.** The +26.5 kB (+6.7 %)
+was measured on the forest's *coarse* crowns file, a third of its trees;
+the fine level's table holds all of them, so the same record costs
+there in proportion, on the level the STOP on wire bytes guards. No
+grant covers it (the one grant is the rails' table). Phase 1 wins it
+back inside the level and says how — a field the build can derive (a
+height the ground gives, a width from the height), a narrower word, the
+three tree files it replaces leaving in the same step — or leaves the
+trees' files as they are and reports the figures. It does not plan on a
+grant.
+
+**The counters this phase raised, and where they fall again.**
+`layerModules.lines` 18 770 → 18 883 (+113) and `bootAppLines`
+3 090 → 3 094 (+4) are the spikes behind their knobs and the baseline's
+read:
+
+- `coarse-crowns-layer.ts` (+69: `crownStand`, the record branch of
+  `coarseCrownSteps`) — goes in Phase 1, when the build writes the
+  records and the layer only makes views: the matrix branch, `crownMatrix`
+  and the runtime ground read go with it.
+- `rail-layer.ts`, `tram-layer.ts`, `bridge-layer.ts` (+10, +30, +4: the
+  `railTable` sink and its branches) — go in Phase 3, when the build
+  lays the rails' runs: `addRail`'s calls, the street-rail ribbons and
+  the sink leave together.
+- `bootApp` (+4: `getDressingFigures`) — stays as long as the ledger
+  reads the builders' milliseconds; with Phase 5 the builders it times
+  are gone, and the call goes with `dressing-figures.ts`' wrappers in
+  `buildDressing`.
+
+So the milestone's counters are read against 18 770 and 3 090, not
+against this phase's.
+
 PR #156's own builders (`rail-mesh.ts` …) were not copied: today's
 builders run under Bun as they are (`mesh-kit.ts`), so the measurement
 feeds their ribbons through the spike's writer (`weld`, 16-bit
