@@ -827,9 +827,29 @@ the trees' files, then the level's whole dressing):
 
 | Tile | Fine: trees | level, requests | Coarse: trees | level, requests |
 |---|---|---|---|---|
-| spawn | 167.7 → 106.3 kB (−37 %) | 249.1 → 187.8 kB, 18 → 16 | 75.9 → 57.5 kB (−24 %) | 84.9 → 66.6 kB, 3 |
+| spawn | 167.7 → 106.3 kB (−37 %) | 249.1 → 187.8 kB, 18 → 16 | 75.9 → 57.6 kB (−24 %) | 84.9 → 66.6 kB, 3 |
 | forest | 492.3 → 466.1 kB (−5.3 %) | 496.9 → 470.7 kB, 18 → 16 | 397.5 → 240.3 kB (−40 %) | 398.2 → 241.1 kB, 3 |
 | yards | 131.6 → 89.9 kB (−32 %) | 276.0 → 234.3 kB, 18 → 16 | 65.6 → 47.9 kB (−27 %) | 78.6 → 61.0 kB, 3 |
+
+**What the STOP is held to: a visit to the fine level** (the coordinator's
+ruling on the judgement above, 2026-11-16). A fine level's visit fetches
+the coarse level's file too, before and after, so like is set against
+like — the fine level's dressing and the coarse level's trees — and the
+ledger carries that sum as a leaf of its own
+(`dressing.tiles.<what>.visit`, `lib/city/ledger-dressing.ts`):
+
+| Tile | the trees of both levels | a fine level's visit: bytes, requests |
+|---|---|---|
+| spawn | 243.6 → 163.9 kB | 325.0 → 245.3 kB, 19 → 17 |
+| forest | 889.8 → 706.5 kB | 894.3 → 711.0 kB, 19 → 17 |
+| yards | 197.1 → 137.8 kB | 341.5 → 282.2 kB, 19 → 17 |
+
+It falls on all three. Where it would not hold: the stream holds the
+renderer's `loadAncestors` on (`orderStreaming`, tested), so a tile's
+coarse level is loaded with or before its fine one and the file is
+fetched once; the second read is the HTTP cache's — a browser that
+keeps no cache (or has dropped the file since) fetches it twice, which
+is the old state of a tree shipped twice, no worse.
 
 No measured level grows; no STOP. A tile's trees over both levels:
 spawn 243.6 → 163.9 kB, forest 889.8 → 706.5 kB, yards 197.1 → 137.8 kB.
@@ -875,11 +895,29 @@ milliseconds, as its findings say. `dressingKinds` 17 → 15,
 arrives). Phase 0's spike lines for the stands are all gone; the rails'
 stay behind `?rails=table` for phase 3.
 
+**The review's findings, fixed in this phase** (PR #330). A foot slope of
+0.976 or more overflowed its byte and decoded with its sign flipped —
+on banks steeper than 44° the feet draped the wrong way (304 slopes on
+Dresden's tiles, 239 on Grimma's): the step count is held to ± 15 (a
+slope of 0.945) and counted, tested at the limit and beyond. A dressing
+file that does not come or is not one is said through the dressing's
+failure hook (the trail's `dressing failed`, the HUD's hole) instead of
+a tile silently without trees. A measured height under half a decimetre
+stays measured; records may not start inside a file's directory.
+
+**The builds** (`browser.pipelines`, plan 094; merged from `rewrite`):
+68 → 62 rows. Sixteen rows of the trees' feet, trunks and crowns went
+(each foot build had two, with the drop buffer and without; all drew
+from four matrix columns) and ten came, drawn from the stand record's
+three attributes: a foot build 5 or 4 → 3 vertex buffers, the trunk
+4 → 3 or 4, the crowns as they were (5 and 4); no build's inter-stage
+count rose.
+
 **The ledger's gated figures that moved** (`qa/ledger.json`, regenerated
 on linux-x64 with the pinned Bun, all seven sites built, `--browser`):
 `browser.phoneLiteSpawnCache.bytes` 158 979 087 → 155 942 579 (−3.0 MB);
-`browser.firstLoad.gzip` 1 103 187 → 1 102 423; `bytes.fine.spawn`
-5 448 502 → 5 387 131, 29 → 27 files (every `bytes` set falls, by the
+`browser.firstLoad.gzip` 1 103 214 → 1 102 580; `bytes.fine.spawn`
+5 448 502 → 5 387 136, 29 → 27 files (every `bytes` set falls, by the
 tree files and two requests a fine level; the site 193.62 → 192.37 MB,
 641 → 611 files); the `dressing` tiles as the table above;
 `counters.dressingKinds`, `layerModules.codeLines` and
@@ -887,7 +925,10 @@ tree files and two requests a fine level; the site 193.62 → 192.37 MB,
 
 **What moved in the picture, named** (ruling 3):
 
-- A tree stands within 1.6 cm in plan of where it stood, its foot up to
+- A canopy or surveyed tree stands within 1.6 cm in plan of where it
+  stood (a mapped row's tree, on tiles without a surface model, within
+  5 cm an axis: its place is kept to the decimetre and its turn to 256
+  steps — "to the bit" above is the canopy's and the register's), its foot up to
   3.1 cm under the fine level's ground and never over it (was: on it);
   its scale within 0.1 %; its NDVI one of 32 steps. Every tree reports
   that join (ADR 0030): `trees` is a row of `scripts/ground-joins.ts`,

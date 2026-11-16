@@ -2795,13 +2795,14 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   and draws sets of records (`Instances.ofStands`). What moved: a tree's
   foot is up to 3.1 cm under the fine ground, never over it (was: on it;
   each tree reports the join, `scripts/ground-joins.ts` `trees`), its
-  place within 1.6 cm, its NDVI one of 32 steps; each tree's own growth
+  place within 1.6 cm (a mapped row's tree within 5 cm), its NDVI one
+  of 32 steps; each tree's own growth
   (its lean, its crook, its roots' turn, hashed in the vertex stage from
   where its instance stands) is drawn anew; a coarse crown stands
   on the fine level's ground, not the coarse grid's; which half of a
   dense chunk's trees the far tier keeps is another half. Dresden's
   spawn tile: the fine level's tree files 167.7 → 106.3 kB, the coarse
-  level's 75.9 → 57.5 kB; the forest tile 492.3 → 466.1 kB and 397.5 →
+  level's 75.9 → 57.6 kB; the forest tile 492.3 → 466.1 kB and 397.5 →
   240.3 kB. The coarse level fetches its file with its other
   side files and builds it with its dressing, whatever the mode or scale,
   so a tree stays where it stood when the level changes and no scale and

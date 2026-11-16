@@ -208,7 +208,9 @@ test("the fine set's side files are those tile-stream.ts fetches", () => {
   expect(fine).not.toContain("extras.ndvi");
   // the coarse level's dressing file, read too: it is the set `far`'s
   // (lib/city/ledger.ts `tileSet`)
-  expect(fine).toContain("fetchPack(extras.coarseDressing, url, signal)");
+  expect(fine).toContain(
+    "fetchPack(extras.coarseDressing, url, treesLost(ctx, tile), signal)"
+  );
   // the coarse level's side files, all of them
   const coarse = functionText(text, "buildCoarseDressing");
   expect(
