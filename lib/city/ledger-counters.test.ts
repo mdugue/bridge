@@ -641,3 +641,21 @@ test("the register's section by its heading, whatever its level", () => {
     entries("####### Workarounds for upstream bugs\n\n**a.** b")
   ).toThrow();
 });
+
+test("the lexers' ends, one character at a time", () => {
+  expect(read("/*ab*/x").comments).toEqual(["ab"]);
+  // a class's escaped bracket does not close it
+  expect(
+    read("a = /[\\]/]+/; // c").bare.replaceAll(/ +/gu, " ").trimEnd()
+  ).toBe("a = ;");
+  // an escaped backtick, then the closing one
+  expect(read("a = `\\``; // c").comments).toEqual(["c"]);
+  expect(read("a = `x`// c").comments).toEqual(["c"]);
+  // a division, then a string
+  expect(read('a = b /"s".length; // c').comments).toEqual(["c"]);
+  expect(readPy('a = """""" + owns(b)').bare).toContain("+ owns(b)");
+  expect(readPy('a = """\\\\""" + owns(b)').bare).toContain("+ owns(b)");
+  expect(readPy('f("""x""",owns(b))').bare).toContain(",owns(b))");
+  // the statement before a function is not the function's
+  expect(names("\nconst x = 1;\nfunction a() {\n}\n")).toEqual(["a 2"]);
+});
