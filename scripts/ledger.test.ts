@@ -571,7 +571,9 @@ test("a write, then a check that holds; a second write is the same file", async 
   const again = await runOn(root, [], "2027-01-01");
   expect(again.report).toBe("qa/ledger.json (2026-11-16)\n");
   expect(ledgerOf(root)).toBe(written);
-});
+  // four runs of the script and the formatter's process: under coverage
+  // on a CI runner that took 5.02 s against the default 5
+}, 60_000);
 
 test("a ledger written without a day given is dated today", async () => {
   const { root } = fixture();
