@@ -55,6 +55,7 @@ import type {
   MonumentFeature,
   ReliefGrid,
 } from "@/lib/city/features";
+import { epsgToData } from "@/lib/city/frames";
 import { epsgToWorld } from "@/lib/city/ground-clamp";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import {
@@ -253,8 +254,8 @@ function bellAlpha(v: F): F {
  *  back onto the ground plane. */
 function shapePoints(ring: readonly Point2[], ctx: GroundContext): Vector2[] {
   return openRing(ring).map(([x, y]) => {
-    const w = epsgToWorld(x, y, ctx.offset);
-    return new Vector2(w.x, -w.z);
+    const d = epsgToData(x, y, ctx.offset);
+    return new Vector2(d.x, d.y);
   });
 }
 
@@ -330,13 +331,13 @@ function basinShapes(
   ctx: GroundContext
 ): { pad: Shape; rim: Shape; water: Shape } {
   if (!b.outer) {
-    const w = epsgToWorld(b.centre[0], b.centre[1], ctx.offset);
+    const d = epsgToData(b.centre[0], b.centre[1], ctx.offset);
     const disc = (r: number) =>
-      new Shape().absarc(w.x, -w.z, r, 0, Math.PI * 2, false);
+      new Shape().absarc(d.x, d.y, r, 0, Math.PI * 2, false);
     // a small basin's rim is a stone's edge, not a basin's wall
     const inner = b.r - Math.min(RIM_M, 0.3 * b.r);
     const rim = disc(b.r);
-    rim.holes.push(circle(inner, w.x, -w.z));
+    rim.holes.push(circle(inner, d.x, d.y));
     return { pad: disc(b.r), rim, water: disc(inner) };
   }
   const pad = new Shape(shapePoints(b.outer, ctx));
@@ -346,9 +347,9 @@ function basinShapes(
     return { pad, rim, water: new Shape(shapePoints(b.water, ctx)) };
   }
   // Too small to inset: a solid bowl, its water a smaller copy on top.
-  const c = epsgToWorld(b.centre[0], b.centre[1], ctx.offset);
+  const c = epsgToData(b.centre[0], b.centre[1], ctx.offset);
   const inner = shapePoints(b.outer, ctx).map(
-    (p) => new Vector2(c.x + (p.x - c.x) * 0.7, -c.z + (p.y + c.z) * 0.7)
+    (p) => new Vector2(c.x + (p.x - c.x) * 0.7, c.y + (p.y - c.y) * 0.7)
   );
   return { pad, rim, water: new Shape(inner) };
 }

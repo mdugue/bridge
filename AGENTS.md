@@ -36,6 +36,7 @@ bun run test            # units in lib/, app/_components/, scripts/
 bun run test:e2e        # playwright against a production build
                         # (E2E_DEV=1: against bun dev)
 bun run shots           # real-GPU plates of shots/*.json (headed)
+bun run ledger          # qa/ledger.json: bytes, requests, counters (-- --check: CI)
 bun run site <site>     # where a site stands (--all: every site)
 bun run fetch <site>    # downloads → data/_raw/<provider>/, sources → data/<site>/
 bun run bake <site>     # offline bakes [tile…] [--step X] [--jobs N] [--force]
@@ -85,10 +86,13 @@ a spec that writes then reads awaits `handle.sync()` (ADR 0061).
 **Frame.** Data stays in the provider's UTM (25833 Saxony and Berlin,
 25832 Hamburg, Bavaria, NRW). `x = E − cx`, `z = −(N − cy)`, `y` = height;
 a −90° X-rotated `world` group turns data-Z up, and tile content is Y-up.
-Dressing lives in the Y-up frame, **never inside the rotated group**. glTF
-positions are quantised: shaders derive data-frame coordinates from world
-space (`shader-chunks.ts`). The glTF extras key is `tileId`, never `tile`
-(the renderer writes `userData.tile` itself). See ADR 0005.
+Dressing lives in the Y-up frame, **never inside the rotated group**.
+New code converts between frames through `lib/city/frames.ts`; the
+older hand arithmetic on the offset is counted in plan 095's Findings and
+goes with its phase B2. glTF positions are quantised: shaders derive
+data-frame coordinates from world space (`shader-chunks.ts`). The glTF
+extras key is `tileId`, never `tile` (the renderer writes `userData.tile`
+itself). See ADR 0005.
 
 **Rendering** (ADR 0027; details in the `city-walker` skill):
 
