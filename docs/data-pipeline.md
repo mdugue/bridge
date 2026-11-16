@@ -1385,8 +1385,10 @@ row's bytes. A published file that no tile and no row names is an
 it. So bytes cannot leave the gate by moving — a side file inlined into
 the tileset shows as the boot growing by what the file held — nor by a
 name the ledger does not read: a tile that names a file the set *all*
-does not hold (a new extras key, a third content, a path out of the
-site's directory) is an error too. Beside the sites' directories lies
+does not hold (a new extras key, a third content) is an error too, and so
+is any name in the tileset or the lite profile's — at its root, under its
+extras, in a content — that ends like a file and is not served from the
+site's directory (`../common/huge.png`). Beside the sites' directories lies
 `public/data/sites.json`, the build's index of its sites, which the
 server reads and no visitor fetches: it is in no class.
 

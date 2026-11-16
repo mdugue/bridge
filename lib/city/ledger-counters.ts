@@ -60,9 +60,10 @@ const DECLARED =
   /^\s*(?:export\s+)?(?:default\s+)?(?:(?:async\s+)?function\b\s*\*?\s*(?<fn>[\w$]*)|(?:abstract\s+)?class\b\s*(?<cls>[\w$]*))/u;
 const ASSIGNED =
   /^\s*(?:export\s+)?(?:const|let|var)\s+(?:(?<name>[\w$]+)|[{[])/u;
-/** Statements that hold no function of their own. */
+/** Statements that hold no function of their own: imports and exports of
+ *  names, types, and control statements (a top-level loop is no function). */
 const NO_VALUE =
-  /^\s*(?:import\b|export\s*[{*]|(?:export\s+)?(?:declare\s+)?(?:type|interface|enum|namespace|module)\b)/u;
+  /^\s*(?:(?:import|for|if|while|switch|try|do)\b|export\s*[{*]|(?:export\s+)?(?:declare\s+)?(?:type|interface|enum|namespace|module)\b)/u;
 const CALLED = /^\s*(?:export\s+default\s+)?(?:await\s+)?(?<name>[\w$.]+)/u;
 
 /**

@@ -37,6 +37,7 @@ import {
   ledgerTiles,
   publishedLedger,
   tileSet,
+  unservedNames,
   WIRE_RULE,
   wireBytes,
 } from "../lib/city/ledger";
@@ -57,7 +58,7 @@ import {
 } from "../lib/city/tile";
 import type { DataManifest } from "../lib/city/tile";
 import type { ContentExtras } from "../lib/city/tileset";
-import { TILESET_FILE } from "../lib/city/tileset";
+import { TILESET_FILE, TILESET_SPAWN_FILE } from "../lib/city/tileset";
 import { REFERENCE_SITE } from "../sites";
 import { rasterLedger, readySites } from "./ledger-rasters";
 
@@ -198,6 +199,27 @@ export function counters(root: string, published: readonly string[]): Counters {
 const platform = (): string =>
   `${process.platform}-${process.arch}, Bun ${Bun.version}`;
 
+/** Throws where a tileset of the site — the full one or the lite
+ *  profile's — names a file that is not served from its directory. */
+function refuseUnserved(published: PublishedFiles): void {
+  const served = new Set(published.names.map((n) => n.served));
+  for (const logical of [TILESET_FILE, TILESET_SPAWN_FILE]) {
+    const name = published.files[logical];
+    if (name === undefined) {
+      continue;
+    }
+    const unserved = unservedNames(
+      JSON.parse(new TextDecoder().decode(published.read(name))),
+      served
+    );
+    if (unserved.length > 0) {
+      throw new Error(
+        `ledger: ${logical} names ${unserved.length} files that the site does not serve: ${unserved.join(", ")}`
+      );
+    }
+  }
+}
+
 /** The ledger's figures for `site`, from its published files and the
  *  sources under `root` (the rasters are every site's, `measureRasters`). */
 export function measure(
@@ -215,6 +237,7 @@ export function measure(
     return bytes;
   };
   const tiles = ledgerTiles(published.tileset);
+  refuseUnserved(published);
   const tileFiles = new Set(
     tiles.flatMap((tile) => tileSet(tile, "all", viewerReads, false))
   );

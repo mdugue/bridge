@@ -84,12 +84,35 @@ type Context =
   /** a JSX element's children: text, until a `<` or a `{` */
   | { kind: "children" };
 
+/** A generic parameter's modifiers: no tag's name. */
+const TYPE_MODIFIERS: ReadonlySet<string> = new Set(["const", "in", "out"]);
+
+/** How far a tag name's type arguments reach at the start of `text`
+ *  (`<Row<Cell>>`): 0 where it has none, or they do not close. */
+function typeArguments(text: string): number {
+  if (!text.startsWith("<")) {
+    return 0;
+  }
+  let depth = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] === "<") {
+      depth += 1;
+    } else if (text[i] === ">") {
+      depth -= 1;
+      if (depth === 0) {
+        return i + 1;
+      }
+    }
+  }
+  return 0;
+}
+
 /** After these characters a `<` may open a JSX tag (with `=>`, `return`
  *  and the like, `BEFORE_REGEX`). */
-const BEFORE_JSX = "(,=:?&|{};[!";
+export const BEFORE_JSX = "(,=:?&|{};[!";
 /** After these a slash opens a regular expression (with `=>` and
  *  `BEFORE_REGEX`); after `<` it closes a JSX tag, after `>` it divides. */
-const BEFORE_SLASH = "(,=:[!&|?{};+-*%~^";
+export const BEFORE_SLASH = "(,=:[!&|?{};+-*%~^";
 
 /** A TypeScript source's reader (`lexTs`). */
 class TsLexer {
@@ -189,33 +212,36 @@ class TsLexer {
 
   /**
    * Whether the `<` at `i` opens a JSX tag: where a value may start, before
-   * a name that a blank, `>` or `/` follows — not a generic's parameter
-   * (`<T,>`, `<T extends U>`, `<T = U>`), and not a generic signature
-   * (`<T>(…) => …`: no `</T>` follows it).
+   * a name (with its type arguments, `<Table<Row> …>`) that a blank, `>` or
+   * `/` follows — not a generic's parameter (`<T,>`, `<const T,>`,
+   * `<T extends U>`, `<T = U>`), and not a generic signature (`<T>(…) =>
+   * …`: no `</T>` follows it). Returns how far the name reaches after the
+   * `<`, or -1 where no tag opens.
    */
-  private opensTag(): boolean {
+  private opensTag(): number {
     const { text, i } = this;
     if (!this.jsx) {
-      return false;
+      return -1;
     }
     // (what the code last ended on is known once it is handed over)
     this.flush(i);
     if (!this.valueStarts(BEFORE_JSX)) {
-      return false;
+      return -1;
     }
-    const rest = text.slice(i + 1, i + 200);
+    const rest = text.slice(i + 1, i + 400);
     if (rest.startsWith(">")) {
-      return true;
+      return 0;
     }
     const name = /^[A-Za-z_$][\w$.:-]*/u.exec(rest)?.[0];
-    if (name === undefined) {
-      return false;
+    if (name === undefined || TYPE_MODIFIERS.has(name)) {
+      return -1;
     }
-    const after = rest.slice(name.length);
+    const head = name.length + typeArguments(rest.slice(name.length));
+    const after = rest.slice(head);
     if (/^\s*>\s*\(/u.test(after)) {
-      return text.includes(`</${name}>`, i);
+      return text.includes(`</${name}>`, i) ? head : -1;
     }
-    return /^(?:\s*\/?>|\s+(?!extends\b|=|,))/u.test(after);
+    return /^(?:\s*\/?>|\s+(?!extends\b|=|,))/u.test(after) ? head : -1;
   }
 
   /** A brace or an angle bracket at `i`, in code. */
@@ -228,8 +254,13 @@ class TsLexer {
       this.depth += 1;
     } else if (c === "}") {
       this.depth -= 1;
-    } else if (c === "<" && top?.kind !== "tag" && this.opensTag()) {
-      this.contexts.push({ kind: "tag", closing: false });
+    } else if (c === "<" && top?.kind !== "tag") {
+      const name = this.opensTag();
+      if (name !== -1) {
+        this.contexts.push({ kind: "tag", closing: false });
+        // (past its name: a type argument's `>` does not end the tag)
+        this.i += name;
+      }
     } else if (c === ">" && top?.kind === "tag") {
       this.contexts.pop();
       if (top.closing) {

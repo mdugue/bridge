@@ -13,6 +13,7 @@ import {
   SITE_FILES,
   setFigures,
   UNCOMPARED,
+  unservedNames,
   tileSet,
   weigh,
   wireBytes,
@@ -942,4 +943,53 @@ test("a path the check does not compare, with everything under it", () => {
   ).toEqual(["a.readWith: 1 → 2"]);
   expect(ledgerDiff(was, now, [])).toContain('dated: "a" → "b"');
   expect([...UNCOMPARED]).toEqual(["dated"]);
+});
+
+test("a name in a tileset that the site does not serve", () => {
+  const served = new Set(["plate.bin.gz", "trams.json", "city_a.glb.gz"]);
+  const tileset = {
+    extras: {
+      site: "test",
+      plate: { file: "plate.bin.gz", tiles: [{ id: "a" }] },
+      trams: "trams.json",
+      landmarks: [{ name: "St. Michael" }, { name: "Haus Nr. 3" }],
+      credits: ["CC BY-SA 4.0", "a/b"],
+    },
+    root: { content: { uri: "city_a.glb.gz" }, children: [] },
+  };
+  expect(unservedNames(tileset, served)).toEqual([]);
+  // at the root, in the root's content, under the plate: each is found
+  expect(
+    unservedNames(
+      {
+        ...tileset,
+        extras: { ...tileset.extras, heavy: "../common/huge.png" },
+      },
+      served
+    )
+  ).toEqual(["../common/huge.png"]);
+  expect(
+    unservedNames(
+      { ...tileset, root: { content: { uri: "../common/huge.glb.gz" } } },
+      served
+    )
+  ).toEqual(["../common/huge.glb.gz"]);
+  expect(
+    unservedNames(
+      {
+        ...tileset,
+        extras: {
+          ...tileset.extras,
+          plate: { ...tileset.extras.plate, more: ["z.webp", "a.geojson"] },
+        },
+      },
+      served
+    )
+  ).toEqual(["a.geojson", "z.webp"]);
+  // a served name is one by its whole text
+  expect(
+    unservedNames({ a: "old-trams.json", b: "trams.json" }, served)
+  ).toEqual(["old-trams.json"]);
+  expect(unservedNames("x.json", served)).toEqual(["x.json"]);
+  expect(unservedNames(null, served)).toEqual([]);
 });

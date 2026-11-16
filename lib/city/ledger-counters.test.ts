@@ -7,7 +7,7 @@ import {
   upstreamWorkarounds,
 } from "./ledger-counters";
 import { codeLines, lexPy } from "./source-lexer";
-import { BEFORE_REGEX, lexTs } from "./ts-lexer";
+import { BEFORE_JSX, BEFORE_REGEX, BEFORE_SLASH, lexTs } from "./ts-lexer";
 
 const ts = (...lines: string[]) => lines.join("\n");
 /** A template's hole, opened (written so that no line here reads as one). */
@@ -871,4 +871,84 @@ test("a closing brace ends a statement only before code at a line's start", () =
     )
   ).toEqual(["a 5", "b 7"]);
   expect(names("function a() {\n}\n\n\n  \n")).toEqual(["a 2"]);
+});
+
+test("each character a value may start after is pinned", () => {
+  // after each of them a slash opens a regular expression …
+  for (const c of BEFORE_SLASH) {
+    expect(read(`a ${c} /'/.test(s); // c`).comments).toEqual(["c"]);
+  }
+  expect(BEFORE_SLASH).toHaveLength(18);
+  // … and, in a .tsx file, a `<` a tag whose text is text
+  for (const c of BEFORE_JSX) {
+    expect(jsx(`a ${c} <b>it's</b>; // c`).comments).toEqual(["c"]);
+  }
+  expect(BEFORE_JSX).toHaveLength(12);
+  // white space alone changes nothing about where the code stands
+  expect(read("a /* c */ / 2; x = '/'; // d").comments).toEqual(["c", "d"]);
+  expect(read("a = 'b' /* c */ / 2; x = '/'; // d").comments).toEqual([
+    "c",
+    "d",
+  ]);
+});
+
+const namesTsx = (text: string) =>
+  topFunctions({ path: "a.tsx", text }).map((f) => `${f.name} ${f.lines}`);
+
+test("a tag's name with type arguments, and a generic that is no tag", () => {
+  const table = ts(
+    "export function Rows() {",
+    "  return (",
+    "    <Table<Row<Cell>> rows={rows}>Rows (of {n}</Table>",
+    "  );",
+    "}"
+  );
+  expect(topFunctions({ path: "rows.tsx", text: table })).toEqual([
+    { name: "Rows", lines: 5 },
+  ]);
+  // self-closing, its type arguments nested: the tag ends at its own `/>`
+  expect(
+    namesTsx(
+      ts(
+        "export const Grid = () => <Table<Row<Cell>> rows={rows} />;",
+        "export function after() {",
+        "  return 'it';",
+        "}"
+      )
+    )
+  ).toEqual(["Grid 1", "after 3"]);
+  // a generic parameter's modifier is no tag's name
+  for (const modifier of ["const", "in", "out"]) {
+    const text = ts(
+      `export const tuple = <${modifier} T,>(x: T) => x;`,
+      "export function after() {",
+      "  return 'it';",
+      "}"
+    );
+    expect(topFunctions({ path: "tuple.tsx", text })).toEqual([
+      { name: "tuple", lines: 1 },
+      { name: "after", lines: 3 },
+    ]);
+  }
+  // type arguments that do not close are none
+  expect(jsx("x = a ? <b>it's</b> : c < d; // c").comments).toEqual(["c"]);
+});
+
+test("a top-level loop is no function, and its head's semicolons end nothing", () => {
+  expect(
+    names(
+      ts(
+        "for (let i = 0; run(() => i); i += 1) {",
+        "  go(() => 1);",
+        "}",
+        "if (a) {",
+        "  b(() => 2);",
+        "}",
+        "while (c(() => 3)) {",
+        "}",
+        "function d() {",
+        "}"
+      )
+    )
+  ).toEqual(["d 2"]);
 });

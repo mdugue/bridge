@@ -188,10 +188,9 @@ const uriOf = (node: Node | undefined, what: string): string => {
  * `tileNode` writes them) beside the extras' tile list, in one order.
  * Throws on a tile that names a file the set `all` does not hold — a new
  * extras key, a third content — wherever that file lies: bytes must not
- * leave the gate by a name the ledger does not read. (Cannot see: a file
- * the tileset's root names outside the tiles and outside the site's
- * directory; what lies in the directory is counted or refused by
- * `publishedLedger`.)
+ * leave the gate by a name the ledger does not read. What the tileset
+ * names outside its tiles is held by `unservedNames`; what lies in the
+ * directory is counted or refused by `publishedLedger`.
  */
 export function ledgerTiles(tileset: unknown): LedgerTile[] {
   const json = tileset as {
@@ -236,6 +235,38 @@ export function ledgerTiles(tileset: unknown): LedgerTile[] {
     }
     return tile;
   });
+}
+
+/**
+ * The strings anywhere in a tileset JSON that end in an extension of the
+ * wire rule and are no served file of the site's directory: a name at the
+ * tileset's root, under its extras or in a content, in the full tileset
+ * or the lite profile's, that points out of the directory (`../common/…`)
+ * or at nothing. Bytes must not leave the gate by such a name; the caller
+ * throws on any. (By extension, not by a dot or a slash: a place is
+ * called "St. Michael".)
+ */
+export function unservedNames(
+  tileset: unknown,
+  served: ReadonlySet<string>
+): string[] {
+  const out = new Set<string>();
+  const walk = (value: unknown): void => {
+    if (typeof value === "string") {
+      const file = [...PACKED_EXTENSIONS, ...TEXT_EXTENSIONS].some((ext) =>
+        value.endsWith(ext)
+      );
+      if (file && !served.has(value)) {
+        out.add(value);
+      }
+    } else if (typeof value === "object" && value !== null) {
+      for (const inner of Object.values(value)) {
+        walk(inner);
+      }
+    }
+  };
+  walk(tileset);
+  return [...out].toSorted(codeOrder);
 }
 
 /** Every string under `value` that reads as a file's name or path: one

@@ -896,6 +896,40 @@ test("a tile that names a file outside the sets is refused", async () => {
   );
 });
 
+test("a tileset that names a file the site does not serve is refused", async () => {
+  // at the root of the full tileset, where the plate and the trams are named
+  const full = fixture();
+  rewrite(full.data, "tileset.json", (bytes) => {
+    const json = JSON.parse(new TextDecoder().decode(bytes)) as {
+      extras: object;
+    };
+    json.extras = { ...json.extras, heavy: "../common/huge.png" };
+    return JSON.stringify(json);
+  });
+  await expect(runOn(full.root, [])).rejects.toThrow(
+    "tileset.json names 1 files that the site does not serve: ../common/huge.png"
+  );
+  // and in the lite profile's tileset, which no set reads for names
+  const lite = fixture();
+  const manifestPath = nodePath.join(lite.data, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
+    files: Record<string, string>;
+  };
+  manifest.files["tileset-spawn.json"] = "tileset-spawn.0a1b2c3d.json";
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+  const spawn = nodePath.join(lite.data, "tileset-spawn.0a1b2c3d.json");
+  writeFileSync(spawn, JSON.stringify({ root: { extras: {} } }));
+  const held = await runOn(lite.root, []);
+  expect(held.code).toBe(0);
+  writeFileSync(
+    spawn,
+    JSON.stringify({ root: { extras: { more: "../common/huge.png" } } })
+  );
+  await expect(runOn(lite.root, ["--check"])).rejects.toThrow(
+    "tileset-spawn.json names 1 files that the site does not serve"
+  );
+});
+
 test("a site that is not built says so", () => {
   const { root, data } = fixture();
   expect(() => measure("nowhere", root)).toThrow(/build first/u);
