@@ -214,37 +214,77 @@ new `qa/ledger.json`; the diff is what the reviewer reads.
 `bun test lib/city/ledger.test.ts` → pass. **Ledger**: the first
 baseline of bytes, requests and counters, dated.
 
-**Built (2026-11-16).** What later phases and plans can rely on:
+**Built (2026-11-16), hardened the same day after an independent
+review** (no way past `--check` for a figure it compared; the holes were
+in what it compared and what its figures were named). What later phases
+and plans can rely on:
 
-- `qa/ledger.json` (version 1) has `bytes` (the five sets, each with
-  `spawn`, `median`, `largest`, `site`, and `phone` where a phone reads
-  other files — today the fine level only), `published` (the whole
-  manifest), `buildings` (each tile's vertices, triangles and decoded
-  bytes, near and far) and `counters`, all gated. `ledgerDiff` skips
-  `dated` at the top level (`UNCOMPARED`); phase 2's `timings` joins
-  that set.
-- **The buildings are under the gate** since PR #310: this phase's STOP
-  found the near buildings' weld 1–3 vertices a tile apart between two
-  machines, and until the bake's maths was made portable
-  (`lib/city/portable-math.ts`) their vertices and bytes, and the tileset
-  JSONs' bytes, were recorded only.
-- `datedLedger` keeps the committed date while no figure moves, so a
-  second run writes the same file.
+- `qa/ledger.json` (version 2) has `published`, `bytes`, `buildings`,
+  `counters` and `rasters`, all gated; `ledgerDiff` skips the paths of
+  `UNCOMPARED` with everything under them — today `dated` alone; a
+  section's recorded part joins by its path (`browser.readWith`).
+- **Every published file is in exactly one class** (`published`: `tiles`,
+  `boot` — the manifest, the tileset and the ground plate —, `site`,
+  `server`; each
+  site-wide row's bytes in `kinds`). The script lists the directory, not
+  the manifest: a file that no tile and no row of `SITE_FILES`
+  (`lib/city/ledger.ts`) names is an error, and so is an extension the
+  wire rule does not know, and so is a tile that names a file the set
+  `all` does not hold (a new extras key, a path out of the directory).
+  Nothing is left out of a sum: PR #310 made the
+  buildings' bytes the same on every machine, so the buildings, the
+  manifest and the tileset JSONs count at their full bytes.
+- **The sets are what a visit does**: `far`, `fine` (the fine level
+  beyond the ground detail's reach: the 1024² twins), `approached` (the
+  full rasters on top), `near`, `ask`, `all`, and `unvisited` (what a tile
+  names and no set fetches: the footprints); each on a desktop and, where
+  a phone reads other files, on a phone. The reads are the viewer's
+  `rasterFiles` over the kinds a level acquires, handed in as
+  `RasterReads`; `scripts/ledger.test.ts` fails when
+  `loadTerrainRasters`, `loadReachSet` or `buildDressing` fetch something
+  else than the sets count.
+- **The counters count code** (`lib/city/ledger-counters.ts`, each with
+  what it cannot see): `layerModules` the `*-layer.ts` modules wherever
+  they lie, in lines of code; `longestFunction` the longest top-level
+  function of the sources (the boot, however it is written, wrapped or
+  moved; a `.tsx` file is read with its JSX);
+  `bakeSeamModules` the bake modules whose code handles a tile's edge,
+  with each way's count; `upstreamWorkarounds` the register's entries in
+  `docs/rendering.md` and the marked comments.
+- **A further section** (as 091's raster table is; phase 2's browser
+  figures, 090's dressing baseline) is a module of its own beside
+  `lib/city/ledger.ts`, one more field of `Ledger` and one more key of
+  the `fresh` object in `run` (`scripts/ledger.ts`), measured from the
+  `site` and `root` that `run` is handed: `datedLedger` and `ledgerDiff`
+  take whatever they are handed and write a section where it was
+  measured. **A gated figure is a leaf**: one named key a number (or a
+  string), compared by its path and named by it when it moves — a list is
+  one leaf and moves whole, so a figure a reviewer should read by name is
+  a key, not an entry. What is recorded and not gated goes under a path
+  of `UNCOMPARED`. A switch of its own joins `FLAGS`; any other argument
+  is refused with exit 2, and nothing is written.
+- `datedLedger` keeps the committed date while no gated figure moves, so
+  a second run writes the same file.
 - `publishedFiles(site)` in `scripts/ledger.ts` is the one reader of the
-  published site (088 repoints it). Which rasters a level reads is the
-  viewer's `rasterFiles`, handed in as `RasterReads`; a change to that
-  rule moves the ledger by itself.
-- The wire rule gzips with Bun's zlib: a Bun upgrade may move the JSON
-  figures by a few bytes, and that diff is committed with the upgrade.
+  published site (088 repoints it); `run(argv, { root, site })` is the
+  script, which the tests run end to end on a fixture site; `main` is
+  `run` with an error printed as its message (exit 1).
+- The wire rule gzips text with Bun's zlib: the figure is that Bun's, not
+  what a host sends, and a Bun upgrade may move the JSON figures by a few
+  bytes — that diff is committed with the upgrade.
+- The tests are written from mutations of the code: every rule changed
+  once, each change failing a test (the PR says how many).
 - CI runs `bun scripts/ledger.ts --check` as the build-check shard's last
   step, after its e2e, whenever the build succeeded.
-- Baseline (Dresden): the spawn tile's fine level 6.94 MB in 29 files
-  (a phone's 6.64 MB in 28), its far set 4.69 MB in 10 (2.64 MB without
-  the far buildings), everything the manifest names 197.8 MB in 698 files
-  (135.5 MB without the buildings and the tileset JSONs); 17 dressing kinds, 27 layer
-  modules with 18 769 lines, `bootApp` 3 088 lines, 52 of 77 bake
-  modules on seams, 8 upstream workarounds. The figures are in the file
-  and in `docs/data-pipeline.md`, "Measuring what the browser downloads".
+- Baseline (Dresden): the spawn tile's fine level 5.45 MB in 29 files
+  beyond the reach (a phone's 5.31 MB in 28) and 7.92 MB in 34 once
+  approached (a phone's 7.52 MB in 30), its far set 4.69 MB in 10, the
+  tiles' files 193.6 MB in 641, the boot 39.8 kB in 3, 39 site-wide files
+  with 3.51 MB, 17 of the server's; 17 dressing kinds, 27 layer modules
+  with 14 420 lines of code, `bootApp` 2 354 lines of code, 58 of 84 bake
+  modules on seams, 10 registered upstream workarounds at 8 marked sites.
+  The figures are in the file and in `docs/data-pipeline.md`, "Measuring
+  what the browser downloads".
 
 ### Phase 2 — Figures a browser has to produce
 

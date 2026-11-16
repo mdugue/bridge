@@ -81,8 +81,6 @@ export interface BrowserFigures {
     note: string;
     /** the files only a worker fetched */
     workerOnly: JsWeight;
-    /** the named workers running when the set was cut */
-    workers: string[];
   };
   /** the phone's tile cache at the spawn, lite profile */
   phoneLiteSpawnCache: {
@@ -128,14 +126,12 @@ const jsWeight = (of: readonly { gzip: number }[]): JsWeight => ({
 
 /** The first load's figures: every file, and those only a worker fetched. */
 export function firstLoadFigures(
-  files: readonly { gzip: number; worker: boolean }[],
-  workers: readonly string[]
+  files: readonly { gzip: number; worker: boolean }[]
 ): BrowserFigures["firstLoad"] {
   return {
     note: FIRST_LOAD_NOTE,
     ...jsWeight(files),
     workerOnly: jsWeight(files.filter((f) => f.worker)),
-    workers: workers.toSorted(),
   };
 }
 
@@ -205,7 +201,7 @@ export function browserLedger(
   return {
     browser: {
       readWith: `${reading.browser}, ${reading.adapter}`,
-      firstLoad: firstLoadFigures(files, reading.workers),
+      firstLoad: firstLoadFigures(files),
       phoneLiteSpawnCache: phoneCache(reading.phone.tiles, logical),
     },
     timings: {

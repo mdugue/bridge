@@ -15,21 +15,17 @@ test("a script weighs its gzip -9 bytes, the same body the same figure", () => {
   expect(jsGzip(body)).toBe(jsGzip(new Uint8Array(body)));
 });
 
-test("the first load: every file, those only a worker fetched, the workers", () => {
+test("the first load: every file, and those only a worker fetched", () => {
   expect(
-    firstLoadFigures(
-      [
-        { gzip: 100, worker: false },
-        { gzip: 50, worker: true },
-        { gzip: 25, worker: true },
-      ],
-      ["scene", "ground"]
-    )
+    firstLoadFigures([
+      { gzip: 100, worker: false },
+      { gzip: 50, worker: true },
+      { gzip: 25, worker: true },
+    ])
   ).toMatchObject({
     files: 3,
     gzip: 175,
     workerOnly: { files: 2, gzip: 75 },
-    workers: ["ground", "scene"],
   });
 });
 

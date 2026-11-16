@@ -42,7 +42,7 @@ row and waits for the maintainer's word, as ADR 0047's exceptions do.
 |---|---|---|
 | **Faster on the device** | time to the first frame and to *ready*; CPU a landing tile costs the scene's thread; frames kept while tiles stream | a fine level's dressing 1.65–2.90 s on SwiftShader (PR #156, 2026-10-10); before they were sliced, on the phone profile: rails 1.3 s, trees 0.8–1.3 s, tram 0.7 s a tile (`docs/rendering.md`, "The frame budget") |
 | **Fewer bytes on the wire** | gzip bytes of the first load's JavaScript; bytes and requests of the spawn tile, of a fine level, of a far tile, of the site | 1.0 MB of JavaScript for `/dresden` (audit 2026-11-11); a tile 4.0–9.7 MB, Dresden ≈ 98.9 MB (`docs/data-pipeline.md`, measured 2026-09-25: stale, 087 measures again) |
-| **Less complexity** | kinds of side file and formats a tile has; lines of mesh building in the viewer; modules that handle a tile's seam; rules AGENTS.md has to state because nothing checks them | 17 dressing kinds, 4 hand-made binary formats beside GeoJSON; 27 `*-layer.ts` with 18 769 lines; 52 of 77 bake modules mention neighbours, seams or margins; `bootApp` 3 088 lines |
+| **Less complexity** | kinds of side file and formats a tile has; lines of mesh building in the viewer; modules that handle a tile's seam; rules AGENTS.md has to state because nothing checks them | 17 dressing kinds, 4 hand-made binary formats beside GeoJSON; 27 `*-layer.ts` with 14 420 lines of code (18 770 with comments and blank lines); 58 of 84 bake modules handle a tile's edge in their code (plan 092's five ways, or another read with a margin; "52 of 77" was the count of modules that *mention* neighbours, seams or margins, nine of which never touch an edge); `bootApp` 2 354 lines of code (3 090 as written) — as `qa/ledger.json` counts them since plan 087's hardening |
 
 Beside them, counted but not an aim of its own: a phone's memory
 (ADR 0047 stays — it must not grow), the repository's size (`data/`
@@ -137,6 +137,36 @@ types too, the rest of 095 last; 096 runs beside everything.
 - **Who does what.** Fable 5.2 coordinates, reviews, and builds the
   plans that are hard (088 from phase 1, 090, 092, 093, 094's
   register, the plates); Opus 5.5 builds the rest.
+- **Every milestone PR opens with two lists**: what it holds, with the
+  ledger's figures before and after; and the table below as it stands
+  that day.
+
+## What waits for the maintainer
+
+One list, kept by the coordinating session; a plan's own *Findings*
+holds the detail. A row leaves when its answer is written into the plan
+it belongs to. "Default" is what the series does if nothing is said.
+
+A question reaches the maintainer on its own, never inside a status
+report, and only with figures an independent review has read. It names
+the options, the recommendation and what happens if nothing is said.
+An answer closes it: a figure corrected later is written into the
+record, and the question comes back only if the correction would turn
+the trade around.
+
+| # | What | Default or recommendation | Needed before | Detail |
+|---|---|---|---|---|
+| 1 | The store the tiles are published to; whether the browser reads it through the site's own host or a second one; who publishes (three decisions) — and an account with a write credential for a ten-file trial | No default. The site stays where it is; only the tile files move. The team is on Vercel's Pro plan (read from its billing, 2026-11-16), so two of 088's four objections to Vercel Blob do not apply: the trial runs on Blob first (no new account, no new processor), then on R2 if Blob fails on the stored encoding or the cache header. Publishing by a CI job | Milestone 4 (088); 092's phase 4 if its format is binary | [088](./088-rewrite-tiles-as-a-data-product.md), *Findings*, decisions 1–3 |
+| 2 | A machine with a GPU that renders the plates (tier 2) | The maintainer's Mac, once a visible milestone; until then a visible PR is judged on CI's software renderer, which only says "changed" | Milestone 2 (the first that changes the picture) | [087](./087-rewrite-measuring-stick.md), "Two tiers" |
+| 3 | When the bake modules may be edited for their types (decision B): it re-runs every step on every tile | With 092's re-bake, so nothing is baked twice | 089's phases 3–4 | [089](./089-rewrite-python-types.md), "Decision B" |
+| 4 | The format of the bake store, if 092's phase 0 recommends one that needs a new dependency | None until the spike reports; GeoJSON under the schema stays possible | 092's phase 4 | [092](./092-rewrite-bake-store.md), phase 0 |
+| 5 | A full re-bake of every site on the maintainer's machine (an action, not a decision) | — | Milestone 5 (092) | [092](./092-rewrite-bake-store.md), *Status* |
+| 6 | How far the frame types go (095's part B2) | The narrower scope its spike recommends | Milestone 6 | [095](./095-rewrite-packages-and-frames.md), *Findings* |
+| 7 | The lines at which a phone's figures still ask for the quadtree (093's gate) | None: put to the maintainer with the figures after 090 and 091 | Milestone 6 | [093](./093-rewrite-streaming-quadtree.md) |
+
+Answered so far: the rails as a segment table (2026-11-16;
+[090](./090-rewrite-dressing-gpu-ready.md), "What the maintainer has
+granted").
 
 ## What each plan may assume of the others
 
