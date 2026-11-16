@@ -16,6 +16,7 @@
     "test:coverage": "bun test --parallel ./lib ./app ./scripts --coverage",
     "test:e2e": "playwright test",
     "shots": "SHOTS=1 playwright test e2e/snapshot-shot.spec.ts --headed",
+    "ledger": "bun scripts/ledger.ts",
     "verify": "bun run lint && bun run typecheck && bun run typecheck:tsc && bun run test",
     "docs:diagrams": "bun scripts/render-diagrams.ts",
     "docs:matrix": "bun scripts/docs-matrix.ts",
