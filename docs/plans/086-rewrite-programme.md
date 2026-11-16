@@ -65,21 +65,24 @@ Beside them, counted but not an aim of its own: a phone's memory
 
 | Plan | What is true afterwards | Effort | Needs |
 |---|---|---|---|
-| [087](./087-rewrite-measuring-stick.md) | Reference plates rendered on a real GPU and compared in CI; one ledger of bytes, requests, boot marks and tile costs that every later plan writes its before and after into | M, plus a GPU runner that runs | — |
-| [088](./088-rewrite-tiles-as-a-data-product.md) | The tileset is published to object storage under its content hashes and served compressed by a CDN; a lock file in git names it; the web build bakes nothing; `data/` leaves git but for a fixture | M, plus storage and traffic | 087 |
-| [089](./089-rewrite-python-types.md) | The bakes are type-checked in CI against a baseline that only shrinks | M | — |
+| [087](./087-rewrite-measuring-stick.md) | Reference views rendered on a real GPU and compared with main rendered on the same machine (no reference image is stored); one ledger of bytes, requests, counters, first-load JavaScript and a phone's tile bytes that gates CI and that every later plan writes its before and after into (timings are recorded, never gated); published tilesets compared by content | M, plus a machine with a GPU that keeps running | — |
+| [088](./088-rewrite-tiles-as-a-data-product.md) | The tileset is published to a store under its content hashes; a lock file in git names what a commit runs on; the web build bakes nothing; `data/` leaves git but for a fixture; one transport encoding in place of the pre-gzipped files, if its spike measures a gain | M, plus storage and traffic every month; three decisions of the maintainer first | 087 |
+| [089](./089-rewrite-python-types.md) | The bakes are type-checked in CI against a baseline that only shrinks | M (the checker and its baseline: S) | — |
 | [090](./090-rewrite-dressing-gpu-ready.md) | A tile's dressing arrives in the layout the GPU draws from: instance tables, line tables, baked parts; the viewer places nothing, slices nothing and parses no GeoJSON | L, a layer at a time | 087; 088 for the byte gates |
-| [091](./091-rewrite-rasters.md) | Data rasters travel as plain arrays, continuous ones as GPU-compressed textures; one raster stack a tile | S for the trial, M–L to roll out | 087, 088 |
-| [092](./092-rewrite-bake-store.md) | The bakes work on site-wide typed tables and cut tiles last; a step never rewrites another's file; one schema says what both languages read | L–XL, with a full re-bake of every site | 087, 088, 089 |
-| [093](./093-rewrite-streaming-quadtree.md) | The stream's tile is smaller than the bake's: a quadtree whose levels replace the raster twins — built only if a phone's numbers after 090 and 091 still ask for it | XL, the series' largest risk | 090, 091, 092, 094 |
-| [094](./094-rewrite-fixed-pipeline-set.md) | The clay's vertex buffers and inter-stage variables are counted by a test; every material variant is known at boot | S now, M before 093 | 087 |
+| [091](./091-rewrite-rasters.md) | Exact rasters (class ids, tables, packed channels) travel as plain arrays in their texture's layout, so the viewer carries no PNG decoder; a trial of block compression on one soft raster decides the others; fewer files and bindings a level | S for the table and the trial, M–L for what the numbers carry | 087, 088; 090 for the NDVI |
+| [092](./092-rewrite-bake-store.md) | The bakes read and write through one store — by extent, by owner — over site-wide typed tables of the vector features (rasters stay cut by window with a halo) and cut tiles at publishing; a step never rewrites another's file; one schema says what both languages read; the format decided by a spike | L–XL, with a full re-bake of every site | 087, 088, 089; leans on 090 |
+| [093](./093-rewrite-streaming-quadtree.md) | The stream's tile is smaller than the bake's: an explicit quadtree under each bake tile whose levels replace the raster twins — built only if a phone's numbers after 090 and 091 still ask for it, and only if a spike on one tile passes its kill criteria | XL, the series' largest risk | 087, 088, 090, 091, 092, 094 |
+| [094](./094-rewrite-fixed-pipeline-set.md) | The clay's vertex buffers and inter-stage variables are counted by a test; every material variant is known at boot, and a flight builds no pipeline after it | S now, M before 093 (cheaper after 090 and 091) | 087 |
 | [095](./095-rewrite-packages-and-frames.md) | The viewer is a package with one entrance; data-frame and scene-frame coordinates are different types; `bootApp` is owners, not one function | M–L, last | 090, 093 |
 | [096](./096-rewrite-heuristic-scores.md) | Each bake heuristic that guesses (roofs, dormers, windows, crowns) has a reference set and a score a bake PR must hold | M a family, open-ended | 087 |
 
-Order: 087 first, then 088 and 089 side by side, then 090 a layer at a
-time with 091's trial beside it, then 092, then the decision on 093.
-094's counting test goes at any time; 095 goes last; 096 runs beside
-everything.
+Order: 087 first, then 088 and 089's checker side by side, then 090 a
+layer at a time with 091's trial beside it, then 092, then the decision
+on 093. 089's edits to the bake modules wait until just before 092's
+re-bake: a step's key hashes its module's bytes
+(`step_cache.code_hash`), so an annotation re-runs that step on every
+tile of every site. 094's counting test goes at any time; 095's frame
+types too, the rest of 095 last; 096 runs beside everything.
 
 ## What each plan may assume of the others
 
@@ -88,12 +91,18 @@ others leave, not for today's alone. These are the joints.
 
 1. **Measure first.** Nothing that changes the picture merges before
    087's plates exist, and every plan writes its numbers into 087's
-   ledger. The reason is the series' own history: PR #156 (plan 074
+   ledger. A plate is compared with main rendered on the same machine,
+   so no reference image is kept anywhere; a PR with a *Snapshots*
+   section claims a change and the plates report it, a PR without one
+   claims none and a differing view fails it. The reason is the series' own history: PR #156 (plan 074
    part A's spike) has waited since 2026-10-11 for a look on a real
    GPU, and plan 019 since September.
 2. **Data leaves git before a binary hand-over format enters it**
    (088 before 092). GeoJSON's one merit is the diff a re-bake shows in
-   git; a Parquet file in git has neither a diff nor a delta.
+   git; a binary table in git has neither a diff nor a delta. Which
+   format it is, 092's spike decides: the pinned GDAL wheel writes
+   FlatGeobuf and GeoPackage but no Parquet, and GeoJSON under the one
+   schema is the fallback.
 3. **Bake where a thing stands, never how it looks** (090). Colour,
    season, picture style and the palette stay at runtime (ADRs 0010,
    0012: "a colour change is not a re-bake"). A baked record is
@@ -108,7 +117,9 @@ others leave, not for today's alone. These are the joints.
    The series aims at both, so 090 prefers a table the GPU expands
    (an instance, a line's segment) over baked triangles, and leaves
    what is large and derived — a BVH, a height index — to the workers
-   that build it today.
+   that build it today. Areas and irregular solids (ballast, platforms,
+   piers, basins) have no table smaller than their triangles: they are
+   baked nodes, each kind behind a stop on the level's bytes.
 6. **No worker pool.** Earlier advice named one ("the render thread
    builds nothing"). With 090 the scene's thread has nothing left to
    build; the slices (`lib/city/build-steps.ts`) go with the last
@@ -119,33 +130,56 @@ others leave, not for today's alone. These are the joints.
    format in one place and not in every baker a second time.
 8. **Format, site-wide tables and steps that overwrite nothing are one
    plan** (092): all three rewrite the same input and output layer of
-   every bake step. Together they cost less than apart, and they lose
-   the proof this repository leans on — "a cold bake publishes 0 new
-   files" — so 092 starts with a comparison by content (087 holds the
-   plates, 089 the types).
+   every bake step. Together they cost less than apart. The proof this repository leans
+   on — "a cold bake publishes 0 new files" — holds through 092's
+   schema, its own-output rule, its store and even its change of
+   format; only the last step, windows in place of tiles, changes
+   published bytes by design, and there a comparison by content takes
+   over: 087 compares two published tilesets, 092 its own tables with
+   today's files, and 087's plates watch the seams.
 9. **The quadtree is decided by numbers, not by this file** (093). It
    needs 092 (or every cut is sixteen times the seams), 090's one
    container a tile (or sixteen times the requests), 091 (levels in
    place of raster twins) and 094's register (more tiles arriving a
-   second). Plan 076 rejected implicit tiling "for now (15 tiles)";
-   093 reopens it under a gate: what a phone still pays after 090 and
+   second). Plan 076 rejected implicit tiling "for now (15 tiles)",
+   and 093 does not bring it back: the installed library's implicit
+   tiling keeps one content a tile and addresses by template, against
+   our hashed names, so the tree is explicit. What 093 reopens, under a
+   gate, is the smaller tile: what a phone still pays after 090 and
    091.
-10. **Raw rasters pay only with 088** (091): without a CDN's
-    compression a pre-gzipped array is a PNG by another name.
+10. **Raw rasters pay only with 088** (091): without a transport
+    encoding a pre-gzipped array is a PNG by another name. 088 measures
+    first what an encoding saves over files that are gzipped at level 9
+    already, and builds it only on a gain. Measured on one tile for
+    091: a plain array is smaller than its PNG for the exact rasters
+    and a third larger for the fields unless a row predictor comes
+    first — PNG's filters are one.
 11. **Packages follow the seams the other plans leave** (095). Regrouping
     699 files first would cross every open PR; after 090 the viewer's
-    edge is where the builders left.
+    edge is where the builders left. A move re-keys every bake (the
+    cache key hashes a module's path), so its proof is a build that
+    publishes 0 new files.
+12. **Block compression is the small lever** (091). The first advice
+    called GPU-compressed textures the largest unused one; 091's table
+    says otherwise: the rasters that tolerate it (NDVI, sky view,
+    horizon) are 4.7 MiB of the 40–60 MiB a phone holds for a fine
+    level, and three's KTX2 path saves nothing on a one-channel raster.
+    The weight is in the id rasters, which stay exact, and in the
+    colour splat painted from them. So 091 leads with plain arrays and
+    fewer bindings and keeps compression to a trial.
 
 ## Plans this series touches
 
 - **074 part A** (bake the static dressing) and its spike **PR #156**:
   taken over by 090, which starts from the spike's numbers.
 - **019** (the GPU checklist): 087 turns its reference views into
-  compared plates; 019's device checks by hand stay 019's.
+  compared plates and rewrites ADR 0018, which rejects pixel
+  comparison — on SwiftShader, where it stays rejected; whether a
+  picture is good, the two phones and the deploy host stay 019's.
 - **070** (raster diet, partial) and 074's backlog item "one raster
   stack per tile": continued by 091. 076's and 077's rejection of KTX2
-  stands for class rasters (block compression would change ids); 091
-  asks it only for rasters whose values are continuous.
+  stands for every exact raster (block compression would change ids);
+  091 tries blocks on one soft raster and lets the numbers decide.
 - **069** (streaming without stalls, partial): its open steps are
   re-read once 090 has taken the dressing off the tile path.
 - **021** (`/wissen` as a workspace package): 095 names the workspace's

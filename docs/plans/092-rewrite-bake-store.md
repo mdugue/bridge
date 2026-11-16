@@ -193,14 +193,14 @@ writer the maintainer approves, and the docs and skills listed under
 
 ### Phase 0 — Count, compare, choose (spike; nothing a bake writes changes)
 
-1. **Two comparers**, built here (087 holds plates and the ledger; if
-   it already has a comparer of published trees, use that one):
-   - `scripts/eval/compare-published.ts`: two `public/data/<site>`
-     trees by their `manifest.json`. Equal hashed names are equal
-     files; for the rest a JSON file is compared as canonical JSON
-     (keys sorted), anything else is listed as different. Exit 1 on a
-     difference.
-   - `scripts/eval/compare-bakes.py`, which today compares only the
+1. **Two comparers.**
+   - `scripts/compare-tilesets.ts` — plan 087's (its phase 5): two
+     published sites by their manifests; equal hashed names are equal
+     files, the rest are compared by content, a kind at a time. Use it
+     as it is; if 087's phase 5 has not landed, build it there, not
+     here. Below, "the published trees compare equal" means this
+     command exits 0.
+   - `scripts/eval/compare-bakes.py`, built out here: today it compares only the
      vegetation files against a git ref (`compare_points`,
      `compare_lines`, `compare_rasters`), widened to every kind and to
      two folders: rows matched by identity, order ignored; rows only
@@ -265,7 +265,7 @@ small step later".
 
 **Verify**: `bun run verify`, `bun run test:pipeline`; a test seeds a
 wrong key into one step's output and sees the write refuse it; a bake
-of Meißen publishes the same bytes (`compare-published.ts` exit 0).
+of Meißen publishes the same bytes (`compare-tilesets.ts` exit 0).
 Ledger: copies of a shape per kind (was: dict, schema or interface,
 tests), kinds still cast (target 0).
 
@@ -296,7 +296,7 @@ table, joined where it is read:
 
 **Verify**: re-bake Meißen, then every site; `compare-bakes.py` against
 the site's current data: 0 differences in every handed-over file;
-`compare-published.ts`: equal. Ledger: lines of `step_cache.py`, steps
+`compare-tilesets.ts`: equal. Ledger: lines of `step_cache.py`, steps
 that write another's path (4 → 0).
 
 ### Phase 3 — One way to read and one way to write (files still as they are)
@@ -324,7 +324,7 @@ halo the step needs and `write`. The backend still writes today's
 per-tile GeoJSON, so both comparers must say: nothing changed.
 
 **Verify** (each family): `bun run test:pipeline`; re-bake every site;
-`compare-bakes.py` 0 differences; `compare-published.ts` equal. Ledger:
+`compare-bakes.py` 0 differences; `compare-tilesets.ts` equal. Ledger:
 modules matching `\.neighbours()` and `owns(` (14 and 20 at
 `5dfa300d`).
 
@@ -335,7 +335,7 @@ a kind, joint 7) read it and hand back rows in the schema's key order,
 which is the files' order today — pinned by a test, because the baked
 bytes follow it. A site at a time, smallest first: Meißen, Grimma,
 Unna, Hamburg, München, Leipzig, Dresden. For each: old and new side
-by side in the site's folder; `compare-published.ts` on a build from
+by side in the site's folder; `compare-tilesets.ts` on a build from
 each must say equal; then the old files go and the site's data is
 published the way 088 set up. The four committed-data tests read
 through the store's reader — over 088's fixture in CI, over every site

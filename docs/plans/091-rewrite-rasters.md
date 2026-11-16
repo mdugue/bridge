@@ -142,23 +142,20 @@ Plain arrays are smaller than PNG for the exact rasters and larger for
 the fields unless a row predictor comes first: PNG's filters are a
 predictor.
 
-**What three r187 offers** (read in `node_modules/three`, to be read
-again by the executor):
+**What three r187 offers** (read in `node_modules/three`; the executor
+reads it again):
 
-- `WebGPUBackend` asks the adapter for every feature it has
-  (`requiredFeatures: supportedFeatures`), and
+- `WebGPUBackend` asks the adapter for every feature it has, and
   `renderer.hasFeature("texture-compression-bc" | "-etc2" | "-astc")`
-  answers after `await renderer.init()`.
-- `WebGPUTextureUtils` maps `RED_RGTC1_Format` and
-  `RED_GREEN_RGTC2_Format` to BC4 and BC5, `R11_EAC_Format` and
-  `RG11_EAC_Format` to EAC, and takes `CompressedTexture` and
-  `CompressedArrayTexture` with their mip levels as given.
+  answers after `await renderer.init()`. `WebGPUTextureUtils` maps
+  `RED_RGTC1_Format` and `RED_GREEN_RGTC2_Format` to BC4 and BC5,
+  `R11_EAC_Format` and `RG11_EAC_Format` to EAC, and uploads a
+  `CompressedTexture`'s or `CompressedArrayTexture`'s mips as given.
 - `KTX2Loader` (`examples/jsm/loaders/KTX2Loader.js`) transcodes Basis
-  only to colour formats — ASTC 4×4, BC7, DXT, ETC2 RGBA — which are
-  eight bits a texel: **no saving for a one-channel raster**. It reads
-  a KTX2 file that already holds BC4, BC5 or EAC blocks without the
-  transcoder. Its transcoder is 527 kB of WebAssembly and 57 kB of
-  script, and it starts workers of its own.
+  only to colour formats — ASTC 4×4, BC7, DXT, ETC2 RGBA — at eight
+  bits a texel: **no saving for a one-channel raster**. A KTX2 file
+  that already holds BC4, BC5 or EAC blocks it reads without the
+  transcoder (527 kB of WebAssembly, 57 kB of script, its own workers).
 
 **Earlier decisions**: plan 076 and
 [077](./077-one-rasters-module.md) rejected KTX2 for the rasters
@@ -316,22 +313,21 @@ Spike first, on the spawn tile and one tile without sports grounds:
 1. **Files.** One file for what both levels and the buildings share
    (the coarse class raster, `ndvi`, `svf`, `horizon`) and one for a
    fine level's own, per reach and tier that reads a different list
-   today (near, far, a phone's). `shared-rasters.ts` keeps sharing by
-   file name; a level must never download what it does not read today.
+   today. `shared-rasters.ts` keeps sharing by file name; a level never
+   downloads what it does not read today.
 2. **Bindings.** Group by sampler where the sizes agree: `surface`,
    `sport` and `markings` as layers of one array texture, the two
-   tables as one, `ndvi` and `svf` as two layers. A layer that is
-   absent must cost no memory — the array holds only the layers a tile
-   has, and a slot uniform says which layer is which.
+   tables as one, `ndvi` and `svf` as two layers. An absent layer must
+   cost no memory: the array holds only the layers a tile has, and a
+   slot uniform says which is which.
 3. **Variants.** With layers and a presence uniform the ground needs
    fewer builds than `splatVariant`'s. Per-pixel graphs use `mix` and
    `step`, never `select` (AGENTS.md); measure the frame.
 
-**Verify**: requests and bindings of a fine level, counted by a test
-and in the ledger; `bun run test:e2e` → all pass; plates within noise;
-the frame's GPU time on the reference phone not above its figure
-before. **Ledger**: files, bindings, distinct ground variants, frame
-time.
+**Verify**: a fine level's requests and bindings, counted by a test;
+`bun run test:e2e` → all pass; plates within noise; the frame's GPU
+time on the reference phone not above its figure before. **Ledger**:
+files, bindings, distinct ground variants, frame time.
 
 ## Test plan
 
