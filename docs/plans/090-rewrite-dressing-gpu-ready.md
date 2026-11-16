@@ -401,7 +401,9 @@ row against Phase 0's baseline.
   or a build a tile, or a variant needs a ninth vertex buffer or a
   seventeenth inter-stage variable. Report the layout that failed.
 - Any phase: a fine level's wire bytes grow on a measured tile, or a
-  phone's bytes grow (ADR 0047). Leave that kind where it was.
+  phone's bytes grow (ADR 0047). Leave that kind where it was — unless
+  the maintainer has granted that kind's bytes by name (below: one
+  grant so far).
 - A ground-join budget would have to rise.
 - A plate differs beyond 087's tolerance and the cause is not found in
   one attempt: report with both plates and the snapshot JSON.
@@ -410,6 +412,24 @@ row against Phase 0's baseline.
 - The dressing's compile, once it is uploads only, still holds a
   tile-renderer parse slot on a real GPU (the spike's open question):
   keep it a late part and report the timing.
+
+## What the maintainer has granted
+
+A fine level's wire bytes may grow only on the maintainer's word, a kind
+at a time. Each grant is recorded here by whoever has that word at first
+hand; a grant is never widened to another kind.
+
+- **2026-11-16 — the rails of `rail` and `tram` as a segment table.**
+  Phase 0 measured the rails three ways on the yards' tile (PR #319;
+  wire gzipped / GPU): built at runtime as today 34.7 kB / 7.08 MB;
+  baked triangles as PR #156 did 364 kB / 6.09 MB, on a 3 cm position
+  step; a segment table the GPU expands 72.5 kB / 0.15 MB, on a 4 mm
+  step. The table costs 38 kB more on the wire on that tile than
+  today's files and takes about 6.9 MB off the GPU and the rail
+  builder's time (840 ms on the software renderer) off the scene's
+  thread. Put to the maintainer by the coordinating session and
+  accepted ("Ok", 2026-11-16). It covers the rails' table on any tile;
+  it does not cover ballast, platforms, wires or any other kind.
 
 ## Maintenance notes
 
