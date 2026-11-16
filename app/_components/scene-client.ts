@@ -104,7 +104,7 @@ const TOLD = [
 type Told = (typeof TOLD)[number];
 
 /** The calls that answer: the HUD waits on a promise. */
-const ASKED = [
+export const ASKED = [
   "captureImage",
   "captureViewpoint",
   "disposeForReload",
@@ -113,6 +113,7 @@ const ASKED = [
   "getGpuDebug",
   "getPipelineBudget",
   "getRenderInfo",
+  "getTimings",
   "inquireAt",
   "releaseGpu",
   "selectCandidate",

@@ -1552,6 +1552,64 @@ three soft fields (4.7, 42.4 %), which both levels of a tile share.
 Beyond the ground detail's reach a phone's fine level reads the 1024²
 twins of the paving and markings (4 MiB each) and the edges (2 MiB).
 
+### What a browser reads
+
+`bun run ledger -- --browser` (plan 087, phase 2) adds what only a
+browser can say, read by `e2e/ledger.spec.ts` (ignored unless `LEDGER=1`,
+never retried) at `/dresden?scene=lite` from a `NEXT_PUBLIC_POC_DEBUG=1`
+production build on SwiftShader — a running `next start` is reused, else
+Playwright builds and starts one. The spec hands what it read to
+`scripts/ledger-browser.ts`, which weighs it with the pinned Bun — and
+refuses a build environment that inlines what CI does not set
+(`NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_RELEASE`, `VERCEL_GIT_COMMIT_SHA`, …)
+or a running server that does not serve `.next`'s current build; the
+shapes are `lib/city/ledger-browser.ts`, and each gated figure carries a
+`note` saying what it is. Both are gated exactly. CI's build-check shard
+runs the check with `--browser` wherever its e2e half runs; without the
+flag the committed figures stand and `--check` says they were not
+compared.
+
+- **The first load's JavaScript** (`browser.firstLoad`): every
+  `/_next/static/*.js` the page and its workers fetch until the set is
+  cut — `ready`, the named workers `scene`, `ground` and `niches`
+  running, then five seconds without a new script — and a second read
+  five seconds later must name the same files (the BVH worker is not in
+  it: it starts at the first move near buildings). Each raw body is
+  gzipped at level 9 by the pinned Bun (plan 074's method, the same
+  `scene=lite` page). `workerOnly` is the files no page fetch named (the
+  page's resource timing), whichever worker fetched them: not the scene's
+  JavaScript, which the page shares. The chunks' names, content hashes
+  that move with any change, are in `timings.firstLoad`.
+- **A phone's tile cache** (`browser.phoneLiteSpawnCache`): a context
+  with `isMobile` and `hasTouch`, the scene's own tier asserted `mobile`;
+  the cache's own accounting (`calculateBytesUsed`, as its budget counts
+  it) of its loaded contents, each by the manifest's logical name, once
+  two reads four seconds apart (more than a late part's compile wait)
+  agree with no compile queued. Under the lite profile that is the
+  spawn tile alone, one of fifteen. It is not the phone's memory: what a
+  tile holds on the GPU that never reaches `calculateBytesUsed` moves
+  nothing here, and three's `info.memory` at `ready`
+  (`timings.phoneHeld`) is recorded only, since two reads of one build
+  differ by a few geometries, textures and programs that come and go.
+- **The timings** (`timings`): `getTimings()` — the scene's
+  `streamTimings.summary()` (`app/_components/stream-timing.ts`) — at
+  `ready` on both pages: the `boot:*` marks, `dressing:build`,
+  `tile:compile`, and `longtask` where the scene counts it (`?trace=1`).
+  Recorded with the machine and the day, never compared: on SwiftShader
+  a timing depends on the runner drawn. `browser.readWith` names the
+  browser and adapter beside the figures, uncompared too.
+
+Baseline, 2026-11-16 (linux-x64 cloud container, Bun 1.4.4, Chromium 153
+on SwiftShader): the first load fetches 42 scripts, 1 103 124 bytes gzip
+-9 (1.10 MB; plan 074 counted 904 619 on 2026-10-10, gzipped elsewhere),
+8 of them, 34 829 bytes, by the three workers alone. A phone's cache at
+the spawn holds four loaded contents — the tile's two terrain levels,
+94.6 MB and 24.7 MB with what they carry, its near and far buildings,
+27.0 MB and 12.6 MB — 159.0 MB in all. Its boot on SwiftShader:
+`boot:spawn-wait` 3.6–4.5 s, `boot:veil-to-loaded` 4.2–4.3 s,
+`dressing:build` 0.9–1.1 s for two tiles, `tile:compile` 9–12 s over four
+compiles (each capped at 3 s).
+
 ## Provenance
 
 `data/dresden/provenance.json` is the machine-readable record for Dresden:

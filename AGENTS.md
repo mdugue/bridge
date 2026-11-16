@@ -38,7 +38,8 @@ bun run test:e2e        # playwright against a production build
 bun run shots           # real-GPU plates of shots/*.json (headed)
 bun run plates          # the QA views of the merge base against the head's,
                         # diffed (SHOTS_SMALL=1: CI's tier on SwiftShader)
-bun run ledger          # qa/ledger.json: bytes, requests, counters (-- --check: CI)
+bun run ledger          # qa/ledger.json: bytes, requests, counters (-- --check: CI;
+                        # -- --browser: first-load JS, a phone's tiles, timings)
 bun run site <site>     # where a site stands (--all: every site)
 bun run fetch <site>    # downloads → data/_raw/<provider>/, sources → data/<site>/
 bun run bake <site>     # offline bakes [tile…] [--step X] [--jobs N] [--force]
