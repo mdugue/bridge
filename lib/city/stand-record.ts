@@ -6,9 +6,13 @@
  * buffer: the viewer makes a view, never a matrix
  * (app/_components/instancing.ts `Instances.ofStands`).
  *
- *   word 0–2   x, y, z   the place in the viewer's Y-up frame, in steps of
- *                        STAND_STEP_M from the table's origin (a tile's
- *                        box: 2 048 m a side, 3 cm a step)
+ *   word 0–2   x, y, z   the place in the viewer's Y-up frame from the
+ *                        table's origin: x and z in steps of STAND_STEP_M
+ *                        (a tile's box: 2 048 m a side, 3 cm a step), the
+ *                        height in STAND_STEP_Y_M (256 m of relief, 4 mm
+ *                        a step: a foot's sink is 5 cm at the least,
+ *                        lib/city/ground-join.ts `SINK`, and half a plan
+ *                        step in height would be a third of it)
  *   word 3     turn      about the vertical, 0..2π over 0..65536
  *   word 4–6   sx, sy, sz  the scale of the set's geometry, × STAND_SCALE_UNIT
  *   word 7     spare     (a second turn, a lean, a drop: the kind's own)
@@ -22,6 +26,10 @@
  * word (`standByte`). The origin reaches the shader as a uniform of the
  * drawn object, so every table of one material shares one build.
  *
+ * A value a record cannot hold is never bent in silence: `writeStand`
+ * counts every field it had to clamp, and a build that packs a table
+ * fails on any (`packStands`, `strict`).
+ *
  * No THREE, no DOM: the build writes it, the viewer and the tests read it.
  */
 
@@ -29,8 +37,10 @@
 export const STAND_RECORD_BYTES = 20;
 /** 16-bit words a record. */
 export const STAND_RECORD_WORDS = STAND_RECORD_BYTES / 2;
-/** One step of a record's place (m): 65 535 steps span 2 048 m. */
+/** One step of a record's x and z (m): 65 535 steps span 2 048 m. */
 export const STAND_STEP_M = 1 / 32;
+/** One step of its height (m): 256 m of relief a table. */
+export const STAND_STEP_Y_M = 1 / 256;
 /** A record's scale is in units of 1 / STAND_SCALE_UNIT (up to 64×). */
 export const STAND_SCALE_UNIT = 1024;
 /** The turn's full circle. */
@@ -65,9 +75,23 @@ export interface Stand {
 
 const TAU = Math.PI * 2;
 const WORD_MAX = 65_535;
-const word = (v: number): number =>
-  Math.min(Math.max(Math.round(v), 0), WORD_MAX);
-const byte = (v: number): number => Math.min(Math.max(Math.round(v), 0), 255);
+
+/** Fields the writes had to bend into their range (a place outside the
+ *  table's box, a scale of 64 or more or one too small to tell from
+ *  nothing, a byte outside 0..255). */
+export interface StandPackReport {
+  clamped: number;
+}
+
+/** `v` as a field of at most `max`, counted in `report` where it had to
+ *  be bent: out of range, or a scale that is not nothing rounded to 0. */
+function field(v: number, max: number, report: StandPackReport): number {
+  const rounded = Math.round(v);
+  if (rounded < 0 || rounded > max) {
+    report.clamped += 1;
+  }
+  return Math.min(Math.max(rounded, 0), max);
+}
 
 /** A table's origin for `stands`: the corner all of them lie beyond, on
  *  whole metres (a tile's own box in a published table). */
@@ -89,25 +113,33 @@ export function standOrigin(
     : [Math.floor(origin[0]), Math.floor(origin[1]), Math.floor(origin[2])];
 }
 
-/** Writes `stand` as record `index` of `words`, its place from `origin`. */
+/** Writes `stand` as record `index` of `words`, its place from `origin`;
+ *  counts in `report` every field it had to bend. */
 export function writeStand(
   words: Uint16Array,
   index: number,
   stand: Stand,
-  origin: readonly [number, number, number]
+  origin: readonly [number, number, number],
+  counted?: StandPackReport
 ): void {
+  const report = counted ?? { clamped: 0 };
   const at = index * STAND_RECORD_WORDS;
+  const word = (v: number) => field(v, WORD_MAX, report);
+  const byte = (v: number) => field(v, 255, report);
   words[at] = word((stand.x - origin[0]) / STAND_STEP_M);
-  words[at + 1] = word((stand.y - origin[1]) / STAND_STEP_M);
+  words[at + 1] = word((stand.y - origin[1]) / STAND_STEP_Y_M);
   words[at + 2] = word((stand.z - origin[2]) / STAND_STEP_M);
   const turn = (((stand.turn % TAU) + TAU) % TAU) / TAU;
   // (a full circle is no turn: 65 536 wraps to 0)
   words[at + STAND_WORD.turn] =
     Math.round(turn * STAND_TURN_UNIT) % STAND_TURN_UNIT;
   for (let axis = 0; axis < 3; axis += 1) {
-    words[at + STAND_WORD.scale + axis] = word(
-      stand.scale[axis] * STAND_SCALE_UNIT
-    );
+    const scaled = stand.scale[axis] * STAND_SCALE_UNIT;
+    if (scaled > 0 && Math.round(scaled) === 0) {
+      // too small to tell from nothing: the thing would vanish
+      report.clamped += 1;
+    }
+    words[at + STAND_WORD.scale + axis] = word(scaled);
   }
   words[at + STAND_WORD.spare] = word(stand.spare ?? 0);
   const [k0, k1] = stand.kind ?? [0, 0];
@@ -116,14 +148,23 @@ export function writeStand(
   words[at + STAND_WORD.more] = byte(m0) | (byte(m1) << 8);
 }
 
-/** `stands` as a table over its own buffer. */
+/** `stands` as a table over its own buffer. `report` counts the fields
+ *  that had to be bent; with `strict` (a build) any is an error. */
 export function packStands(
   stands: readonly Stand[],
-  origin: readonly [number, number, number]
+  origin: readonly [number, number, number],
+  counted?: StandPackReport,
+  strict = false
 ): Uint16Array<ArrayBuffer> {
+  const report = counted ?? { clamped: 0 };
   const words = new Uint16Array(stands.length * STAND_RECORD_WORDS);
   for (let i = 0; i < stands.length; i += 1) {
-    writeStand(words, i, stands[i], origin);
+    writeStand(words, i, stands[i], origin, report);
+  }
+  if (strict && report.clamped > 0) {
+    throw new Error(
+      `stand record: ${report.clamped} fields do not fit (a place outside the table's box, a scale out of range, a byte outside 0..255)`
+    );
   }
   return words;
 }
@@ -139,7 +180,7 @@ export function standAt(
   const more = words[at + STAND_WORD.more];
   return {
     x: origin[0] + words[at] * STAND_STEP_M,
-    y: origin[1] + words[at + 1] * STAND_STEP_M,
+    y: origin[1] + words[at + 1] * STAND_STEP_Y_M,
     z: origin[2] + words[at + 2] * STAND_STEP_M,
     turn: (words[at + STAND_WORD.turn] / STAND_TURN_UNIT) * TAU,
     scale: [

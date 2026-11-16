@@ -30,6 +30,7 @@ import {
   STAND_RECORD_WORDS,
   STAND_SCALE_UNIT,
   STAND_STEP_M,
+  STAND_STEP_Y_M,
   STAND_TURN_UNIT,
   STAND_WORD,
 } from "@/lib/city/stand-record";
@@ -342,7 +343,9 @@ function standMatrixNode() {
   const c = cos(angle);
   const s = sin(angle);
   const scale = size.xyz.mul(1 / STAND_SCALE_UNIT);
-  const at = tableOrigin.add(place.xyz.mul(STAND_STEP_M));
+  const at = tableOrigin.add(
+    place.xyz.mul(vec3(STAND_STEP_M, STAND_STEP_Y_M, STAND_STEP_M))
+  );
   return mat4(
     vec4(c.mul(scale.x), 0, s.negate().mul(scale.x), 0),
     vec4(0, scale.y, 0, 0),

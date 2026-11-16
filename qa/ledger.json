@@ -309,7 +309,7 @@
     ],
     "layerModules": {
       "files": 27,
-      "lines": 18878
+      "lines": 18883
     },
     "bootAppLines": 3094,
     "bakeSeamModules": {
@@ -318,119 +318,6 @@
     },
     "upstreamWorkarounds": 8
   },
-  "dressing": [
-    {
-      "tile": "33412_5656_2_sn",
-      "what": "spawn",
-      "fine": {
-        "bytes": 249125,
-        "files": 18,
-        "kinds": {
-          "bridge": 1053,
-          "canopy": 40495,
-          "canopyx": 43036,
-          "cultivated": 772,
-          "furniture": 25898,
-          "lamps": 3733,
-          "lowveg": 4252,
-          "mly": 9314,
-          "monuments": 5973,
-          "platform": 796,
-          "rail": 188,
-          "railarea": 193,
-          "riverside": 1431,
-          "sportTable": 1332,
-          "traffic": 8015,
-          "tram": 16963,
-          "trees": 84150,
-          "vegrows": 1531
-        }
-      },
-      "coarse": {
-        "bytes": 84944,
-        "files": 3,
-        "kinds": {
-          "bridge": 1053,
-          "crowns": 75876,
-          "traffic": 8015
-        }
-      }
-    },
-    {
-      "tile": "33416_5658_2_sn",
-      "what": "forest",
-      "fine": {
-        "bytes": 496855,
-        "files": 18,
-        "kinds": {
-          "bridge": 162,
-          "canopy": 468887,
-          "canopyx": 22869,
-          "cultivated": 162,
-          "furniture": 345,
-          "lamps": 162,
-          "lowveg": 191,
-          "mly": 153,
-          "monuments": 561,
-          "platform": 159,
-          "rail": 188,
-          "railarea": 193,
-          "riverside": 162,
-          "sportTable": 620,
-          "traffic": 614,
-          "tram": 162,
-          "trees": 535,
-          "vegrows": 730
-        }
-      },
-      "coarse": {
-        "bytes": 398235,
-        "files": 3,
-        "kinds": {
-          "bridge": 162,
-          "crowns": 397459,
-          "traffic": 614
-        }
-      }
-    },
-    {
-      "tile": "33410_5656_2_sn",
-      "what": "yards",
-      "fine": {
-        "bytes": 275994,
-        "files": 18,
-        "kinds": {
-          "bridge": 5311,
-          "canopy": 56529,
-          "canopyx": 25106,
-          "cultivated": 557,
-          "furniture": 29202,
-          "lamps": 5544,
-          "lowveg": 1730,
-          "mly": 10937,
-          "monuments": 14864,
-          "platform": 5515,
-          "rail": 12840,
-          "railarea": 9839,
-          "riverside": 1413,
-          "sportTable": 1906,
-          "traffic": 7761,
-          "tram": 35801,
-          "trees": 49947,
-          "vegrows": 1192
-        }
-      },
-      "coarse": {
-        "bytes": 78626,
-        "files": 3,
-        "kinds": {
-          "bridge": 5311,
-          "crowns": 65554,
-          "traffic": 7761
-        }
-      }
-    }
-  ],
   "rasters": {
     "rule": "Per site, from its published files: each raster and table artifact's files, wire bytes (as `wire`) and decoded texture shapes; each kind's GPU bytes on the spawn tile and the largest over the tiles, per tier and level — the fine level near the camera (`fine`) and beyond the ground detail's reach (`fineFar`, the far twins), the coarse level — by the viewer's `rasterFiles` and `textureBytes` (the float tables are not weighed, as in the viewer); the fine level by sort at both reaches, the colour splat painted from the classes apart; the share of texels the sparse rasters carry anything in, and of their bounding box, against the full tile raster, over the tiles whose fine level holds the raster on a desktop; the distinct ground programs (`splatVariant` keys) per tier. Gated: every figure is a function of the tree.",
     "sorts": {
@@ -4238,6 +4125,119 @@
       }
     }
   },
+  "dressing": [
+    {
+      "tile": "33412_5656_2_sn",
+      "what": "spawn",
+      "fine": {
+        "bytes": 249125,
+        "files": 18,
+        "kinds": {
+          "bridge": 1053,
+          "canopy": 40495,
+          "canopyx": 43036,
+          "cultivated": 772,
+          "furniture": 25898,
+          "lamps": 3733,
+          "lowveg": 4252,
+          "mly": 9314,
+          "monuments": 5973,
+          "platform": 796,
+          "rail": 188,
+          "railarea": 193,
+          "riverside": 1431,
+          "sportTable": 1332,
+          "traffic": 8015,
+          "tram": 16963,
+          "trees": 84150,
+          "vegrows": 1531
+        }
+      },
+      "coarse": {
+        "bytes": 84944,
+        "files": 3,
+        "kinds": {
+          "bridge": 1053,
+          "crowns": 75876,
+          "traffic": 8015
+        }
+      }
+    },
+    {
+      "tile": "33416_5658_2_sn",
+      "what": "forest",
+      "fine": {
+        "bytes": 496855,
+        "files": 18,
+        "kinds": {
+          "bridge": 162,
+          "canopy": 468887,
+          "canopyx": 22869,
+          "cultivated": 162,
+          "furniture": 345,
+          "lamps": 162,
+          "lowveg": 191,
+          "mly": 153,
+          "monuments": 561,
+          "platform": 159,
+          "rail": 188,
+          "railarea": 193,
+          "riverside": 162,
+          "sportTable": 620,
+          "traffic": 614,
+          "tram": 162,
+          "trees": 535,
+          "vegrows": 730
+        }
+      },
+      "coarse": {
+        "bytes": 398235,
+        "files": 3,
+        "kinds": {
+          "bridge": 162,
+          "crowns": 397459,
+          "traffic": 614
+        }
+      }
+    },
+    {
+      "tile": "33410_5656_2_sn",
+      "what": "yards",
+      "fine": {
+        "bytes": 275994,
+        "files": 18,
+        "kinds": {
+          "bridge": 5311,
+          "canopy": 56529,
+          "canopyx": 25106,
+          "cultivated": 557,
+          "furniture": 29202,
+          "lamps": 5544,
+          "lowveg": 1730,
+          "mly": 10937,
+          "monuments": 14864,
+          "platform": 5515,
+          "rail": 12840,
+          "railarea": 9839,
+          "riverside": 1413,
+          "sportTable": 1906,
+          "traffic": 7761,
+          "tram": 35801,
+          "trees": 49947,
+          "vegrows": 1192
+        }
+      },
+      "coarse": {
+        "bytes": 78626,
+        "files": 3,
+        "kinds": {
+          "bridge": 5311,
+          "crowns": 65554,
+          "traffic": 7761
+        }
+      }
+    }
+  ],
   "dressingRecorded": {
     "note": "Recorded, never compared (plan 090, phase 0): a browser's timings and cache bytes on a software renderer say which builder is heavy, not what a phone pays; the spikes' figures are those of the day and machine named in each.",
     "muenchen": {
@@ -4740,11 +4740,15 @@
           },
           "record": {
             "recordBytes": 20,
-            "wire": 73124,
+            "wire": 75260,
             "raw": 100420,
             "gpuPlacementBytes": 100400,
-            "stepM": 0.03125,
-            "worstPlaceM": 0.0236,
+            "stepM": {
+              "plan": 0.03125,
+              "height": 0.00390625
+            },
+            "fieldsOutOfRange": 0,
+            "worstPlaceM": 0.0178,
             "worstScaleShare": 0.0011,
             "scalesOutOfRange": 0
           }
@@ -4763,11 +4767,15 @@
           },
           "record": {
             "recordBytes": 20,
-            "wire": 407597,
+            "wire": 424001,
             "raw": 554740,
             "gpuPlacementBytes": 554720,
-            "stepM": 0.03125,
-            "worstPlaceM": 0.0236,
+            "stepM": {
+              "plan": 0.03125,
+              "height": 0.00390625
+            },
+            "fieldsOutOfRange": 0,
+            "worstPlaceM": 0.0179,
             "worstScaleShare": 0.0012,
             "scalesOutOfRange": 0
           }
@@ -4786,11 +4794,15 @@
           },
           "record": {
             "recordBytes": 20,
-            "wire": 65152,
+            "wire": 66666,
             "raw": 89360,
             "gpuPlacementBytes": 89340,
-            "stepM": 0.03125,
-            "worstPlaceM": 0.0236,
+            "stepM": {
+              "plan": 0.03125,
+              "height": 0.00390625
+            },
+            "fieldsOutOfRange": 0,
+            "worstPlaceM": 0.0178,
             "worstScaleShare": 0.0013,
             "scalesOutOfRange": 0
           }
@@ -4809,11 +4821,15 @@
           },
           "record": {
             "recordBytes": 20,
-            "wire": 49778,
+            "wire": 50655,
             "raw": 66040,
             "gpuPlacementBytes": 66020,
-            "stepM": 0.03125,
-            "worstPlaceM": 0.0236,
+            "stepM": {
+              "plan": 0.03125,
+              "height": 0.00390625
+            },
+            "fieldsOutOfRange": 0,
+            "worstPlaceM": 0.0178,
             "worstScaleShare": 0.0016,
             "scalesOutOfRange": 0
           }
@@ -4822,9 +4838,13 @@
       "probe": {
         "three": "187",
         "stands": {
+          "standBytes": {
+            "byte1Of200": 229,
+            "byte3Of255": 255
+          },
           "litMatrices": 10546,
-          "litRecords": 10535,
-          "differing": 131,
+          "litRecords": 10538,
+          "differing": 118,
           "buildsForASecondMatrixSet": 0,
           "buildsForASecondRecordSet": 0,
           "matrices": {
@@ -4852,13 +4872,13 @@
         },
         "coarseCrowns": {
           "crowns": 5020,
-          "sets": 102,
+          "sets": 103,
           "litMatrices": 8424,
-          "litRecords": 8412,
-          "differing": 291,
+          "litRecords": 8409,
+          "differing": 285,
           "buildsForTheOtherRecordSets": 3,
           "placementBytesMatrices": 321280,
-          "placementBytesRecords": 98600,
+          "placementBytesRecords": 100400,
           "matrices": {
             "attributes": [
               "position: vec3<f32>",
@@ -4974,7 +4994,7 @@
             "errors": [
               "THREE.WebGPUAttributeUtils: Vertex format not supported yet.",
               "THREE.WebGPUAttributeUtils: Vertex format not supported yet.",
-              "THREE.WebGPURenderer: Async render pipeline creation failed (renderPipeline_MeshBasicNodeMaterial_28): Failed to execute 'createRenderPipelineAsync' on 'GPUDevice': Failed to read the 'vertex' property from 'GPURenderPipelineDescriptor': Failed to read the 'buffers' property from 'GPUVertexState': F",
+              "THREE.WebGPURenderer: Async render pipeline creation failed (renderPipeline_MeshBasicNodeMaterial_30): Failed to execute 'createRenderPipelineAsync' on 'GPUDevice': Failed to read the 'vertex' property from 'GPURenderPipelineDescriptor': Failed to read the 'buffers' property from 'GPUVertexState': F",
               "THREE.WebGPUAttributeUtils: Vertex format not supported yet."
             ],
             "threw": ""
@@ -5013,7 +5033,7 @@
         "errors": [
           "THREE.WebGPUAttributeUtils: Vertex format not supported yet.",
           "THREE.WebGPUAttributeUtils: Vertex format not supported yet.",
-          "THREE.WebGPURenderer: Async render pipeline creation failed (renderPipeline_MeshBasicNodeMaterial_28): Failed to execute 'createRenderPipelineAsync' on 'GPUDevice': Failed to read the 'vertex' property from 'GPURenderPipelineDescriptor': Failed to read the 'buffers' property from 'GPUVertexState': F",
+          "THREE.WebGPURenderer: Async render pipeline creation failed (renderPipeline_MeshBasicNodeMaterial_30): Failed to execute 'createRenderPipelineAsync' on 'GPUDevice': Failed to read the 'vertex' property from 'GPURenderPipelineDescriptor': Failed to read the 'buffers' property from 'GPUVertexState': F",
           "THREE.WebGPUAttributeUtils: Vertex format not supported yet."
         ]
       }

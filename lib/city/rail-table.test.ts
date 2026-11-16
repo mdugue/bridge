@@ -123,3 +123,9 @@ test("a simplified segment is no longer than a record reaches, and none is clamp
   packRails([kept], report);
   expect(report.clamped).toBe(0);
 });
+
+test("a track offset past the record's reach is counted, not bent in silence", () => {
+  const report = { clamped: 0, segments: 0 };
+  packRails([{ ...run(3), lateral: 40 }], report);
+  expect(report.clamped).toBe(2);
+});

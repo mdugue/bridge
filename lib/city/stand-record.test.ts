@@ -6,6 +6,7 @@ import {
   STAND_RECORD_WORDS,
   STAND_SCALE_UNIT,
   STAND_STEP_M,
+  STAND_STEP_Y_M,
   standAt,
   standCount,
   standMatrix,
@@ -41,7 +42,7 @@ test("a stand comes back within half a step, its bytes as written", () => {
   for (const [i, s] of STANDS.entries()) {
     const back = standAt(words, i, origin);
     expect(Math.abs(back.x - s.x)).toBeLessThanOrEqual(STAND_STEP_M / 2);
-    expect(Math.abs(back.y - s.y)).toBeLessThanOrEqual(STAND_STEP_M / 2);
+    expect(Math.abs(back.y - s.y)).toBeLessThanOrEqual(STAND_STEP_Y_M / 2);
     expect(Math.abs(back.z - s.z)).toBeLessThanOrEqual(STAND_STEP_M / 2);
     for (let axis = 0; axis < 3; axis += 1) {
       expect(Math.abs(back.scale[axis] - s.scale[axis])).toBeLessThanOrEqual(
@@ -82,4 +83,25 @@ test("the composed matrix is three's place · turn about Y · scale", () => {
   for (let i = 0; i < 16; i += 1) {
     expect(got[i]).toBeCloseTo(expected.elements[i], 9);
   }
+});
+
+test("a field that does not fit is counted, and a build fails on it", () => {
+  const origin: [number, number, number] = [0, 0, 0];
+  const fits = { clamped: 0 };
+  packStands(STANDS, standOrigin(STANDS), fits, true);
+  expect(fits.clamped).toBe(0);
+  const bent: Stand[] = [
+    // 300 m over the origin: past the height's 256 m
+    { x: 1, y: 300, z: 1, turn: 0, scale: [1, 1, 1] },
+    // a scale of 64 and one too small to tell from nothing
+    { x: 1, y: 1, z: 1, turn: 0, scale: [64, 1e-5, 1] },
+    // a signed byte (CRW1's jitter) and one past 255
+    { x: 1, y: 1, z: 1, turn: 0, scale: [1, 1, 1], more: [-3, 256] },
+    // outside the table's box
+    { x: -5, y: 1, z: 3000, turn: 0, scale: [1, 1, 1] },
+  ];
+  const report = { clamped: 0 };
+  packStands(bent, origin, report);
+  expect(report.clamped).toBe(7);
+  expect(() => packStands(bent, origin, undefined, true)).toThrow(/7 fields/u);
 });

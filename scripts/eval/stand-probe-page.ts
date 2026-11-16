@@ -20,6 +20,7 @@ import {
   InstancedBufferGeometry,
   InstancedInterleavedBuffer,
   InterleavedBufferAttribute,
+  InterpolationSamplingType,
   Matrix4,
   Mesh,
   MeshBasicNodeMaterial,
@@ -31,10 +32,18 @@ import {
   WebGPURenderer,
 } from "three/webgpu";
 import type { Material, Object3D, BufferGeometry } from "three/webgpu";
-import { attribute, normalLocal, positionLocal, vec3, vec4 } from "three/tsl";
+import {
+  attribute,
+  normalLocal,
+  positionLocal,
+  varying,
+  vec3,
+  vec4,
+} from "three/tsl";
 import {
   Instances,
   instancePosition,
+  standByte,
   standTable,
 } from "@/app/_components/instancing";
 import { addRibbon, mesh3, meshFrom } from "@/app/_components/mesh-kit";
@@ -282,7 +291,34 @@ async function main() {
   builds = 0;
   const fromRecords = await draw(recordSets);
   const recordBuilds = builds;
+  // a record's bytes, taken out of their words in the vertex stage
+  // (`standByte`): the stands above carry 200 and 255 in bytes 1 and 3
+  const byteRed = async (index: 0 | 1 | 2 | 3) => {
+    const m = new MeshBasicNodeMaterial();
+    m.positionNode = instancePosition();
+    const value = varying(standByte(index).div(255)).setInterpolation(
+      InterpolationSamplingType.FLAT
+    );
+    m.colorNode = vec4(vec3(value), 1);
+    const sets = recordSets.map((set) => {
+      const twin = new Instances(box, m, set.capacity, set.placement);
+      twin.geometry.boundingSphere = set.geometry.boundingSphere;
+      return twin;
+    });
+    const px = await draw(sets);
+    let red = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      red = Math.max(red, px[i]);
+    }
+    return red;
+  };
+  const standBytes = {
+    // sRGB of 200/255 is 229, of 255/255 is 255
+    byte1Of200: await byteRed(1),
+    byte3Of255: await byteRed(3),
+  };
   const stands = {
+    standBytes,
     litMatrices: lit(fromMatrices),
     litRecords: lit(fromRecords),
     differing: differing(fromMatrices, fromRecords),
@@ -339,8 +375,15 @@ async function main() {
   const byMatrix = crownSets(false);
   const byRecord = crownSets(true);
   const crownsFromMatrices = await drawWith(crownCamera, [byMatrix]);
-  await drawWith(crownCamera, [byRecord.children[0]]);
-  byRecord.add(byRecord.children[0] ?? byRecord);
+  // the first set alone (the others hidden, none reparented), so that
+  // what the rest of the tile builds can be counted
+  for (const [i, set] of byRecord.children.entries()) {
+    set.visible = i === 0;
+  }
+  await drawWith(crownCamera, [byRecord]);
+  for (const set of byRecord.children) {
+    set.visible = true;
+  }
   builds = 0;
   const crownsFromRecords = await drawWith(crownCamera, [byRecord]);
   const shaderWith = async (view: OrthographicCamera, object: Object3D) => {

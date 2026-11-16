@@ -274,12 +274,11 @@ export function packRails(
         words[at + 5] = step(s.b.y - origin[1], RAIL_STEP_Y_M);
         words[at + 6] = step(s.b.z - origin[2]);
         words[at + 7] = turnWord(s.bearingB);
-        words[at + 8] = Math.min(
-          Math.max(
-            Math.round(s.lateral / RAIL_OFFSET_STEP_M) + RAIL_OFFSET_ZERO,
-            0
-          ),
-          WORD_MAX
+        // (an offset past ±32.7 m is counted like a coordinate out of
+        // its chunk)
+        words[at + 8] = step(
+          s.lateral + RAIL_OFFSET_ZERO * RAIL_OFFSET_STEP_M,
+          RAIL_OFFSET_STEP_M
         );
       }
       count += segments.length;

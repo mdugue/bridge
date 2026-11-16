@@ -1,6 +1,10 @@
 import { Color, Group, Matrix4, Quaternion, Vector3 } from "three/webgpu";
 import type { BufferGeometry } from "three/webgpu";
-import { coarseForm, COARSE_TREE_WIDEN } from "@/lib/city/coarse-crowns";
+import {
+  coarseForm,
+  COARSE_TREE_WIDEN,
+  crownBytes,
+} from "@/lib/city/coarse-crowns";
 import type { CoarseCrown, CoarseForm } from "@/lib/city/coarse-crowns";
 import type { RecenterOffset } from "@/lib/city/ground-clamp";
 import {
@@ -90,17 +94,15 @@ export function crownStand(c: CoarseCrown, ground: number, m: Matrix4): Stand {
   const turn = new Quaternion();
   const scale = new Vector3();
   crownMatrix(c, ground, m).decompose(position, turn, scale);
+  const [code, ndvi, genus, jitter] = crownBytes(c);
   return {
     x: position.x,
     y: position.y,
     z: position.z,
     turn: 2 * Math.atan2(turn.y, turn.w),
     scale: [scale.x, scale.y, scale.z],
-    kind: [
-      c.kind === "register" ? 1 : 0,
-      c.ndvi === undefined ? 255 : c.ndvi * 254,
-    ],
-    more: [c.kind === "register" ? c.genus : 0, 0],
+    kind: [code, ndvi],
+    more: [genus, jitter],
   };
 }
 
@@ -233,12 +235,15 @@ export function* coarseCrownSteps(
     ? cells.map(({ list }) => list.map((c) => crownStand(c, c.ground, m)))
     : null;
   const origin = standOrigin(stands?.flat() ?? []);
-  const words = new Uint16Array(standing.length * STAND_RECORD_WORDS);
+  // (nothing is allocated for the spike off its knob)
+  const words = stands
+    ? new Uint16Array(standing.length * STAND_RECORD_WORDS)
+    : null;
   let run = 0;
   for (const [index, { list: cell, form }] of cells.entries()) {
     const records = stands?.[index];
     let set: Instances;
-    if (records) {
+    if (records && words) {
       const view = words.subarray(
         run * STAND_RECORD_WORDS,
         (run + cell.length) * STAND_RECORD_WORDS

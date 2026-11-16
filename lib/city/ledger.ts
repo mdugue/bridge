@@ -585,11 +585,11 @@ export function datedLedger(
     bytes: fresh.bytes,
     buildings: fresh.buildings,
     counters: fresh.counters,
+    rasters: fresh.rasters,
     dressing: fresh.dressing,
     // written by its own tools (scripts/ledger.ts folds them in)
     ...(was?.dressingRecorded === undefined
       ? {}
       : { dressingRecorded: was.dressingRecorded }),
-    rasters: fresh.rasters,
   };
 }

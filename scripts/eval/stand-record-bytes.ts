@@ -4,8 +4,9 @@
  * float x and z, no height, the viewer makes each matrix and reads the
  * ground) against the same crowns as stand records
  * (lib/city/stand-record.ts: the place over the tile's box with the
- * height in it, turn and scale, sorted by vegetation chunk and crown
- * form as a set draws them), for the plan's four tiles. Gzip 9 both; the
+ * height in it, turn and scale, and the crown's four bytes — code, NDVI,
+ * genus, season jitter — sorted by vegetation chunk and crown form as a
+ * set draws them), for the plan's four tiles. Gzip 9 both; the
  * bytes a crown's placement takes on the GPU; and how far a record's
  * place and scale lie from the matrix the viewer writes today.
  *
@@ -32,6 +33,7 @@ import {
   STAND_RECORD_BYTES,
   STAND_SCALE_UNIT,
   STAND_STEP_M,
+  STAND_STEP_Y_M,
 } from "../../lib/city/stand-record";
 import type { Stand } from "../../lib/city/stand-record";
 import { bucketByCell } from "../../lib/city/tree-placement";
@@ -89,7 +91,8 @@ async function measure(site: string, id: string, what: string) {
   );
   const stands: Stand[] = sorted.map((c) => crownStand(c, c.ground, m));
   const origin = standOrigin(stands);
-  const words = packStands(stands, origin);
+  const report = { clamped: 0 };
+  const words = packStands(stands, origin, report);
   let place = 0;
   let scale = 0;
   let clamped = 0;
@@ -127,7 +130,9 @@ async function measure(site: string, id: string, what: string) {
       raw: 20 + words.byteLength,
       // the file's own bytes, uploaded
       gpuPlacementBytes: words.byteLength,
-      stepM: STAND_STEP_M,
+      stepM: { plan: STAND_STEP_M, height: STAND_STEP_Y_M },
+      // fields a record could not hold (a build fails on any)
+      fieldsOutOfRange: report.clamped,
       // against the matrix the viewer writes today
       worstPlaceM: mm(place),
       worstScaleShare: mm(scale),
