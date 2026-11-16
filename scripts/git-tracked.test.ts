@@ -48,10 +48,12 @@ test("a folder that is no work tree tracks nothing", () => {
 
 test("a git that fails is an error in git's words, never an empty list", () => {
   const root = folder(["data/a/x.json"]);
-  // a linked worktree whose repository is gone
+  // a linked worktree whose repository is gone (git words it by version:
+  // "not a git repository" in 2.43, "gitfile does not point to a valid
+  // repository" in 2.56; either way its own "fatal:" is carried)
   writeFileSync(nodePath.join(root, ".git"), "gitdir: /no/such/repo/.git\n");
   expect(() => trackedFiles(root, "data")).toThrow(
-    /git ls-files in .* failed: .*not a git repository/u
+    /git ls-files in .* failed: fatal: ./u
   );
 });
 
