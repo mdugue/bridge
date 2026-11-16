@@ -46,6 +46,9 @@ next-env.d.ts
 /blob-report/
 /playwright/.cache/
 
+# the compared plates (scripts/plates.ts): renders, base worktrees, reports
+/plates/
+
 # POC tile data copied from data/ by scripts/prepare-data.ts
 /public/data/
 /public/wasm/

@@ -5370,10 +5370,10 @@
     "firstLoad": {
       "note": "Every /_next/static/*.js the page or the workers ground, niches, scene fetched themselves (each one's resource timing) at /dresden?scene=lite (a NEXT_PUBLIC_POC_DEBUG=1 production build), cut at: ready, those workers running, then 5 s without a new script; a second read 5 s later must equal it. The BVH worker's own scripts are left out: it starts only if the spawn's buildings have no BVH yet. Each raw body gzipped at level 9 by the pinned Bun, exact. workerOnly: the files those workers fetched and the page did not — not the scene's JavaScript, which the page shares.",
       "files": 42,
-      "gzip": 1103124,
+      "gzip": 1103187,
       "workerOnly": {
         "files": 8,
-        "gzip": 34829
+        "gzip": 34828
       }
     },
     "phoneLiteSpawnCache": {
@@ -5394,90 +5394,18 @@
     "desktop": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 7,
-        "maxMs": 7
+        "totalMs": 62.8,
+        "maxMs": 62.8
       },
       "boot:frame": {
-        "count": 9,
-        "totalMs": 632,
-        "maxMs": 596.6
+        "count": 6,
+        "totalMs": 549.7,
+        "maxMs": 411.9
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 611,
-        "maxMs": 611
-      },
-      "boot:light-wait": {
-        "count": 1,
-        "totalMs": 2246.2,
-        "maxMs": 2246.2
-      },
-      "boot:page-to-viewer": {
-        "count": 1,
-        "totalMs": 1619.3,
-        "maxMs": 1619.3
-      },
-      "boot:place": {
-        "count": 1,
-        "totalMs": 375.5,
-        "maxMs": 375.5
-      },
-      "boot:renderer-init": {
-        "count": 1,
-        "totalMs": 339.6,
-        "maxMs": 339.6
-      },
-      "boot:scene-compile": {
-        "count": 1,
-        "totalMs": 3000.3,
-        "maxMs": 3000.3
-      },
-      "boot:setup": {
-        "count": 1,
-        "totalMs": 125.5,
-        "maxMs": 125.5
-      },
-      "boot:spawn-wait": {
-        "count": 1,
-        "totalMs": 5293.2,
-        "maxMs": 5293.2
-      },
-      "boot:tileset": {
-        "count": 1,
-        "totalMs": 0.1,
-        "maxMs": 0.1
-      },
-      "boot:veil-to-loaded": {
-        "count": 1,
-        "totalMs": 4364,
-        "maxMs": 4364
-      },
-      "dressing:build": {
-        "count": 2,
-        "totalMs": 1082.3,
-        "maxMs": 853.8
-      },
-      "tile:compile": {
-        "count": 4,
-        "totalMs": 12003.6,
-        "maxMs": 3001.9
-      }
-    },
-    "phone": {
-      "boot:first-shadow-frame": {
-        "count": 1,
-        "totalMs": 124.1,
-        "maxMs": 124.1
-      },
-      "boot:frame": {
-        "count": 8,
-        "totalMs": 716.7,
-        "maxMs": 454.8
-      },
-      "boot:light-to-veil": {
-        "count": 1,
-        "totalMs": 605.4,
-        "maxMs": 605.4
+        "totalMs": 608.7,
+        "maxMs": 608.7
       },
       "boot:light-wait": {
         "count": 1,
@@ -5486,33 +5414,33 @@
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 1617.1,
-        "maxMs": 1617.1
+        "totalMs": 1491.1,
+        "maxMs": 1491.1
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 452.3,
-        "maxMs": 452.3
+        "totalMs": 354.1,
+        "maxMs": 354.1
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 360.9,
-        "maxMs": 360.9
+        "totalMs": 617.8,
+        "maxMs": 617.8
       },
       "boot:scene-compile": {
         "count": 1,
-        "totalMs": 3000.2,
-        "maxMs": 3000.2
+        "totalMs": 3000.3,
+        "maxMs": 3000.3
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 125.5,
-        "maxMs": 125.5
+        "totalMs": 119,
+        "maxMs": 119
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 4614.5,
-        "maxMs": 4614.5
+        "totalMs": 5323.4,
+        "maxMs": 5323.4
       },
       "boot:tileset": {
         "count": 1,
@@ -5521,24 +5449,96 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4236.9,
-        "maxMs": 4236.9
+        "totalMs": 4309.7,
+        "maxMs": 4309.7
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 949.2,
-        "maxMs": 689.3
+        "totalMs": 1028.8,
+        "maxMs": 775.4
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 10209.2,
-        "maxMs": 3046.9
+        "totalMs": 12008,
+        "maxMs": 3007.2
+      }
+    },
+    "phone": {
+      "boot:first-shadow-frame": {
+        "count": 1,
+        "totalMs": 124.3,
+        "maxMs": 124.3
+      },
+      "boot:frame": {
+        "count": 7,
+        "totalMs": 728.3,
+        "maxMs": 474
+      },
+      "boot:light-to-veil": {
+        "count": 1,
+        "totalMs": 606.1,
+        "maxMs": 606.1
+      },
+      "boot:light-wait": {
+        "count": 1,
+        "totalMs": 3000.6,
+        "maxMs": 3000.6
+      },
+      "boot:page-to-viewer": {
+        "count": 1,
+        "totalMs": 1514.5,
+        "maxMs": 1514.5
+      },
+      "boot:place": {
+        "count": 1,
+        "totalMs": 378.3,
+        "maxMs": 378.3
+      },
+      "boot:renderer-init": {
+        "count": 1,
+        "totalMs": 103.8,
+        "maxMs": 103.8
+      },
+      "boot:scene-compile": {
+        "count": 1,
+        "totalMs": 3000.4,
+        "maxMs": 3000.4
+      },
+      "boot:setup": {
+        "count": 1,
+        "totalMs": 86.6,
+        "maxMs": 86.6
+      },
+      "boot:spawn-wait": {
+        "count": 1,
+        "totalMs": 3808.8,
+        "maxMs": 3808.8
+      },
+      "boot:tileset": {
+        "count": 1,
+        "totalMs": 0,
+        "maxMs": 0
+      },
+      "boot:veil-to-loaded": {
+        "count": 1,
+        "totalMs": 4189.3,
+        "maxMs": 4189.3
+      },
+      "dressing:build": {
+        "count": 2,
+        "totalMs": 901.8,
+        "maxMs": 673.1
+      },
+      "tile:compile": {
+        "count": 4,
+        "totalMs": 10750.5,
+        "maxMs": 3027.8
       }
     },
     "phoneHeld": {
-      "attributes": 1322,
-      "attributesSize": 47523814,
-      "geometries": 519,
+      "attributes": 1211,
+      "attributesSize": 47381554,
+      "geometries": 479,
       "indexAttributes": 133,
       "indexAttributesSize": 33979704,
       "indirectStorageAttributes": 0,
@@ -5552,9 +5552,9 @@
       "storageAttributesSize": 0,
       "textures": 63,
       "texturesSize": 71615312,
-      "uniformBuffers": 617,
-      "uniformBuffersSize": 153312,
-      "total": 155268132
+      "uniformBuffers": 576,
+      "uniformBuffersSize": 146096,
+      "total": 155118656
     },
     "firstLoad": [
       {
@@ -5568,18 +5568,13 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/02_nblhr_bcei.js",
-        "gzip": 12125,
+        "url": "/_next/static/chunks/01n94la_98kqw.js",
+        "gzip": 134057,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/06ok45jl5m13i.js",
-        "gzip": 774,
-        "worker": true
-      },
-      {
-        "url": "/_next/static/chunks/074dlqcdq9njm.js",
-        "gzip": 291235,
+        "url": "/_next/static/chunks/02_nblhr_bcei.js",
+        "gzip": 12125,
         "worker": false
       },
       {
@@ -5603,11 +5598,6 @@
         "worker": true
       },
       {
-        "url": "/_next/static/chunks/0jsbqs25q3nys.js",
-        "gzip": 392,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/0oo697a5jcpj1.js",
         "gzip": 21864,
         "worker": false
@@ -5628,13 +5618,18 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1iqnel96o7oxi.js",
-        "gzip": 134040,
+        "url": "/_next/static/chunks/1gf9032yqxdyi.js",
+        "gzip": 8410,
         "worker": false
       },
       {
         "url": "/_next/static/chunks/1kgvfy450pybk.js",
         "gzip": 16157,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/1m_ofslgs3mu1.js",
+        "gzip": 773,
         "worker": true
       },
       {
@@ -5663,6 +5658,11 @@
         "worker": false
       },
       {
+        "url": "/_next/static/chunks/281xse1jmbhyz.js",
+        "gzip": 394,
+        "worker": false
+      },
+      {
         "url": "/_next/static/chunks/2dwv7g770jz95.js",
         "gzip": 175831,
         "worker": false
@@ -5683,23 +5683,18 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/2oe96daveh6z2.js",
-        "gzip": 8410,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/2ser170149cnh.js",
         "gzip": 14759,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/2u-g76roi4tbh.js",
-        "gzip": 417,
+        "url": "/_next/static/chunks/2wsjxrkk9_2d7.js",
+        "gzip": 71849,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/2wsjxrkk9_2d7.js",
-        "gzip": 71849,
+        "url": "/_next/static/chunks/2xu6msu6xts86.js",
+        "gzip": 418,
         "worker": false
       },
       {
@@ -5733,6 +5728,11 @@
         "worker": false
       },
       {
+        "url": "/_next/static/chunks/3l3hnqt1cbw6w.js",
+        "gzip": 291279,
+        "worker": false
+      },
+      {
         "url": "/_next/static/chunks/3r-ml6mc8gxvh.js",
         "gzip": 8946,
         "worker": false
@@ -5743,14 +5743,14 @@
         "worker": true
       },
       {
+        "url": "/_next/static/chunks/turbopack-03crpj052a4p0.js",
+        "gzip": 191,
+        "worker": true
+      },
+      {
         "url": "/_next/static/chunks/turbopack-077hmtqrhcoji.js",
         "gzip": 4367,
         "worker": false
-      },
-      {
-        "url": "/_next/static/chunks/turbopack-1-2hkuy6hgizh.js",
-        "gzip": 191,
-        "worker": true
       },
       {
         "url": "/_next/static/chunks/turbopack-1e5f49zawb_bt.js",

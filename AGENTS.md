@@ -36,6 +36,8 @@ bun run test            # units in lib/, app/_components/, scripts/
 bun run test:e2e        # playwright against a production build
                         # (E2E_DEV=1: against bun dev)
 bun run shots           # real-GPU plates of shots/*.json (headed)
+bun run plates          # the QA views of the merge base against the head's,
+                        # diffed (SHOTS_SMALL=1: CI's tier on SwiftShader)
 bun run ledger          # qa/ledger.json: bytes, requests, counters (-- --check: CI;
                         # -- --browser: first-load JS, a phone's tiles, timings)
 bun run site <site>     # where a site stands (--all: every site)
@@ -192,7 +194,18 @@ uploaded; nothing it names is fetched (ADR 0054).
 ## QA: self-verify, don't ask for screenshots
 
 - A PR that changes what the viewer shows carries JSON snapshots in its
-  description (`pr-snapshots` skill).
+  description (`pr-snapshots` skill). CI compares a PR with its base on
+  the runner's software renderer (the *Plates* job, ADR 0018) and fails
+  on a differing view the PR does not name under `## Snapshots`. It
+  says *changed*, never *good*, and it sees little: 8 of the 50 QA
+  views, all on the spawn tile, in `lite` at 400 × 250 drawn pixels, on
+  PRs that are not drafts and touch what can move a pixel. The other
+  views, every other tile, the full profile's shadows, AO and
+  resolution, the data layers and a view's page query it never sees: a
+  green job is no licence to skip the snapshots or the GPU.
+- What holds a frame still for a plate is a probe of the debug hook
+  (`__poc.still`, `poc-scene.ts`): something new that animates takes its
+  time through `pocPhase` or TSL `time`, or the plates flake.
 - Visual work is judged on a real GPU: drop a snapshot JSON into `shots/`
   and run `bun run shots`; read the plate and iterate. Verify from oblique
   angles, not head-on.
