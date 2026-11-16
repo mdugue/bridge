@@ -54,7 +54,7 @@ function placeIn(line: Waiter[], rank: number, maxOvertakes: number): number {
 }
 
 /** What a waiter rejects with when its signal fires: the abort's reason. */
-function abortError(signal: AbortSignal | undefined): Error {
+export function abortError(signal: AbortSignal | undefined): Error {
   return signal?.reason instanceof Error
     ? signal.reason
     : new DOMException("The operation was aborted.", "AbortError");

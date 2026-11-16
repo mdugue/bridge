@@ -159,7 +159,7 @@ const PlaceRow = ({
           // reason: the places never reorder within an answer
           key={`${i}:${p.name}`}
           onClick={() => {
-            showPlaces(scene, { ziele: [p], aus_der_luft: air });
+            void showPlaces(scene, { ziele: [p], aus_der_luft: air });
           }}
           title={`Zu ${p.name}`}
           type="button"
@@ -173,7 +173,7 @@ const PlaceRow = ({
           className={CHIP}
           disabled={busy}
           onClick={() => {
-            showPlaces(scene, { ziele: places, alle: true });
+            void showPlaces(scene, { ziele: places, alle: true });
           }}
           title="Alle Orte in einer Ansicht (zu weit verstreut: den ersten)"
           type="button"

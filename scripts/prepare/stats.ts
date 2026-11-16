@@ -3,7 +3,7 @@
  * bake's entries name this module (bake-entries.ts `siteStats`).
  */
 import sharp from "sharp";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import {
   buildingHeights,
@@ -13,6 +13,10 @@ import {
   SITE_STATS_FILE,
 } from "../../lib/city/site-stats";
 import type { SiteStats } from "../../lib/city/site-stats";
+import {
+  readFootprints,
+  unpackedFootprints,
+} from "../../lib/city/footprint-pack";
 import {
   cityMeshSourceFiles,
   sideFileSource,
@@ -110,9 +114,13 @@ async function siteStats(
     );
     const prints = footprintFiles.get(tile);
     if (prints) {
-      footprint += footprintArea(
-        readJson(path.join(OUT_DIR, prints)) as [number, number][][][]
+      const pack = readFootprints(
+        Bun.gunzipSync(readFileSync(path.join(OUT_DIR, prints)))
       );
+      if (!pack) {
+        throw new Error(`${prints}: not a footprint file`);
+      }
+      footprint += footprintArea(unpackedFootprints(pack));
     }
     landmarks += landmarkFile(tile)?.landmarks.length ?? 0;
   }

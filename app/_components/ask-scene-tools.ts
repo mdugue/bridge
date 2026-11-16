@@ -16,8 +16,8 @@ import {
   whereTool,
 } from "@/lib/city/ask-tools";
 import type { TimeChange } from "@/lib/city/ask-tools";
-import { frameTargets, streetView } from "@/lib/city/ask-view";
-import type { AskTarget, FrameContext } from "@/lib/city/ask-view";
+import { streetView } from "@/lib/city/ask-view";
+import type { AskTarget, Framed } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -40,9 +40,13 @@ export interface AskScene {
   show: (view: ViewpointGeometry, ground?: number) => boolean;
   /** whether a point (site CRS) lies on one of the site's tiles */
   within: (x: number, y: number) => boolean;
-  /** what the framing reads of the moment: the screen, the sun, the
-   *  loaded buildings' sight lines (lib/city/ask-view.ts) */
-  frame: () => Omit<FrameContext, "from">;
+  /** the view of `places` as the scene frames it (lib/city/ask-view.ts:
+   *  its canvas, the sun, the loaded buildings' sight lines), from where
+   *  the camera stands; null while there is no scene */
+  frameView: (
+    places: readonly AskTarget[],
+    from: { x: number; y: number } | null
+  ) => Promise<Framed | null>;
   /** the player's pose, mode, time, style and layers, for the model */
   where: () => Record<string, unknown>;
   /** asks what stands at the centre of the view (and opens its card);
@@ -63,7 +67,7 @@ export function sceneTools(scene: AskScene) {
     lookTool.client(
       async (_input, context) => await scene.look(context?.abortSignal)
     ),
-    showTool.client((input) => showPlaces(scene, input)),
+    showTool.client(async (input) => await showPlaces(scene, input)),
     timeTool.client(({ uhrzeit, datum }) => {
       const problem = timeProblem({ uhrzeit, datum });
       return problem
@@ -104,10 +108,10 @@ export const AERIAL_REACH = 900;
  * the walker stands before the first. A place off the city's tiles is
  * left out; none on them is refused.
  */
-export function showPlaces(
+export async function showPlaces(
   scene: AskScene,
   ask: { alle?: boolean; aus_der_luft?: boolean; ziele: readonly AskPlace[] }
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const places = ask.ziele
     .filter((p) => scene.within(p.x, p.y))
     .slice(0, SHOW_TARGETS);
@@ -121,9 +125,8 @@ export function showPlaces(
       ? { ok: true, gezeigt: [first.name] }
       : LOADING;
   }
-  const context = { ...scene.frame(), from };
   const all = ask.alle !== false && places.length > 1;
-  const framed = all ? frameTargets(places, context) : null;
+  const framed = all ? await scene.frameView(places, from) : null;
   if (framed && framed.distance <= AERIAL_REACH) {
     return scene.show(framed.view, framed.ground)
       ? {
@@ -133,8 +136,8 @@ export function showPlaces(
         }
       : LOADING;
   }
-  const alone = frameTargets([first], context);
-  if (!scene.show(alone.view, alone.ground)) {
+  const alone = await scene.frameView([first], from);
+  if (!(alone && scene.show(alone.view, alone.ground))) {
     return LOADING;
   }
   return {

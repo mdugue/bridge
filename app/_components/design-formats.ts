@@ -5,6 +5,7 @@ import {
   rhinoPlacement,
   rhinoUnitMetres,
 } from "@/lib/city/rhino-units";
+import { bitmapTextureHandler } from "./design-bitmap-texture";
 
 /**
  * The design formats beside glTF and IFC (ADR 0054): OBJ with its MTL and
@@ -14,6 +15,9 @@ import {
  * and textures only from the files picked with it, rhino3dm's
  * WebAssembly from the site's own `/wasm/rhino3dm/`
  * (scripts/copy-wasm.ts). Loaded as their own chunks, only when picked.
+ * Read in the scene's worker (ADR 0061), so no image goes through the
+ * DOM: an OBJ's textures decode with `createImageBitmap`, and a Rhino
+ * file's textures and text dots stay out.
  */
 
 /** Thrown with a sentence for the panel. */
@@ -113,6 +117,8 @@ export async function readObj(
   const picked = pickedFiles(main, files);
   try {
     const text = await main.text();
+    // MTLLoader takes a manager's handler before its TextureLoader
+    picked.manager.addHandler(/./u, bitmapTextureHandler(picked.manager));
     const loader = new OBJLoader(picked.manager);
     const libraries = materialLibraries(text);
     const mtls = files.filter((f) => libraries.includes(f.name));
@@ -211,6 +217,90 @@ function rhinoMatrix(
   };
 }
 
+/** The warning type the prelude reports what it left out with. */
+const RHINO_LEFT_OUT = "city-walk: left out";
+
+/**
+ * Runs in three's Rhino worker ahead of its own code, as a prelude to
+ * the library (it is stringified: it names nothing outside itself).
+ * Takes the textures and text dots out of what the worker sends back:
+ * three's loader would draw them through the DOM (an `<img>`, a
+ * `<canvas>`), which the scene's worker has not, and fail the whole
+ * file. Reports how many it took as a loader warning of `type`.
+ */
+export function rhinoWorkerPrelude(
+  scope: { postMessage: (message: unknown, transfer?: unknown) => void },
+  type: string
+): void {
+  const post = scope.postMessage.bind(scope);
+  scope.postMessage = (message, transfer) => {
+    const m = message as {
+      type?: string;
+      id?: number;
+      data?: {
+        objects?: { objectType?: string }[];
+        materials?: ({ textures?: { image: string | null }[] } | null)[];
+      };
+    } | null;
+    if (m?.type === "decode" && m.data) {
+      let textures = 0;
+      for (const material of m.data.materials ?? []) {
+        for (const texture of material?.textures ?? []) {
+          if (texture.image !== null) {
+            texture.image = null;
+            textures += 1;
+          }
+        }
+      }
+      const objects = m.data.objects ?? [];
+      const kept = objects.filter((o) => o.objectType !== "TextDot");
+      m.data.objects = kept;
+      const dots = objects.length - kept.length;
+      if (textures + dots > 0) {
+        post({ type: "warning", id: m.id, data: { type, textures, dots } });
+      }
+    }
+    post(message, transfer);
+  };
+}
+
+/** A loading manager that serves three's Rhino loader its library with
+ *  the prelude ahead; `release` lets the built script go. */
+async function rhinoLibrary(): Promise<{
+  manager: LoadingManager;
+  release: () => void;
+}> {
+  const libraryUrl = `${RHINO_LIBRARY_PATH}rhino3dm.js`;
+  const response = await fetch(libraryUrl);
+  if (!response.ok) {
+    throw new Error(`rhino3dm.js: ${response.status}`);
+  }
+  const script = [
+    await response.text(),
+    `(${rhinoWorkerPrelude.toString()})(self, ${JSON.stringify(RHINO_LEFT_OUT)});`,
+  ].join("\n");
+  const url = URL.createObjectURL(
+    new Blob([script], { type: "text/javascript" })
+  );
+  const manager = new LoadingManager();
+  manager.setURLModifier((u) => (u === libraryUrl ? url : u));
+  return { manager, release: () => URL.revokeObjectURL(url) };
+}
+
+/** What the prelude left out of a file, in words; null where nothing. */
+function leftOutNote(warnings: unknown): string | null {
+  const found = (Array.isArray(warnings) ? warnings : []).find(
+    (w: { type?: unknown } | null) => w?.type === RHINO_LEFT_OUT
+  ) as { textures?: number; dots?: number } | undefined;
+  const parts = [
+    (found?.textures ?? 0) > 0 ? "Texturen" : null,
+    (found?.dots ?? 0) > 0 ? "Textpunkte (TextDots)" : null,
+  ].filter((p) => p !== null);
+  return parts.length > 0
+    ? `${parts.join(" und ")} der Rhino-Datei werden nicht gezeigt.`
+    : null;
+}
+
 /**
  * Reads a Rhino .3dm with rhino3dm (openNURBS as WebAssembly): its meshes,
  * and its breps and extrusions by the render meshes Rhino saved with them
@@ -221,14 +311,18 @@ export async function read3dm(
   epsg: number
 ): Promise<{ root: Object3D; note: string | null; heightsKnown: boolean }> {
   const { Rhino3dmLoader } = await import("three/addons/loaders/3DMLoader.js");
-  const loader = new Rhino3dmLoader();
-  loader.setLibraryPath(RHINO_LIBRARY_PATH);
-  loader.setWorkerLimit(1);
+  let library: Awaited<ReturnType<typeof rhinoLibrary>> | null = null;
+  let loader: InstanceType<typeof Rhino3dmLoader> | null = null;
   try {
+    library = await rhinoLibrary();
+    const rhino = new Rhino3dmLoader(library.manager);
+    loader = rhino;
+    rhino.setLibraryPath(RHINO_LIBRARY_PATH);
+    rhino.setWorkerLimit(1);
     const data = await main.arrayBuffer();
     const content = await new Promise<Object3D>((resolve, reject) => {
       try {
-        loader.parse(data, resolve, reject);
+        rhino.parse(data, resolve, reject);
       } catch (error) {
         reject(error instanceof Error ? error : new Error(String(error)));
       }
@@ -240,7 +334,14 @@ export async function read3dm(
     content.matrixAutoUpdate = false;
     // (row-major: fromArray reads column-major)
     content.matrix.fromArray(matrix).transpose();
-    return { root: content, note, heightsKnown };
+    const notes = [note, leftOutNote(content.userData.warnings)].filter(
+      (n) => n !== null
+    );
+    return {
+      root: content,
+      note: notes.length > 0 ? notes.join(" ") : null,
+      heightsKnown,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new FormatError(
@@ -248,6 +349,7 @@ export async function read3dm(
     );
   } finally {
     // its workers and their copy of the library go
-    loader.dispose();
+    loader?.dispose();
+    library?.release();
   }
 }

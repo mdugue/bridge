@@ -137,7 +137,10 @@ async function parseDesign(
     return { root: await parseGltf(main, files), note: null };
   }
   // the others are read whole before they can be weighed
-  const tooLarge = judgeFile(main.size, tier);
+  // every picked file: a plan's companions (.dbf) are read whole too
+  const tooLarge = [main, ...files]
+    .map((f) => judgeFile(f.size, tier))
+    .find((word) => word !== null);
   if (tooLarge) {
     throw new DesignError(tooLarge);
   }

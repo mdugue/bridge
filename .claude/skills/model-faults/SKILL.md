@@ -30,6 +30,10 @@ PW_CHROMIUM=/opt/pw-browsers/chromium SHOTS=1 SHOTS_SMALL=1 SHOTS_AT=1 \
   bunx playwright test e2e/snapshot-shot.spec.ts --workers=1 -g "foto-dresden"
 ```
 
+With `SHOTS_SMALL=1` the harness launches Chromium with the flags in
+`e2e/swiftshader-webgpu.ts`: the scene draws WebGPU on SwiftShader's
+Vulkan, since it has no WebGL2 path to fall back to.
+
 The first walks the site's 400 m cells in an order the ISO week draws
 (`--seed` to repeat one) and takes the newest usable Panoramax photo of
 each until it has N: a street (not MapComplete's point-of-interest
@@ -75,7 +79,7 @@ For each building both show, note what differs, by category:
 - **Fehlt / zu viel**: a building, a tree, a wall, a kiosk the twin lacks
   or invents; **Lage** (an object metres off).
 
-Ignore what the twin draws on purpose (stylised clay, no glass, no
+Ignore what the twin draws on purpose (stylised clay, windows without panes or mullions, no
 signage, no people or cars, the pastel light) and what the photo's season
 or time explains.
 

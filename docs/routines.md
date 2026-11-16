@@ -51,7 +51,9 @@ there is nothing to say, and never merges, resolves or deletes.
   (`e2e/snapshot-shot.spec.ts`) render at 800 × 500 with fifteen minutes
   to load, what a software-rendered container can do; `SHOTS_AT=1` boots
   each shot at its own place, and `PW_CHROMIUM` names a browser
-  installed outside Playwright's store (the container's).
+  installed outside Playwright's store (the container's). There the
+  scene draws WebGPU on SwiftShader's Vulkan, with the launch flags in
+  `e2e/swiftshader-webgpu.ts`.
 
 `osm-gaps/`, `street-photos/` and `shots/` are gitignored.
 

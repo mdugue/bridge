@@ -23,7 +23,6 @@ import type {
   WebGPURenderer,
 } from "three/webgpu";
 import { ao } from "three/addons/tsl/display/GTAONode.js";
-import { smaa } from "three/addons/tsl/display/SMAANode.js";
 import {
   clamp,
   distance,
@@ -34,7 +33,6 @@ import {
   max,
   min,
   mix,
-  nodeObject,
   pow,
   renderOutput,
   rtt,
@@ -66,11 +64,13 @@ import { NAMEPLATE_TYPES } from "@/lib/city/nameplate-type";
 import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
 import type { PaperKind, RenderStyleDef } from "@/lib/city/render-style";
 import { compileInLanes, compileInTurn } from "./compile-lanes";
+import { streamTimings } from "./stream-timing";
 import type { Compiling } from "./compile-lanes";
 import { crownsPrinted } from "./crown-season";
 import { DATA_MARKS, dataMarks } from "./glass";
 import { crownSwayShare } from "./vegetation-layer";
 import { fxaa } from "./fxaa";
+import { createSmaa } from "./smaa";
 import { createLensBlur, LENS_TALLEST_PX } from "./lens-blur";
 import { createMotionBlur } from "./motion-blur";
 import type { SceneFog } from "./height-fog";
@@ -200,6 +200,10 @@ export interface PostStack {
    * started too (compile-lanes.ts): a tile drops its CPU copies on it.
    */
   compile: (object: Object3D) => Promise<void>;
+  /** `compile` again for a material changed in place (a clay that turns
+   *  to cutting its niches' openings, a new build of the same material
+   *  object): the record of what compiled is dropped for it first. */
+  recompile: (object: Object3D) => Promise<void>;
   /**
    * Pushes the picture style into the passes: its weights on the depth
    * grading, the paper grain and the ink. (Their strengths and the contact
@@ -215,8 +219,10 @@ export interface PostStack {
    *  autofocus rests where none is. */
   lensWanted: () => boolean;
   /** Draws the scene into its target, then the post chain to the canvas;
-   *  `stepMs`, the loop's time step, advances the lens's fade and focus. */
-  render: (stepMs: number) => void;
+   *  `stepMs`, the loop's time step, advances the lens's fade and focus;
+   *  `moveMs`, the step the camera moved by (its own cap), paces the motion
+   *  blur (default `stepMs`). */
+  render: (stepMs: number, moveMs?: number) => void;
   /** world-space point under the crosshair; null = nothing hit (sky) */
   setFocusTarget: (point: Vector3 | null) => void;
   /**
@@ -392,8 +398,8 @@ interface Antialiasing {
 }
 
 /**
- * SMAA reads a texture and renders three passes of its own into three
- * full-resolution half-float targets, so there is one SMAA for every frame
+ * SMAA (smaa.ts) reads a texture and renders two passes of its own into
+ * two full-resolution byte targets, so there is one SMAA for every frame
  * and its input is a texture binding the frame switches (`read`): the lens
  * blur's composite, a style's frame in `beforeAa`, or — nothing drawn
  * before it — the scene target, the contact shadows multiplied in after
@@ -413,11 +419,10 @@ function antialiasingOf(
 ): Antialiasing {
   if (kind === "smaa") {
     const input = texture(beforeAa.texture);
-    const node = smaa(input);
+    const own = createSmaa(input, new Vector2(scene.width, scene.height));
     // 1 while SMAA reads the scene target: its contact shadows come after
     const raw = uniform(0);
-    // reason: as above, SMAANode's vec4 output
-    const antialiased = nodeObject(node) as unknown as V4;
+    const antialiased = own.color;
     return {
       afterPre: vec4(
         antialiased.rgb.mul(mix(float(1), occlusion, raw)),
@@ -428,10 +433,8 @@ function antialiasingOf(
         input.value = from;
         raw.value = isRaw ? 1 : 0;
       },
-      setSize: () => {
-        // SMAA follows the renderer's size by itself
-      },
-      dispose: () => node.dispose(),
+      setSize: own.setSize,
+      dispose: own.dispose,
     };
   }
   const texel = uniform(new Vector2());
@@ -745,6 +748,15 @@ export function createPostStack(
   // it), Modell `model` — recovery from one never overrides another.
   let regressed = false;
   let model = false;
+  /** The scene into its target; `after` undoes the frame's dressing. */
+  const drawScene = (view: Camera, after: () => void) => {
+    try {
+      renderer.render(scene, view);
+    } finally {
+      after();
+      renderer.setRenderTarget(null);
+    }
+  };
   // the camera moved enough this frame to draw the pastel frame blurred
   // (motion-blur.ts), where this tier has a way to draw it
   let blurred = false;
@@ -959,8 +971,19 @@ export function createPostStack(
   /** Queues a compile made by `now` behind the ones in flight. */
   const inTurn =
     (now: (object: Object3D) => Promise<void>) =>
-    async (object: Object3D): Promise<void> =>
-      await compileInTurn(renderer, async () => await now(object));
+    async (object: Object3D): Promise<void> => {
+      // (the two parts of a drawable's compile, apart: its wait behind the
+      // compiles in flight, and its own call — `?trace=1` tells whether a
+      // slow tile waits for the line or for its own builds)
+      const queued = streamTimings.now();
+      await compileInTurn(renderer, async () => {
+        streamTimings.since("compile:turn-wait", queued);
+        await streamTimings.timed(
+          "compile:call",
+          async () => await now(object)
+        );
+      });
+    };
   const compileOne = inTurn(async (object) => await compileNow(object));
   /**
    * The cameras the frames are drawn with, one of each kind: the walk/fly
@@ -1304,7 +1327,7 @@ export function createPostStack(
     await compileBuilds([scene]);
   };
 
-  return {
+  const stack: PostStack = {
     compile: async (root) => {
       const drawables = drawablesOf(root);
       // a tile that leaves before its holds and other cameras' anchors are
@@ -1323,6 +1346,12 @@ export function createPostStack(
       } finally {
         unwatch();
       }
+    },
+    recompile: async (root) => {
+      for (const d of drawablesOf(root)) {
+        compiled.delete(d);
+      }
+      await stack.compile(root);
     },
     anchorCount: () => anchors.count(),
     holdCut: async (group, roots, view) => {
@@ -1390,7 +1419,7 @@ export function createPostStack(
       styleDressing.sceneChanged();
     },
     setSunAltitude: (altitudeDeg) => stylize.setSunAltitude(altitudeDeg),
-    render: (stepMs) => {
+    render: (stepMs, moveMs = stepMs) => {
       updateFocus(stepMs);
       stylize.update(renderer.getPixelRatio(), size);
       // The frame names its targets and ends on the canvas, never on the
@@ -1415,13 +1444,10 @@ export function createPostStack(
       const restore = swap ? paperScene.begin(swap) : null;
       stylize.captureFog();
       const view = active();
-      try {
-        renderer.render(scene, view);
-      } finally {
+      drawScene(view, () => {
         restore?.();
         dressed?.();
-        renderer.setRenderTarget(null);
-      }
+      });
       // a released cut's builds go once a frame has drawn without them
       if (releaseAfterFrame.length > 0) {
         for (const a of releaseAfterFrame) {
@@ -1435,7 +1461,9 @@ export function createPostStack(
       blurred = motion.update(
         size,
         moving !== null && style.shaderMode === 0 && !model && regressed,
-        moving?.pre === null
+        moving?.pre === null,
+        // the camera's step: the blur smears a nominal frame's way
+        moveMs
       );
       const shown = frame();
       // the input named before anything is drawn or let go: `beforeAa`
@@ -1534,4 +1562,5 @@ export function createPostStack(
       target.dispose();
     },
   };
+  return stack;
 }

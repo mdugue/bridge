@@ -111,3 +111,55 @@ test("gltf-transform reads it again under its EXT name, and simplifies it", asyn
   expect(json.extensionsRequired).toContain("KHR_meshopt_compression");
   expect(far.length).toBeLessThan(glb.length);
 });
+
+test("the far glb leaves out the objects whose source it is told to drop", async () => {
+  const { positions, indices } = grid();
+  // object 0 the grid's west half (x < 19), object 1 its east half
+  const ids = new Float32Array(positions.length / 3).map((_, v) =>
+    positions[3 * v] < 19 ? 0 : 1
+  );
+  const glb = await writeMeshGlb({
+    name: "city",
+    positions,
+    indices,
+    normals: new Float32Array(positions.length).map((_, i) =>
+      i % 3 === 2 ? 1 : 0
+    ),
+    attributes: { _FEATURE_ID_0: ids },
+    extras: { kind: "city", tileId: "t" },
+  });
+  const table = {
+    className: "building",
+    count: 2,
+    properties: {
+      source: {
+        type: "SCALAR" as const,
+        componentType: "UINT8" as const,
+        values: Uint8Array.from([0, 5]),
+      },
+    },
+  };
+  const far = await simplifyGlb(glb, 0.001, table, new Set([5]));
+  const loader = new GLTFLoader(new LoadingManager());
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  const gltf = await loader.parseAsync(far.slice().buffer, "");
+  let mesh: Mesh | undefined;
+  gltf.scene.traverse((o) => {
+    mesh ??= (o as Mesh).isMesh ? (o as Mesh) : undefined;
+  });
+  gltf.scene.updateMatrixWorld(true);
+  const position = mesh?.geometry.getAttribute("position");
+  expect(position?.count ?? 0).toBeGreaterThan(0);
+  // every vertex left is the west half's (a triangle across the seam
+  // touches it: it is the west's when its first corner is)
+  const p = new Vector3();
+  let east = 0;
+  for (let i = 0; i < (position?.count ?? 0); i += 1) {
+    p.fromBufferAttribute(position as never, i).applyMatrix4(
+      mesh?.matrixWorld as never
+    );
+    east = Math.max(east, p.x);
+  }
+  // (the whole grid reaches 38)
+  expect(east).toBeLessThanOrEqual(20 + 1e-3);
+});

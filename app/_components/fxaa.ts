@@ -22,9 +22,9 @@ import type { F, V2, V4 } from "./shader-chunks";
 /**
  * FXAA over the frame as the post stack holds it — linear, half-float,
  * above 1 in the sun's glow — for the phone's last pass (post-stack.ts,
- * scene-profile.ts `PostProfile`). SMAA needs three full-resolution
- * targets and a copy of the frame to read; this needs none: it runs
- * inside the pass that finishes the frame, on a texture already there.
+ * scene-profile.ts `PostProfile`). SMAA (smaa.ts) needs two full-resolution
+ * targets; this needs none: it runs inside the pass that finishes the
+ * frame, on a texture already there.
  *
  * The algorithm is three's FXAANode (examples/jsm/tsl/display, MIT, after
  * Jasper Flick's "FXAA" for Catlike Coding): find where the luma jumps,

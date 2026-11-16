@@ -2,7 +2,7 @@
  * The bridge decks as a lift table: which deck tops lie under a point
  * (`decksAt`), from the baked decks (pipeline/bake/rail.py, ADR 0041).
  * DOM-free, THREE-free, pure — shared by the rail and tram layers (which add
- * the approach ramps, app/_components/rail-layer.ts `buildDeckTable`) and
+ * the approach ramps, app/_components/bridge-deck.ts `buildDeckTable`) and
  * the build step's line levels (scripts/line-levels.ts).
  *
  * Coordinates are the Y-up world frame's (x, z) (lib/city/ground-clamp.ts).
@@ -189,7 +189,7 @@ export function deckLift(
 /**
  * One deck's lift entry from its world ring and per-vertex deck tops, its
  * profile from the measured `line` when given (`deckLine`): the deck is
- * drawn on it (rail-layer.ts `onLine`), and the ring's few vertices chord
+ * drawn on it (bridge-layer.ts `onLine`), and the ring's few vertices chord
  * it — 2.4 m under the Güterumgehungsbahn's deck in Hamburg, where the
  * rails rode below the drawn deck.
  */

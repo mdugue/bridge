@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { BikeCounter } from "@/lib/city/bike-counts";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { createBikeFeed, createBikeLayer } from "./bike-layer";
+import { feedPageView } from "./page-view";
 import type { Instances } from "./instancing";
 
 const counter = (
@@ -131,23 +132,17 @@ test("an answer the feed cannot parse is no crash: the last counts stay", async 
   }
 });
 
+/** The tests run without a document: the page view is the one a worker's
+ *  page feeds (page-view.ts). */
+const show = (hidden: boolean) =>
+  feedPageView(
+    { hidden, href: "https://example.test/", onLine: true },
+    { type: "visibilitychange" }
+  );
+
 test("the counters are read only while the page is in view", async () => {
   const stub = stubFetch({ features: [] });
-  const listeners = new Set<() => void>();
-  const page = {
-    hidden: true,
-    addEventListener: (_: string, fn: () => void) => listeners.add(fn),
-    removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
-  };
-  const g = globalThis as { document?: unknown };
-  const real = g.document;
-  g.document = page;
-  const show = (hidden: boolean) => {
-    page.hidden = hidden;
-    for (const fn of listeners) {
-      fn();
-    }
-  };
+  show(true);
   let heard = 0;
   const feed = createBikeFeed({
     bounds: [0, 0, 1, 1],
@@ -172,11 +167,9 @@ test("the counters are read only while the page is in view", async () => {
     show(false);
     await settle();
     expect(stub.calls()).toBe(1);
-    feed.stop();
-    expect(listeners.size).toBe(0);
   } finally {
     feed.stop();
-    g.document = real;
+    show(false);
     stub.restore();
   }
 });

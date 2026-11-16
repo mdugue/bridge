@@ -18,7 +18,11 @@ import {
 } from "../../lib/city/tile";
 import type { TileArtifactKind } from "../../lib/city/tile";
 import { TERRAIN_LEVELS, terrainRasterExtras } from "../../lib/city/tileset";
-import type { TerrainExtras } from "../../lib/city/tileset";
+import type {
+  TerrainContent,
+  TerrainExtras,
+  TerrainFiles,
+} from "../../lib/city/tileset";
 import { bakeCoarseCrowns } from "../coarse-crowns";
 import { BAKE_ENTRIES } from "../bake-entries";
 import {
@@ -233,6 +237,7 @@ export async function bakeTerrain(
   level: 0 | 1
 ): Promise<{
   file: string;
+  files: TerrainFiles;
   ground?: number[];
   maxZ: number;
   minZ: number;
@@ -253,19 +258,24 @@ export async function bakeTerrain(
   const inputs =
     level === 0 ? TILES.flatMap(terrainInputs) : terrainInputs(tile);
   const stem = `terrain_${tile}_l${level}`;
+  // The side files the level is dressed with are named on its tile in the
+  // tileset (lib/city/tileset.ts `TerrainFiles`), not in the glb: a lamp
+  // or tree file that changes neither re-bakes the ground nor renames it.
+  const files: TerrainFiles = {
+    // the rasters the tile has, by the artifact table's `terrain` column
+    // (the coarse level reads its 1024² class raster on every tier,
+    // lib/city/tile.ts COARSE_RASTER_PX)
+    ...terrainRasterExtras(names, level, colonyCrops.get(tile)),
+    ...(level === 0
+      ? { dressing: pickFiles(names, DRESSING_KINDS) }
+      : { coarse: pickFiles(names, COARSE_DRESSING_KINDS) }),
+  };
   const described = {
     kind: "terrain" as const,
     tileId: tile,
     level,
     n,
-    // the rasters the tile has, by the artifact table's `terrain` column
-    // (the coarse level reads its 1024² class raster on every tier,
-    // lib/city/tile.ts COARSE_RASTER_PX)
-    ...terrainRasterExtras(names, level, colonyCrops.get(tile)),
     ...waterExtras(tile, level),
-    ...(level === 0
-      ? { dressing: pickFiles(names, DRESSING_KINDS) }
-      : { coarse: pickFiles(names, COARSE_DRESSING_KINDS) }),
   };
   // The passages come from every tile's lines and decks (line-levels.ts);
   // the fine level's walls, kerbs, stairs and fences stand on every tile's
@@ -295,7 +305,7 @@ export async function bakeTerrain(
     minZ: number;
     tin?: TerrainExtras["tin"];
   };
-  const extras: TerrainExtras = {
+  const extras: TerrainContent = {
     ...described,
     bounds: meta.bounds,
     minElevation: meta.minZ,
@@ -317,6 +327,7 @@ export async function bakeTerrain(
   });
   return {
     file: publish(name, glb),
+    files,
     ground: meta.ground,
     minZ: meta.minZ,
     maxZ: meta.maxZ,

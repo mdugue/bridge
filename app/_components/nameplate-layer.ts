@@ -120,13 +120,15 @@ import { trackTexture } from "./three-utils";
 import {
   PAINT,
   DESKTOP_RESOLUTION,
-  facesReady,
   layPlate,
   PHONE_RESOLUTION,
-  loadFaces,
-  rasterPlate,
 } from "./nameplate-glyphs";
-import type { Align, PlateGeometry, PlateRaster } from "./nameplate-glyphs";
+import type {
+  Align,
+  PlateGeometry,
+  PlateRaster,
+  PlateResolution,
+} from "./nameplate-glyphs";
 import type { F, Live, V3 } from "./shader-chunks";
 import type { SunShadowMap } from "./stylize-effect";
 import { readSunShadow, shadowStandIn } from "./sun-shadow-read";
@@ -188,8 +190,17 @@ export interface NameplateDeps {
   lens: ViewLens;
   /** the scene pass's depth */
   depthTexture: DepthTexture;
-  /** the element the page's faces are read off (its CSS variables) */
-  fonts: () => Element | null;
+  /**
+   * The letters of a text in a style's type, rasterised by the page in its
+   * own web faces once they are loaded (nameplate-glyphs.ts `plateLetters`;
+   * the scene's worker has neither the faces nor the CSS that names them,
+   * ADR 0061); null where none can be drawn.
+   */
+  letters: (
+    text: NameplateText,
+    style: RenderStyle,
+    res: PlateResolution
+  ) => Promise<PlateRaster | null>;
   /** the share of these points the city hides from the camera */
   hidden: (camera: Camera, points: Vec3[]) => number;
   groundAt: (x: number, z: number) => number;
@@ -745,37 +756,27 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     uniforms.side.value.set(side[0], side[1], side[2]);
   };
 
-  /** The letters for the text and style, rasterised again only when
-   *  either changed (or the faces arrived); null where none can be drawn. */
+  /** The letters for the text and style, once the page has drawn them
+   *  (`withFaces`); null until then, or where none can be drawn. */
   const lettering = (): PlateRaster | null => {
     const s = subject;
-    const from = deps.fonts();
-    if (!(s && from)) {
-      return null;
+    return s && rasterFor?.text === s.text && rasterFor.style === style
+      ? raster
+      : null;
+  };
+
+  /** The page's letters into the atlas; the bytes go to the texture. */
+  const takeLetters = (r: PlateRaster | null) => {
+    raster = r;
+    if (!r) {
+      return;
     }
-    if (rasterFor?.text === s.text && rasterFor.style === style) {
-      return raster;
-    }
-    raster = rasterPlate(
-      s.text,
-      type(),
-      from,
-      deps.phone ? PHONE_RESOLUTION : DESKTOP_RESOLUTION
-    );
-    rasterFor = { text: s.text, style };
-    if (raster) {
-      atlas.dispose();
-      atlas = atlasTexture(
-        raster.atlas.data,
-        raster.atlas.width,
-        raster.atlas.height
-      );
-      atlasNode.value = atlas;
-      uniforms.texel.value.set(1 / raster.atlas.width, 1 / raster.atlas.height);
-      // the texture has the bytes now; the layout needs only the size
-      raster.atlas.data = new Uint8Array(0);
-    }
-    return raster;
+    atlas.dispose();
+    atlas = atlasTexture(r.atlas.data, r.atlas.width, r.atlas.height);
+    atlasNode.value = atlas;
+    uniforms.texel.value.set(1 / r.atlas.width, 1 / r.atlas.height);
+    // the texture has the bytes now; the layout needs only the size
+    r.atlas.data = new Uint8Array(0);
   };
 
   /** Lays the plate out for the current layout: its alignment, and its
@@ -825,19 +826,14 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     recolour();
   };
 
-  /** Sets the letters once their faces are there: the first question
-   *  in a style waits for them (not set twice, no swap on the plate). */
+  /** Sets the letters once the page has drawn them: the first question
+   *  in a style waits for its faces (not set twice, no swap on the plate).
+   *  Drawn once per text and style; a later question or style wins. */
   const withFaces = () => {
-    const from = deps.fonts();
     generation += 1;
     const asked = generation;
-    // the letters as drawn (a style may set them in capitals, whose
-    // part of a face can differ)
-    const raw = subject
-      ? [subject.text.title, ...subject.text.lines].join(" ")
-      : "";
-    const text = `${raw} ${raw.toLocaleUpperCase("de-DE")}`;
-    if (!from || facesReady(type(), from, text)) {
+    const s = subject;
+    if (!s || lettering()) {
       rebuild();
       return;
     }
@@ -846,13 +842,22 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     setLetters(emptyGeometry());
     letters.visible = false;
     shadow.visible = false;
-    void loadFaces(type(), from, text).then(() => {
-      if (!disposed && asked === generation) {
-        rasterFor = null;
-        rebuild();
-      }
-      return null;
-    });
+    const forStyle = style;
+    void deps
+      .letters(
+        s.text,
+        forStyle,
+        deps.phone ? PHONE_RESOLUTION : DESKTOP_RESOLUTION
+      )
+      .catch(() => null)
+      .then((r) => {
+        if (!disposed && asked === generation) {
+          rasterFor = { text: s.text, style: forStyle };
+          takeLetters(r);
+          rebuild();
+        }
+        return null;
+      });
   };
 
   const placeScene = (

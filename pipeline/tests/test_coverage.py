@@ -45,7 +45,7 @@ def test_tags_read_from_columns_and_other_tags():
 def test_an_undecided_frequent_value_fails(tmp_path, monkeypatch, capsys):
     nodes = {}
     for i in range(MIN_COUNT):
-        nodes[1 + i] = (20 + 10 * i, 20, tags(man_made="flagpole"))
+        nodes[1 + i] = (20 + 10 * i, 20, tags(man_made="antenna"))
         nodes[10 + i] = (20 + 10 * i, 60, tags(man_made="zeppelin_mast"))
     # rare: seen less often than MIN_COUNT
     nodes[30] = (20, 100, tags(man_made="sundial"))
@@ -57,13 +57,13 @@ def test_an_undecided_frequent_value_fails(tmp_path, monkeypatch, capsys):
     nodes = dict(sorted(nodes.items()))
     tile = osm_tile(tmp_path, monkeypatch, nodes, way(100, [40, 42, 41], {"railway": "turntable"}))
     counts = coverage.count(tile.osm_extract(), [tile])
-    assert counts["man_made=flagpole"] == MIN_COUNT
+    assert counts["man_made=antenna"] == MIN_COUNT
     assert counts["railway=turntable"] == 1
     assert coverage.run(tile.osm_extract(), [tile], "t") == 1
     out = capsys.readouterr().out
     assert "man_made=zeppelin_mast" in out.split("does not decide:")[1]
     assert "sundial" not in out.split("does not decide:")[1]
-    assert "planned: flagpoles" in out
+    assert "planned: maypoles and antennas" in out
 
 
 def test_a_decided_site_passes(tmp_path, monkeypatch):

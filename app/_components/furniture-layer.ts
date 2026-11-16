@@ -41,6 +41,7 @@ import {
 } from "three/tsl";
 import type { FurnitureFeature } from "@/lib/city/features";
 import {
+  FLAG_HEIGHT,
   FURNITURE_MODELS,
   furnitureAreas,
   furniturePieces,
@@ -56,6 +57,8 @@ import type { GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
 import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
+import { flagCloths, tileCloths } from "./flag-cloth";
+import type { TileCloths } from "./flag-cloth";
 import { Instances, instancePosition } from "./instancing";
 import { clockMinutes, sceneNight } from "./scene-environment";
 import { markThinCaster, sceneMaterial } from "./three-utils";
@@ -86,13 +89,16 @@ import { markThinCaster, sceneMaterial } from "./three-utils";
  * pillar; an underground one only its small sign plate on a post, drawn
  * 30 % under size so 450 of them do not read as a forest of signs), the
  * clock (a double face on a post, or a disc on its facade) whose hands
- * show the scene's time, the drinking fountain and the bus stop's "H".
+ * show the scene's time, the drinking fountain and the bus stop's "H";
+ * later the flagpole, its cloth flying in the wind (flag-cloth.ts), seen
+ * from further than a bench (`FLAG_IN_M`).
  *
  * Built per fine terrain tile by the dressing plugin (tile-stream.ts), in
- * the Y-up frame, stood on that tile's ground. The four materials (matte,
- * glowing, the flush slab's, the hands') carry nothing of a tile — the
- * clock and the dusk are module uniforms — so every tile wears the same
- * ones (`sceneMaterial`). Non-fatal: missing or empty input yields an
+ * the Y-up frame, stood on that tile's ground. The five materials (matte,
+ * glowing, the flush slab's, the hands', the cloth's) carry nothing of a
+ * tile — the clock, the wind and the dusk are module uniforms — so every
+ * tile wears the same ones (`sceneMaterial`); the cloths are one geometry
+ * per tile and design, freed with the tile (`tileCloths`). Non-fatal: missing or empty input yields an
  * empty group.
  */
 
@@ -589,6 +595,12 @@ function wallClock(): BufferGeometry[] {
   ];
 }
 
+/** A flagpole: a slim mast, stretched to its height (the ball on top and
+ *  the cloth are flag-cloth.ts's, which do not stretch). */
+function flagpole(): BufferGeometry[] {
+  return [pillar(0.05, FLAG_HEIGHT, [0, 0], SLATE)];
+}
+
 /** A drinking fountain: a slim bronze column with a small basin in front. */
 function drinkingWater(): BufferGeometry[] {
   const basin = new SphereGeometry(
@@ -655,6 +667,7 @@ const MODEL_PARTS: Record<FurnitureModel, () => BufferGeometry[]> = {
   hydrantSign,
   clock: poleClock,
   wallClock,
+  flag: flagpole,
   water: drinkingWater,
   stop: stopSign,
 };
@@ -764,6 +777,33 @@ function clockHands(model: "clock" | "wallClock", stood: Stood[]): Instances {
   return mesh;
 }
 
+/** One cell's flag cloths, one set per design, each showing and hiding
+ *  with the cell's masts (the cell's box, not its design's). */
+function flagsOf(cell: Stood[], cloths: TileCloths): Instances[] {
+  const byDesign = new Map<NonNullable<FurniturePiece["design"]>, Stood[]>();
+  for (const s of cell) {
+    const design = s.piece.design ?? "plain";
+    const list = byDesign.get(design) ?? [];
+    list.push(s);
+    byDesign.set(design, list);
+  }
+  return [...byDesign].map(([design, masts]) =>
+    asCell(
+      flagCloths(
+        design,
+        masts.map(({ at, piece }) => ({
+          at,
+          yaw: piece.yaw,
+          height: FLAG_HEIGHT * piece.scaleY,
+        })),
+        cloths
+      ),
+      cell,
+      "flag"
+    )
+  );
+}
+
 function modelGeometry(model: FurnitureModel): BufferGeometry | null {
   const parts = MODEL_PARTS[model]();
   const geo = parts.length > 0 ? mergeGeometries(parts) : null;
@@ -814,6 +854,7 @@ const TALL_FURNITURE: ReadonlySet<FurnitureModel> = new Set<FurnitureModel>([
   "clock",
   "column",
   "columnLit",
+  "flag",
   "pedSignal",
   "playhouse",
   "post",
@@ -995,6 +1036,20 @@ export const FURNITURE_CELL_M = 500;
  */
 export const FURNITURE_IN_M = 350;
 export const FURNITURE_OUT_M = 400;
+/**
+ * The same band for flagpoles: a 3–30 m mast and its 2 m cloth against
+ * the sky still read where a bench is gone, so they come and go further
+ * out (348 masts in four of the seven cities: their draw is nothing).
+ */
+export const FLAG_IN_M = 800;
+export const FLAG_OUT_M = 900;
+/** What a cell's band is: [in, out] (m). */
+type Reach = readonly [number, number];
+const FURNITURE_REACH: Reach = [FURNITURE_IN_M, FURNITURE_OUT_M];
+/** The models that show from further than FURNITURE_IN_M, and their band. */
+const FURTHER_REACH: Partial<Record<FurnitureModel, Reach>> = {
+  flag: [FLAG_IN_M, FLAG_OUT_M],
+};
 
 /** The pieces of each cell (by their site coordinates). */
 function byCell(stood: Stood[]): Stood[][] {
@@ -1009,13 +1064,23 @@ function byCell(stood: Stood[]): Stood[][] {
 }
 
 /** Marks a set as a cell's, with the box its pieces stand in (scene frame,
- *  a few metres for the pieces' own size). */
-function asCell(mesh: Instances, stood: Stood[]): Instances {
+ *  a few metres for the pieces' own size) and the band it shows in (a
+ *  flag's, `FLAG_IN_M`, else `FURNITURE_IN_M`). */
+function asCell(
+  mesh: Instances,
+  stood: Stood[],
+  model?: FurnitureModel
+): Instances {
   const box = new Box3();
   for (const s of stood) {
     box.expandByPoint(s.at);
   }
   mesh.userData.furnitureCell = box.expandByScalar(3);
+  // the model whose cell it is (its cloths and hands go with it)
+  const reach = model && FURTHER_REACH[model];
+  if (reach) {
+    mesh.userData.furnitureReach = reach;
+  }
   return mesh;
 }
 
@@ -1025,13 +1090,16 @@ const cellBox = new Box3();
  * stops' signs) whose pieces are near `eye` (the scene frame), hides the
  * far ones; none hidden without an eye (Modell: its views and exports
  * draw the whole picture at one scale). True when any changed (the shadow
- * map must then be redrawn).
+ * map must then be redrawn); `changed`, when given, hears the world box of
+ * every cell that did (borrowed: read it at once) — only the rings that
+ * can hold it need a redraw, each cell's own.
  */
 export function showFurnitureNear(
   root: Object3D,
-  eye: Vector3 | null
+  eye: Vector3 | null,
+  changed?: (box: Readonly<Box3>) => void
 ): boolean {
-  let changed = false;
+  let any = false;
   root.traverse((child) => {
     const box = child.userData.furnitureCell as Box3 | undefined;
     if (!box) {
@@ -1040,15 +1108,23 @@ export function showFurnitureNear(
     let near = true;
     if (eye) {
       cellBox.copy(box).applyMatrix4(child.matrixWorld);
-      const reach = child.visible ? FURNITURE_OUT_M : FURNITURE_IN_M;
+      const [into, out] =
+        (child.userData.furnitureReach as Reach | undefined) ?? FURNITURE_REACH;
+      const reach = child.visible ? out : into;
       near = cellBox.distanceToPoint(eye) <= reach;
     }
     if (near !== child.visible) {
       child.visible = near;
-      changed = true;
+      any = true;
+      if (changed) {
+        // without an eye the box was not placed yet
+        changed(
+          eye ? cellBox : cellBox.copy(box).applyMatrix4(child.matrixWorld)
+        );
+      }
     }
   });
-  return changed;
+  return any;
 }
 
 /** One tile's street furniture as instanced models on its ground. */
@@ -1093,6 +1169,7 @@ export function* furnitureSteps(
   if (byModel.size === 0 && areas.length === 0) {
     return group;
   }
+  const cloths = tileCloths();
   for (const model of FURNITURE_MODELS) {
     const stood = byModel.get(model);
     const geo = stood ? modelGeometry(model) : null;
@@ -1104,9 +1181,14 @@ export function* furnitureSteps(
           cell,
           model === "columnLit" ? materials.glow() : materials.matte()
         );
-        group.add(asCell(mesh, cell));
+        group.add(asCell(mesh, cell, model));
         if (model === "clock" || model === "wallClock") {
-          group.add(asCell(clockHands(model, cell), cell));
+          group.add(asCell(clockHands(model, cell), cell, model));
+        }
+        if (model === "flag") {
+          for (const flags of flagsOf(cell, cloths)) {
+            group.add(flags);
+          }
         }
       }
     }
