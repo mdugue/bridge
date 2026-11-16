@@ -16,7 +16,8 @@
  *   agree, no compile queued;
  * - the timings: `getTimings()` at `ready`, on both;
  * - the lite spawn's builds against WebGPU's limits (`getPipelineBudget`
- *   once no compile is queued: plan 094's rows, gated);
+ *   on the phone, once its cache has settled with no compile queued:
+ *   plan 094's rows, gated);
  * - with `LEDGER_CENSUS` (a comma-separated list of sites; `bun run ledger
  *   -- --census`), plan 094's census: each site flown in the whole-site
  *   profile with its data layers on, and Dresden once more in Modell
@@ -300,12 +301,6 @@ test("the first load's JavaScript, and the desktop's timings", async ({
     });
   reading.adapter = await adapterOf(page);
   reading.browser = `${browser.browserType().name()} ${browser.version()}`;
-  // plan 094's rows: every build of the lite spawn, once nothing is
-  // queued to compile (a late part's builds among them)
-  await settled(page, READY_MS);
-  const budget = await budgetOf(page);
-  expect(budget.unread).toBe(0);
-  reading.pipelines = budget.rows;
   await context.close();
 });
 
@@ -355,6 +350,12 @@ test("a phone's tile cache, and its timings", async ({ browser }) => {
     gpu = await debug();
   }
   expect(loadedEntries(gpu?.tileCache.tiles ?? []).length).toBeGreaterThan(0);
+  // plan 094's rows: every build of the lite spawn, read here, where the
+  // cache has settled with no compile queued (on the desktop page the
+  // wait for that cost the read a minute)
+  const budget = await budgetOf(page);
+  expect(budget.unread).toBe(0);
+  reading.pipelines = budget.rows;
   reading.phone = {
     tier: gpu?.tier ?? "",
     held: { ...gpu?.held },
@@ -420,12 +421,12 @@ async function settled(
   const start = Date.now();
   let quietBefore = false;
   for (;;) {
-    const quiet = await quietNow(page);
+    const isQuiet = await quietNow(page);
     const waitedMs = Date.now() - start;
-    if ((quiet && quietBefore) || waitedMs > capMs) {
-      return { settled: quiet && quietBefore, waitedMs };
+    if ((isQuiet && quietBefore) || waitedMs > capMs) {
+      return { settled: isQuiet && quietBefore, waitedMs };
     }
-    quietBefore = quiet;
+    quietBefore = isQuiet;
     await page.waitForTimeout(QUIET_GAP_MS);
   }
 }
@@ -443,10 +444,13 @@ async function budgetOf(page: Page): Promise<{
     if (!handle) {
       throw new Error("handle not published");
     }
-    const before = (await handle.getRenderInfo()).memory.programs ?? 0;
+    const was = await handle.getRenderInfo();
     const budget = await handle.getPipelineBudget();
-    const after = (await handle.getRenderInfo()).memory.programs ?? 0;
-    return { ...budget, probeBuilt: after - before };
+    const now = await handle.getRenderInfo();
+    return {
+      ...budget,
+      probeBuilt: (now.memory.programs ?? 0) - (was.memory.programs ?? 0),
+    };
   });
   return {
     left: read.left,
@@ -472,12 +476,16 @@ function collectErrors(page: Page): Set<string> {
 
 /** The site's tileset extras, read through its manifest. */
 async function siteOf(page: Page, site: string): Promise<CensusSite> {
-  const manifest = (await (
-    await page.request.get(`/data/${site}/${MANIFEST_FILE}`)
-  ).json()) as { files: Record<string, string> };
-  const tileset = (await (
-    await page.request.get(`/data/${site}/${manifest.files[TILESET_FILE]}`)
-  ).json()) as { extras: CensusSite };
+  const manifestResponse = await page.request.get(
+    `/data/${site}/${MANIFEST_FILE}`
+  );
+  const manifest = (await manifestResponse.json()) as {
+    files: Record<string, string>;
+  };
+  const tilesetResponse = await page.request.get(
+    `/data/${site}/${manifest.files[TILESET_FILE]}`
+  );
+  const tileset = (await tilesetResponse.json()) as { extras: CensusSite };
   return tileset.extras;
 }
 
@@ -499,7 +507,7 @@ async function readStop(
   page: Page,
   name: string
 ): Promise<{ builds: CensusBuild[]; moment: CensusMoment; stop: CensusStop }> {
-  const quiet = await settled(page, STOP_CAP_MS);
+  const rest = await settled(page, STOP_CAP_MS);
   const moment = await momentOf(page);
   const budget = await budgetOf(page);
   return {
@@ -507,7 +515,7 @@ async function readStop(
     moment,
     stop: {
       name,
-      ...quiet,
+      ...rest,
       rows: budget.rows.length,
       left: budget.left,
       probeBuilt: budget.probeBuilt,
@@ -545,7 +553,7 @@ async function modellOf(
   flight: Omit<CensusFlightReading, "builds" | "end" | "ready" | "stops">,
   errors: Set<string>
 ): Promise<CensusFlightReading> {
-  const ready = await momentOf(page);
+  const before = await momentOf(page);
   await page.keyboard.press("KeyM");
   await page.waitForFunction(
     () => {
@@ -559,7 +567,7 @@ async function modellOf(
   const read = await readStop(page, "modell");
   return {
     ...flight,
-    ready,
+    ready: before,
     end: read.moment,
     stops: [read.stop],
     builds: read.builds,
@@ -590,7 +598,8 @@ for (const site of CENSUS_SITES) {
       window.__poc?.handle?.getCameraState()
     );
     const extras = await dressForCensus(page, site);
-    const plan = censusFlight(await siteOf(page, site));
+    const census = await siteOf(page, site);
+    const plan = censusFlight(census);
     const builds: CensusBuild[] = [];
     const stops: CensusStop[] = [];
     let end = ready0;
@@ -602,7 +611,7 @@ for (const site of CENSUS_SITES) {
     }
     const flight: CensusFlightReading = {
       site,
-      tiles: (await siteOf(page, site)).tiles.length,
+      tiles: census.tiles.length,
       extras,
       ready: ready0,
       end,

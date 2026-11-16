@@ -1599,8 +1599,9 @@ compared.
   a timing depends on the runner drawn. `browser.readWith` names the
   browser and adapter beside the figures, uncompared too.
 - **The builds against WebGPU's limits** (`browser.pipelines`, plan
-  094): on the desktop page, once no compile is queued, every build the
-  lite spawn draws with, from `handle.getPipelineBudget()` (the e2e
+  094): on the phone page, once its cache has settled with no compile
+  queued (on the desktop page the wait for that cost a minute), every
+  build the lite spawn draws with, from `handle.getPipelineBudget()` (the e2e
   "limits" test's probe), named `key [draw: layout] shadowed camera`,
   each with the vertex buffers, attributes and inter-stage variables it
   takes of WebGPU's 8, 16 and 16 and the variables it has spare

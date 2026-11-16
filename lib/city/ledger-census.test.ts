@@ -28,6 +28,18 @@ const build = (patch: Partial<CensusBuild> = {}): CensusBuild => ({
   ...patch,
 });
 
+const tile = (id: string, e: number, n: number) => ({
+  id,
+  bounds: [e, n, e + 2000, n + 2000] as [number, number, number, number],
+});
+
+const moment = (framedOther: number, programs: number) => ({
+  framedOther,
+  framedShadow: 1,
+  programs,
+  timings: {},
+});
+
 test("a material key's family is what comes before its first value", () => {
   expect(keyFamily("bridge-deck:road:ffeedd")).toBe("bridge-deck");
   expect(keyFamily("bridge-stone:c0c0c0")).toBe("bridge-stone");
@@ -98,10 +110,6 @@ test("the gated rows: one per build, the four counts", () => {
 });
 
 test("the flight: an overview, then the spawn and the tiles farthest from those seen", () => {
-  const tile = (id: string, e: number, n: number) => ({
-    id,
-    bounds: [e, n, e + 2000, n + 2000] as [number, number, number, number],
-  });
   const poses = censusFlight({
     ground: [100, 140],
     offset: { cx: 1000, cy: 1000 },
@@ -163,12 +171,6 @@ test("the compile waits over the flight: counts and totals subtracted, the large
 });
 
 test("a flight's figures: families made from data, the tightest builds, the counters", () => {
-  const moment = (framedOther: number, programs: number) => ({
-    framedOther,
-    framedShadow: 1,
-    programs,
-    timings: {},
-  });
   const flight: CensusFlightReading = {
     site: "x",
     tiles: 2,

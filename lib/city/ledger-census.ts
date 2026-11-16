@@ -137,6 +137,31 @@ const centreOf = (b: TerrainBounds) => ({
   n: (b[1] + b[3]) / 2,
 });
 
+/** The Manhattan distance between two points (m). */
+const distance = (a: { e: number; n: number }, b: { e: number; n: number }) =>
+  Math.abs(a.e - b.e) + Math.abs(a.n - b.n);
+
+/** Of `from` not yet in `seen`, the one farthest from all of `seen` (the
+ *  first such on a tie). */
+function farthest<T extends { e: number; n: number }>(
+  from: readonly T[],
+  seen: readonly T[]
+): T | undefined {
+  let best: T | undefined;
+  let bestDistance = -1;
+  for (const c of from) {
+    if (seen.includes(c)) {
+      continue;
+    }
+    const d = Math.min(...seen.map((s) => distance(c, s)));
+    if (d > bestDistance) {
+      best = c;
+      bestDistance = d;
+    }
+  }
+  return best;
+}
+
 /**
  * The scripted flight over a site: an overview from far off over the
  * site's centre, then down to the spawn tile and to the tiles farthest
@@ -167,20 +192,8 @@ export function censusFlight(site: CensusSite): CensusPose[] {
     },
   ];
   const chosen: typeof centres = [];
-  const distance = (a: { e: number; n: number }, b: { e: number; n: number }) =>
-    Math.abs(a.e - b.e) + Math.abs(a.n - b.n);
   while (chosen.length < Math.min(CENSUS_LOW_STOPS, centres.length)) {
-    const next =
-      chosen.length === 0
-        ? centres[0]
-        : centres
-            .filter((c) => !chosen.includes(c))
-            .reduce((best, c) =>
-              Math.min(...chosen.map((s) => distance(c, s))) >
-              Math.min(...chosen.map((s) => distance(best, s)))
-                ? c
-                : best
-            );
+    const next = chosen.length === 0 ? centres[0] : farthest(centres, chosen);
     if (!next) {
       break;
     }
@@ -212,7 +225,7 @@ export const buildName = (b: CensusBuild): string =>
  */
 export function keyFamily(key: string): string {
   const stem = key.split(/[:|]/u)[0] ?? key;
-  return /^(.+?)-\d/u.exec(stem)?.[1] ?? stem;
+  return /^(?<family>.+?)-\d/u.exec(stem)?.groups?.family ?? stem;
 }
 
 /** The distinct builds of `rows`, one per name, sorted. */
@@ -235,7 +248,7 @@ export interface PipelineFigure {
 }
 
 export const PIPELINES_NOTE =
-  "Every build the lite scene draws with at the spawn (/dresden?scene=lite, ready, no compile queued): its WGSL read through renderer.debug.getShaderAsync and counted by lib/city/wgsl-budget.ts (pipeline-budget.ts), named key [draw: layout] shadowed camera. vertexBuffers, attributes and interStage are what the build takes of WebGPU's 8, 16 and 16; spare is what a new varying still fits into. A row that moves is a layer coming nearer a limit (plan 094).";
+  "Every build the lite scene draws with at the spawn on the phone page (/dresden?scene=lite, isMobile; read once its tile cache has settled with no compile queued): its WGSL read through renderer.debug.getShaderAsync and counted by lib/city/wgsl-budget.ts (pipeline-budget.ts), named key [draw: layout] shadowed camera. vertexBuffers, attributes and interStage are what the build takes of WebGPU's 8, 16 and 16; spare is what a new varying still fits into. A row that moves is a layer coming nearer a limit (plan 094).";
 
 /** The lite spawn's builds as the ledger gates them. */
 export function pipelineFigures(rows: readonly CensusBuild[]): {
