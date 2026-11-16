@@ -22,7 +22,7 @@ export const PACKED_EXTENSIONS = [".png", ".webp", ".gz"] as const;
 /** The gzip level a static host compresses the rest at. */
 export const WIRE_GZIP_LEVEL = 6;
 export const WIRE_RULE =
-  ".png, .webp and .gz at face value; every other file gzipped at level 6 (Bun's zlib). The gated byte figures leave out the buildings' glTF (city_*.glb.gz, near and far) and the tileset JSONs that name them by hash, but count them as files; `recorded` keeps the full wire bytes, never compared.";
+  ".png, .webp and .gz at face value; every other file gzipped at level 6 (Bun's zlib) — a stand-in for what a host sends (Vercel sends text as brotli), kept constant so the figures compare over time, exact once plan 088 stores files in their transport encoding. The gated figures are those of CI's platform (linux-x64, the pinned Bun): regenerate the ledger there or in a cloud session. The gated byte figures leave out the buildings' glTF (city_*.glb.gz, near and far) and the tileset JSONs that name them by hash, but count them as files; `recorded` keeps the full wire bytes, never compared.";
 
 /** The published files whose bytes depend on the machine that baked the
  *  buildings: their glTF, near and far (served
@@ -344,6 +344,14 @@ export function weigh(
   };
 }
 
+/** Strings by their code units: no locale reorders a gated figure. */
+function codeOrder(a: string, b: string): number {
+  if (a === b) {
+    return 0;
+  }
+  return a < b ? -1 : 1;
+}
+
 /** The spawn (first), median (the lower of an even count) and largest tile
  *  by bytes; ties go to the tile id, so the figures are a function of the
  *  files alone. */
@@ -360,7 +368,7 @@ export function setFigures(
     throw new Error("ledger: no tiles");
   }
   const sorted = weights.toSorted(
-    (a, b) => a.bytes - b.bytes || a.tile.localeCompare(b.tile)
+    (a, b) => a.bytes - b.bytes || codeOrder(a.tile, b.tile)
   );
   const median = sorted[Math.floor((sorted.length - 1) / 2)] ?? spawn;
   const largest = sorted.at(-1) ?? spawn;

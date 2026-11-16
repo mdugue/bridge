@@ -256,6 +256,11 @@ function main(check: boolean): void {
         : `${moved.length} figures differ: run bun scripts/ledger.ts and commit qa/ledger.json\n`
     );
     if (moved.length > 0) {
+      // the gated JSON bytes are zlib's on CI's platform: a platform
+      // difference shows here at a glance
+      process.stdout.write(
+        `platform: here ${machine()}; the ledger's record: ${was?.machine ?? "(none)"}\n`
+      );
       process.exitCode = 1;
     }
     return;
