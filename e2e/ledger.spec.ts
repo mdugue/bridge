@@ -14,7 +14,15 @@
  *   with `isMobile` and `hasTouch`, the scene's own tier asserted mobile,
  *   read until two reads further apart than a late part's compile wait
  *   agree, no compile queued;
- * - the timings: `getTimings()` at `ready`, on both.
+ * - the timings: `getTimings()` at `ready`, on both;
+ * - the lite spawn's builds against WebGPU's limits (`getPipelineBudget`
+ *   on the phone, once its cache has settled with no compile queued:
+ *   plan 094's rows, gated);
+ * - with `LEDGER_CENSUS` (a comma-separated list of sites; `bun run ledger
+ *   -- --census`), plan 094's census: each site flown in the whole-site
+ *   profile with its data layers on, and Dresden once more in Modell
+ *   (lib/city/ledger-census.ts) — tens of minutes on SwiftShader, so never
+ *   on CI.
  *
  * Never retried: a first read that differs is the finding. Both pages run
  * `/dresden?scene=lite` on SwiftShader, as the specs do.
@@ -34,6 +42,24 @@ import type {
   CacheEntry,
   TimingFigure,
 } from "../lib/city/ledger-browser";
+import { censusBuild, censusFlight } from "../lib/city/ledger-census";
+import type {
+  CensusBuild,
+  CensusFlightReading,
+  CensusMoment,
+  CensusPose,
+  CensusSite,
+  CensusStop,
+} from "../lib/city/ledger-census";
+import { siteDataLayers } from "../lib/city/data-layers";
+import { MANIFEST_FILE } from "../lib/city/tile";
+import { TILESET_FILE } from "../lib/city/tileset";
+import { isSiteId, SITES } from "../sites";
+import {
+  BIKE_COUNTS_BODY,
+  BIKE_COUNTS_ROUTE,
+  designBlockGlb,
+} from "./scene-fixtures";
 import { SWIFTSHADER_WEBGPU } from "./swiftshader-webgpu";
 
 const LITE = "/dresden?scene=lite";
@@ -47,6 +73,22 @@ test.describe.configure({ mode: "serial", retries: 0, timeout: 2 * READY_MS });
 
 const reading: Partial<BrowserReading> = {};
 const timings: Partial<BrowserReading["timings"]> = {};
+
+/** The sites the census flies (`LEDGER_CENSUS`), each a site id. */
+const CENSUS_SITES = (process.env.LEDGER_CENSUS ?? "")
+  .split(",")
+  .filter((site) => site !== "");
+/** The census page's viewport: the whole-site spec's (city-walk.spec.ts
+ *  `SITE_VIEWPORT`), whose frames cost a third of 800×600's. */
+const CENSUS_VIEWPORT = { width: 400, height: 300 };
+/** How long a stop waits for the stream and the compiles to fall quiet
+ *  before it is read as it is (ms): unsettled, and said so. */
+const STOP_CAP_MS = 240_000;
+/** How long one site's census may take (ms). */
+const CENSUS_TIMEOUT_MS = 60 * 60_000;
+/** Where the design block stands on Dresden's spawn tile: by the
+ *  Albertplatz, in the Land's coordinates, NHN (city-walk.spec.ts). */
+const DESIGN_AT: [number, number, number] = [412_300, 112, -5_657_420];
 
 /** Waits for the scene's `ready`. */
 async function ready(page: Page): Promise<void> {
@@ -308,6 +350,13 @@ test("a phone's tile cache, and its timings", async ({ browser }) => {
     gpu = await debug();
   }
   expect(loadedEntries(gpu?.tileCache.tiles ?? []).length).toBeGreaterThan(0);
+  // plan 094's rows: every build of the lite spawn, read here, where the
+  // cache has settled with no compile queued (on the desktop page the
+  // wait for that cost the read a minute)
+  const budget = await budgetOf(page);
+  expect(budget.unread).toBe(0);
+  expect(budget.left).toBe(0);
+  reading.pipelines = budget.rows;
   reading.phone = {
     tier: gpu?.tier ?? "",
     held: { ...gpu?.held },
@@ -315,6 +364,288 @@ test("a phone's tile cache, and its timings", async ({ browser }) => {
   };
   await context.close();
 });
+
+/** The scene's counters now (`CensusMoment`). */
+async function momentOf(page: Page): Promise<CensusMoment> {
+  return await page.evaluate(async () => {
+    const handle = window.__poc?.handle;
+    if (!handle) {
+      throw new Error("handle not published");
+    }
+    const info = await handle.getRenderInfo();
+    return {
+      framedOther: info.framedBuilds.other,
+      framedShadow: info.framedBuilds.shadow,
+      programs: info.memory.programs ?? 0,
+      timings: await handle.getTimings(),
+    };
+  });
+}
+
+/** Frames the scene must draw at a new pose before its stream's state
+ *  is believed: the stream asks for tiles on the frames after a move, and
+ *  the mirror reports it a frame later. */
+const FRAMES_AFTER_MOVE = 4;
+/** How far apart two quiet reads must be (ms). */
+const QUIET_GAP_MS = 2000;
+
+/** Waits for `count` more frames of the scene. */
+async function frames(page: Page, count: number): Promise<void> {
+  const start = await page.evaluate(() => window.__poc?.frames ?? 0);
+  await page.waitForFunction(
+    (target) => (window.__poc?.frames ?? 0) >= target,
+    start + count,
+    { timeout: READY_MS }
+  );
+}
+
+/** Whether the view rests, the stream is quiet and no compile is queued. */
+async function quietNow(page: Page): Promise<boolean> {
+  return await page.evaluate(async () => {
+    const handle = window.__poc?.handle;
+    const info = await handle?.getRenderInfo();
+    return (
+      handle?.viewMoving() === false &&
+      !handle.streamBusy() &&
+      info?.compilesQueued === 0
+    );
+  });
+}
+
+/** Waits until two reads `QUIET_GAP_MS` apart find the scene quiet
+ *  (`quietNow`), at most `capMs`; whether it got there, and after how
+ *  long. */
+async function settled(
+  page: Page,
+  capMs: number
+): Promise<{ settled: boolean; waitedMs: number }> {
+  const start = Date.now();
+  let quietBefore = false;
+  for (;;) {
+    const isQuiet = await quietNow(page);
+    const waitedMs = Date.now() - start;
+    if ((isQuiet && quietBefore) || waitedMs > capMs) {
+      return { settled: isQuiet && quietBefore, waitedMs };
+    }
+    quietBefore = isQuiet;
+    await page.waitForTimeout(QUIET_GAP_MS);
+  }
+}
+
+/** Every build the scene holds, against WebGPU's limits, and the programs
+ *  the read itself made. */
+async function budgetOf(page: Page): Promise<{
+  left: number;
+  probeBuilt: number;
+  rows: CensusBuild[];
+  unread: number;
+}> {
+  const read = await page.evaluate(async () => {
+    const handle = window.__poc?.handle;
+    if (!handle) {
+      throw new Error("handle not published");
+    }
+    const was = await handle.getRenderInfo();
+    const budget = await handle.getPipelineBudget();
+    const now = await handle.getRenderInfo();
+    return {
+      ...budget,
+      probeBuilt: (now.memory.programs ?? 0) - (was.memory.programs ?? 0),
+    };
+  });
+  return {
+    left: read.left,
+    probeBuilt: read.probeBuilt,
+    rows: read.rows.map(censusBuild),
+    unread: read.unread,
+  };
+}
+
+/** Console and page errors, each once. */
+function collectErrors(page: Page): Set<string> {
+  const seen = new Set<string>();
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      seen.add(message.text().slice(0, 300));
+    }
+  });
+  page.on("pageerror", (error) => {
+    seen.add(error.message.slice(0, 300));
+  });
+  return seen;
+}
+
+/** The site's tileset extras, read through its manifest. */
+async function siteOf(page: Page, site: string): Promise<CensusSite> {
+  const manifestResponse = await page.request.get(
+    `/data/${site}/${MANIFEST_FILE}`
+  );
+  const manifest = (await manifestResponse.json()) as {
+    files: Record<string, string>;
+  };
+  const tilesetResponse = await page.request.get(
+    `/data/${site}/${manifest.files[TILESET_FILE]}`
+  );
+  const tileset = (await tilesetResponse.json()) as { extras: CensusSite };
+  return tileset.extras;
+}
+
+/** Flies to a stop, waits for it, reads it: its stop record, the moment
+ *  before the read, and the builds. */
+async function stopAt(
+  page: Page,
+  pose: CensusPose
+): Promise<{ builds: CensusBuild[]; moment: CensusMoment; stop: CensusStop }> {
+  await page.evaluate((p) => {
+    window.__poc?.handle?.flyTo(p.pos, p.target);
+  }, pose);
+  await frames(page, FRAMES_AFTER_MOVE);
+  return await readStop(page, pose.name);
+}
+
+/** Waits for the view to settle where it is and reads it (`stopAt`). */
+async function readStop(
+  page: Page,
+  name: string
+): Promise<{ builds: CensusBuild[]; moment: CensusMoment; stop: CensusStop }> {
+  const rest = await settled(page, STOP_CAP_MS);
+  const moment = await momentOf(page);
+  const budget = await budgetOf(page);
+  return {
+    builds: budget.rows,
+    moment,
+    stop: {
+      name,
+      ...rest,
+      rows: budget.rows.length,
+      left: budget.left,
+      unread: budget.unread,
+      probeBuilt: budget.probeBuilt,
+    },
+  };
+}
+
+/** Switches on every data layer the site has, and on Dresden loads the
+ *  design block; what it switched on. */
+async function dressForCensus(page: Page, site: string): Promise<string[]> {
+  const layers = isSiteId(site)
+    ? siteDataLayers(SITES[site].dataLayers).map((def) => def.key)
+    : [];
+  await page.evaluate((keys) => {
+    window.__poc?.look?.set(Object.fromEntries(keys.map((k) => [k, true])));
+  }, layers);
+  if (site !== "dresden") {
+    return layers;
+  }
+  const glb = await designBlockGlb(DESIGN_AT);
+  await page.evaluate(
+    async (bytes) => {
+      await window.__poc?.handle?.design.load([
+        new File([new Uint8Array(bytes)], "block.glb"),
+      ]);
+    },
+    [...glb]
+  );
+  return [...layers, "design:block.glb"];
+}
+
+/** Enters Modell where the view is and reads it once settled. */
+async function modellOf(
+  page: Page,
+  flight: Omit<CensusFlightReading, "builds" | "end" | "ready" | "stops">,
+  errors: Set<string>
+): Promise<CensusFlightReading> {
+  const before = await momentOf(page);
+  await page.keyboard.press("KeyM");
+  await page.waitForFunction(
+    () => {
+      const handle = window.__poc?.handle;
+      const hud = handle?.getModelHud();
+      return handle?.getViewMode() === "model" && hud && !hud.transitioning;
+    },
+    undefined,
+    { timeout: STOP_CAP_MS }
+  );
+  const read = await readStop(page, "modell");
+  return {
+    ...flight,
+    ready: before,
+    end: read.moment,
+    stops: [read.stop],
+    builds: read.builds,
+    errors: [...errors],
+  };
+}
+
+for (const site of CENSUS_SITES) {
+  test(`census: ${site}, the whole site with its data layers`, async ({
+    browser,
+  }) => {
+    test.setTimeout(CENSUS_TIMEOUT_MS);
+    const context = await browser.newContext({ viewport: CENSUS_VIEWPORT });
+    const page = await context.newPage();
+    const errors = collectErrors(page);
+    await page.route(
+      BIKE_COUNTS_ROUTE,
+      async (route) =>
+        await route.fulfill({
+          contentType: "application/geo+json",
+          body: BIKE_COUNTS_BODY,
+        })
+    );
+    await page.goto(`/${site}?scene=lite&block=1`);
+    await ready(page);
+    const ready0 = await momentOf(page);
+    const spawn = await page.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    const extras = await dressForCensus(page, site);
+    // the layers' and the design's own builds land here, before the
+    // flight's window opens
+    await frames(page, FRAMES_AFTER_MOVE);
+    await settled(page, STOP_CAP_MS);
+    const dressed = await momentOf(page);
+    const census = await siteOf(page, site);
+    const plan = censusFlight(census);
+    const builds: CensusBuild[] = [];
+    const stops: CensusStop[] = [];
+    let end = dressed;
+    for (const pose of plan) {
+      const read = await stopAt(page, pose);
+      builds.push(...read.builds);
+      stops.push(read.stop);
+      end = read.moment;
+    }
+    const flight: CensusFlightReading = {
+      site,
+      tiles: census.tiles.length,
+      extras,
+      ready: ready0,
+      dressed,
+      end,
+      stops,
+      builds,
+      errors: [...errors],
+    };
+    (reading.census ??= { flights: [] }).flights.push(flight);
+    if (site === "dresden" && spawn) {
+      // Modell once, from the spawn: its parallel camera's builds are its
+      // own (three r187 keys a build by the kind of camera)
+      await page.evaluate((state) => {
+        window.__poc?.handle?.applyCameraState(state);
+      }, spawn);
+      await frames(page, FRAMES_AFTER_MOVE);
+      await settled(page, STOP_CAP_MS);
+      errors.clear();
+      reading.census.modell = await modellOf(
+        page,
+        { site, tiles: flight.tiles, extras, errors: [] },
+        errors
+      );
+    }
+    await context.close();
+  });
+}
 
 test.afterAll(() => {
   if (!OUT) {

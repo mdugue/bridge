@@ -427,7 +427,9 @@ and therefore what keeps builds out of frames:
   three's vertex stage names, by the geometry's distinct buffers); a
   layer the lite scene does not draw — traffic, the very one that
   vanished, the data layers, the designs — tests its own count
-  (`traffic-layer.test.ts`).
+  (`traffic-layer.test.ts`), and the ledger's census (`bun run ledger
+  -- --census`, by hand) reads the whole site's builds with the same
+  probe, data layers on and a design loaded.
 - **Points are 1 px on WebGPU**, whatever their size. The lamp halos are
   billboard quads: an `Instances` set under a `PointsNodeMaterial`.
 - **No tone mapping.** The output node is `renderOutput(…, NoToneMapping,
