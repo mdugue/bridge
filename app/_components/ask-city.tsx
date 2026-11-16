@@ -730,7 +730,7 @@ const Conversation = ({
       fetchServerSentEvents("/api/frag", () => {
         const at = askVisitorHeader({
           ...scene.where(),
-          seitenverhaeltnis: scene.frame().aspect,
+          seitenverhaeltnis: scene.aspect(),
         });
         return {
           // a refusal's code reaches the card as an answer's error does
@@ -883,11 +883,12 @@ const Conversation = ({
                         onPlace={
                           chat.isLoading
                             ? null
-                            : (place) =>
-                                showPlaces(scene, {
+                            : (place) => {
+                                void showPlaces(scene, {
                                   ziele: [place],
                                   aus_der_luft: !chips?.onFoot,
-                                })
+                                });
+                              }
                         }
                         pending={pending}
                         places={shownPlaces(chips?.places ?? [], scene)}

@@ -51,6 +51,7 @@ const provenance: SiteProvenance = {
         bridges: "2026-09-19",
         fountains: "2026-09-19",
         trees: "2026-09-26",
+        furniture: "2026-11-07",
       },
     },
     trees: {
@@ -698,4 +699,17 @@ test("a playground piece found in the surface model says it was measured there",
   expect(card.sources[0]?.text).toBe(
     "Lage und Höhe gemessen: Digitales Oberflächenmodell DOM1"
   );
+});
+
+test("a piece of furniture quotes its own extract's edition, not the trees'", () => {
+  const card = furnitureCard(
+    {
+      kind: "furniture",
+      tile: "t",
+      position: at,
+      properties: { k: "flag" },
+    },
+    provenance
+  );
+  expect(card.sources[0]?.text).toContain("Stand 07.11.2026");
 });

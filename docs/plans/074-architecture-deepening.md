@@ -201,7 +201,7 @@ the three features need.
 **What was kept** (`refactor(scene)`, byte-neutral as measured: +97 B
 gz; the decision is ADR 0040): the seam itself. `feature-seam.ts` — the
 spine's hooks (`frame`, `streamChange`, the look store, the scene's
-clock as a watched value a late starter reads first), `lazyFeature` (starts once, on first want;
+clock as a watched value a late starter reads first), `lazyFeature` (since 2026-11-11 `startOnce`: starts once, on first want;
 never after the spine is gone; a failed load asked for again — by the
 spine on the next switch-on, `wantOnSwitchOn`);
 `data-layers-feature.ts` — the data layers start on the first switch-on

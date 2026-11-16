@@ -53,6 +53,49 @@ export function sunDirectionWorld(date: Date, lat: number, lng: number): Vec3 {
   return enuToWorld(sunDirectionEnu(date, lat, lng));
 }
 
+/** Where the sun stands for the HUD and the scene: above the horizon or
+ *  not, how high, and how far into the night. */
+export interface SunState {
+  aboveHorizon: boolean;
+  altitudeDeg: number;
+  /** 0 (full day) → 1 (civil dusk and below): drives the street-lamp ignition */
+  nightFactor: number;
+}
+
+/** smoothstep ramping 1→0 as x rises from edge0 to edge1 (edges may invert). */
+function smoothstepDown(edge0: number, edge1: number, x: number): number {
+  const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
+  return t * t * (3 - 2 * t);
+}
+
+/** The night factor at a sun altitude (°): 0 by day, 1 from civil dusk
+ *  (−6°) — what lights the lamps, and what the picture styles' nights
+ *  follow (stylize-effect.ts, paper-scene.ts). */
+export function nightFactorAt(altitudeDeg: number): number {
+  return smoothstepDown(2, -6, altitudeDeg);
+}
+
+/** The sun's altitude (°) from its world direction's height. */
+export function altitudeOf(y: number): number {
+  return (Math.asin(Math.min(Math.max(y, -1), 1)) * 180) / Math.PI;
+}
+
+/** Where the sun stands at `date` over `latLng`, without moving the rig:
+ *  what the HUD shows for the instant it asked for (the scene's sun rig
+ *  agrees: it stands the sun by the same direction). */
+export function sunStateAt(
+  date: Date,
+  latLng: { lat: number; lng: number }
+): SunState {
+  const d = sunDirectionWorld(date, latLng.lat, latLng.lng);
+  const altitudeDeg = altitudeOf(d.y);
+  return {
+    aboveHorizon: d.y > 0,
+    altitudeDeg,
+    nightFactor: nightFactorAt(altitudeDeg),
+  };
+}
+
 /**
  * Sunrise, sunset and the rest for the calendar day `day` names (its
  * year, month and date as the browser reads them), at the city: that day

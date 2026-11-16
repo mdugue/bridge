@@ -29,7 +29,10 @@ import type { CityJsonDocument } from "../../lib/city/types";
 import { BAKE_ENTRIES } from "../bake-entries";
 import { cropColonyRaster } from "../crop-raster";
 import type { ColonyCrop } from "../crop-raster";
-import { downsampleClassRaster } from "../downsample-raster";
+import {
+  downsampleClassRaster,
+  downsampleInterleaved,
+} from "../downsample-raster";
 import {
   SITE,
   TILES,
@@ -167,18 +170,20 @@ export async function publishCanopy(
   return publish(packed, bytes);
 }
 
-/** A class raster downsampled to the size the artifact table names
- *  (lib/city/tile.ts), published. */
+/** A raster downsampled to the size the artifact table names
+ *  (lib/city/tile.ts), published: a class raster, or one of `channels`
+ *  interleaved bytes a texel. */
 export async function publishClassRaster(
   file: string,
   src: string,
-  raster: number
+  raster: number,
+  channels?: 2 | 4
 ): Promise<string> {
-  const key = cacheKey([src], BAKE_ENTRIES.classRaster);
-  const bytes = await cached(
-    file,
-    key,
-    async () => await downsampleClassRaster(src, raster)
+  const key = cacheKey([src], BAKE_ENTRIES.classRaster, channels ?? 1);
+  const bytes = await cached(file, key, async () =>
+    channels
+      ? await downsampleInterleaved(src, raster, channels)
+      : await downsampleClassRaster(src, raster)
   );
   return publish(file, bytes);
 }

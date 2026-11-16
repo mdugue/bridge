@@ -54,7 +54,7 @@ export function runShown(scene: AskScene, call: ShownCall): void {
   switch (call.name) {
     case "zeige": {
       if (Array.isArray(a.ziele) && a.ziele.length > 0) {
-        showPlaces(
+        void showPlaces(
           scene,
           {
             ziele: a.ziele as AskPlace[],

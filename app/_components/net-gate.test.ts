@@ -5,24 +5,29 @@ import type { GatePage } from "./net-gate";
 /** A page on a clock the test moves: visible and online until told. */
 function fakePage() {
   let t = 0;
-  const window = new EventTarget();
-  const shown: { visibilityState: DocumentVisibilityState } = {
-    visibilityState: "visible",
+  const events = new EventTarget();
+  const view = {
+    visibilityState: "visible" as DocumentVisibilityState,
+    onLine: true,
+    addEventListener: (type: string, listener: (event: never) => void) =>
+      events.addEventListener(type, listener as EventListener),
+    removeEventListener: (type: string, listener: (event: never) => void) =>
+      events.removeEventListener(type, listener as EventListener),
   };
-  const document = Object.assign(new EventTarget(), shown);
-  const navigator = { onLine: true };
-  const page: GatePage = { window, document, navigator, now: () => t };
+  const page: GatePage = { page: view, now: () => t };
+  const window = events;
+  const document = events;
   return {
     page,
     pass: (ms: number) => {
       t += ms;
     },
     online: (onLine: boolean) => {
-      navigator.onLine = onLine;
+      view.onLine = onLine;
       window.dispatchEvent(new Event(onLine ? "online" : "offline"));
     },
     visible: (isShown: boolean) => {
-      document.visibilityState = isShown ? "visible" : "hidden";
+      view.visibilityState = isShown ? "visible" : "hidden";
       document.dispatchEvent(new Event("visibilitychange"));
     },
     hide: () => window.dispatchEvent(new Event("pagehide")),

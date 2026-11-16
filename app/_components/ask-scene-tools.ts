@@ -8,8 +8,7 @@ import { clientTools } from "@tanstack/ai-client";
 import { placesShown, showAnswer } from "@/lib/city/ask-shown";
 import { lookTool } from "@/lib/city/ask-tools";
 import type { TimeChange } from "@/lib/city/ask-tools";
-import { frameTargets, streetView } from "@/lib/city/ask-view";
-import type { AskTarget, FrameContext } from "@/lib/city/ask-view";
+import type { AskTarget, Framed } from "@/lib/city/ask-view";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { ViewpointGeometry } from "@/lib/city/site";
@@ -31,14 +30,26 @@ export interface AskScene {
   /** glides to a view, its eye over `ground` (m a.s.l.) where given;
    *  false while there is no scene to move */
   show: (view: ViewpointGeometry, ground?: number) => boolean;
+  /** the screen's width over its height, as the scene's canvas has it */
+  aspect: () => number;
   /** whether a point (site CRS) lies on one of the site's tiles */
   within: (x: number, y: number) => boolean;
   /** selects what stands at each place (site CRS), as Shift+click does:
    *  the places an answer shows */
   select: (places: readonly { r?: number; x: number; y: number }[]) => void;
-  /** what the framing reads of the moment: the screen, the sun, the
-   *  loaded buildings' sight lines (lib/city/ask-view.ts) */
-  frame: () => Omit<FrameContext, "from">;
+  /** the view of `places` as the scene frames it (lib/city/ask-view.ts:
+   *  its canvas, the sun, the loaded buildings' sight lines), from where
+   *  the camera stands; null while there is no scene */
+  frameView: (
+    places: readonly AskTarget[],
+    from: { x: number; y: number } | null
+  ) => Promise<Framed | null>;
+  /** on foot before `place`, on the side of `from`, as the scene stands
+   *  it on its terrain; null while there is no scene */
+  streetView: (
+    place: AskTarget,
+    from: { x: number; y: number } | null
+  ) => Promise<ViewpointGeometry | null>;
   /** what the first questions read of the moment (plan 085) */
   moment: () => StarterContext;
   /** the player's pose, mode, time, style and layers, for the model */
@@ -83,31 +94,29 @@ export type AskPlace = AskTarget & { name: string };
  * server's answer said it shows, so the view frames what the model was
  * told even where the screen changed since.
  */
-export function showPlaces(
+export async function showPlaces(
   scene: AskScene,
   ask: { alle?: boolean; aus_der_luft?: boolean; ziele: readonly AskPlace[] },
   told?: readonly string[]
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const places = placesShown(ask.ziele, scene.within);
   const [first] = places;
   if (!first) {
     return showAnswer(ask, undefined, scene.within);
   }
   const from = scene.from();
-  const frame = scene.frame();
-  const answer = showAnswer({ ...ask, ziele: places }, frame.aspect);
+  const answer = showAnswer({ ...ask, ziele: places }, scene.aspect());
   scene.select(ask.alle !== false && places.length > 1 ? places : [first]);
   if (ask.aus_der_luft === false) {
-    return scene.show(streetView(first, from ?? first, frame.groundAt))
-      ? answer
-      : LOADING;
+    const street = await scene.streetView(first, from);
+    return street && scene.show(street) ? answer : LOADING;
   }
   const names = told ?? (answer.gezeigt as string[]);
-  const framed = frameTargets(
+  const framed = await scene.frameView(
     places.filter((p, i) => i === 0 || names.includes(p.name)),
-    { ...frame, from }
+    from
   );
-  return scene.show(framed.view, framed.ground)
+  return framed && scene.show(framed.view, framed.ground)
     ? { ...answer, abstand_m: framed.distance }
     : LOADING;
 }

@@ -3,14 +3,18 @@ import { chat, maxIterations } from "@tanstack/ai";
 import { fakeText } from "@tanstack/ai/testing";
 import { ChatClient, stream } from "@tanstack/ai-client";
 import { BROWSER_TOOLS, lookTool } from "@/lib/city/ask-tools";
-import { AERIAL_REACH } from "@/lib/city/ask-view";
+import { AERIAL_REACH, frameTargets, streetView } from "@/lib/city/ask-view";
 import { sceneTools, showPlaces } from "./ask-scene-tools";
 import type { AskScene } from "./ask-scene-tools";
 import type { ViewpointGeometry } from "@/lib/city/site";
 
 const STUB: AskScene = {
+  aspect: () => 1.5,
   from: () => null,
-  frame: () => ({ aspect: 1.5 }),
+  frameView: async (places, from) =>
+    await Promise.resolve(frameTargets(places, { aspect: 1.5, from })),
+  streetView: async (place, from) =>
+    await Promise.resolve(streetView(place, from ?? place)),
   haltAnswerGlide: () => {},
   look: async () => ({}),
   moment: () => ({
@@ -37,7 +41,7 @@ test("the card runs every tool the server hands the browser", () => {
   );
 });
 
-test("zeige frames the places together, or the first alone when they lie too far apart", () => {
+test("zeige frames the places together, or the first alone when they lie too far apart", async () => {
   const shown: ViewpointGeometry[] = [];
   const scene = {
     ...STUB,
@@ -50,35 +54,41 @@ test("zeige frames the places together, or the first alone when they lie too far
     { name: "Kreuzkirche", x: 0, y: 0, z: 110, h: 90, r: 30 },
     { name: "Frauenkirche", x: 250, y: 150, z: 112, h: 90, r: 30 },
   ];
-  const together = showPlaces(scene, { ziele: near });
+  const together = await showPlaces(scene, { ziele: near });
   expect(together.gezeigt).toEqual(["Kreuzkirche", "Frauenkirche"]);
   expect(together.abstand_m as number).toBeLessThanOrEqual(AERIAL_REACH);
   const far = [near[0], { ...near[1], x: 4000 }];
-  const apart = showPlaces(scene, { ziele: far });
+  const apart = await showPlaces(scene, { ziele: far });
   expect(apart.gezeigt).toEqual(["Kreuzkirche"]);
   expect(apart.hinweis).toBeDefined();
-  expect(showPlaces(scene, { ziele: near, alle: false }).gezeigt).toEqual([
-    "Kreuzkirche",
-  ]);
-  const street = showPlaces(scene, { ziele: near, aus_der_luft: false });
+  const first = await showPlaces(scene, { ziele: near, alle: false });
+  expect(first.gezeigt).toEqual(["Kreuzkirche"]);
+  const street = await showPlaces(scene, { ziele: near, aus_der_luft: false });
   expect(street.gezeigt).toEqual(["Kreuzkirche"]);
   expect(shown.at(-1)?.mode).toBe("walk");
   expect(shown.slice(0, 3).every((v) => v.mode === "fly")).toBe(true);
 });
 
-test("zeige leaves out places off the city, refuses when none is on it, and waits for the scene", () => {
+test("zeige leaves out places off the city, refuses when none is on it, and waits for the scene", async () => {
   const place = { name: "Kreuzkirche", x: 0, y: 0, z: 110, h: 90, r: 30 };
   const off = { ...place, name: "Weit weg", x: 51, y: 13 };
   const inside = { ...STUB, within: (x: number) => x === 0 };
-  expect(showPlaces(inside, { ziele: [off] }).ausserhalb).toBe(true);
-  expect(showPlaces(inside, { ziele: [off, place] }).gezeigt).toEqual([
-    "Kreuzkirche",
-  ]);
+  const outside = await showPlaces(inside, { ziele: [off] });
+  expect(outside.ausserhalb).toBe(true);
+  const left = await showPlaces(inside, { ziele: [off, place] });
+  expect(left.gezeigt).toEqual(["Kreuzkirche"]);
   const loading = { ...STUB, show: () => false };
-  expect(showPlaces(loading, { ziele: [place] }).ok).toBe(false);
+  const waits = await showPlaces(loading, { ziele: [place] });
+  expect(waits.ok).toBe(false);
+  const unborn = {
+    ...STUB,
+    frameView: async () => await Promise.resolve(null),
+  };
+  const none = await showPlaces(unborn, { ziele: [place] });
+  expect(none.ok).toBe(false);
 });
 
-test("zeige takes the eye over the places' ground and shows eight at most", () => {
+test("zeige takes the eye over the places' ground and shows eight at most", async () => {
   const grounds: (number | undefined)[] = [];
   let shown = 0;
   const scene = {
@@ -90,21 +100,22 @@ test("zeige takes the eye over the places' ground and shows eight at most", () =
     },
   };
   const place = { name: "Kirche", x: 0, y: 0, z: 140, h: 40, r: 20 };
-  showPlaces(scene, { ziele: [place] });
+  await showPlaces(scene, { ziele: [place] });
   expect(grounds).toEqual([140]);
   expect(shown).toBeGreaterThan(0);
   // a place whose ground nobody knew: the glide measures it
-  showPlaces(scene, { ziele: [{ ...place, z: undefined }] });
+  await showPlaces(scene, { ziele: [{ ...place, z: undefined }] });
   expect(grounds[1]).toBeUndefined();
   const many = Array.from({ length: 12 }, (_, i) => ({
     ...place,
     name: `Ort ${i}`,
     x: i * 20,
   }));
-  expect(showPlaces(scene, { ziele: many }).gezeigt).toHaveLength(8);
+  const eight = await showPlaces(scene, { ziele: many });
+  expect(eight.gezeigt).toHaveLength(8);
 });
 
-test("what an answer shows is selected: all of them, or the answer alone", () => {
+test("what an answer shows is selected: all of them, or the answer alone", async () => {
   const selected: (readonly { x: number; y: number }[])[] = [];
   const scene = {
     ...STUB,
@@ -115,11 +126,11 @@ test("what an answer shows is selected: all of them, or the answer alone", () =>
     { name: "B", x: 60, y: 0 },
     { name: "C", x: 5000, y: 0 },
   ];
-  showPlaces(scene, { ziele: ziele.slice(0, 2) });
-  showPlaces(scene, { ziele, alle: false });
+  await showPlaces(scene, { ziele: ziele.slice(0, 2) });
+  await showPlaces(scene, { ziele, alle: false });
   // spread too far for one view: still every place selected
-  showPlaces(scene, { ziele });
-  showPlaces(scene, { ziele: ziele.slice(0, 2), aus_der_luft: false });
+  await showPlaces(scene, { ziele });
+  await showPlaces(scene, { ziele: ziele.slice(0, 2), aus_der_luft: false });
   expect(selected.map((s) => s.length)).toEqual([2, 1, 3, 2]);
 });
 

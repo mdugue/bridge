@@ -1,20 +1,26 @@
 /**
- * The render loop's pace while the HUD covers the scene.
+ * The render loop's pace.
  *
  * On a phone the sidebar opens as a sheet over nearly the whole screen,
- * its backdrop 80 % black. The scene behind it still rendered every
- * frame — shadows, contact shadows, the post pipeline — on the GPU the
- * system's compositor draws the sheet's scrolling with, and the scroll
- * lagged behind the finger. While covered the loop therefore draws at
- * COVERED_FPS (enough for a sun or style change to show through the
- * backdrop), and not at all while the sheet scrolls and SCROLL_QUIET_MS
- * after its last scroll event (a momentum scroll keeps firing them).
+ * its backdrop 80 % black. The scene behind it would render every frame —
+ * shadows, contact shadows, the post pipeline — on the GPU the system's
+ * compositor draws the sheet's scrolling with. The scene's script runs in
+ * a worker (ADR 0061), so the sheet's scroll no longer waits on it; its
+ * GPU work it still shares. While covered the loop therefore draws only
+ * what is asked of it: a call from the HUD (a sun, a style, a slider)
+ * draws COVERED_TAIL_MS at COVERED_FPS (`wake`) — enough for the change
+ * to show through the backdrop — and keeps that rate while the scene
+ * moves (a glide a call started, a stream landing, the shadow map's
+ * redraw: the pose steps only in drawn frames, and the frames the tail
+ * draws see it move). The call itself does not end the scene's standing
+ * still, so a still scene stops after the tail, listened to or not. It
+ * draws nothing otherwise, a scroll included: it asks the scene nothing.
  *
  * A scene that stands still — the camera has not moved for STILL_AFTER_MS,
  * nothing streams in, no data layer runs, no input came — draws at
  * STILL_FPS: its water and fountains still move, and a phone's GPU and
  * battery get half their frames back (a 120 Hz display three quarters).
- * Any input wakes it for the very next frame (`setStill(false)`).
+ * Any input or call wakes it for the very next frame (`wake`).
  *
  * While the visitor only listens (*Frag die Stadt*'s Hörmodus, ADR 0057)
  * the scene draws at LISTENING_FPS while it stands still: the city shows
@@ -31,10 +37,10 @@
  * Otherwise every frame draws.
  */
 
-/** frames per second the covered scene draws at most */
+/** frames per second the covered scene draws at most, once asked */
 export const COVERED_FPS = 12;
-/** how long after the last scroll event the covered scene stays still */
-export const SCROLL_QUIET_MS = 250;
+/** how long the covered scene draws after it was asked (ms) */
+export const COVERED_TAIL_MS = 500;
 /** frames per second a still scene draws at most */
 export const STILL_FPS = 30;
 /** how long the scene must stand still before it is (ms) */
@@ -50,8 +56,13 @@ export const LISTENING_MOVING_GAP_MS = 48;
 export interface FramePace {
   /** the HUD covers the scene (on a phone: the sidebar's sheet is open) */
   setCovered: (covered: boolean) => void;
-  /** the covering HUD scrolled at `now` (ms, the loop's clock) */
-  noteScroll: (now: number) => void;
+  /**
+   * Something asked the scene to draw (a call, an input, a look): from
+   * the next frame, at full rate; covered, for the tail only. Whether it
+   * ends the scene's standing still (the caller wakes its `Stillness`
+   * then): not while covered.
+   */
+  wake: () => boolean;
   /** the scene stands still (`createStillness`), or input woke it */
   setStill: (still: boolean) => void;
   /** the visitor only listens (the Hörmodus): the scene barely draws */
@@ -72,7 +83,9 @@ export interface FramePace {
 
 export function createFramePace(): FramePace {
   let covered = false;
-  let quietUntil = Number.NEGATIVE_INFINITY;
+  /** a covered scene draws until then (the loop's clock), once asked */
+  let askedUntil = Number.NEGATIVE_INFINITY;
+  let asked = false;
   let lastDrawn = Number.NEGATIVE_INFINITY;
   let paced = false;
   let held = false;
@@ -91,14 +104,13 @@ export function createFramePace(): FramePace {
   return {
     setCovered: (on) => {
       covered = on;
-      if (!on) {
-        quietUntil = Number.NEGATIVE_INFINITY;
-      }
     },
-    noteScroll: (now) => {
-      if (covered) {
-        quietUntil = now + SCROLL_QUIET_MS;
+    wake: () => {
+      asked = true;
+      if (!covered) {
+        still = false;
       }
+      return !covered;
     },
     setStill: (on) => {
       still = on;
@@ -110,16 +122,28 @@ export function createFramePace(): FramePace {
       const frame = now - lastFrame || 0;
       lastFrame = now;
       const since = now - lastDrawn;
-      const coveredDraws = !covered || (now >= quietUntil && since >= interval);
+      if (asked) {
+        // (on the loop's clock: the ask's own time is the caller's)
+        asked = false;
+        askedUntil = now + COVERED_TAIL_MS;
+      }
+      // covered: at its rate while asked, or while the scene moves (a
+      // glide a call started, a stream landing): the pose steps only in
+      // drawn frames
+      const tail = covered && now < askedUntil;
+      const coveredDraws = !covered || ((tail || !still) && since >= interval);
+      // a covered ask's tail draws as the scene moving would: at the
+      // covered rate, still or listened to
+      const resting = still && !tail;
       // moving and listened to: at its rate, or now if skipping this frame
       // would leave the next one past the loop's time step
-      const listenedDraws = still
+      const listenedDraws = resting
         ? since >= listeningInterval
         : since >= listeningMovingInterval ||
           since + frame > LISTENING_MOVING_GAP_MS;
       const draw =
         coveredDraws &&
-        (!still || since >= stillInterval) &&
+        (!resting || since >= stillInterval) &&
         (!listening || listenedDraws);
       if (draw) {
         lastDrawn = now;
@@ -143,7 +167,8 @@ export function createFramePace(): FramePace {
 export interface Stillness {
   /** a drawn frame at `now` (ms): whether anything moved or streamed */
   frame: (now: number, busy: boolean) => boolean;
-  /** input at `now`: not still, from this frame on */
+  /** input at `now` (`FramePace.wake` said so): not still, from this
+   *  frame on */
   wake: (now: number) => void;
 }
 

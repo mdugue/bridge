@@ -11,6 +11,7 @@
  * — ADR 0042.
  * No THREE, no DOM.
  */
+import { passedToParts } from "./city-mesh";
 import type { OsmBuildingFacts } from "./city-mesh";
 
 /** "Unknown" in a numeric fact column (the schema's `noData`). */
@@ -297,7 +298,7 @@ export function inheritedOsm(
   if (!(own || root)) {
     return undefined;
   }
-  return { ...root, ...own };
+  return { ...passedToParts(root), ...own };
 }
 
 type Columns<K extends string, V> = Record<K, V>;

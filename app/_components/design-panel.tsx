@@ -27,7 +27,8 @@ import type {
 } from "@/lib/city/design-placement";
 import { decimal, metres } from "@/lib/city/card-lines";
 import { cn } from "cn";
-import type { DesignControls } from "./create-app";
+import { settle } from "./scene-client";
+import type { CityWalkHandle } from "./scene-client";
 import type { DesignStatus } from "./design-layer";
 import { useSceneStatus } from "./scene-status";
 
@@ -148,7 +149,7 @@ export const DesignPanel = ({
   controls,
   ready,
 }: {
-  controls: () => DesignControls | null;
+  controls: () => CityWalkHandle["design"] | null;
   ready: boolean;
 }) => {
   const status = useSceneStatus("design");
@@ -166,7 +167,7 @@ export const DesignPanel = ({
     setError(null);
     const onlyPlacement = files.every((f) => /\.json$/iu.test(f.name));
     if (onlyPlacement && status) {
-      setError(c.applyPlacementFile(await files[0].text()));
+      setError(await c.applyPlacementFile(await files[0].text()));
       return;
     }
     setBusy(true);
@@ -178,7 +179,7 @@ export const DesignPanel = ({
     setBusy(false);
   };
   const place = (patch: Partial<DesignPlacement>) =>
-    controls()?.setPlacement(patch);
+    settle(controls()?.setPlacement(patch));
   let pickLabel = "Datei wählen";
   if (busy) {
     pickLabel = "Lädt …";
@@ -253,7 +254,7 @@ const DesignControlsView = ({
   place,
   status,
 }: {
-  controls: () => DesignControls | null;
+  controls: () => CityWalkHandle["design"] | null;
   ids: string;
   place: (patch: Partial<DesignPlacement>) => void;
   status: DesignStatus;
@@ -291,7 +292,7 @@ const DesignControlsView = ({
       </div>
       <div className="grid grid-cols-2 gap-1.5">
         <Button
-          onClick={() => controls()?.placeHere()}
+          onClick={() => settle(controls()?.placeHere())}
           size="sm"
           type="button"
           variant="outline"
@@ -300,7 +301,7 @@ const DesignControlsView = ({
           Hierher holen
         </Button>
         <Button
-          onClick={() => controls()?.setOnGround()}
+          onClick={() => settle(controls()?.setOnGround())}
           size="sm"
           type="button"
           variant="outline"
@@ -366,7 +367,7 @@ const DesignControlsView = ({
         <Switch
           checked={status.replaceExisting}
           id={`${ids}-replace`}
-          onCheckedChange={(on) => controls()?.setReplaceExisting(on)}
+          onCheckedChange={(on) => settle(controls()?.setReplaceExisting(on))}
           size="sm"
         />
       </Field>
@@ -381,7 +382,7 @@ const DesignControlsView = ({
           onCheckedChange={(on) => {
             // a failed build stays an unhandled rejection, for the global
             // handler (Sentry) to report
-            void controls()?.setFileColours(on);
+            settle(controls()?.setFileColours(on));
           }}
           size="sm"
         />
@@ -389,10 +390,16 @@ const DesignControlsView = ({
       <div className="grid grid-cols-2 gap-1.5">
         <Button
           onClick={() => {
-            const text = controls()?.placementText();
-            if (text) {
-              savePlacement(text, status.name);
-            }
+            settle(
+              controls()
+                ?.placementText()
+                .then((text) => {
+                  if (text) {
+                    savePlacement(text, status.name);
+                  }
+                  return null;
+                })
+            );
           }}
           size="sm"
           title="Die Lage als kleine Datei sichern: beim nächsten Mal mit dem Entwurf zusammen laden"
@@ -403,7 +410,7 @@ const DesignControlsView = ({
           Lage sichern
         </Button>
         <Button
-          onClick={() => controls()?.remove()}
+          onClick={() => settle(controls()?.remove())}
           size="sm"
           type="button"
           variant="outline"
@@ -426,7 +433,7 @@ const ScaleControls = ({
   ids,
   status,
 }: {
-  controls: () => DesignControls | null;
+  controls: () => CityWalkHandle["design"] | null;
   ids: string;
   status: DesignStatus;
 }) => {
@@ -446,7 +453,7 @@ const ScaleControls = ({
         onValueChange={(value: string[]) => {
           const [unit] = value;
           if (isDesignUnit(unit)) {
-            controls()?.setScale({ ...scale, unit });
+            settle(controls()?.setScale({ ...scale, unit }));
           }
         }}
         size="sm"
@@ -469,10 +476,12 @@ const ScaleControls = ({
         label="Faktor"
         digits={4}
         onCommit={(factor) =>
-          controls()?.setScale({
-            ...scale,
-            factor: Math.min(FACTOR_MAX, Math.max(FACTOR_MIN, factor)),
-          })
+          settle(
+            controls()?.setScale({
+              ...scale,
+              factor: Math.min(FACTOR_MAX, Math.max(FACTOR_MIN, factor)),
+            })
+          )
         }
         step={0.01}
         unit="×"
