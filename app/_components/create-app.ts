@@ -3809,8 +3809,6 @@ async function bootApp(
     frameDt: number;
     dt: number;
     elapsed: number;
-    /** what animates reads this: `elapsed`, or a probe's still instant */
-    phase: number;
     /** the 10 Hz tick is due (the minimap's pose, the BVHs near, the
      *  focus, the tree tiers) */
     poseTick: boolean;
@@ -3832,7 +3830,6 @@ async function bootApp(
       frameDt,
       dt: Math.min(frameDt, 0.05),
       elapsed,
-      phase: pocPhase(elapsed),
       // read here, as the trees step before it is spent
       poseTick: elapsed >= tickDue,
       exporting: capture.exporting(),
@@ -3877,26 +3874,26 @@ async function bootApp(
       // draws it (the shadow map, the lamp pool, the styles' gathering)
       streamChange.flush();
     },
-    follow: ({ dt, phase, exporting, poseTick }) => {
+    follow: ({ dt, elapsed, exporting, poseTick }) => {
       // (Modell's parallel camera draws a model, not the walker's view)
       loadVeil.step(dt, { exporting, model: modelRig.owns() });
       // Advance every tile's water ripple and glitter (its sky tint is the
       // fog colour's node, in lockstep with the sun by construction).
-      setWaterTime(phase);
-      lastEquivalent = followView(phase, poseTick) ?? 600;
+      setWaterTime(pocPhase(elapsed));
+      lastEquivalent = followView(pocPhase(elapsed), poseTick) ?? 600;
       updateCuts();
     },
-    view: ({ phase, view }) => {
+    view: ({ elapsed, view }) => {
       capture.aim();
       // What the post passes and the scene's materials know of the camera
       // drawing this frame.
       lens.update(view, lastEquivalent);
       setViewDirection(view);
       // The fountains' jets and water shimmer (one shared uniform).
-      setFountainTime(phase);
+      setFountainTime(pocPhase(elapsed));
       // The features that hook the frame (the data layers' light, the
       // timetable trams), once they are here.
-      frameHook.emit(phase, performance.now());
+      frameHook.emit(pocPhase(elapsed), performance.now());
     },
     tick: ({ elapsed, poseTick }) => {
       if (poseTick) {

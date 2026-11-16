@@ -43,6 +43,10 @@ on:
         description: The branch means to change the picture (report, do not fail)
         type: boolean
         default: false
+      pairs:
+        description: Instead, measure this runner's noise floor over so many same-commit pairs (0 = compare)
+        type: number
+        default: 0
 
 concurrency:
   group: plates-${{ github.ref }}
@@ -61,7 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     # Measured 2026-11-16 (plan 087, Findings): two builds and two renders
     # of the tier's views. A budget that cancels reports nothing at all.
-    timeout-minutes: 45
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.pairs > 0 && 180 || 45 }}
     steps:
       # A pull request's checkout is its merge with the base's tip, so the
       # base's tip against HEAD is exactly what the pull request changes.
@@ -134,11 +138,22 @@ jobs:
       # with the debug hook and the reference site alone, serves each and
       # renders it with the head's harness.
       - name: Render the base and the head, and compare
+        if: github.event_name != 'workflow_dispatch' || inputs.pairs == 0
         run: bun run plates -- --base "$BASE_SHA" --summary "$GITHUB_STEP_SUMMARY" $CLAIM
         env:
           SHOTS_SMALL: "1"
           BASE_SHA: ${{ steps.base.outputs.sha }}
           CLAIM: ${{ steps.claim.outputs.flag }}
+      # Plan 087's gate for this tier, on the runner it runs on: n + 1
+      # renders of the head, every pair of neighbours compared. Eleven
+      # renders took an hour in the cloud container, hence the budget.
+      - name: Measure the noise floor
+        if: github.event_name == 'workflow_dispatch' && inputs.pairs > 0
+        timeout-minutes: 170
+        run: bun run plates -- pairs "$PAIRS" --summary "$GITHUB_STEP_SUMMARY"
+        env:
+          SHOTS_SMALL: "1"
+          PAIRS: ${{ inputs.pairs }}
       # Base, head and difference image of each differing view, and the
       # report; every plate of both sides beside them.
       - name: Upload the report

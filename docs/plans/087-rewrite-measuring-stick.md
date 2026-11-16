@@ -462,7 +462,7 @@ show: `lite` has one tile, and the harness waits for the lens.
 `still` is one field of `PocProbe`. The loop's clock runs on (at
 `frameMs` = 50 ms a frame for a plate, the loop's largest step), so what
 settles by it still settles; only the phase handed to what animates
-(`Frame.phase`, `pocPhase`) and three's `time` node (its public
+(`pocPhase`) and three's `time` node (its public
 `onRenderUpdate`) stand. `create-app.ts` reads the probe exactly as it
 reads `pocFrameTime`: in a build without `NEXT_PUBLIC_POC_DEBUG` the
 phase is the elapsed time (`poc-scene.test.ts`).
@@ -485,7 +485,14 @@ sides render the same row in the same order.
 
 Whether another CPU's SwiftShader draws the same pixels was not measured
 and does not need to hold: base and head are rendered by one runner in
-one job.
+one job. **Open, tier 1's own gate:** the same ten pairs on the hosted
+runner. The workflow measures them when started by hand with `pairs: 10`
+(`workflow_dispatch`), which GitHub allows once the file is on the
+default branch; until then the floor above is the container's.
+
+Tier 1's other gate — stop if fewer than half of the views hold — is
+met as its limit, not passed: 25 of 50 can be shown at all (`lite`
+streams one tile) and 8 fit a job. Tier 1 is those eight.
 
 **The job.** `.github/workflows/plates.yml`, on a pull request of this
 repository that touches what can move a pixel: it builds the head and,

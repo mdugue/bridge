@@ -198,8 +198,8 @@ uploaded; nothing it names is fetched (ADR 0054).
   ADR 0018): with a `## Snapshots` section a differing view is reported,
   without one it fails. It says *changed*, never *good*.
 - What holds a frame still for a plate is a probe of the debug hook
-  (`__poc.still`, `poc-scene.ts`): something new that animates reads the
-  frame's `phase` or TSL `time`, or the plates flake.
+  (`__poc.still`, `poc-scene.ts`): something new that animates takes its
+  time through `pocPhase` or TSL `time`, or the plates flake.
 - Visual work is judged on a real GPU: drop a snapshot JSON into `shots/`
   and run `bun run shots`; read the plate and iterate. Verify from oblique
   angles, not head-on.
