@@ -53,6 +53,7 @@ import {
 import type { MinimapExtras } from "../lib/city/minimap";
 import type { MuralExtras } from "../lib/city/murals";
 import { PROVENANCE_FILE, siteProvenance } from "../lib/city/provenance";
+import { PROVENANCE_FILE_SPEC } from "../lib/city/provenance-file";
 import type { ProvenanceRecord } from "../lib/city/provenance";
 import { tileExtentOf } from "../lib/city/site";
 import {
@@ -221,7 +222,7 @@ function readProvenance(): ProvenanceRecord {
     );
     return {};
   }
-  return readJson(path) as ProvenanceRecord;
+  return parseBakeFile(PROVENANCE_FILE_SPEC, readJson(path), path);
 }
 const provenance = siteProvenance(
   readProvenance(),

@@ -8,6 +8,7 @@
  * fetches it once, when first opened (ADR 0042). No THREE, no DOM.
  */
 
+import type { BakedRuns, ProvenanceFile } from "./provenance-file";
 import type { Provider, TreeCadastre } from "./site";
 
 /** The logical name the build publishes the manifest under. */
@@ -59,18 +60,10 @@ export interface SiteProvenance {
   version: 1;
 }
 
-/** The parts of `data/<site>/provenance.json` the manifest reads (a GeoSN
- *  site's record carries per-tile editions; others' only the provider). */
-export interface ProvenanceRecord {
-  dresden?: { Stadtbaumkataster?: { retrieved?: string } };
-  geosn?: Record<string, { tiles?: Record<string, { stand?: string }> }>;
-  openstreetmap?: {
-    bbbike?: { products?: Record<string, { dataAsOf?: string }> };
-    /** Unna's stand-in extract (openstreetmap.fr's Arnsberg region) */
-    openstreetmapFr?: { products?: Record<string, { dataAsOf?: string }> };
-  };
-  wikidata?: { dataAsOf?: string };
-}
+/** `data/<site>/provenance.json` as its schema reads it (lib/city/
+ *  provenance-file.ts; a GeoSN site's record carries per-tile editions,
+ *  others' only the provider). */
+export type ProvenanceRecord = ProvenanceFile;
 
 /** The record's product behind each OSM product a card quotes. */
 const OSM_PRODUCTS: [OsmProduct, string][] = [
@@ -99,6 +92,60 @@ const GEOSN_PRODUCTS: [SourceKey, string][] = [
 /** The leading ISO date of a free-text field ("2026-09-26 (first …)"). */
 export function leadingDate(text: string | undefined): string | undefined {
   return /^\d{4}-\d{2}-\d{2}/u.exec(text ?? "")?.[0];
+}
+
+/** The bake step that writes each OSM product a card quotes, whose
+ *  `openstreetmap.baked` runs say which extract it was baked from. */
+const OSM_STEPS: [OsmProduct, string][] = [
+  ["buildings", "osm-buildings"],
+  ["bridges", "rail"],
+  ["fountains", "monuments"],
+  ["trees", "trees"],
+  ["furniture", "furniture"],
+];
+
+/**
+ * A product's edition by the bake's own record of its step: the oldest
+ * extract day over the site's `tiles` it ran on; null where a run's
+ * extract names no day (unknown, so no edition is claimed); undefined
+ * where the step has no run on these tiles (the hand-kept record holds).
+ */
+export function bakedStand(
+  baked: BakedRuns | undefined,
+  step: string,
+  tiles: readonly string[]
+): string | null | undefined {
+  const runs = tiles.flatMap((t) => baked?.[step]?.[t] ?? []);
+  if (runs.length === 0) {
+    return undefined;
+  }
+  const days = runs.map((r) => leadingDate(r.dataAsOf));
+  if (days.some((d) => d === undefined)) {
+    return null;
+  }
+  return days.toSorted((a = "", b = "") => a.localeCompare(b))[0];
+}
+
+/** The hand-kept editions, then the bake's own record of each product's
+ *  step over them (it names what was baked last). */
+function osmEditions(
+  record: ProvenanceRecord,
+  tiles: readonly string[]
+): Partial<Record<OsmProduct, string>> {
+  const products =
+    record.openstreetmap?.bbbike?.products ??
+    record.openstreetmap?.openstreetmapFr?.products;
+  const hand = osmStands(products);
+  const stands: Partial<Record<OsmProduct, string>> = {};
+  for (const [product, step] of OSM_STEPS) {
+    const baked = bakedStand(record.openstreetmap?.baked, step, tiles);
+    // a run whose extract named no day claims none, over the hand-kept one
+    const stand = baked === undefined ? hand[product] : baked;
+    if (stand) {
+      stands[product] = stand;
+    }
+  }
+  return stands;
 }
 
 /** Each OSM product's edition the record states. */
@@ -173,11 +220,8 @@ export function siteProvenance(
 ): SiteProvenance {
   const official = site.provider.credit;
   const { licence } = site.provider;
-  const products =
-    record.openstreetmap?.bbbike?.products ??
-    record.openstreetmap?.openstreetmapFr?.products;
-  const osmStand = leadingDate(products?.osmBuildings?.dataAsOf);
-  const stands = osmStands(products);
+  const stands = osmEditions(record, tiles);
+  const osmStand = stands.buildings;
   const wikidataStand = leadingDate(record.wikidata?.dataAsOf);
   const osm: SourceInfo = {
     label: "OpenStreetMap",

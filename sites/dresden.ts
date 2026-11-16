@@ -79,6 +79,7 @@ export const DRESDEN: Site = {
     { e: 408, n: 5658 },
   ],
   fallbackLatLng: { lat: 51.05, lng: 13.74 },
+  bbbike: "Dresden",
   spawn: "altstadt",
   viewpoints: [
     // The start: low over the Elbe just west of the Carolabrücke, the whole
