@@ -136,6 +136,7 @@ export function serveScene(
   const trail: SceneTrail | undefined = init.trail
     ? {
         note: (...a) => send({ t: "trail", op: "note", a }),
+        error: (...a) => send({ t: "trail", op: "error", a }),
         set: (...a) => send({ t: "trail", op: "set", a }),
         beat: (...a) => send({ t: "trail", op: "beat", a }),
       }

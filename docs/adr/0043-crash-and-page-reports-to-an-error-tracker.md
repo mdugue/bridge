@@ -13,7 +13,9 @@ policy that are true for this code.
 ## Decision
 
 1. **The crash trail** (local storage) records each page's boot stages,
-   errors, lost device and heartbeats. The next load reports a page that
+   errors (three's own console errors among them, `three-console.ts`:
+   a failed pipeline's reason reaches no `onError`), lost device and
+   heartbeats. The next load reports a page that
    died in use, and offers the trail as text to copy (`?trail=1` always).
 2. **Four kinds of report**, built from the trail
    (`lib/city/crash-reports.ts`): a crash, a problem on this page (capped),

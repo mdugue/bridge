@@ -242,6 +242,12 @@ export interface CrashTrail {
   startedAt: string;
   /** One event: a boot stage, a style switch, an error, a lost device. */
   note: (kind: string, detail?: string) => void;
+  /**
+   * An error that is no exception of the page's own (three's console
+   * errors, three-console.ts): noted as `error`, a repeat counted as
+   * the page's own errors are.
+   */
+  error: (text: string) => void;
   /** One heartbeat (the record adds the time). */
   beat: (beat: Omit<TrailBeat, "t">) => void;
   /**
@@ -361,6 +367,7 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
   return {
     startedAt: trail.startedAt,
     note,
+    error: (text) => errors.error(text.slice(0, 300)),
     beat: (beat) => {
       const entry = { t: seconds(), ...beat };
       pushBeat(trail, entry);

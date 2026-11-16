@@ -139,7 +139,7 @@ export type ToPage =
   | { t: "mirror"; mirror: SceneMirror }
   | { t: "footprints"; footprints: ReturnType<SceneApp["getFootprints"]> }
   | { t: "glide"; id: number; progress: number }
-  | { t: "trail"; op: "beat" | "note" | "set"; a: unknown[] }
+  | { t: "trail"; op: "beat" | "error" | "note" | "set"; a: unknown[] }
   /** a promise the worker let fall (a thrown error reaches the Worker's
    *  own error event) */
   | { t: "rejected"; error: ErrorMessage }
