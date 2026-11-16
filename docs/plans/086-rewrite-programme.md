@@ -102,6 +102,42 @@ re-bake: a step's key hashes its module's bytes
 tile of every site. 094's counting test goes at any time; 095's frame
 types too, the rest of 095 last; 096 runs beside everything.
 
+## How the series is built (the maintainer's word, 2026-11-16)
+
+- **One branch, `rewrite`.** Every PR of the series targets it, not
+  main. It is main plus what the series has merged; main is merged
+  into it daily, so it does not drift.
+- **Reviewed before it merges.** A PR goes into `rewrite` when an
+  independent code review of its head has run, the findings that
+  matter are fixed by the session that owns the PR, and CI is green on
+  that head. The coordinating session does this; a reviewer has not
+  seen the PR's own session, and reads the branch as fetched then.
+- **Milestones go to main, by the maintainer alone.** A milestone is a
+  PR from `rewrite` to main with the ledger's figures before and
+  after: about one for each line below, not one for each phase.
+
+  1. *The measuring stick* — nothing a visitor sees: the ledger, the
+     comparison of published tilesets, plates in CI, the buildings'
+     bake the same on every machine, the counting test, the type
+     checker's gate, a BBBike extract where Geofabrik cannot be
+     reached. It goes first and alone because it is what guards main
+     from then on — for every PR, the series' or not — and because the
+     bake fix changes published bytes once: a later difference in the
+     picture is then some other change's.
+  2. *The dressing arrives GPU-ready* (090), a family of layers at a
+     time.
+  3. *Rasters* (091).
+  4. *Tiles as a data product* (088), once the maintainer has decided
+     the store.
+  5. *The bake store* (092).
+  6. The decision on 093, then *packages and frames* (095).
+- **The rows of `docs/plans/README.md` are the coordinator's.** A
+  session sends its row's text and leaves the file alone: nine PRs'
+  rows side by side conflict.
+- **Who does what.** Fable 5.2 coordinates, reviews, and builds the
+  plans that are hard (088 from phase 1, 090, 092, 093, 094's
+  register, the plates); Opus 5.5 builds the rest.
+
 ## What each plan may assume of the others
 
 The series is built whole. A plan is therefore written for the state the
