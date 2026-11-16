@@ -49,7 +49,8 @@ kept misbehaving.
   zoom in runs.
 - WebGPU's limits bind every material: eight vertex buffers, sixteen
   inter-stage variables (the clay uses all but two). A mesh past either
-  does not draw.
+  does not draw. The e2e "limits" test counts both for every build,
+  from the WGSL three's public debug hook hands out.
 - Headless CI renders WebGPU over SwiftShader's Vulkan (Chrome's own
   Vulkan on SwiftShader too, or the canvas cannot present), so it meets
   the same limits as a device.

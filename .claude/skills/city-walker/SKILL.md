@@ -412,8 +412,11 @@ and therefore what keeps builds out of frames:
   one). A ninth invalidates the pipeline and the mesh silently draws
   nothing, on a real GPU and in the headless e2e alike (WebGPU on
   SwiftShader's Vulkan): the traffic flows vanished that way with ten
-  single-float attributes. Pack scalars into vec4s and test the
-  count.
+  single-float attributes. Pack scalars into vec4s. The e2e "limits"
+  test counts the buffers of every build the lite scene draws with
+  (`handle.getPipelineBudget()`, pipeline-budget.ts: the attributes
+  three's vertex stage names, by the geometry's distinct buffers); a
+  layer the lite scene does not draw tests its own count.
 - **Points are 1 px on WebGPU**, whatever their size. The lamp halos are
   billboard quads: an `Instances` set under a `PointsNodeMaterial`.
 - **No tone mapping.** The output node is `renderOutput(…, NoToneMapping,
@@ -443,7 +446,17 @@ More traps, each found the hard way:
   clip distances one on the vertex side), and the clay passes thirteen
   of the other fifteen. A new value per building or per vertex rides in
   a varying it already passes; past fifteen the buildings vanish, in the
-  headless e2e too (ADR 0010).
+  headless e2e too (ADR 0010). Counted, not remembered: the e2e
+  "limits" test reads three's own WGSL for every build
+  (`renderer.debug.getShaderAsync`, counted by
+  `lib/city/wgsl-budget.ts` after the WebGPU specification's rules) and
+  holds the clay to its spare variables as a number in the spec
+  (`CLAY_SPARE_VARIABLES`: 2, and 3 under Modell's parallel camera,
+  whose direction to the eye needs no varying). A change that takes one
+  edits that number and says so in its PR; run the test at every bump
+  of three, whose lighting and fog pass variables too. The probe does
+  not read under a held cut (the Ausschnitt), so the clip distances'
+  one is not counted.
 - **A TSL `select` is an if/else in the shader.** three builds each arm in
   its own scope: what an arm builds first is built again where it is used
   outside, and a derivative or texture read first built in an arm runs in

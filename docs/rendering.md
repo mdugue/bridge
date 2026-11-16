@@ -2043,3 +2043,25 @@ GPU with the snapshot harness: drop a Snapshot JSON into `shots/` and run
 `bun run shots`. Judge from oblique angles. The streaming tuning (error
 thresholds, cache budget, tile seams, the painted shoreline) is still
 waiting for that look: [plan 019](./plans/019-gpu-verification.md).
+
+**WebGPU's per-pipeline limits are counted** (plan 094). A pipeline with
+a ninth vertex buffer, a seventeenth attribute or more inter-stage
+variables than the device passes is invalid, and its mesh draws nothing
+without an error a spec sees. The e2e "limits" test
+(`e2e/city-walk.spec.ts`) asks the scene for a row a build
+(`handle.getPipelineBudget()`, `pipeline-budget.ts`): for each
+representative of a material, draw kind and layout
+(`compileRepresentatives`) the WGSL three built, through its public
+`renderer.debug.getShaderAsync` in the compiles' turn
+(`PostStack.shadersOf`), counted by `lib/city/wgsl-budget.ts` after the
+WebGPU specification's validation of inter-stage interfaces — sixteen
+variables, of which each of the fragment stage's `front_facing`,
+`sample_index`, `sample_mask` and `primitive_index` takes one, and every
+four clip distances one on the vertex side — and the distinct buffers the
+vertex stage's attributes come from on the geometry. The test holds
+every row to the device's limits and the clay to its budget, a number in
+the spec: 2 spare variables under the walk/fly camera (13 passed, one to
+`front_facing`), 3 under Modell's parallel one, 4 vertex buffers. It
+reads the lite scene at the spawn, from far off (the far building level)
+and in Modell; a build only the whole site has, and the clay under a
+held Ausschnitt, are not read.

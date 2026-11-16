@@ -200,6 +200,22 @@ export interface PostStack {
    * started too (compile-lanes.ts): a tile drops its CPU copies on it.
    */
   compile: (object: Object3D) => Promise<void>;
+  /**
+   * The WGSL three built for `object` under `view` (the walk/fly camera
+   * without one), for the scene's target: what the limits test counts
+   * (lib/city/wgsl-budget.ts, plan 094). A debug read, through three's
+   * public `renderer.debug.getShaderAsync`, which runs a compile — so it
+   * takes its turn like one, after the drawable's own compile. Null for a
+   * drawable whose tile left, and while a cut is held (the read would
+   * look the drawable up outside its clipping group).
+   */
+  shadersOf: (
+    object: Object3D,
+    view?: Camera
+  ) => Promise<{
+    vertexShader: string | null;
+    fragmentShader: string | null;
+  } | null>;
   /** `compile` again for a material changed in place (a clay that turns
    *  to cutting its niches' openings, a new build of the same material
    *  object): the record of what compiled is dropped for it first. */
@@ -505,6 +521,10 @@ function drawablesOf(root: Object3D): Drawable[] {
  * ready behind them.
  */
 const COMPILE_LANES = 4;
+
+/** How often `shadersOf` reads a build before it gives up: a second read
+ *  finds everything compiled and lets no frame in. */
+const SHADER_READS = 3;
 
 /**
  * The frame: the scene drawn into its own target — a top-level render, so
@@ -986,6 +1006,46 @@ export function createPostStack(
     };
   const compileOne = inTurn(async (object) => await compileNow(object));
   /**
+   * `shadersOf`, in a compile's turn. three reads the build back for the
+   * target set once its compile has resolved, so the scene's target stays
+   * set over the call — and a frame that got in meanwhile ends on the
+   * canvas (`render`), which the read would then look up: the drawable is
+   * compiled first, so that the read's own compile awaits nothing a frame
+   * fits into, and a read that still found another target is made again.
+   */
+  const shadersNow = async (object: Object3D, view: Camera) => {
+    await compileNow(object, view);
+    for (let attempt = 0; attempt < SHADER_READS; attempt += 1) {
+      if (stackDisposed || left(object) || cut) {
+        return null;
+      }
+      const previous = renderer.getRenderTarget();
+      const { visible, frustumCulled } = object;
+      object.visible = true;
+      object.frustumCulled = false;
+      renderer.setRenderTarget(target);
+      let reading: ReturnType<typeof renderer.debug.getShaderAsync>;
+      try {
+        reading = withNightMaterialsShown(
+          object,
+          async () => await renderer.debug.getShaderAsync(scene, view, object)
+        );
+      } finally {
+        object.visible = visible;
+        object.frustumCulled = frustumCulled;
+      }
+      try {
+        const shaders = await reading;
+        if (renderer.getRenderTarget() === target) {
+          return shaders;
+        }
+      } finally {
+        renderer.setRenderTarget(previous);
+      }
+    }
+    return null;
+  };
+  /**
    * The cameras the frames are drawn with, one of each kind: the walk/fly
    * camera, and once it was asked for (`warmView`) Modell's parallel one.
    * three (r187) builds a material's programs per kind of camera — a
@@ -1354,6 +1414,13 @@ export function createPostStack(
       await stack.compile(root);
     },
     anchorCount: () => anchors.count(),
+    shadersOf: async (object, view = camera) => {
+      let shaders: Awaited<ReturnType<typeof shadersNow>> = null;
+      await compileInTurn(renderer, async () => {
+        shaders = await shadersNow(object, view);
+      });
+      return shaders;
+    },
     holdCut: async (group, roots, view) => {
       if (cut?.group !== group || cut.view !== view) {
         letGo();
