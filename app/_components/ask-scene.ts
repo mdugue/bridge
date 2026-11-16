@@ -10,7 +10,6 @@ import type { TimeChange } from "@/lib/city/ask-tools";
 import { SITE_ZONE, zonedTime } from "@/lib/city/bike-counts";
 import { cardCredits } from "@/lib/city/card-lines";
 import { activeDataLayers, siteDataLayers } from "@/lib/city/data-layers";
-import type { FramePace } from "@/lib/city/frame-pace";
 import { inquiryCard } from "@/lib/city/inquiry";
 import type { Inquiry } from "@/lib/city/inquiry";
 import type { LookState } from "@/lib/city/look-state";
@@ -22,7 +21,7 @@ import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { Site } from "@/lib/city/site";
 import type { AskScene } from "./ask-scene-tools";
-import type { CityWalkHandle } from "./create-app";
+import type { CityWalkHandle, ScenePace } from "./scene-client";
 import { untilAborted } from "./fetch-optional";
 import { loadLandmarkFacts } from "./landmark-facts-load";
 import { sleep, visibleMs } from "./net-gate";
@@ -170,7 +169,7 @@ export function useAskScene(
   look: LookState,
   time: SceneTime,
   site: Site,
-  pace: FramePace
+  pace: ScenePace
 ): AskScene {
   const { current, setInstant } = time;
   return useMemo(() => {
@@ -211,6 +210,10 @@ export function useAskScene(
         // a scene remounted while this waited (a GPU loss) is not asked
         // through the old one's handle
         const gone = () => handleRef.current !== h;
+        // the mirror is a frame stale: a glide `show` just told the scene
+        // reads as moving only once the scene has answered it (ADR 0061);
+        // a scene torn down meanwhile is caught by `gone` below
+        await h.sync().catch(() => null);
         // where a glide lands, not on its way
         const there = await standing(h, gone, signal);
         if (gone()) {
@@ -221,7 +224,7 @@ export function useAskScene(
         }
         // at the view's subject (Modell's pivot), and once the tiles
         // there have come: a miss is asked again — never mid-glide
-        let asked: Inquiry | null = h.inquireAt(h.focusNdc());
+        let asked: Inquiry | null = await h.inquireAt(h.focusNdc());
         for (let i = 0; !asked && i < MISS_RETRIES; i += 1) {
           await sleep(MISS_RETRY_MS, signal);
           const still = !h.viewMoving() || (await standing(h, gone, signal));
@@ -231,7 +234,7 @@ export function useAskScene(
           if (!still) {
             return MOVING;
           }
-          asked = h.inquireAt(h.focusNdc());
+          asked = await h.inquireAt(h.focusNdc());
         }
         if (!asked) {
           return {
@@ -303,18 +306,20 @@ export function useAskScene(
       },
       within: (x, y) => siteHoldsPoint(site, x, y),
       select: (places) => handleRef.current?.pickPlaces(places),
-      frame: () => {
+      streetView: async (place, from) =>
+        (await handleRef.current?.streetViewOf(place, from)) ?? null,
+      frameView: async (places, from) => {
         const h = handleRef.current;
-        const sun = h
-          ? sunDirectionEnu(current(), h.latLng.lat, h.latLng.lng)
-          : null;
-        return {
-          aspect: h
-            ? h.viewAspect()
-            : window.innerWidth / Math.max(window.innerHeight, 1),
-          sun: sun && sun.up > 0 ? { east: sun.east, north: sun.north } : null,
-          ...(h ? { sightHit: h.sightHit, groundAt: h.groundAt } : {}),
-        };
+        if (!h) {
+          return null;
+        }
+        const sun = sunDirectionEnu(current(), h.latLng.lat, h.latLng.lng);
+        // framed in the scene, where the buildings' sight lines are
+        return await h.frameView(
+          places,
+          from,
+          sun.up > 0 ? { east: sun.east, north: sun.north } : null
+        );
       },
       setTime: (change) => {
         const at = instantAt(current(), change);

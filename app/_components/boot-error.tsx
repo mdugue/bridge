@@ -9,7 +9,7 @@ import { isNetworkMessage } from "@/lib/city/fetch-retry";
  * (city-walk-client.tsx): what happened in German — a network cause in
  * plain words, the browser's own text ("Load failed") under *Details* —
  * and a way to try again without hunting for the reload button (none where
- * trying again cannot help: a browser without WebGPU or WebGL2).
+ * trying again cannot help: a browser without WebGPU).
  */
 export const BootError = ({
   message,

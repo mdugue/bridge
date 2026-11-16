@@ -146,6 +146,19 @@ def test_an_ordinary_roofs_antennas_make_no_relief():
     assert structures.relief(s, cell_box(20, 20, 60, 60), "x") == []
 
 
+def test_a_low_wing_drawn_too_high_borrows_no_relief_from_the_hall_beside_it():
+    roof = np.full((N, N), np.nan)
+    roof[20:40, 20:80] = GROUND + 8  # the wing, LoD2 2 m over the scan
+    roof[40:80, 20:80] = GROUND + 36  # the hall beside it
+    roof[39, 50:70] = GROUND + 36  # ... reaching into the wing's outline
+    dom = np.where(np.isfinite(roof), roof, GROUND)
+    dom[20:39, 20:80] = GROUND + 6
+    dom[39, 20:50] = dom[39, 70:80] = GROUND + 6
+    s = surfaces(dom, roof)
+    # no void to fill from the hall's cells: the wing's roof is simply high
+    assert structures.relief(s, cell_box(20, 20, 20, 60), "wing") == []
+
+
 def test_a_landmark_point_beside_its_building_finds_it():
     city = {"CityObjects": {"hall": {"children": ["part"]}, "part": {"parents": ["hall"]}}}
     ids = ["part"]
@@ -720,3 +733,25 @@ def test_a_bridge_slab_the_mesh_leaves_out_is_never_matched():
     }
     ids, _ = landmarks.drawn_footprints(city)
     assert ids == ["house"]
+
+
+def test_a_hole_in_a_landmarks_roof_is_filled_a_roof_drawn_too_high_is_not():
+    roofed = np.ones((30, 30), bool)
+    void = np.zeros((30, 30), bool)
+    void[2:4, 2:4] = True  # a sound opening
+    void[6:14, 10:18] = True  # a glass roof over a courtyard, shut in
+    void[18:, :] = True  # a low wing (40 %), under a roof LoD2 drew too high
+    void[18:, 15] = False  # ... a skylight's strip across it
+    out = structures.roof_holes(void, roofed)
+    assert out[2:4, 2:4].all() and out[6:14, 10:18].all()
+    assert not out[18:, :].any()
+
+
+def test_an_inner_hall_drawn_too_high_is_no_hole():
+    roofed = np.ones((30, 30), bool)
+    void = np.zeros((30, 30), bool)
+    void[8:20, 8:20] = True  # shut in by the blocks around it
+    depth = np.full((30, 30), 12.0)
+    # its scan a lower roof 8 m up: no hole; down to the floor: a glass roof
+    assert not structures.roof_holes(void, roofed, 1.0, np.where(void, 8.0, depth)).any()
+    assert structures.roof_holes(void, roofed, 1.0, np.where(void, 0.5, depth))[void].all()

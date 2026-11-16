@@ -838,11 +838,12 @@ const Conversation = ({
                         onPlace={
                           chat.isLoading
                             ? null
-                            : (place) =>
-                                showPlaces(scene, {
+                            : (place) => {
+                                void showPlaces(scene, {
                                   ziele: [place],
                                   aus_der_luft: !chips?.onFoot,
-                                })
+                                });
+                              }
                         }
                         pending={pending}
                         places={shownPlaces(chips?.places ?? [], scene)}

@@ -46,3 +46,6 @@ scope.addEventListener("message", ({ data }) => {
     );
   }
 });
+
+// the script runs: from here the page hands its jobs over
+scope.postMessage({ ready: true }, []);

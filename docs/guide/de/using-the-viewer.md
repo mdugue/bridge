@@ -4,10 +4,8 @@
 
 Diese Seite geht das Einstellungsfeld Beschriftung für Beschriftung
 durch. Du brauchst einen Browser mit **WebGPU** (die neuere
-Grafikschnittstelle, die die meisten aktuellen Browser bieten) oder, wo
-das fehlt, **WebGL2** (jeder aktuelle Desktop- und Mobilbrowser hat es;
-das Bild ist dasselbe, nur kann die Ansicht kurz stocken, während neue
-Gegenden erscheinen) und für ein flüssiges Bild eine halbwegs aktuelle
+Grafikschnittstelle: Chrome, Edge und Safari ab iOS und macOS 26 bieten
+sie) und für ein flüssiges Bild eine halbwegs aktuelle
 Grafikkarte. Handys werden unterstützt: Sie bekommen
 automatisch ein leichteres Render-Budget.
 
@@ -579,7 +577,7 @@ Code und Wissensbasis für sie verwenden:
 | | *Dachsättigung* | hebt die Sättigung der Luftbild-Dachfarben, ohne den Farbton zu verschieben; 0 = rohes Luftbild |
 | | *Traufkante* | eine weiche Linie, wo Wand auf Dach trifft |
 | | *Gliederung* | was ein Haus auf Augenhöhe zeigt, gemalt: eine dunklere Ladenzone, wo ein Laden erfasst ist. Sockel, Gesims über dem Erdgeschoss und Traufgesims sind modelliert, laufen von Haus zu Haus durch und sind immer da |
-| | *Fenster* | Fensterreihen an jedem Haus, in die Wand gezeichnet: eine Öffnung, in die man hineinsieht, die Laibungen im Putz der Wand, der Grund dunkler und kühler, eine schmale Sohlbank mit ihrem Schatten — kein Glas, keine Scheiben, keine Sprossen. Achsweite und Größe, wo Straßenfotos das Haus vermessen haben (Dresden), sonst die des nächsten gemessenen Hauses derselben Art, sonst die seines Typs; eine Reihe je Geschoss, die Fenster so hoch, wie das Geschoss es zulässt, die des Erdgeschosses über dem Sockel, die des obersten unter dem Traufgesims; das Erdgeschoss eines Bürgerhauses etwas erhöht, seine Fenster mit Faschen. Keine an Brandwänden, neben Türen, über Ladenfronten, an Kirchen, Schlössern und Hallen. Aus der Ferne gehen sie im Ton der Fassade auf |
+| | *Fenster* | Fensterreihen an jedem Haus, in die Wand gezeichnet: eine Öffnung, in die man hineinsieht, die Laibungen im Putz der Wand, der Grund dunkler und kühler, eine schmale Sohlbank mit ihrem Schatten, im Grund bei schrägem Blick ein wenig gespiegelter Himmel — keine Scheiben, keine Sprossen. Achsweite und Größe, wo Straßenfotos das Haus vermessen haben (Dresden), sonst die des nächsten gemessenen Hauses derselben Art, sonst die seines Typs; eine Reihe je Geschoss, die Fenster so hoch, wie das Geschoss es zulässt, die des Erdgeschosses über dem Sockel, die des obersten unter dem Traufgesims; das Erdgeschoss eines Bürgerhauses etwas erhöht, seine Fenster mit Faschen. Keine an Brandwänden, neben Türen, über Ladenfronten, an Kirchen, Schlössern und Hallen. Aus der Ferne gehen sie im Ton der Fassade auf |
 | | *Fassadenbild* | was Straßenfotos (Mapillary) über eine Fassade sagen, abstrahiert: ein feines Relief, wo sie unruhig ist, ein Gesims an jedem Geschoss einer unruhigen Gründerzeitfront, ein etwas dunklerer oder hellerer Ton, ein Ladensockel, wo ein Ladenschild hängt; wo Rundumfotos die Fassade zeigen (in jeder Stadt außer Unna, das keine hat) |
 | | *Abendlicht* | nach Einbruch der Dunkelheit: ein Viertel der Fenster leuchtet warm, Läden und öffentliche Bauten werden von Lichtkegeln am Fuß der Fassade angestrahlt, manche Wahrzeichen von ungleichmäßigem Flutlicht bis zur Traufe — die Wände selbst leuchten nie |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |

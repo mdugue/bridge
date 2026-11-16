@@ -186,8 +186,21 @@ let trackAxes: AxisIndex | undefined;
  * beside the Basis-DLM's tracks stood over a rail where the two lie a
  * metre apart.
  */
-export function publishPlatforms(file: string): string {
+export async function publishPlatforms(file: string): Promise<string> {
   const src = at(sideFileSource(SITE, file));
+  // (the tracks' files and the DGMs their levels were solved on: every
+  // input of the axes; hashed once a run)
+  const key = cacheKey([src, ...levelInputs(SITE)], BAKE_ENTRIES.platforms);
+  return publish(
+    file,
+    await cached(file, key, () => utf8(clearPlatforms(file, src)))
+  );
+}
+
+function clearPlatforms(
+  file: string,
+  src: string
+): FeatureCollection<AreaFeature> {
   trackAxes ??= new AxisIndex(siteTrackAxes(SITE, lineLevels));
   const axes = trackAxes;
   const doc = readJson(src) as FeatureCollection<AreaFeature>;
@@ -207,5 +220,5 @@ export function publishPlatforms(file: string): string {
   if (cut > 0) {
     log(`${file}: ${cut} platforms cut back from the tracks`);
   }
-  return publish(file, utf8({ ...doc, features }));
+  return { ...doc, features };
 }

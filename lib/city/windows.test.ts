@@ -58,7 +58,6 @@ const host = (extra: Partial<WindowHost> = {}): WindowHost => ({
   lod2: true,
   ownFacade: false,
   root: 0,
-  shop: false,
   storeyH: 3.75,
   ...extra,
 });
@@ -290,11 +289,6 @@ describe("windowSpecs", () => {
     // 16 m at the neighbours' 4 m: four rows, not the photos' five
     const [own] = windowSpecs([host({ eaveH: 16, storeyH: 4 })], [wall], index);
     expect(own.storey).toBeCloseTo(4, 9);
-  });
-
-  test("a shop's ground floor gets none", () => {
-    const [shop] = windowSpecs([host({ shop: true })], [], index);
-    expect(unpackStyle(shop.spec.style).noGround).toBe(true);
   });
 
   test("a measured rhythm keeps near its type's", () => {
