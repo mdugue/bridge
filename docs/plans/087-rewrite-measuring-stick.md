@@ -269,7 +269,7 @@ and plans can rely on:
   approached (a phone's 7.52 MB in 30), its far set 4.69 MB in 10, the
   tiles' files 193.6 MB in 641, the boot 18.6 kB in 2, 40 site-wide files
   with 3.54 MB, 17 of the server's; 17 dressing kinds, 27 layer modules
-  with 14 420 lines of code, `bootApp` 2 352 lines of code, 57 of 83 bake
+  with 14 420 lines of code, `bootApp` 2 354 lines of code, 57 of 83 bake
   modules on seams, 10 registered upstream workarounds at 9 marked sites.
   The figures are in the file and in `docs/data-pipeline.md`, "Measuring
   what the browser downloads".

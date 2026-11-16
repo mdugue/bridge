@@ -446,7 +446,7 @@
       "codeLines": 14420
     },
     "longestFunction": {
-      "lines": 2352,
+      "lines": 2354,
       "name": "bootApp",
       "path": "app/_components/create-app.ts"
     },

@@ -1310,7 +1310,7 @@ line or a wrapper function moves none:
 | `dressingKinds`, `coarseDressingKinds`, `askKinds` | the artifact table's kinds | 17, 3, 1 |
 | `publishedExtensions` | the distinct extensions among the published files | 9 |
 | `layerModules` | the modules named `*-layer.ts` anywhere under `app/`, `lib/` or `packages/`, and their lines of code (no comment, no blank line) | 27 with 14 420 |
-| `longestFunction` | the longest top-level function, arrow constant or class of the sources, in lines of code: the boot, wherever its code goes | `bootApp`, 2 352 |
+| `longestFunction` | the longest top-level function, arrow constant or class of the sources, in lines of code: the boot, wherever its code goes | `bootApp`, 2 354 |
 | `bakeSeamModules` | the modules under `pipeline/bake/` whose code handles a tile's edge — plan 092's five ways by their calls, and any other read with a `margin` | 57 of 83 |
 | `upstreamWorkarounds` | the entries of `docs/rendering.md`, "Workarounds for upstream bugs", and the comments that say *upstream workaround* | 10 entries, 9 sites |
 
