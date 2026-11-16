@@ -38,8 +38,10 @@ import {
   wireBytes,
 } from "../lib/city/ledger";
 import type {
+  ByLevel,
   Counters,
   Ledger,
+  MeshFigures,
   RasterReads,
   Recorded,
   SourceText,
@@ -155,6 +157,14 @@ function counters(published: Record<string, string>): Counters {
   };
 }
 
+/** The gated part of the buildings' figures: their triangles. */
+const triangles = (
+  level: Record<string, MeshFigures>
+): Record<string, { triangles: number }> =>
+  Object.fromEntries(
+    Object.entries(level).map(([tile, m]) => [tile, { triangles: m.triangles }])
+  );
+
 /** This machine, as the recorded figures name it. */
 function machine(): string {
   const cpu = cpuCount();
@@ -187,6 +197,10 @@ export function measure(site: string): {
   const servedNames = Object.values(published.files).toSorted();
   const mesh = (served: string) =>
     glbFigures(new Uint8Array(gunzipSync(published.read(served))));
+  const meshes: ByLevel<MeshFigures> = {
+    near: Object.fromEntries(tiles.map((t) => [t.id, mesh(t.city)])),
+    far: Object.fromEntries(tiles.map((t) => [t.id, mesh(t.cityFar)])),
+  };
   return {
     gated: {
       version: LEDGER_VERSION,
@@ -196,8 +210,8 @@ export function measure(site: string): {
       published: weigh(servedNames, gated),
       bytes: bytesLedger(tiles, viewerReads, gated),
       buildings: {
-        near: Object.fromEntries(tiles.map((t) => [t.id, mesh(t.city)])),
-        far: Object.fromEntries(tiles.map((t) => [t.id, mesh(t.cityFar)])),
+        near: triangles(meshes.near),
+        far: triangles(meshes.far),
       },
       counters: counters(published.files),
     },
@@ -205,6 +219,7 @@ export function measure(site: string): {
       note: RECORDED_NOTE,
       published: weigh(servedNames, wire),
       bytes: bytesLedger(tiles, viewerReads, wire),
+      buildings: meshes,
     },
   };
 }
@@ -222,8 +237,16 @@ function main(check: boolean): void {
     // the recorded figures, for the reader only: never a failure
     const was = (committed as Partial<Ledger> | null)?.recorded;
     for (const line of ledgerDiff(
-      { published: was?.published, bytes: was?.bytes },
-      { published: recorded.published, bytes: recorded.bytes }
+      {
+        published: was?.published,
+        bytes: was?.bytes,
+        buildings: was?.buildings,
+      },
+      {
+        published: recorded.published,
+        bytes: recorded.bytes,
+        buildings: recorded.buildings,
+      }
     )) {
       process.stdout.write(`recorded, not compared: ${line}\n`);
     }

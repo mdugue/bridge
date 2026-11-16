@@ -7,13 +7,12 @@
  * their names, bytes and texts in. `qa/ledger.json` is the result; its
  * `--check` names each figure that moved (`ledgerDiff`).
  *
- * The buildings' glTF are the one exception to "a function of the tree":
- * their bake gives the same bytes on one machine and different bytes on
- * another (3–552 bytes a tile between this repo's CI and a cloud container
- * on 2026-11-16), so the gate counts what does not depend on the machine —
- * their vertices, triangles and accessors' bytes (`glbFigures`) — and their
- * wire bytes are recorded beside it, never compared (`recorded`). They
- * return to the gate once that bake is the same everywhere.
+ * Recorded only, never compared: the buildings' vertices, decoded bytes and
+ * wire bytes, and the bytes of every file that names them by their content
+ * hash (the tileset JSONs) — the near buildings' weld gives 1–3 vertices
+ * more or fewer a tile on another machine (CI against a cloud container,
+ * 2026-11-16) — until the bake fix of PR #310 has merged and they return to
+ * the gate. Their triangle counts and every file count stay gated.
  */
 import { gzipSync } from "node:zlib";
 import { TERRAIN_RASTER_KEYS } from "./tileset";
@@ -23,11 +22,14 @@ export const PACKED_EXTENSIONS = [".png", ".webp", ".gz"] as const;
 /** The gzip level a static host compresses the rest at. */
 export const WIRE_GZIP_LEVEL = 6;
 export const WIRE_RULE =
-  ".png, .webp and .gz at face value; every other file gzipped at level 6 (Bun's zlib). The gated figures leave the buildings' glTF (city_*.glb.gz, near and far) out of the bytes but count them as files: their bake differs by machine, so `buildings` gates their geometry and `recorded` keeps the full wire bytes, never compared.";
+  ".png, .webp and .gz at face value; every other file gzipped at level 6 (Bun's zlib). The gated byte figures leave out the buildings' glTF (city_*.glb.gz, near and far) and the tileset JSONs that name them by hash, but count them as files; `recorded` keeps the full wire bytes, never compared.";
 
-/** The published files whose bytes depend on the machine that baked them:
- *  the buildings' glTF, near and far (served `city_<tile>[_far].<hash>.glb.gz`). */
-export const MACHINE_BOUND = /^city_[^/]*\.glb\.gz$/u;
+/** The published files whose bytes depend on the machine that baked the
+ *  buildings: their glTF, near and far (served
+ *  `city_<tile>[_far].<hash>.glb.gz`), and the tileset JSONs that name them
+ *  by their content hash (`tileset[-spawn].<hash>.json`). */
+export const MACHINE_BOUND =
+  /^(?:city_[^/]*\.glb\.gz|tileset(?:-spawn)?\.[^/.]+\.json)$/u;
 
 /** A wire measure that counts the machine-bound files as no bytes. */
 export function gatedWire(
@@ -499,16 +501,22 @@ export interface Counters {
 
 export const LEDGER_VERSION = 1;
 
-/** The buildings' geometry per tile, near (as baked) and far (simplified). */
-export interface BuildingFigures {
-  far: Record<string, MeshFigures>;
-  near: Record<string, MeshFigures>;
+/** Per tile, near (as baked) and far (simplified). */
+export interface ByLevel<T> {
+  far: Record<string, T>;
+  near: Record<string, T>;
 }
+
+/** The buildings' gated geometry: their triangles, the same on every
+ *  machine (their vertices are not, `Recorded`). */
+export type BuildingFigures = ByLevel<{ triangles: number }>;
 
 /** Figures recorded with the machine and day they were read on, never
  *  compared by `--check`. */
 export interface Recorded {
-  /** every set's full wire bytes, the buildings' glTF in them */
+  /** the buildings' full mesh figures */
+  buildings: ByLevel<MeshFigures>;
+  /** every set's full wire bytes, the machine-bound files in them */
   bytes: Record<LedgerSet, SetLedger>;
   machine: string;
   note: string;
@@ -517,18 +525,18 @@ export interface Recorded {
 }
 
 export const RECORDED_NOTE =
-  "Recorded, never compared: the full wire bytes, the buildings' glTF in them, whose bake differs by machine.";
+  "Recorded, never compared: the buildings' vertices and decoded bytes, and the full wire bytes with the buildings' glTF and the tileset JSONs in them; the near buildings' weld differs by machine until PR #310.";
 
 /** `qa/ledger.json`. Every figure but `dated` and `recorded` is a function
  *  of the tree. */
 export interface Ledger {
   buildings: BuildingFigures;
-  /** the bytes (the buildings' glTF left out) and requests of each set */
+  /** the bytes (the machine-bound files' left out) and requests of each set */
   bytes: Record<LedgerSet, SetLedger>;
   counters: Counters;
   /** the day the gated figures last changed (kept while they hold) */
   dated: string;
-  /** every file the manifest names (the buildings' glTF's bytes left out) */
+  /** every file the manifest names (the machine-bound files' bytes left out) */
   published: Weight;
   recorded: Recorded;
   site: string;
@@ -572,6 +580,14 @@ export function ledgerDiff(was: unknown, now: unknown): string[] {
 }
 
 type Gated = Omit<Ledger, "dated" | "recorded">;
+
+/** A record's figures, without who read them and when. */
+const recordedFigures = (r: Partial<Recorded>) => ({
+  note: r.note,
+  published: r.published,
+  bytes: r.bytes,
+  buildings: r.buildings,
+});
 type RecordedFigures = Omit<Recorded, "machine" | "read">;
 
 /** The ledger to write: the committed one's date while no gated figure
@@ -590,18 +606,8 @@ export function datedLedger(
   const dated = kept && was?.dated ? was.dated : today;
   const sameRecord =
     was?.recorded !== undefined &&
-    ledgerDiff(
-      {
-        note: was.recorded.note,
-        published: was.recorded.published,
-        bytes: was.recorded.bytes,
-      },
-      {
-        note: recorded.note,
-        published: recorded.published,
-        bytes: recorded.bytes,
-      }
-    ).length === 0;
+    ledgerDiff(recordedFigures(was.recorded), recordedFigures(recorded))
+      .length === 0;
   const record: Recorded =
     sameRecord && was?.recorded
       ? was.recorded
@@ -611,6 +617,7 @@ export function datedLedger(
           read: today,
           published: recorded.published,
           bytes: recorded.bytes,
+          buildings: recorded.buildings,
         };
   // the heading first, then the figures, in one order
   return {

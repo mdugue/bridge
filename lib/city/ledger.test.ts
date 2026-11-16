@@ -219,10 +219,13 @@ test("the comments that name a workaround for upstream", () => {
   ).toBe(2);
 });
 
-test("the buildings' glTF are no bytes in the gate, but files", () => {
+test("the machine-bound files are no bytes in the gate, but files", () => {
   const wire = gatedWire(() => 7);
   expect(wire("city_33412_5656_2_sn.fa5c0c5f.glb.gz")).toBe(0);
   expect(wire("city_33412_5656_2_sn_far.c85037b5.glb.gz")).toBe(0);
+  // the tileset JSONs name the buildings by their content hash
+  expect(wire("tileset.804b2f60.json")).toBe(0);
+  expect(wire("tileset-spawn.6a2504c0.json")).toBe(0);
   expect(wire("terrain_33412_5656_2_sn_l0.12c82968.glb.gz")).toBe(7);
   expect(wire("facades_33412_5656_2_sn.4c9c5f53.json")).toBe(7);
 });
@@ -279,6 +282,10 @@ const RECORDED: Recorded = {
   read: "2026-11-16",
   published: { bytes: 20, files: 2 },
   bytes: {} as Ledger["bytes"],
+  buildings: {
+    near: { a: { vertices: 3, triangles: 1, accessorBytes: 36 } },
+    far: { a: { vertices: 3, triangles: 1, accessorBytes: 36 } },
+  },
 };
 
 const LEDGER = {
@@ -289,10 +296,7 @@ const LEDGER = {
   tiles: 2,
   published: { bytes: 10, files: 2 },
   bytes: {} as Ledger["bytes"],
-  buildings: {
-    near: { a: { vertices: 3, triangles: 1, accessorBytes: 36 } },
-    far: { a: { vertices: 3, triangles: 1, accessorBytes: 36 } },
-  },
+  buildings: { near: { a: { triangles: 1 } }, far: { a: { triangles: 1 } } },
   counters: {
     askKinds: 1,
     bakeSeamModules: { matching: 2, of: 3 },
@@ -311,7 +315,13 @@ test("the check names each figure that moved, never the date or the record", () 
     ledgerDiff(LEDGER, {
       ...LEDGER,
       dated: "2027-01-01",
-      recorded: { ...RECORDED, published: { bytes: 21, files: 2 } },
+      recorded: {
+        ...RECORDED,
+        buildings: {
+          ...RECORDED.buildings,
+          near: { a: { vertices: 4, triangles: 1, accessorBytes: 48 } },
+        },
+      },
     })
   ).toEqual([]);
   const moved = {
@@ -319,12 +329,12 @@ test("the check names each figure that moved, never the date or the record", () 
     published: { bytes: 12, files: 2 },
     buildings: {
       ...LEDGER.buildings,
-      near: { a: { vertices: 4, triangles: 1, accessorBytes: 36 } },
+      near: { a: { triangles: 2 } },
     },
     counters: { ...LEDGER.counters, publishedExtensions: [".png", ".json"] },
   };
   expect(ledgerDiff(LEDGER, moved)).toEqual([
-    "buildings.near.a.vertices: 3 → 4",
+    "buildings.near.a.triangles: 1 → 2",
     'counters.publishedExtensions: [".png"] → [".png",".json"]',
     "published.bytes: 10 → 12",
   ]);

@@ -1185,15 +1185,16 @@ raster. A set where a phone reads other files has a `phone` row beside the
 desktop's. Each set is recorded as the spawn tile, the median tile (the
 lower of an even count), the largest tile and the site (each file once).
 
-One kind of file is gated differently: the buildings' glTF
-(`city_<tile>.glb.gz`, near and far). Their bake gives the same bytes on one
-machine and different bytes on another — 3–552 bytes a tile between CI and
-a cloud container on 2026-11-16 — so the gated sets count them as files but
-leave their bytes out, and `buildings` gates each tile's vertices,
-triangles and accessors' bytes instead, read from the glTF's JSON. Their
-full wire bytes are kept in `recorded`, with the machine and the day they
-were read on, which `--check` prints and never compares. They return to
-the gate once that bake is the same everywhere.
+Some figures are recorded only, never compared: the buildings' vertices,
+decoded bytes and wire bytes (`city_<tile>.glb.gz`, near and far), and the
+bytes of the tileset JSONs, which name the buildings by their content
+hash. The near buildings' weld gives 1–3 vertices more or fewer a tile on
+another machine (CI against a cloud container, 2026-11-16), so the gated
+sets count these files but leave their bytes out, `buildings` gates each
+tile's triangles (the same everywhere), and `recorded` keeps the rest with
+the machine and the day it was read on; `--check` prints it and never
+compares it. They return to the gate once the bake fix (PR #310) has
+merged.
 
 Baseline, 2026-11-16 (Dresden, fifteen tiles; MB = 10⁶ bytes on the wire,
 the buildings in them, as `recorded` holds them; files in brackets):
