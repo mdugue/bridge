@@ -412,7 +412,10 @@ falls back on BBBike's city extract the site names (`Site.bbbike`):
   inside that margin would bake a seam's walls, ways and lamps from half
   the data without a word. Short of it, the fetch says on which side and
   by how much and takes nothing; the fetch then exits 1, and a provider
-  with a Basis-DLM still bakes, its OSM steps skipping with a note.
+  with a Basis-DLM still bakes, its OSM steps skipping with a note —
+  though some rewrite their committed files with less (the OSM extract's
+  row in [portability.md](./portability.md#degradation-matrix)), so the
+  fetch's line says to re-bake a committed site only with an extract.
 - **Each under its own name.** BBBike's extract lands as
   `data/_raw/<provider>/osm/<City>.osm.pbf` beside Geofabrik's, so two
   sites of one Land never read each other's city. The bakes read
@@ -448,7 +451,9 @@ beyond the margin on the tightest side):
 
 Meißen therefore needs Geofabrik (or a custom BBBike extract, a request
 by hand on extract.bbbike.org) to re-bake its OSM layers in the cloud;
-its bake there runs to the end and keeps every committed OSM file. Its
+its bake there runs to the end (every step, 2026-11-16), but rewrites
+its trees, rails, monuments, kerbs and NDVI with less, so it is not one
+to commit. Its
 committed bakes were made from BBBike's Dresden extract before this check
 existed, under the Geofabrik name. BBBike rebuilds its city extracts
 weekly from the planet (`Last-Modified` 2026-11-14 for all six on

@@ -476,8 +476,9 @@ def test_a_bbbike_extract_short_of_the_site_is_not_taken(tmp_path, monkeypatch, 
     out = capsys.readouterr().out
     assert "does not cover x" in out and "west by 0.02" in out
     assert not (tmp_path / "raw" / "osm" / "Dresden.osm.pbf").exists()
-    # a provider with a Basis-DLM still bakes: the OSM steps skip
-    assert "its OSM steps skip" in out
+    # a provider with a Basis-DLM still bakes, its OSM steps skipping, and
+    # the line warns that some of them rewrite committed files with less
+    assert "its OSM steps skip, but some rewrite committed files" in out
 
 
 def test_a_geofabrik_404_is_a_wrong_config_not_an_outage(tmp_path, monkeypatch, capsys):

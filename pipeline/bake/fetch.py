@@ -455,7 +455,8 @@ def run(spec: Spec, tiles: list[Tile], lsc: bool = False, fallback: str | None =
             + (
                 "the bakes cannot run without it"
                 if stops
-                else "the bake runs, its OSM steps skip and keep their committed files"
+                else "the bake runs, its OSM steps skip, but some rewrite committed files with less "
+                "(docs/portability.md): re-bake a committed site only with an extract"
             )
         )
     if failures:
