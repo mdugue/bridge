@@ -498,8 +498,9 @@ The fixtures are the clay's texts, `lib/city/__fixtures__/wgsl-budget/`
   here): the limits test 1.1 min — the far flight and its compiles —
   and about 0.5 min in the Modell test, on a shard of about 3.2 min
   before. No test was retried on CI. If the shards' balance asks for
-  it, the far flight is the part to give up: the far level wears the
-  same `clay` build Modell reads.
+  it, the far flight is the part to give up: the far level's `clay`
+  differs from the near `clay|niches` by the openings' mask alone, and
+  both measured the same thirteen variables and four buffers.
 
 **Open after phases 0–1**
 
