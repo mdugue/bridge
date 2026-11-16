@@ -22,6 +22,7 @@
  * and wall-or-roof), so two buildings standing back to back, or a wall
  * and its roof, never blend. Pure, no DOM.
  */
+import * as PMath from "./portable-math";
 
 /** The largest turn between two faces still read as one curved surface
  *  (degrees). The facets of a rounded wall turn 5–20°; an octagon's
@@ -37,7 +38,7 @@ export const FACET_M = 8;
 export const AZIMUTH_DEG = 60;
 
 /** Below this lean (the sine of its slope) a face has no side it leans to. */
-const LEVEL = Math.sin((5 * Math.PI) / 180);
+const LEVEL = PMath.sin((5 * Math.PI) / 180);
 
 /**
  * The normals of a non-indexed triangle stream (three vertices a
@@ -60,7 +61,7 @@ export function creaseNormals(
     out[3 * v + 1] = fn[t + 1];
     out[3 * v + 2] = fn[t + 2];
   }
-  const cos = Math.cos(((options.creaseDeg ?? CREASE_DEG) * Math.PI) / 180);
+  const cos = PMath.cos(((options.creaseDeg ?? CREASE_DEG) * Math.PI) / 180);
   const skip = options.skip ?? (() => false);
   const live = (v: number) => {
     const t = Math.floor(v / 3);
@@ -90,7 +91,7 @@ interface Faces {
  *  the crease, both narrow, leaning to about the same side. */
 function facetsMeet(faces: Faces, cos: number) {
   const n = faces.normal;
-  const az = Math.cos((AZIMUTH_DEG * Math.PI) / 180);
+  const az = PMath.cos((AZIMUTH_DEG * Math.PI) / 180);
   return (t: number, u: number): boolean => {
     if (t === u) {
       return true;
@@ -102,8 +103,8 @@ function facetsMeet(faces: Faces, cos: number) {
     if (d < cos || faces.width[t] > FACET_M || faces.width[u] > FACET_M) {
       return false;
     }
-    const ht = Math.hypot(n[3 * t], n[3 * t + 1]);
-    const hu = Math.hypot(n[3 * u], n[3 * u + 1]);
+    const ht = PMath.hypot(n[3 * t], n[3 * t + 1]);
+    const hu = PMath.hypot(n[3 * u], n[3 * u + 1]);
     if (ht < LEVEL || hu < LEVEL) {
       return true;
     }
@@ -122,9 +123,9 @@ function faceNormals(p: Float32Array): Faces {
   for (let t = 0; t < count; t += 1) {
     const o = 9 * t;
     width[t] = Math.max(
-      Math.hypot(p[o + 3] - p[o], p[o + 4] - p[o + 1]),
-      Math.hypot(p[o + 6] - p[o + 3], p[o + 7] - p[o + 4]),
-      Math.hypot(p[o] - p[o + 6], p[o + 1] - p[o + 7])
+      PMath.hypot(p[o + 3] - p[o], p[o + 4] - p[o + 1]),
+      PMath.hypot(p[o + 6] - p[o + 3], p[o + 7] - p[o + 4]),
+      PMath.hypot(p[o] - p[o + 6], p[o + 1] - p[o + 7])
     );
     const ux = p[o + 3] - p[o];
     const uy = p[o + 4] - p[o + 1];
@@ -135,7 +136,7 @@ function faceNormals(p: Float32Array): Faces {
     const nx = uy * wz - uz * wy;
     const ny = uz * wx - ux * wz;
     const nz = ux * wy - uy * wx;
-    const len = Math.hypot(nx, ny, nz);
+    const len = PMath.hypot(nx, ny, nz);
     if (len < 1e-9) {
       continue;
     }
@@ -162,13 +163,13 @@ function cornerAngle(p: Float32Array, at: number, b: number, c: number) {
   const cx = p[3 * c] - p[3 * at];
   const cy = p[3 * c + 1] - p[3 * at + 1];
   const cz = p[3 * c + 2] - p[3 * at + 2];
-  const la = Math.hypot(ax, ay, az);
-  const lc = Math.hypot(cx, cy, cz);
+  const la = PMath.hypot(ax, ay, az);
+  const lc = PMath.hypot(cx, cy, cz);
   if (la === 0 || lc === 0) {
     return 0;
   }
   const d = (ax * cx + ay * cy + az * cz) / (la * lc);
-  return Math.acos(Math.min(1, Math.max(-1, d)));
+  return PMath.acos(Math.min(1, Math.max(-1, d)));
 }
 
 /** Each point's corners: the vertices of `live` triangles at exactly the
@@ -286,7 +287,7 @@ function smoothPoint(
         z += a * fn[3 * u + 2];
       }
     }
-    const len = Math.hypot(x, y, z);
+    const len = PMath.hypot(x, y, z);
     if (len > 1e-9) {
       out[3 * v] = x / len;
       out[3 * v + 1] = y / len;
