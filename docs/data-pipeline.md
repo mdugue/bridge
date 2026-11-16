@@ -152,6 +152,7 @@ never from the tile name. The modules in `pipeline/bake/`:
 | `citygml.py` | streaming CityGML (AdV LoD2) → CityJSON, buildings owned by the tile holding their envelope centre (the fetch reads the neighbouring cells, so the rule never drops a building — Bavaria aside, see the adapters' row: Saxony files each building in exactly one 2 km file; the committed Leipzig, Grimma and Meißen CityJSON was fetched before the fetch read the neighbouring cells, so it can still lack buildings at the tile seams until the maintainer re-fetches those sites) |
 | `net.py` | downloads (`.part` until complete), single members of remote ZIPs by HTTP range |
 | `osm.py` | reads the site's `.osm.pbf` (through its index, `osm_index.py`), with a margin in degrees around the tile, reprojected to the tile's CRS; `in_tunnel` (a way in a tunnel or `location=underground`) and `below_ground` (that, or a negative `layer` / `level`) for what is drawn on the terrain; `read_ways`, the `lines` with every way in a tunnel left out, which each bake that paints a way on the terrain or lets one steer what it draws reads |
+| `osm_source.py` | where the extract comes from: the BBBike fallback's coverage check against its published boundary with `MAX_MARGIN_DEG`, the `<extract>.source.json` record, the provenance a bake writes from it (see "Where the OSM extract comes from" below); no step imports it |
 | `osm_index.py` | the extract read once into FlatGeobuf files beside it (`<extract>.index/`), so a tile's bbox read takes hundredths of a second instead of a parse of the whole extract; it gives the OSM driver's own answer, features, fields and order, the driver's relation rule included (see "Reading the OSM extract" below) |
 | `step_cache.py` | what each step read and wrote on each tile, so the next `bake` skips a step whose code and files did not change (see "What a re-bake runs" below) |
 | `landcover.py`, `landcover_osm.py`, `rail.py`, `canopy.py`, `trees.py`, `ndvi.py`, `roof_colour.py`, `osm_buildings.py`, `lamps.py`, `monuments.py`, `furniture.py`, `mapillary.py`, `facades.py` (+ `facade_measure.py`, one panorama measured on one wall; `facade_traits.py`, its trait profiles; `facade_glass.py`, a photo's glass reading), `shopfronts.py`, `windows.py`, `walls.py`, `stairs.py`, `surface.py`, `edges.py`, `markings.py`, `sport.py`, `tram.py`, `riverside.py`, `landmarks.py`, `roofs.py` (+ `roof_planes.py`, the forms a measured face may take), `skyview.py`, `lowveg.py`, `cultivated.py`, `small_buildings.py`, `structures.py`, `doors.py`, `passages.py`, `plinths.py`, `dormers.py` | one step each, in the order of the step table (`STEPS`; the table below) |
@@ -182,8 +183,13 @@ It also fails when pyright did not read every module of `bake/` or a
 setting beyond the known ones relaxes it, and in CI when the baseline
 holds what the base branch's does not, unless the PR's description says
 why in a line `Typecheck-baseline-raise: …`.
-Neither the checker nor the script re-keys a bake: both live outside
-`bake/` and the dev group is not in `locked_runtime`. Fetch and bakes
+Where a library leaves the bakes' calls untyped, `pipeline/typings/`
+holds partial stub packages for pyright alone — scipy's `ndimage` and
+`fft`, rasterio's package and `windows`, pyogrio's package, laspy's point
+records — each typed from the installed library's source and checked
+against it when that library is bumped (`typings/README.md`).
+Neither the checker, the script nor the stubs re-key a bake: all live
+outside `bake/` and the dev group is not in `locked_runtime`. Fetch and bakes
 need the network and the raw downloads and run on the maintainer's
 machine.
 
@@ -406,6 +412,122 @@ Geofabrik is unreachable the fetch says so and carries on; put the
 extract at the path it names. The *committed* Dresden lamp, platform and
 bridge-structure data still comes from the old Overpass bakes; the next
 re-bake moves it (see [Provenance](#provenance)).
+
+### Where the OSM extract comes from
+
+The extract is Geofabrik's (`Provider.osm`, or the site's own `Site.osm`).
+Geofabrik resets the connection from the cloud container, so the fetch
+falls back on BBBike's city extract the site names (`Site.bbbike`):
+`pipeline/bake/osm_source.py`. The rules:
+
+- **Only on an outage.** Geofabrik is tried three times (`OSM_TRIES`,
+  10 s and 20 s apart) while it cannot be reached — a cut connection, a
+  timeout, a 5xx (`osm_source.unreachable`); only then does the fetch
+  fall back. A 404 or 410 is a wrong `osm` in the config, a download that
+  fails its published md5 or a full disk would fail the same on any
+  source: no fallback, the fetch says so.
+- **Only where it covers the site, every time.** BBBike publishes each
+  extract's boundary (`<City>.poly`, an Osmosis polygon); the fetch keeps
+  it beside the extract, fetched together with it and recorded with it
+  (its md5 in the extract's record): a boundary that is not the one
+  fetched with the file is refused, and when BBBike publishes another one
+  the fetch fetches the pair again. An extract is taken only if that boundary covers
+  every tile of the site about to read it with the widest margin a bake
+  reads OSM beyond a tile, `MAX_MARGIN_DEG` = 0.05° (the monorail's whole
+  chain, `rail_osm.py`); `test_osm_source.py` holds every margin a bake
+  passes to the OSM readers to it. An extract cut inside that margin
+  would bake a seam's walls, ways and lamps from half the data without a
+  word. The check is made by the fetch and again by every bake
+  (`osm_source.usable`), whoever fetched the file: a Land's sites share
+  one raw folder, so Dresden's `Dresden.osm.pbf` is on disk when Meißen,
+  which it does not cover, asks — Meißen's fetch and bake refuse it, and
+  it stays for Dresden. Short of the margin, the fetch says on which side
+  and by how much and takes nothing; the fetch then exits 1.
+- **A bake needs a covering extract.** A `bake` whose steps read OSM
+  stops before its first step when no extract covers the site
+  (`refuse_without_extract`), and so does one whose extract is not the
+  file its record names (replaced by hand under its record): those steps
+  would skip, but some rewrite their committed files with less (the OSM
+  extract's row in [portability.md](./portability.md#degradation-matrix)).
+  `--without-osm` runs them anyway, for a new site or a test; a step
+  that wrote its files without an extract keeps no day in the
+  provenance, one that skipped (its committed file stays) keeps the day
+  it had. Which
+  steps read OSM is a hand list (`OSM_FREE` in `__main__.py` names the
+  seven whose code reaches `osm.py` only for a helper: skyview, roofs,
+  dormers, windows, facades, plinths, lamp-water); a step on that list
+  that reads the extract after all fails at that read, before it writes
+  and before its run is recorded, so every next bake fails the same way. Geofabrik's extract is
+  a Land's or a Regierungsbezirk's, which holds every site configured on
+  it, so it gets no coverage check.
+- **Each under its own name, and checked.** BBBike's extract lands as
+  `data/_raw/<provider>/osm/<City>.osm.pbf` beside Geofabrik's. The bakes
+  read Geofabrik's where it is there, else the site's BBBike one where it
+  covers the site (`osm_source.resolve`). A file whose md5 is not the one
+  its record names is not taken; the fetch fetches it again, into a file
+  beside it (`<extract>.new`) that takes its place only once complete
+  and checked, so it never deletes an extract it cannot replace. A `.new`
+  left by a download cut short stays beside the extract until the next
+  download, which starts by removing it; no bake reads it. A record
+  without an md5 (none written by this fetch) checks nothing, and its day
+  is taken as the record says. The
+  fallback's URL travels beside the spec (`--osm-fallback`), not in it,
+  and is resolved outside `spec.py`, so no step's code key changes with
+  it. Which extract a step read is in its cache key all the same
+  (`osm_source.identity`, `step_key`'s `osm`): a step baked on BBBike's
+  runs again when Geofabrik's comes, one baked with none when any comes,
+  so sources never mix within a site. On the provider's own Geofabrik
+  extract the key is the one every recorded run already has.
+- **Never silent.** Each extract the fetch writes gets
+  `<extract>.source.json` beside it: source, URL, `Last-Modified` (the
+  day its data is as of), the file's md5 and the one its server
+  publishes, the day it was fetched. The fetch's log and every `bake`
+  start with one line naming the extract, its source and that day; an
+  extract placed by hand has no record and says so. Every step that read
+  the extract (by its recorded reads) is recorded per tile it finished —
+  a failed bake's too, a `--jobs` bake's whichever tile failed — in the
+  site's `provenance.json` as `openstreetmap.baked.<step>.<tile>`:
+  `dataAsOf`, the data's day first, then source and URL, and `on`, the
+  bake's day, apart; only that member of the file is written, every
+  other byte of the hand-kept record stays as it was. An extract with no day (placed by hand, or no
+  `Last-Modified`) is recorded as `unknown`, never as the bake's day:
+  after this lands, the first bake on the maintainer's hand-placed
+  extracts writes `unknown` for each step it runs (`mapillary` first, the
+  one step whose key changes), until the extract is fetched with a
+  record. The
+  Open-Data-Wächter reads the age there (an `unknown` is a finding of its
+  own), and the inquiry card's OSM editions come from it, the oldest day
+  over the site's tiles (`provenance.ts` `bakedStand`); the file has its
+  schema, `lib/city/provenance-file.ts`.
+
+Which BBBike extract covers which site, with the 0.05° margin, from
+BBBike's published boundaries on 2026-11-16 (the room is what is left
+beyond the margin on the tightest side):
+
+| Site | Geofabrik | BBBike (`Site.bbbike`) | Covers | Room |
+|---|---|---|---|---|
+| Dresden | `sachsen` | Dresden (13.43–14.18° E, 50.88–51.23° N) | ✅ | 0.094° |
+| Leipzig | `sachsen` | Leipzig (12.02–12.92° E, 50.98–51.59° N) | ✅ | 0.189° |
+| Grimma | `sachsen` | Leipzig | ✅ | 0.104° |
+| Meißen | `sachsen` | Dresden | ❌ short in the west by 0.025° (the tile starts 1.7 km east of 13.43° E) | — |
+| Hamburg | `hamburg` | Hamburg (9.37–10.57° E, 53.32–53.85° N) | ✅ | 0.163° |
+| München | `bayern/oberbayern` | Muenchen (11.06–12.00° E, 47.80–48.42° N) | ✅ | 0.221° |
+| Berlin | `berlin` | Berlin (12.76–13.98° E, 52.23–52.82° N) | ✅ | 0.221° |
+| Unna | `nordrhein-westfalen/arnsberg-regbez` | Hamm (7.60–8.15° E, 51.46–51.83° N; BBBike has no Unna, its Dortmund ends at 7.65° E) | ✅ | 0.006° (west) |
+
+Meißen therefore needs Geofabrik (or a custom BBBike extract, a request
+by hand on extract.bbbike.org) to re-bake its OSM layers in the cloud;
+its bake there stops before the first step unless `--without-osm`
+(which ran every step on 2026-11-16, and rewrote its trees, rails,
+monuments, kerbs and NDVI with less: not a bake to commit). Its
+committed bakes were made from BBBike's Dresden extract before this check
+existed, under the Geofabrik name. BBBike rebuilds its city extracts
+weekly from the planet (`Last-Modified` 2026-11-14 for all six on
+2026-11-16). Its extracts are OpenStreetMap data under the ODbL, as its
+download index says: "All Data from OpenStreetMap is licensed under the
+OpenStreetMap License" (<https://download.bbbike.org/osm/bbbike/>). The
+credit the HUD and NOTICE give OSM, "© OpenStreetMap-Mitwirkende (ODbL)",
+is the one that licence asks for.
 
 ### Reading the OSM extract
 
@@ -1383,20 +1505,24 @@ its edition must be noted at download time: the ZIP carries
 every committed Saxon site is baked from since 2026-11-05), recorded as
 `geosn["Basis-DLM"].lastModified` in each Saxon site's `provenance.json`.
 
-**Where the OSM values come from.** The pipeline reads the Geofabrik
-extract in `data/_raw/<provider>/osm/`; its timestamp is printed by
-`osmium fileinfo -e <file>.osm.pbf` (`osmosis_replication_timestamp`).
-Geofabrik resets connections from the cloud container, so the extract is
-placed by hand under the Geofabrik name the spec expects (`spec.osm`):
-BBBike's city extracts (Dresden for Dresden and Meißen, Leipzig for
-Leipzig and Grimma, Hamburg, München) and openstreetmap.fr's Arnsberg
-region for Unna — every committed site was re-baked from them on
-2026-11-01 (and again on 2026-11-05, from the same BBBike extracts and a
-newer Arnsberg one), except the two steps that need the laser scan GeoSN did not
-serve that day (`lowveg`, `small-buildings` on the Saxon sites). The
-extract's date is its `Last-Modified` (BBBike) or `state.txt`
-(openstreetmap.fr), recorded as each product's `dataAsOf` in the site's
-`provenance.json`.
+**Where the OSM values come from.** The pipeline reads the extract in
+`data/_raw/<provider>/osm/`: Geofabrik's, or where Geofabrik cannot be
+reached the site's BBBike city extract that covers it (see "Where the OSM
+extract comes from"). The fetch records each one's source and
+`Last-Modified` in `<extract>.source.json`, and each bake writes the day
+into `provenance.json` per step and tile it ran (`openstreetmap.baked`;
+`unknown` where the extract names no day). Before
+the fetch fell back by itself, the extract was placed by hand under the
+Geofabrik name the spec expects: BBBike's city extracts (Dresden for
+Dresden and Meißen, Leipzig for Leipzig and Grimma, Hamburg, München) and
+openstreetmap.fr's Arnsberg region for Unna — every committed site was
+re-baked from them on 2026-11-01 (and again on 2026-11-05, from the same
+BBBike extracts and a newer Arnsberg one), except the two steps that need
+the laser scan GeoSN did not serve that day (`lowveg`, `small-buildings`
+on the Saxon sites). Those records are hand-written: the extract's date
+is its `Last-Modified` (BBBike) or `state.txt` (openstreetmap.fr), as
+each product's `dataAsOf`; when a re-bake's `baked` records replace them,
+drop the old ones, or the Wächter keeps reading the oldest day.
 
 **Licences.** Per provider in `sites/providers.ts` (`licence`, `credit`):
 *Datenlizenz Deutschland – Namensnennung 2.0* for GeoSN and Hamburg,

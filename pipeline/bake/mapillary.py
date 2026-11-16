@@ -67,7 +67,7 @@ from .common import Tile, column, feature, write_geojson
 from .dop_light import solar_position
 from .furniture import Gate
 from .net import _request
-from .osm import in_tunnel, read_osm
+from .osm import has_extract, in_tunnel, read_osm
 from .osm_buildings import footprints
 
 ATTRIBUTION = "Mapillary, CC BY-SA 4.0"
@@ -322,6 +322,13 @@ def run(tile: Tile) -> None:
         if tile.mapillary_objects:
             print(f"{tile.id}: no Mapillary cache (v2) — the lamps are OSM's alone")
         write_geojson(out, [], tile.epsg, ATTRIBUTION)
+        return
+    # Mapillary's lamps are only what OSM lacks: without the extract (the
+    # tunnels, the streets they hang across) there is nothing to weigh them
+    # against, so the committed file stays, as every OSM step leaves its own
+    if not has_extract(tile, "Mapillary's lamps"):
+        if not tile.raw_absent(out, "no OSM extract here"):
+            write_geojson(out, [], tile.epsg, ATTRIBUTION)
         return
     gate = Gate(tile)
     _, polys = footprints(json.loads(tile.cityjson.read_text()))

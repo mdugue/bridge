@@ -3,7 +3,7 @@
  * on disk, and the one command that moves it forward. Pure — the script
  * (scripts/site-report.ts) passes in a file check. No THREE, no DOM.
  */
-import { osmExtractUrl } from "./site";
+import { osmExtractFiles, osmExtractUrl } from "./site";
 import type { Site } from "./site";
 import {
   cityMeshSourceFiles,
@@ -56,17 +56,20 @@ export const DLM_LAYERS = [
 ] as const;
 
 /** What the required land cover is baked from: the complete Basis-DLM, or
- *  without one the OSM extract. The optional surface model and orthophoto
- *  do not hold a tile back — without them their features are off. */
-function landCoverInputs(site: Site): string[] {
+ *  without one the OSM extract (Geofabrik's or the BBBike fallback's,
+ *  whichever is there). The optional surface model and orthophoto do not
+ *  hold a tile back — without them their features are off. */
+function landCoverFetched(
+  site: Site,
+  exists: (path: string) => boolean
+): boolean {
   const raw = providerRawDir(site);
   if (site.provider.products.dlm) {
-    return DLM_LAYERS.flatMap((l) => [
-      `${raw}/dlm/${l}.shp`,
-      `${raw}/dlm/${l}.dbf`,
-    ]);
+    return DLM_LAYERS.every(
+      (l) => exists(`${raw}/dlm/${l}.shp`) && exists(`${raw}/dlm/${l}.dbf`)
+    );
   }
-  return [`${raw}/osm/${osmExtractUrl(site).split("/").at(-1) ?? ""}`];
+  return osmExtractFiles(site).some((file) => exists(`${raw}/osm/${file}`));
 }
 
 export function tileReport(
@@ -100,9 +103,8 @@ export function tileReport(
     terraceSourceFile(site, tile),
     kerbSourceFile(site, tile),
   ].filter((p) => !exists(p));
-  const unfetched = [...sources, ...landCoverInputs(site)].some(
-    (p) => !exists(p)
-  );
+  const unfetched =
+    sources.some((p) => !exists(p)) || !landCoverFetched(site, exists);
   // Buildable is ready, even without the raw inputs (Dresden's derived
   // files are committed; its downloads need not be on this machine).
   let next: Stage = "ready";
@@ -151,7 +153,7 @@ export function siteSummary(site: Site): string[] {
     `${site.label} — ${site.id} (/${site.id}), ${site.tiles.length} tile(s), ${site.viewpoints.length} viewpoint(s)`,
     `provider: ${site.provider.name}, EPSG:${site.provider.epsg}, ${site.provider.licence}`,
     `surface model: ${products.dom ? "yes" : "no (trees from rows only)"} · orthophoto: ${products.dop ?? "none"} · land cover from ${products.dlm ? "the Basis-DLM" : "OpenStreetMap"}`,
-    `OSM extract: ${osmExtractUrl(site)}`,
+    `OSM extract: ${osmExtractUrl(site)}${site.bbbike === undefined ? "" : ` (else BBBike's ${site.bbbike})`}`,
   ];
 }
 

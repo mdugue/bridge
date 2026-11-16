@@ -6,7 +6,9 @@ import {
   landcoverCredit,
   MAPILLARY_CREDIT,
   mapillaryCredit,
+  osmExtractFiles,
   osmExtractUrl,
+  osmFallbackUrl,
   GLO30_CREDIT,
   PHENOLOGY_CREDIT,
   siteAttribution,
@@ -117,6 +119,17 @@ test("Dresden keeps its tile ids, credits and extract", () => {
   expect(osmExtractUrl(DRESDEN)).toBe(
     "https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf"
   );
+});
+
+test("the BBBike fallback is a second file beside Geofabrik's, under its own name", () => {
+  expect(osmFallbackUrl(DRESDEN)).toBe(
+    "https://download.bbbike.org/osm/bbbike/Dresden/Dresden.osm.pbf"
+  );
+  expect(osmExtractFiles(SITES.grimma)).toEqual([
+    "sachsen-latest.osm.pbf",
+    "Leipzig.osm.pbf",
+  ]);
+  expect(osmFallbackUrl({ ...DRESDEN, bbbike: undefined })).toBeNull();
 });
 
 test("each city's tree register is credited with its licence", () => {
