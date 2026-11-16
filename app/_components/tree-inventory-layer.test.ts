@@ -2,10 +2,15 @@ import { expect, test } from "bun:test";
 import { Matrix4, Vector3 } from "three/webgpu";
 import type { Object3D } from "three/webgpu";
 import type { CanopyFeature, TreeFeature } from "@/lib/city/features";
-import { PINE_CROWN_BASE } from "@/lib/city/tree-inventory";
+import {
+  inventoryCovers,
+  inventoryTrees,
+  PINE_CROWN_BASE,
+} from "@/lib/city/tree-inventory";
+import { canopyPlacements } from "@/lib/city/tree-placement";
 import { pineSilhouette } from "./conifer-crown";
 import { isInstances } from "./instancing";
-import { buildTreeInventory } from "./tree-inventory-layer";
+import { buildTreeInventory as buildFromTrees } from "./tree-inventory-layer";
 import {
   buildVegetation,
   createVegetationLod,
@@ -25,10 +30,15 @@ function census(root: Object3D): { instances: number; meshes: number } {
   return out;
 }
 
-const ctx: VegetationContext = {
-  offset: { cx: 0, cy: 0 },
-  heightAt: () => 100,
-};
+const ctx: VegetationContext = {};
+
+/** The ground the build stood the trees on. */
+const ground = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
+
+/** The layer over register features, stood as the tile's tree table hands
+ *  them over (lib/city/tree-table.ts `registerTree`). */
+const buildTreeInventory = (features: TreeFeature[], on: VegetationContext) =>
+  buildFromTrees(inventoryTrees(features, ground), on);
 
 const tree = (x: number, a: number, h = 12, d = 8): TreeFeature => ({
   geometry: { type: "Point", coordinates: [x, 0] },
@@ -85,7 +95,10 @@ test("the reshaped silhouettes get meshes; trunks and broadleaf crowns join the 
   expect(inv.instances).toHaveLength(6);
   expect(inv.instances.filter((t) => t.crown)).toHaveLength(3);
   const veg = buildVegetation(
-    { rows: [], canopy: [canopy(100)], extraTrees: inv.instances },
+    {
+      trees: canopyPlacements([canopy(100)], ground),
+      extraTrees: inv.instances,
+    },
     ctx
   );
   const merged = census(veg.group);
@@ -157,16 +170,10 @@ test("crowns stand on the ground, never NaN (a NaN matrix culls the chunk)", () 
   }
 });
 
-test("keepTree vetoes the canopy points inside an inventory crown", () => {
-  const inv = buildTreeInventory([tree(0, 0, 12, 10)], ctx);
-  expect(inv.keepTree(3, 0)).toBe(false);
-  expect(inv.keepTree(30, 0)).toBe(true);
-  const veg = buildVegetation(
-    { rows: [], canopy: [canopy(2), canopy(40)], keepTree: inv.keepTree },
-    ctx
-  );
-  // only the far canopy point survives: trunk + mid, rich and far crown
-  expect(census(veg.group).instances).toBe(4);
+test("an inventory crown covers the canopy points inside it (the build's veto)", () => {
+  const covers = inventoryCovers([tree(0, 0, 12, 10)]);
+  expect(covers(3, 0)).toBe(true);
+  expect(covers(30, 0)).toBe(false);
 });
 
 test("a tree in forest/copse (f = 1) vetoes no canopy tree", () => {
@@ -174,16 +181,14 @@ test("a tree in forest/copse (f = 1) vetoes no canopy tree", () => {
     geometry: { type: "Point", coordinates: [0, 0] },
     properties: { a: 0, d: 10, h: 12, l: "d", f: 1 },
   };
-  const inv = buildTreeInventory([woodland], ctx);
-  expect(inv.keepTree(3, 0)).toBe(true);
-  expect(inv.instances).toHaveLength(1);
+  expect(inventoryCovers([woodland])(3, 0)).toBe(false);
+  expect(buildTreeInventory([woodland], ctx).instances).toHaveLength(1);
 });
 
-test("empty input builds nothing and vetoes nothing; the control still works", () => {
+test("empty input builds nothing; the control still works", () => {
   const inv = buildTreeInventory([], ctx);
   expect(inv.control.group.children).toHaveLength(0);
   expect(inv.instances).toHaveLength(0);
-  expect(inv.keepTree(0, 0)).toBe(true);
   const built = buildTreeInventory([tree(5, 2)], ctx);
   // its silhouettes are planned with the canopy's chunks: rich near the
   // camera, the next pass changes nothing, and with no rich budget left
@@ -231,8 +236,7 @@ test("a broadleaf crown rides into the canopy with its genus and trunk", () => {
     ctx
   );
   // a young lime's measured 20 cm trunk is slimmer than the height rule's
-  const girth = (t: typeof inv) =>
-    new Vector3().setFromMatrixColumn(t.instances[0].trunk, 0).length();
+  const girth = (t: typeof inv) => t.instances[0].trunk.scale[0];
   expect(girth(inv)).toBeLessThan(girth(unmeasured));
 });
 
@@ -250,7 +254,6 @@ test("a sapling stands between stakes, and thin; an old tree is broad-footed", (
   expect(stakes).toHaveLength(1);
   expect(isInstances(stakes[0]) && stakes[0].drawCount).toBe(1);
   const [young, old] = inv.instances;
-  const girth = (t: (typeof inv.instances)[number]) =>
-    new Vector3().setFromMatrixColumn(t.trunk, 0).length();
+  const girth = (t: (typeof inv.instances)[number]) => t.trunk.scale[0];
   expect(girth(young)).toBeLessThan(girth(old));
 });

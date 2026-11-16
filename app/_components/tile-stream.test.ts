@@ -4,6 +4,7 @@ import {
   DEFAULT_PARSE_QUEUE,
 } from "3d-tiles-renderer/core";
 import { TilesRenderer } from "3d-tiles-renderer/three";
+import { emptyPack, packDressing } from "@/lib/city/dressing-pack";
 import { createLookState } from "@/lib/city/look-state";
 import {
   BoxGeometry,
@@ -43,6 +44,8 @@ import {
   handOverWaitMs,
   PHONE_STREAM,
   STREAM_DOWNLOADS,
+  fetchPack,
+  treesLost,
   setStreamDownloads,
   orderStreaming,
   takesOver,
@@ -769,6 +772,13 @@ test("a phone parses fewer contents at once, on queues of their own in our order
   expect(DEFAULT_DOWNLOAD_QUEUE.maxJobsPerOrigin).toBeGreaterThan(
     STREAM_DOWNLOADS.desktop
   );
+  // a tile's coarse level loads with or before its fine one, on every
+  // tier: the fine level's dressing reads the coarse level's tree table
+  // too, and the ledger counts that file once a visit
+  // (lib/city/ledger-dressing.ts `visit`)
+  phone.loadAncestors = false;
+  orderStreaming(phone, "mobile", () => null);
+  expect([phone.loadAncestors, desktop.loadAncestors]).toEqual([true, true]);
   // not the renderer's error order: a tile's coarse ground before its
   // buildings
   for (const queue of [phone.parseQueue, desktop.downloadQueue]) {
@@ -1709,4 +1719,62 @@ test("an ask builder that throws in idle time is reported and lets the tile go",
   expect(failures).toHaveLength(1);
   expect(d.buildAsks).toBeUndefined();
   expect(asksOf(d)).toEqual([]);
+});
+
+/** A level's tree table through `fetchPack`, every request answered with
+ *  `body`; what the dressing's failure hook heard. */
+async function packFetched(
+  file: string | undefined,
+  body: () => Response
+): Promise<{ packs: number; said: string[]; requests: number }> {
+  const real = globalThis.fetch;
+  const said: string[] = [];
+  let requests = 0;
+  // reason: the stub answers any URL the same
+  globalThis.fetch = (async () => {
+    requests += 1;
+    return await Promise.resolve(body());
+  }) as unknown as typeof fetch;
+  try {
+    const packs = await fetchPack(
+      file,
+      (name) => `/data/${name}`,
+      treesLost(
+        {
+          onDressingFailed: (error, tile) => {
+            said.push(`${tile}: ${(error as Error).message}`);
+          },
+        },
+        "t1"
+      )
+    );
+    return { packs: packs.length, said, requests };
+  } finally {
+    globalThis.fetch = real;
+  }
+}
+
+test("a tree table the level names that does not come is said, never a silence", async () => {
+  const lost = await packFetched(
+    "dressing_t1.drs.gz",
+    () => new Response(null, { status: 404 })
+  );
+  expect(lost.packs).toBe(0);
+  expect(lost.said).toEqual(["t1: Bäume: Tabelle nicht lesbar"]);
+});
+
+test("a tree table that is not one is said; a good one and a level without one are not", async () => {
+  const garbage = await packFetched(
+    "dressing_t1.drs.gz",
+    () => new Response(new Uint8Array(64).fill(7))
+  );
+  expect([garbage.packs, garbage.said.length]).toEqual([0, 1]);
+  const good = await packFetched(
+    "dressing_t1.drs.gz",
+    () => new Response(new Uint8Array(packDressing(emptyPack([1, 2, 3]))))
+  );
+  expect([good.packs, good.said]).toEqual([1, []]);
+  // a level that names no file asks for none
+  const none = await packFetched(undefined, () => new Response(null));
+  expect([none.packs, none.said, none.requests]).toEqual([0, [], 0]);
 });

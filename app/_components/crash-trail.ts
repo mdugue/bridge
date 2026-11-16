@@ -49,8 +49,7 @@ const TRAIL_QUERY = [
   "trace",
   "inspect",
   "depth",
-  // plan 090's spikes: a page drawn through one is not the default page
-  "stands",
+  // plan 090's spike: a page drawn through it is not the default page
   "rails",
   // plan 091 phase 2's trial
   "svf",

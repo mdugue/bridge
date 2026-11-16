@@ -225,6 +225,11 @@ export interface TerrainContent {
 export interface TerrainFiles {
   /** fine level only */
   dressing?: DressingFiles;
+  /** fine level only: its tile's coarse level's dressing file
+   *  (`coarse.dressingCoarse`), which holds the third of the tile's trees
+   *  that level draws — the fine level draws every tree and reads it
+   *  beside its own (lib/city/tree-table.ts) */
+  coarseDressing?: string;
   /** coarse level only: the few side files it is dressed with
    *  (lib/city/tile.ts `COARSE_DRESSING_KINDS`) */
   coarse?: Partial<Record<CoarseDressingKind, string>>;

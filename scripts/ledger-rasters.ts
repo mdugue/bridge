@@ -66,15 +66,11 @@ const KINDS = Object.keys(SAME_KINDS) as RasterKind[];
 /**
  * What the viewer decodes on the CPU and never uploads, by module. The
  * ledger scans app/ for the PNG decoder's callers and fails on one not
- * named here: a new CPU read is named with its kind.
+ * named here: a new CPU read is named with its kind. None since plan 090's
+ * phase 1: the crowns' greenness, the last, is baked into each tree's
+ * record (lib/city/tree-table.ts).
  */
-export const CPU_DECODES: readonly CpuDecode[] = [
-  {
-    module: "app/_components/vegetation-layer.ts",
-    kind: "ndvi",
-    use: "the crowns' greenness, sampled once a fine level's dressing builds (loadNdviSampler; the same file is uploaded for the ground too)",
-  },
-];
+export const CPU_DECODES: readonly CpuDecode[] = [];
 /** The module that decodes a raster to upload it. */
 export const UPLOAD_PATH = "app/_components/raster-upload.ts";
 

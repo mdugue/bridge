@@ -13,11 +13,7 @@
 import { writeFileSync } from "node:fs";
 import nodePath from "node:path";
 import { chromium } from "@playwright/test";
-import { gunzipSync } from "node:zlib";
 import { SWIFTSHADER_WEBGPU } from "../../e2e/swiftshader-webgpu";
-import { tileIds } from "../../lib/city/tile";
-import { REFERENCE_SITE, siteById } from "../../sites";
-import { publishedFiles } from "../ledger";
 
 const ROOT = nodePath.join(import.meta.dir, "../..");
 
@@ -32,22 +28,10 @@ async function main(): Promise<void> {
     throw new Error(built.logs.map(String).join("\n"));
   }
   const script = await built.outputs[0].text();
-  // the reference site's spawn tile's coarse crowns, as published
-  const published = publishedFiles(REFERENCE_SITE);
-  const site = siteById(REFERENCE_SITE);
-  if (!site) {
-    throw new Error("no reference site");
-  }
-  const [spawn] = tileIds(site);
-  const crownsName = published.files[`crowns_${spawn}.crw.gz`];
-  const crowns = gunzipSync(published.read(crownsName));
   const server = Bun.serve({
     port: 0,
     fetch: (request) => {
       const { pathname } = new URL(request.url);
-      if (pathname === "/crowns") {
-        return new Response(crowns);
-      }
       return pathname === "/probe.js"
         ? new Response(script, {
             headers: { "content-type": "text/javascript" },

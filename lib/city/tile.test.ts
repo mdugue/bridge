@@ -7,6 +7,7 @@ import {
   cityMeshSourceFiles,
   COARSE_RASTER_PX,
   dgmSourceFiles,
+  COARSE_DRESSING_KINDS,
   DRESSING_KINDS,
   kerbSourceFile,
   manifestUrl,
@@ -40,14 +41,39 @@ test("the artifact map reproduces the served file names", () => {
 
 test("the cadastre, hedges and scan crowns are optional side files", () => {
   const a = tileArtifacts(PRIMARY_TILE);
+  // a source of the tile's tree table, read by the build and never served
   expect(a.trees).toEqual({
     file: "trees_33412_5656_2_sn.geojson",
     required: false,
+    source: true,
   });
   expect(a.lowveg.file).toBe("lowveg_33412_5656_2_sn.geojson");
-  // Only tiles with a laser scan have them; prepare-data names the file in
-  // the dressing only when it is committed.
-  expect(a.canopyx.required).toBe(false);
+  // Only tiles with a laser scan have them.
+  expect(a.canopyx).toEqual({
+    file: "canopyx_33412_5656_2_sn.geojson",
+    required: false,
+    source: true,
+  });
+});
+
+test("each level has its dressing file, built, the trees' sources unserved", () => {
+  const a = tileArtifacts(PRIMARY_TILE);
+  expect(a.dressing).toEqual({
+    file: "dressing_33412_5656_2_sn.drs.gz",
+    required: false,
+    built: true,
+  });
+  expect(a.dressingCoarse).toEqual({
+    file: "dressing_33412_5656_2_sn.c.drs.gz",
+    required: false,
+    built: true,
+  });
+  expect(DRESSING_KINDS).toContain("dressing");
+  expect(COARSE_DRESSING_KINDS).toContain("dressingCoarse");
+  // what the tree table replaced is no dressing kind any more
+  for (const kind of ["canopy", "canopyx", "trees"]) {
+    expect(DRESSING_KINDS as readonly string[]).not.toContain(kind);
+  }
 });
 
 test("only the class rasters and the vegetation rows are required", () => {

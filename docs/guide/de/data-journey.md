@@ -161,11 +161,18 @@ Für jede Stadt tut es drei Dinge:
    offenen **3D-Tiles**-Format, listet für jede Kachel die Gebäude und die
    zwei Geländestufen und legt fest, ab welcher Nähe die detaillierte Stufe
    die grobe ersetzt. Das Landnutzungsklassen-PNG bekommt eine
-   2048²- und eine 512²-Kopie. Ergebnisse werden in `.cache/` zwischengespeichert und nur
+   2048²- und eine 512²-Kopie. **Auch die Bäume werden hier gestellt**:
+   Jeder Baum einer Kachel wird auf das detaillierte Gelände gesetzt, und
+   was von ihm gemessen ist — wo er steht, Höhe und Neigung des Bodens
+   dort, seine Höhe, wie grün das Luftbild ist —, kommt als Zeile von
+   zwölf oder zwanzig Bytes in eine kompakte Tabelle je Geländestufe (ein
+   Drittel der Bäume für die grobe Stufe, der Rest für die detaillierte).
+   Der Browser liest für einen Baum keine Baumdatei, kein Gelände und
+   kein Luftbild mehr. Ergebnisse werden in `.cache/` zwischengespeichert und nur
    neu erzeugt, wenn sich eine Eingabe oder der Bake-Code geändert hat.
 2. **Veröffentlicht** jede Datei in den Ordner der Stadt unter einem Namen, der
    einen Fingerabdruck ihres Inhalts trägt (zum Beispiel
-   `canopy_33412_5656_2_sn.55a26a2d.geojson`), und schreibt eine
+   `lamps_33412_5656_2_sn.b161fd62.geojson`), und schreibt eine
    `manifest.json`, die die einfachen Namen auf die Namen mit
    Fingerabdruck abbildet.
 3. **Räumt auf**, was das Manifest nicht mehr nennt, damit eine entfernte

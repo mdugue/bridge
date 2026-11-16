@@ -175,11 +175,17 @@ ADR 0041).
   mismatch; `bake-files.test.ts` parses every committed file, and
   `features.test.ts` keeps the value rules a shape does not say. The
   viewer imports a schema module by type only. Excused until a later
-  schema pass, still cast: the crown and canopy layers
-  (`scripts/coarse-crowns.ts`, `scripts/prepare/side-bakes.ts`), the lines
-  and areas (`scripts/prepare/lines.ts`), the land-cover legend's
-  `water`, and the sports and markings tables the viewer packs
-  (`tile-rasters.ts`). A new file takes a schema.
+  schema pass, still cast: the lines and areas
+  (`scripts/prepare/lines.ts`), the land-cover legend's `water`, and the
+  sports and markings tables the viewer packs (`tile-rasters.ts`). A new
+  file takes a schema.
+- What a tile's dressing is baked from is read through one reader a kind
+  (`scripts/dressing-sources.ts`); what the build places for it travels
+  as a section of the level's dressing file (`lib/city/dressing-pack.ts`:
+  one table names every section's record), never as a fetch of its own.
+  A record says where a thing stands and what was measured, never how it
+  looks: a dressing baker imports no colour, season or style
+  (`scripts/bake-dressing.test.ts`).
 - Nothing whose alpha or values carry data goes through an image resize or
   the browser's image decoder; class rasters are NEAREST and decoded by
   `lib/city/png-raster.ts`.
@@ -217,7 +223,7 @@ uploaded; nothing it names is fetched (ADR 0054).
   index has each one's link); `bun run shots` renders them too.
 - URL knobs: `?scene=lite`, `?thread=main`, `?safety=0…3`, `?trail=1`,
   `?trace=1`, `?inspect=1`, `?depth=standard`, `?at=lat,lng`, `?snap=…`
-  (a view link); plan 090's spikes: `?stands=record`, `?rails=table`;
+  (a view link); plan 090's spike: `?rails=table`;
   plan 091's trial: `?svf=blocks` (on a build with `SVF_BLOCKS=1`).
   URL parameters go in the query, never the fragment; one
   that carries a place is named on the privacy page.

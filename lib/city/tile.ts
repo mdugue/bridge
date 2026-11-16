@@ -103,6 +103,8 @@ export interface TileArtifact {
   bakedFrom?: { channels?: 2 | 4; file: string; raster: number };
   /** made by prepare-data.ts from other side files: nothing committed */
   built?: true;
+  /** read by the build for a `built` row, never published */
+  source?: true;
   /** file name under public/data (before content hashing) */
   file: string;
   /** false = the loader treats a missing file as "feature off" */
@@ -151,6 +153,9 @@ interface ArtifactSpec {
   file: (tile: string) => string;
   osm?: true;
   required?: true;
+  /** a committed file the build reads and does not publish: a source of
+   *  a `built` row */
+  source?: true;
   terrain?: TerrainNaming;
 }
 
@@ -186,7 +191,8 @@ const ARTIFACTS = {
     dressing: true,
   },
   // Optional: the canopy bake skips a tile without DOM1 (rows still plant).
-  canopy: { file: named("canopy", "geojson"), dressing: true },
+  // A source of the tile's tree table (`dressing`), never served.
+  canopy: { file: named("canopy", "geojson"), source: true },
   ndvi: {
     file: named("ndvi", "png"),
     terrain: { levels: { 0: ["ndvi"], 1: ["ndvi"] } },
@@ -349,7 +355,8 @@ const ARTIFACTS = {
   // Optional: the street-tree cadastre (pipeline/bake/trees.py), the OSM
   // hedges and the laser-scan crowns outside the canopy mask
   // (pipeline/bake/lowveg.py; only tiles with a laser scan have them).
-  trees: { file: named("trees", "geojson"), dressing: true },
+  // A source of the tree table and of the tree facts, never served.
+  trees: { file: named("trees", "geojson"), source: true },
   // What the card says about those trees (species, location, age, the
   // measured sizes) — fetched with the first question about a tree on the
   // tile (ADR 0042), never to draw.
@@ -362,12 +369,20 @@ const ARTIFACTS = {
     coarse: true,
   },
   lowveg: { file: named("lowveg", "geojson"), dressing: true, osm: true },
-  canopyx: { file: named("canopyx", "geojson"), dressing: true },
-  // The coarse level's trees, a third of them (lib/city/coarse-crowns.ts):
-  // baked by prepare-data.ts from the tree files above, no committed
-  // source.
-  crowns: {
-    file: (tile) => `crowns_${tile}.crw.gz`,
+  canopyx: { file: named("canopyx", "geojson"), source: true },
+  // A terrain level's dressing as one file of tables
+  // (lib/city/dressing-pack.ts), baked by prepare-data.ts
+  // (scripts/bake-dressing.ts), no committed source: the fine level's, and
+  // the coarse level's — which holds the third of the tile's trees that
+  // level draws (lib/city/coarse-crowns.ts), and which the fine level
+  // reads beside its own (`TerrainFiles.coarseDressing`).
+  dressing: {
+    file: (tile) => `dressing_${tile}.drs.gz`,
+    built: true,
+    dressing: true,
+  },
+  dressingCoarse: {
+    file: (tile) => `dressing_${tile}.c.drs.gz`,
     built: true,
     coarse: true,
   },
@@ -393,8 +408,8 @@ export const DRESSING_KINDS: readonly DressingKind[] = kindsWith("dressing");
  * show beyond the fine level's reach — the counted traffic (a data layer
  * read from the air, which stopped at every tile the fine level had not
  * reached yet), the bridges, which it rides and which the coarse level
- * draws (the buildings leave LoD2's bridge slabs out), and its own trees,
- * a third of the fine level's (lib/city/coarse-crowns.ts).
+ * draws (the buildings leave LoD2's bridge slabs out), and its dressing
+ * file: its own trees, a third of the tile's (lib/city/coarse-crowns.ts).
  */
 export type CoarseDressingKind = KindsWith<"coarse">;
 export const COARSE_DRESSING_KINDS: readonly CoarseDressingKind[] =
@@ -448,6 +463,7 @@ export function tileArtifacts(
       file: spec.file(tile),
       required: spec.required === true,
       ...(spec.built ? { built: true as const } : {}),
+      ...(spec.source ? { source: true as const } : {}),
       ...(spec.terrain ? { terrain: spec.terrain } : {}),
       ...(spec.bakedFrom
         ? {

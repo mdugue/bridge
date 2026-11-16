@@ -1,20 +1,12 @@
-import { Color, Group, Matrix4, Quaternion, Vector3 } from "three/webgpu";
-import type { BufferGeometry } from "three/webgpu";
-import {
-  coarseForm,
-  COARSE_TREE_WIDEN,
-  crownBytes,
-} from "@/lib/city/coarse-crowns";
-import type { CoarseCrown, CoarseForm } from "@/lib/city/coarse-crowns";
-import type { RecenterOffset } from "@/lib/city/ground-clamp";
-import {
-  standOrigin,
-  STAND_RECORD_WORDS,
-  writeStand,
-} from "@/lib/city/stand-record";
+import { Color, Group } from "three/webgpu";
+import type { BufferGeometry, Vector3 } from "three/webgpu";
+import { COARSE_TREE_WIDEN } from "@/lib/city/coarse-crowns";
 import type { Stand } from "@/lib/city/stand-record";
 import { pineBase } from "@/lib/city/tree-inventory";
+import type { InventoryTree } from "@/lib/city/tree-inventory";
 import { bucketByCell, hash } from "@/lib/city/tree-placement";
+import type { Placement } from "@/lib/city/tree-placement";
+import { placementRecords, registerCrownStand } from "@/lib/city/tree-stands";
 import {
   boxOf,
   buildConeGeo,
@@ -26,129 +18,105 @@ import type { CrownBox } from "./conifer-crown";
 import type { CrownSeasonKey, SeasonalCrowns } from "./crown-season";
 import { seasonCrowns } from "./crown-season";
 import { Instances, standTable } from "./instancing";
-import { finished, inRuns } from "@/lib/city/build-steps";
+import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
-import { inventoryColor, registerCrownMatrix } from "./tree-inventory-layer";
+import { broadCrownFit, inventoryColor } from "./tree-inventory-layer";
 import {
   applySeasons,
   buildCrownGeo,
+  canopyForm,
   crownColor,
-  crownFrame,
   genericSeasonKey,
   padCrownSphere,
   sceneCrowns,
 } from "./vegetation-layer";
-import type { VegetationControl } from "./vegetation-layer";
+import type { CanopyForm, VegetationControl } from "./vegetation-layer";
 
 /**
  * The coarse terrain level's trees (lib/city/coarse-crowns.ts): a third of
- * the fine level's trees, where the fine level stands them, in its colours
- * and season, their crowns COARSE_TREE_WIDEN wider. Built with the coarse
+ * the tile's trees, where the fine level stands them, in its colours and
+ * season, their crowns COARSE_TREE_WIDEN wider. Built with the coarse
  * level's dressing and shown with it — whenever the tile renderer shows
  * the coarse level, in the distance on foot and in the air, in Modell
  * wherever the fine level is not loaded — so no scale and no device is
- * left without trees. One set per vegetation chunk and form — the lobed
- * crown, the cone for its conifers and the pine's crown for its pines
- * (`coarseForm`) —, on the scene's
- * crown materials (sceneCrowns): the wind and the look reach them as every
- * other crown, and they need no build of their own.
+ * left without trees. They come placed (the level's dressing file,
+ * lib/city/tree-table.ts: each on the fine level's ground, which the
+ * build read): the layer reads no ground and writes no matrix. One set per
+ * vegetation chunk and form — the lobed crown, the cone for its conifers
+ * and the pine's crown for its pines —, each a table of stand records
+ * (lib/city/tree-stands.ts), on the scene's crown materials
+ * (sceneCrowns): the wind and the look reach them as every other crown,
+ * and they need no build of their own.
  */
 export interface CoarseCrownContext {
-  /** the coarse ground the crowns stand on (EPSG) */
-  heightAt: (x: number, y: number) => number | null;
-  offset: RecenterOffset;
-  /** draw the crowns from stand records (lib/city/stand-record.ts), the
-   *  vertex stage composing each matrix, instead of writing matrices —
-   *  plan 090's phase-0 spike, behind `?stands=record` */
-  standRecord?: boolean;
   sunDirection?: Vector3;
 }
 
-const Y_AXIS = new Vector3(0, 1, 0);
-const W = COARSE_TREE_WIDEN;
-
-/** One crown's matrix: the fine level's, wider — a canopy crown between
- *  its base and its top (`crownFrame`), a pine's high on its stem
- *  (`pineBase`). */
-function crownMatrix(c: CoarseCrown, ground: number, out: Matrix4): Matrix4 {
-  if (c.kind === "register") {
-    const ext = { ...c.ext, crownWidth: c.ext.crownWidth * W };
-    return out.copy(
-      registerCrownMatrix({ ext, ground, rot: c.rot, x: c.x, z: c.z })
-    );
-  }
-  const base = coarseForm(c) === "pine" ? pineBase(c) : c.base;
-  const { lift, scale } = crownFrame({ ...c, y: ground, base });
-  return out.compose(
-    new Vector3(c.x, ground + lift, c.z),
-    new Quaternion().setFromAxisAngle(Y_AXIS, c.rot),
-    new Vector3((c.w ?? c.s) * W, scale, (c.w ?? c.s) * W)
-  );
+/** The coarse level's third of a tile's trees. */
+export interface CoarseTrees {
+  /** the register's, each drawn as the lobed crown, the cone or a pine's */
+  register: readonly InventoryTree[];
+  /** the canopy's, the scan's and the rows' */
+  trees: readonly Placement[];
 }
 
-/** A crown as a stand record's fields: its matrix (`crownMatrix`) taken
- *  apart again — the place, the turn about the vertical and the scale are
- *  all it is made of. The bytes are what a shader would paint it from. */
-export function crownStand(c: CoarseCrown, ground: number, m: Matrix4): Stand {
-  const position = new Vector3();
-  const turn = new Quaternion();
-  const scale = new Vector3();
-  crownMatrix(c, ground, m).decompose(position, turn, scale);
-  const [code, ndvi, genus, jitter] = crownBytes(c);
+const W = COARSE_TREE_WIDEN;
+
+/** One crown to draw: its chunk's place, its form, its summer colour and
+ *  how it follows the year, and what its record is written from — a
+ *  canopy tree's placement, or a register tree's record. */
+interface Crown {
+  colour: Color;
+  form: CanopyForm;
+  placed?: Placement;
+  season: CrownSeasonKey;
+  stand?: Stand;
+  x: number;
+  z: number;
+}
+
+/** A canopy tree's crown, as the fine level's far tier draws it, wider: a
+ *  pine's high on its stem (`pineBase`). */
+function canopyCrown(p: Placement): Crown {
+  const form = canopyForm(p);
+  const colour = new Color();
+  crownColor(colour, p, hash(p.x * 0.3 + p.z * 0.7) - 0.5);
   return {
-    x: position.x,
-    y: position.y,
-    z: position.z,
-    turn: 2 * Math.atan2(turn.y, turn.w),
-    scale: [scale.x, scale.y, scale.z],
-    kind: [code, ndvi],
-    more: [genus, jitter],
+    x: p.x,
+    z: p.z,
+    form,
+    placed: form === "pine" ? { ...p, base: pineBase(p) } : p,
+    colour,
+    season: genericSeasonKey(p.x, p.z, p.evergreen),
   };
 }
 
-/** One crown's colour, as the fine level paints it. */
-function paintCrown(c: CoarseCrown, ground: number, col: Color): void {
-  const v = hash(c.x * 0.3 + c.z * 0.7) - 0.5;
-  if (c.kind === "canopy") {
-    crownColor(
-      col,
-      {
-        x: c.x,
-        y: ground,
-        z: c.z,
-        rot: c.rot,
-        s: c.s,
-        w: c.w,
-        ndvi: c.ndvi,
-        ...(c.evergreen ? { evergreen: true } : {}),
-      },
-      v
-    );
-    return;
-  }
+/** A register tree's crown: the lobed crown's box fitted to it whatever
+ *  its silhouette, wider; a conifer's as the cone, a pine's as the pine's. */
+function registerCrown(t: InventoryTree): Crown {
+  const colour = new Color();
+  // (its age leans the fine level's crown alone)
   inventoryColor(
-    col,
-    {
-      colour: colourCode(c.colour),
-      genus: c.genus,
-      ground,
-      leaf: c.colour === "evergreen" ? "e" : "d",
-      ndvi: c.ndvi,
-      x: c.x,
-      z: c.z,
-    },
-    v
+    colour,
+    { ...t, age: undefined },
+    hash(t.x * 0.3 + t.z * 0.7) - 0.5
   );
-}
-
-function seasonKey(c: CoarseCrown): CrownSeasonKey {
-  if (c.kind === "canopy") {
-    return genericSeasonKey(c.x, c.z, c.evergreen);
+  let form: CanopyForm = "broad";
+  if (t.shape === "cone" || t.shape === "pine") {
+    form = t.shape;
   }
   return {
-    genus: c.genus,
-    evergreen: c.colour === "evergreen",
-    jitter: c.jitter,
+    x: t.x,
+    z: t.z,
+    form,
+    stand: registerCrownStand(t, broadCrownFit(), W),
+    colour,
+    season: {
+      genus: t.genus,
+      // (a copper or golden cultivar follows its genus's year)
+      evergreen: t.leaf === "e" && t.colour === 0,
+      jitter: t.jitter,
+    },
   };
 }
 
@@ -175,28 +143,16 @@ function coarseCone(): BufferGeometry {
 /** A coarse tile's crowns as a vegetation control (no tiers to pick: the
  *  coarse level is far, or small, wherever it shows). */
 export function buildCoarseCrowns(
-  crowns: readonly CoarseCrown[],
+  trees: CoarseTrees,
   ctx: CoarseCrownContext
 ): VegetationControl {
-  return finished(coarseCrownSteps(crowns, ctx));
+  return finished(coarseCrownSteps(trees, ctx));
 }
 
-/** An autumn colour's inventory code: copper 1, golden 2, else 0. */
-function colourCode(colour: string | undefined): number {
-  if (colour === "copper") {
-    return 1;
-  }
-  return colour === "golden" ? 2 : 0;
-}
-
-/** Crowns stood per step (build-steps.ts). */
-const STAND_RUN = 512;
-
-/** `buildCoarseCrowns` in steps: per run of crowns, per cell
- *  (build-steps.ts).
- *  @yields {void} after each run of crowns and each cell */
+/** `buildCoarseCrowns` in steps: per cell (build-steps.ts).
+ *  @yields {void} after each cell */
 export function* coarseCrownSteps(
-  crowns: readonly CoarseCrown[],
+  trees: CoarseTrees,
   ctx: CoarseCrownContext
 ): Steps<VegetationControl> {
   const group = new Group();
@@ -206,84 +162,59 @@ export function* coarseCrownSteps(
   // across wherever the coarse level shows —, and the conifers' cone of one
   // skirt; each the tile's own: freeing a set frees the geometry it views.
   const geo = buildCrownGeo(0);
-  const forms: Partial<Record<CoarseForm, BufferGeometry>> = { broad: geo };
-  const geoOf = (form: CoarseForm): BufferGeometry => {
+  const forms: Partial<Record<CanopyForm, BufferGeometry>> = { broad: geo };
+  const geoOf = (form: CanopyForm): BufferGeometry => {
     forms[form] ??=
       form === "pine" ? padCrownSphere(buildPineGeo(geo)) : coarseCone();
     return forms[form];
   };
-  const { cx, cy } = ctx.offset;
-  const standing = yield* inRuns(crowns, STAND_RUN, (run) =>
-    run.flatMap((c) => {
-      const ground = ctx.heightAt(c.x + cx, cy - c.z);
-      return ground === null ? [] : [{ ...c, ground }];
-    })
-  );
+  const crowns = [
+    ...trees.trees.map(canopyCrown),
+    ...trees.register.map(registerCrown),
+  ];
+  yield;
   const seasons: SeasonalCrowns[] = [];
-  const m = new Matrix4();
-  const col = new Color();
-  const cells = bucketByCell(standing).flatMap((cell) =>
-    (["broad", "cone", "pine"] as const).flatMap((form) => {
-      const list = cell.filter((c) => coarseForm(c) === form);
-      return list.length > 0 ? [{ list, form }] : [];
-    })
-  );
-  // The spike's way in (`standRecord`): every crown of the tile as one
-  // table of records over one buffer, sorted by cell and form — as a
-  // published file would be — and each set a view of its run.
-  const stands = ctx.standRecord
-    ? cells.map(({ list }) => list.map((c) => crownStand(c, c.ground, m)))
-    : null;
-  const origin = standOrigin(stands?.flat() ?? []);
-  // (nothing is allocated for the spike off its knob)
-  const words = stands
-    ? new Uint16Array(standing.length * STAND_RECORD_WORDS)
-    : null;
-  let run = 0;
-  for (const [index, { list: cell, form }] of cells.entries()) {
-    const records = stands?.[index];
-    let set: Instances;
-    if (records && words) {
-      const view = words.subarray(
-        run * STAND_RECORD_WORDS,
-        (run + cell.length) * STAND_RECORD_WORDS
-      );
-      for (let i = 0; i < records.length; i += 1) {
-        writeStand(view, i, records[i], origin);
+  for (const cell of bucketByCell(crowns)) {
+    for (const form of ["broad", "cone", "pine"] as const) {
+      const list = cell.filter((c) => c.form === form);
+      if (list.length === 0) {
+        continue;
       }
-      run += cell.length;
-      set = Instances.ofStands(
+      // the canopy's crowns, then the register's: one table, in the
+      // order the colours and the season keys go
+      const canopy = list.filter((c) => c.placed);
+      const surveyed = list.filter((c) => c.stand);
+      const ordered = [...canopy, ...surveyed];
+      const { origin, words } = placementRecords(
+        canopy.flatMap((c) => (c.placed ? [c.placed] : [])),
+        W,
+        surveyed.flatMap((c) => (c.stand ? [c.stand] : []))
+      );
+      const set = Instances.ofStands(
         geoOf(form),
         mats.leafy,
-        standTable(view, origin)
+        standTable(words, origin)
       );
-      set.name = "coarse-crowns-records";
-    } else {
-      set = new Instances(geoOf(form), mats.leafy, cell.length);
-    }
-    set.castShadow = true;
-    set.receiveShadow = true;
-    // a cone or a pine keeps its form in a styled frame, as on the fine
-    // level
-    if (form === "broad") {
-      set.userData.styleCrown = "far";
-    }
-    for (let i = 0; i < cell.length; i += 1) {
-      const c = cell[i];
-      if (!records) {
-        set.setMatrixAt(i, crownMatrix(c, c.ground, m));
+      set.castShadow = true;
+      set.receiveShadow = true;
+      // a cone or a pine keeps its form in a styled frame, as on the fine
+      // level
+      if (form === "broad") {
+        set.userData.styleCrown = "far";
       }
-      paintCrown(c, c.ground, col);
-      set.setColorAt(i, col);
+      for (const [i, c] of ordered.entries()) {
+        set.setColorAt(i, c.colour);
+      }
+      set.computeBoundingSphere();
+      group.add(set);
+      seasons.push(
+        seasonCrowns(
+          { mid: set, rich: set },
+          ordered.map((c) => c.season),
+          mats
+        )
+      );
     }
-    if (!records) {
-      set.instanceMatrix.needsUpdate = true;
-    }
-    set.computeBoundingSphere();
-    group.add(set);
-    seasons.push(
-      seasonCrowns({ mid: set, rich: set }, cell.map(seasonKey), mats)
-    );
     yield;
   }
   return {

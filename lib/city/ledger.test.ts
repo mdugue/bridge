@@ -79,9 +79,12 @@ const level = (t: string, n: 0 | 1): TerrainFiles => ({
         surfaceFar: `surface_${t}.r1024.png`,
         ndvi: `ndvi_${t}.png`,
         sportTable: `sport_${t}.json`,
-        dressing: { lamps: `lamps_${t}.geojson`, trees: `trees_${t}.geojson` },
+        dressing: {
+          lamps: `lamps_${t}.geojson`,
+          dressing: `trees_${t}.geojson`,
+        },
       }
-    : { coarse: { crowns: `crowns_${t}.crw.gz` } }),
+    : { coarse: { dressingCoarse: `crowns_${t}.crw.gz` } }),
 });
 
 const baked = (t: string, x: number): BakedTile => ({
@@ -110,12 +113,14 @@ const TILESET = buildTileset([baked("a", 0), baked("b", 2000)], {
 });
 
 /** The viewer's rule in small: the class raster or its phone twin, the
- *  sky view, and the paving — its far twin beyond the reach, on a desktop
- *  the full raster within it (a phone keeps the twin). */
+ *  sky view, the greenness, and the paving — its far twin beyond the
+ *  reach, on a desktop the full raster within it (a phone keeps the
+ *  twin). */
 const reads: RasterReads = (extras, _level, phone, reach) =>
   [
     phone ? extras.landcoverLow : extras.landcover,
     extras.svf,
+    extras.ndvi,
     reach === "beyond" || phone ? extras.surfaceFar : extras.surface,
   ].filter((f): f is string => typeof f === "string");
 

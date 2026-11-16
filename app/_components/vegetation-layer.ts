@@ -6,7 +6,6 @@ import {
   InstancedBufferAttribute,
   Matrix4,
   MeshStandardNodeMaterial,
-  Object3D,
   Quaternion,
   SRGBColorSpace,
   Vector2,
@@ -47,14 +46,9 @@ import {
   vec4,
 } from "three/tsl";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
-import { groundSlope } from "@/lib/city/ground-clamp";
-import type { GroundContext } from "@/lib/city/ground-clamp";
 import { srgbToLinear } from "@/lib/city/landcover";
-import { decodeGreyPng } from "@/lib/city/png-raster";
-import { maxWindowSampler } from "@/lib/city/raster-sampler";
-import type { RasterSampler } from "@/lib/city/raster-sampler";
-import type { TerrainBounds } from "@/lib/city/terrain-geometry";
+import { packStands, standOrigin } from "@/lib/city/stand-record";
+import type { Stand } from "@/lib/city/stand-record";
 import {
   pineBase,
   TRUNK_FOOT_R,
@@ -64,15 +58,9 @@ import {
   TRUNK_UNIT_H,
   trunkFlare,
 } from "@/lib/city/tree-inventory";
-import {
-  BASE_TREE_H,
-  canopyPlacements,
-  cellKey,
-  GENERIC_CROWN_FOOT,
-  hash,
-  rowPlacements,
-} from "@/lib/city/tree-placement";
-import type { Placement, TreeVeto } from "@/lib/city/tree-placement";
+import { CHUNK_SIZE, hash } from "@/lib/city/tree-placement";
+import type { Placement } from "@/lib/city/tree-placement";
+import { crownFrame, placementRecords } from "@/lib/city/tree-stands";
 import { seasonJitter } from "@/lib/city/tree-season";
 import {
   CROWN_BASE_COLOR,
@@ -99,18 +87,17 @@ import {
   buildPineGeo,
   CONE_SEGMENTS,
 } from "./conifer-crown";
-import { finished, inRuns } from "@/lib/city/build-steps";
+import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
-import { isAbortError } from "./fetch-optional";
-import { fetchRasterBytes, inRasterTurn } from "./raster-upload";
 import {
-  instanceFloat,
+  instanceColumn,
   Instances,
-  instanceMatrix,
   instancePosition,
   instanceTint,
+  standTable,
 } from "./instancing";
-import type { F, Live, V2, V3, V4 } from "./shader-chunks";
+import type { StandTable } from "./instancing";
+import type { F, Live, V2, V3 } from "./shader-chunks";
 import { setGraph, setSlots } from "./material-slots";
 import { gdHash } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
@@ -125,50 +112,48 @@ import {
   rootSeed,
   seasonalFoot,
   treeFeet,
+  trunkDrop,
 } from "./tree-foot";
 import type { FootGeos, FootMaterials } from "./tree-foot";
 
-export { bucketByCell, hash, type TreeVeto } from "@/lib/city/tree-placement";
+export { bucketByCell, hash } from "@/lib/city/tree-placement";
+export { crownFrame } from "@/lib/city/tree-stands";
 
 /**
- * A tree placed by precomputed transforms rather than a uniform scale — the
- * street-tree cadastre's (tree-inventory-layer.ts). It joins the canopy's own
- * chunk meshes, so it costs instances, not draw calls: its trunk always, its
+ * A tree with records of its own rather than a placement's — the tree
+ * register's (tree-inventory-layer.ts). It joins the canopy's own chunk
+ * sets, so it costs instances, not draw calls: its trunk always, its
  * crown when it has the broadleaf shape the canopy draws (`crown`; the other
- * silhouettes are the inventory layer's own meshes).
+ * silhouettes are the inventory layer's own sets).
  */
 export interface TreeInstance {
-  /** `season`: how the crown follows the year (absent = the generic
+  /** `cheap` and `rich`: the crown fitted to each tier's geometry;
+   *  `season`: how the crown follows the year (absent = the generic
    *  deciduous curve, like a canopy tree) */
   crown?: {
-    cheap: Matrix4;
+    cheap: Stand;
     colour: Color;
-    rich: Matrix4;
+    rich: Stand;
     season?: CrownSeasonKey;
   };
   /** the bark as a tint of the trunk material (absent = its own colour) */
   bark?: Color;
-  trunk: Matrix4;
+  trunk: Stand;
   /** Y-up world position, for the chunk bucketing */
   x: number;
   z: number;
 }
 
-/** One tile's decoded vegetation inputs. */
+/** One tile's trees, as its dressing files hand them over
+ *  (lib/city/tree-table.ts): each on its ground already. */
 export interface VegetationFeatures {
-  /** DOM1-derived canopy points (trees scaled to their measured height) */
-  canopy: CanopyFeature[];
-  /** precomputed trees drawn in the same chunk meshes (TreeInstance) */
+  /** the register's trees drawn in the same chunk sets (TreeInstance) */
   extraTrees?: TreeInstance[];
-  /** optional TreeVeto; hedges are never vetoed */
-  keepTree?: TreeVeto;
-  /** the DOP NDVI sampler (loadNdviSampler), for lush↔dry crown colour */
-  ndviAt?: RasterSampler;
-  /** ATKIS veg04 tree rows (its hedges are low-vegetation-layer.ts's) */
-  rows: VegRowFeature[];
+  /** the canopy's, the scan's and the rows' trees */
+  trees: Placement[];
 }
 
-export interface VegetationContext extends GroundContext {
+export interface VegetationContext {
   /**
    * Shared world-space sun direction (surface→sun), updated by the sun rig.
    * The crown uniforms' `sunDirection` node holds it by reference for the
@@ -338,10 +323,18 @@ export function canopyForm(p: Placement): CanopyForm {
   return p.pine === true ? "pine" : "cone";
 }
 
+/** The crown forms, in the order a cell's key counts them. */
+const FORMS: readonly CanopyForm[] = ["broad", "cone", "pine"];
+
 function bucketTrees(trees: Placement[], extras: TreeInstance[]): TreeCell[] {
-  const cells = new Map<string, TreeCell>();
+  // by a number, not a string a tree: a forest tile buckets 80 000
+  const cells = new Map<number, TreeCell>();
   const cellAt = (x: number, z: number, form: CanopyForm): TreeCell => {
-    const key = `${cellKey(x, z)}${form === "broad" ? "" : `:${form}`}`;
+    const key =
+      ((Math.floor(x / CHUNK_SIZE) + 4096) * 8192 +
+        (Math.floor(z / CHUNK_SIZE) + 4096)) *
+        4 +
+      FORMS.indexOf(form);
     let cell = cells.get(key);
     if (!cell) {
       cell = { form, trees: [], extras: [] };
@@ -363,99 +356,54 @@ function bucketTrees(trees: Placement[], extras: TreeInstance[]): TreeCell[] {
   return [...cells.values()];
 }
 
-/**
- * How a placement's matrix stands the generic crown between its crown base
- * (`base`, lib/city/tree-placement.ts `crownBase`) and its top (s ·
- * BASE_TREE_H): the vertical scale, and the lift (m) of the crown's frame
- * off the ground. Without a base (a hedge) the scale is `s`, no lift — the
- * crown starts where its geometry does, 0.28 of its height up.
- */
-export function crownFrame(p: Placement): { lift: number; scale: number } {
-  if (p.base === undefined) {
-    return { lift: 0, scale: p.s };
-  }
-  const top = p.s * BASE_TREE_H;
-  const scale =
-    Math.max(top - p.base, 0.1) / (BASE_TREE_H - GENERIC_CROWN_FOOT);
-  return { lift: p.base - scale * GENERIC_CROWN_FOOT, scale };
+/** `stands` as a table of their own, its corner under all of them. */
+function tableOf(stands: readonly Stand[]): StandTable {
+  const origin = standOrigin(stands);
+  return standTable(packStands(stands, origin), origin);
 }
 
-/** Writes the placements' matrices from slot 0 on (`widen` stretches the
- *  crown sideways: the far tier's thinned forest): the crown between its
- *  base and its top (`crownFrame`). The trunks share them (`writeTrunkDrops`
- *  puts their feet back on the ground). */
-function writePlacements(mesh: Instances, items: Placement[], widen = 1): void {
-  const dummy = new Object3D();
-  for (let i = 0; i < items.length; i += 1) {
-    const p = items[i];
-    const { lift, scale } = crownFrame(p);
-    dummy.position.set(p.x, p.y + lift, p.z);
-    dummy.rotation.set(0, p.rot, 0);
-    const w = (p.w ?? p.s) * widen;
-    dummy.scale.set(w, scale, w);
-    dummy.updateMatrix();
-    mesh.setMatrixAt(i, dummy.matrix);
-  }
+/** A cell's placements (`widen` times as wide) and, after them, the
+ *  register's crowns as one table (lib/city/tree-stands.ts). */
+function crownTable(
+  trees: readonly Placement[],
+  others: readonly Stand[],
+  widen = 1
+): StandTable {
+  const { origin, words } = placementRecords(trees, widen, others);
+  return standTable(words, origin);
 }
 
-/** The trunk material's per-instance drop (`trunkDrop`). */
-const TRUNK_DROP = "iDrop";
-
-/**
- * The trunks drawn on their crowns' matrices (`writePlacements`): each one's
- * foot lowered by its crown's lift, in the matrix's units (`TRUNK_DROP`; the
- * precomputed trees after `items` none), so it stands on the ground and
- * still reaches into its crown. One float a tree, not a matrix: the forest's
- * chunks keep one matrix buffer for the trunks and both near crowns (the
- * attribute is the set's geometry's, freed with it). Returns the largest
- * lift (m), which the set's cull sphere must grow by (`fitTrunks`).
- */
-function writeTrunkDrops(trunks: Instances, items: Placement[]): number {
-  let reach = 0;
-  const drops = new Float32Array(trunks.capacity);
-  for (let i = 0; i < items.length; i += 1) {
-    const p = items[i];
-    const { lift, scale } = crownFrame(p);
-    drops[i] = lift / scale;
-    reach = Math.max(reach, Math.abs(lift));
+/** The far tier's tints: its kept crowns' own, copied from the mid tier's
+ *  (`slots[j]` the mid slot of its crown `j`) — painted once. */
+function copyTints(
+  far: Instances,
+  mid: Instances,
+  slots: readonly number[]
+): void {
+  const from = mid.instanceTints?.array;
+  if (!from) {
+    return;
   }
-  if (reach > 0) {
-    trunks.geometry.setAttribute(
-      TRUNK_DROP,
-      new InstancedBufferAttribute(drops, 1)
-    );
+  const tints = new Float32Array(slots.length * 3);
+  for (let j = 0; j < slots.length; j += 1) {
+    const at = slots[j] * 3;
+    tints[j * 3] = from[at];
+    tints[j * 3 + 1] = from[at + 1];
+    tints[j * 3 + 2] = from[at + 2];
   }
-  return reach;
-}
-
-/** The trunks' cull sphere over their crowns' matrices, grown by `reach`
- *  (m): a lowered foot lies that far below what the matrices place. */
-function fitTrunks(trunks: Instances, reach: number): void {
-  trunks.computeBoundingSphere();
-  if (trunks.geometry.boundingSphere) {
-    trunks.geometry.boundingSphere.radius += reach;
-  }
+  far.instanceTints = new InstancedBufferAttribute(tints, 3);
 }
 
 /** A trunk vertex (the geometry's, 0..TRUNK_H) with its foot lowered by the
- *  instance's drop and its top where it was: the trunk spans the ground to
- *  its crown on the crown's matrix (`writeTrunkDrops`; 0 off a crowned set,
- *  the register's own trunks). */
-function trunkDrop(): V3 {
+ *  record's drop and its top where it was: a canopy tree's trunk spans the
+ *  ground to its crown on the crown's own record (tree-foot.ts
+ *  `trunkDrop`; 0 on the register's own trunks). */
+function trunkLowered(): V3 {
   const p = positionGeometry;
-  const drop = instanceFloat(TRUNK_DROP);
+  const drop = trunkDrop();
   // (the limbs above the trunk's top stay where the crown is)
   const below = min(p.y.div(TRUNK_H), 1).sub(1);
   return vec3(p.x, p.y.add(below.mul(drop)), p.z);
-}
-
-/** Uploads the matrices and fits the cull sphere to the instances. */
-function finishInstances(mesh: Instances): void {
-  mesh.instanceMatrix.needsUpdate = true;
-  // Without this the cull test uses the (origin-centred) geometry sphere and
-  // wrongly culls the whole spread-out instance cloud whenever the world
-  // origin is off-screen.
-  mesh.computeBoundingSphere();
 }
 
 /**
@@ -681,12 +629,6 @@ function createCrownUniforms(): CrownUniforms {
     time: crownTime,
   };
 }
-
-/** A column of the drawn instance's matrix (`m · eᵢ`; identity off a set). */
-const instanceColumn = (i: number): V4 =>
-  instanceMatrix().mul(
-    vec4(i === 0 ? 1 : 0, i === 1 ? 1 : 0, i === 2 ? 1 : 0, i === 3 ? 1 : 0)
-  );
 
 /** Within this distance (m) a crown sways fully; past `SWAY_FAR_M` not
  *  at all. */
@@ -1119,8 +1061,8 @@ const TRUNK_EARTH = new Color().setRGB(
  * ground. One shape for every tree, no geometry of its own.
  */
 function trunkRoots(): { lobe: F; metres: F; local: V3 } {
-  const local = trunkDrop();
-  const drop = instanceFloat(TRUNK_DROP);
+  const local = trunkLowered();
+  const drop = trunkDrop();
   const metres = local.y.add(drop).mul(length(instanceColumn(1).xyz));
   const { lobes, phase } = rootSeed(instanceColumn(3).xz);
   const angle = atan(positionGeometry.z, positionGeometry.x);
@@ -1443,70 +1385,86 @@ export interface TreeGeos {
   foot?: FootGeos;
 }
 
-/** A crown set over the placements and the crowned precomputed trees. */
-function crownMesh(
+/** A crown set over `table`'s records, its cull sphere fitted. */
+function crownSet(
   geo: BufferGeometry,
   material: Material,
-  trees: Placement[],
-  crowned: TreeInstance[],
-  which: "cheap" | "rich",
-  widen = 1
+  table: StandTable
 ): Instances {
-  const mesh = new Instances(geo, material, trees.length + crowned.length);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  writePlacements(mesh, trees, widen);
-  for (let i = 0; i < crowned.length; i += 1) {
-    const e = crowned[i];
-    if (e.crown) {
-      mesh.setMatrixAt(trees.length + i, e.crown[which]);
-    }
-  }
-  finishInstances(mesh);
-  paintCrowns(mesh, trees, crowned);
-  return mesh;
+  const set = Instances.ofStands(geo, material, table);
+  set.castShadow = true;
+  set.receiveShadow = true;
+  set.computeBoundingSphere();
+  return set;
 }
 
-/** The precomputed trees' bark on their trunks (slots from `first`); the
- *  canopy's trunks keep the material's own colour. Nothing to paint, no
- *  tint buffer. */
-function paintBark(
-  trunks: Instances,
-  first: number,
-  extras: TreeInstance[]
-): void {
+/** A trunk set over `table`'s first `count` records, its cull sphere
+ *  grown by `reach` (m): a lowered foot lies that far below its record's
+ *  place. */
+function trunkSet(
+  geo: BufferGeometry,
+  material: Material,
+  table: StandTable,
+  count: number,
+  reach = 0
+): Instances {
+  const set = Instances.ofStands(geo, material, table);
+  set.drawCount = count;
+  set.castShadow = true;
+  set.computeBoundingSphere();
+  if (set.geometry.boundingSphere) {
+    set.geometry.boundingSphere.radius += reach;
+  }
+  return set;
+}
+
+/** The precomputed trees' bark on their trunks; nothing to paint, no tint
+ *  buffer. */
+function paintBark(trunks: Instances, extras: TreeInstance[]): void {
   if (!extras.some((e) => e.bark)) {
     return;
   }
   const white = new Color(1, 1, 1);
-  for (let i = 0; i < first; i += 1) {
-    trunks.setColorAt(i, white);
-  }
   for (let i = 0; i < extras.length; i += 1) {
     const e = extras[i];
-    trunks.setColorAt(first + i, e.bark ?? white);
+    trunks.setColorAt(i, e.bark ?? white);
   }
   if (trunks.instanceTints) {
     trunks.instanceTints.needsUpdate = true;
   }
 }
 
+/** The register's own trunks: a record each (`TreeInstance.trunk`). */
+function ownTrunks(
+  geo: BufferGeometry,
+  material: Material,
+  extras: TreeInstance[]
+): Instances {
+  const trunks = trunkSet(
+    geo,
+    material,
+    tableOf(extras.map((e) => e.trunk)),
+    extras.length
+  );
+  paintBark(trunks, extras);
+  return trunks;
+}
+
 /**
  * One chunk's sets: a trunk per tree, and — when the chunk has any crown
  * — the mid, rich and far crowns (one is visible; createVegetationLod
- * picks). A chunk without precomputed trees (every forest chunk) lets the
- * trunks and both near crowns share ONE matrix buffer and the crowns one
- * tint buffer, on the CPU and, since GPU buffers are keyed by the buffer,
- * on the GPU (one upload): a forest tile's vegetation takes ~9 MB of
- * instance data instead of ~21 MB. A precomputed tree has a matrix of its
- * own for each set, so its chunk keeps separate buffers.
+ * picks). Every set is drawn from stand records (lib/city/tree-stands.ts),
+ * twenty bytes a tree: the mid crowns, the canopy trees' trunks and the
+ * feet from ONE table — and the rich crowns too in a chunk without
+ * register trees (every forest chunk), whose crowns are fitted to each
+ * tier's own geometry and so have a second table. The far tier's kept
+ * trees have one of their own (they are drawn wider).
  */
 function buildTreeCell(
   cell: TreeCell,
   geos: TreeGeos,
   trunkMat: Material,
   crownMats: CrownMaterials,
-  ground: GroundContext,
   footMat?: FootMaterials
 ): {
   chunk: VegetationChunk | null;
@@ -1520,15 +1478,8 @@ function buildTreeCell(
   const crowned = extras.filter((e) => e.crown);
   const plain = geos.plain ?? geos.trunk;
   if (trees.length + crowned.length === 0) {
-    const trunks = new Instances(plain, trunkMat, extras.length);
-    trunks.castShadow = true;
-    for (let i = 0; i < extras.length; i += 1) {
-      const e = extras[i];
-      trunks.setMatrixAt(i, e.trunk);
-    }
-    paintBark(trunks, 0, extras);
-    finishInstances(trunks);
-    const feet = feetOf(trunks, geos, ground, footMat, false);
+    const trunks = ownTrunks(plain, trunkMat, extras);
+    const feet = feetOf(trunks, geos, footMat, false);
     return {
       chunk: null,
       loose: feet ? { feet, trunks } : undefined,
@@ -1536,63 +1487,57 @@ function buildTreeCell(
       season: null,
     };
   }
-  const mid = crownMesh(geos.mid, crownMat, trees, crowned, "cheap");
-  let rich: Instances;
-  let trunks: Instances;
+  const cheapCrowns = crowned.flatMap((e) => (e.crown ? [e.crown.cheap] : []));
+  const cheap = crownTable(trees, cheapCrowns);
+  const mid = crownSet(geos.mid, crownMat, cheap);
+  paintCrowns(mid, trees, crowned);
+  // a register crown is fitted to each tier's own geometry
+  const rich = crownSet(
+    geos.rich,
+    crownMat,
+    crowned.length === 0
+      ? cheap
+      : crownTable(
+          trees,
+          crowned.flatMap((e) => (e.crown ? [e.crown.rich] : []))
+        )
+  );
+  rich.instanceTints = mid.instanceTints;
   // the register's own trunks, apart from the placements' forked ones
-  let own: Instances | undefined;
-  if (extras.length === 0) {
-    // Born on the mid crowns' matrices (no buffer of their own to drop).
-    trunks = new Instances(
-      geos.trunk,
-      trunkMat,
-      trees.length,
-      mid.instanceMatrix
-    );
-    rich = new Instances(geos.rich, crownMat, trees.length, mid.instanceMatrix);
-    rich.castShadow = true;
-    rich.receiveShadow = true;
-    rich.instanceTints = mid.instanceTints;
-    // Each set fits its own geometry into the shared matrices.
-    fitTrunks(trunks, writeTrunkDrops(trunks, trees));
-    rich.computeBoundingSphere();
-  } else {
-    rich = crownMesh(geos.rich, crownMat, trees, crowned, "rich");
-    own = new Instances(plain, trunkMat, extras.length);
-    for (let i = 0; i < extras.length; i += 1) {
-      const e = extras[i];
-      own?.setMatrixAt(i, e.trunk);
-    }
-    paintBark(own, 0, extras);
-    finishInstances(own);
-    own.castShadow = true;
-    if (trees.length > 0) {
-      trunks = new Instances(geos.trunk, trunkMat, trees.length);
-      writePlacements(trunks, trees);
-      trunks.instanceMatrix.needsUpdate = true;
-      fitTrunks(trunks, writeTrunkDrops(trunks, trees));
-    } else {
-      trunks = own;
-      own = undefined;
-    }
+  const registered =
+    extras.length > 0 ? ownTrunks(plain, trunkMat, extras) : undefined;
+  // on the crowns' own records, each foot lowered by its drop
+  let reach = 0;
+  for (const p of trees) {
+    reach = Math.max(reach, Math.abs(crownFrame(p).lift));
   }
-  trunks.castShadow = true;
+  const forked =
+    trees.length > 0
+      ? trunkSet(geos.trunk, trunkMat, cheap, trees.length, reach)
+      : undefined;
+  // (a crowned cell has placements or register trees: one of the two)
+  const trunks = forked ?? registered ?? ownTrunks(plain, trunkMat, extras);
+  const own = forked ? registered : undefined;
   const feet = [
     // a cell of cones or pines: needle trees' feet
-    ...(feetOf(trunks, geos, ground, footMat, cell.form !== "broad") ?? []),
-    ...((own && feetOf(own, geos, ground, footMat, false)) ?? []),
+    ...(feetOf(trunks, geos, footMat, cell.form !== "broad") ?? []),
+    ...((own && feetOf(own, geos, footMat, false)) ?? []),
   ];
   // The far tier: every other tree of a dense chunk, drawn wider (see
   // keepInFarTier), so a forest stays a closed canopy far away.
   const farTrees = trees.filter((_, i) => keepInFarTier(i, trees.length));
-  const far = crownMesh(
+  const widen = farTrees.length < trees.length ? FAR_THIN_WIDEN : 1;
+  const far = crownSet(
     geos.far,
     crownMat,
-    farTrees,
-    crowned,
-    "cheap",
-    farTrees.length < trees.length ? FAR_THIN_WIDEN : 1
+    crownTable(farTrees, cheapCrowns, widen)
   );
+  // Same order as the records: the placements, then the register's crowns.
+  const farSlots = [
+    ...trees.flatMap((_, i) => (keepInFarTier(i, trees.length) ? [i] : [])),
+    ...crowned.map((_, k) => trees.length + k),
+  ];
+  copyTints(far, mid, farSlots);
   // createVegetationLod() picks the tier on the pose tick; start on mid.
   rich.visible = false;
   far.visible = false;
@@ -1604,14 +1549,9 @@ function buildTreeCell(
     mid.userData.styleCrown = "mid";
     rich.userData.styleCrown = "rich";
   }
-  // Same order as the slots: the placements, then the precomputed crowns.
   const keys = [
     ...trees.map((p) => genericSeasonKey(p.x, p.z, p.evergreen)),
     ...crowned.map((e) => e.crown?.season ?? genericSeasonKey(e.x, e.z)),
-  ];
-  const farSlots = [
-    ...trees.flatMap((_, i) => (keepInFarTier(i, trees.length) ? [i] : [])),
-    ...crowned.map((_, k) => trees.length + k),
   ];
   return {
     chunk: {
@@ -1633,38 +1573,12 @@ function buildTreeCell(
 function feetOf(
   trunks: Instances,
   geos: TreeGeos,
-  ground: GroundContext,
   footMat: FootMaterials | undefined,
   needle: boolean
 ): Instances[] | undefined {
   return footMat && geos.foot
-    ? treeFeet(geos.foot, footMat, trunks, footSlopes(trunks, ground), needle)
+    ? treeFeet(geos.foot, footMat, trunks, needle)
     : undefined;
-}
-
-/**
- * The ground's slope at each trunk's foot (`groundSlope`), two signed
- * bytes a tree: the feet lie on it instead of flat (tree-foot.ts). The
- * foot is where the trunk material puts it, its matrix's origin lowered
- * by its drop.
- */
-function footSlopes(
-  trunks: Instances,
-  ground: GroundContext
-): InstancedBufferAttribute {
-  const slopes = new Int8Array(trunks.capacity * 2);
-  const m = trunks.instanceMatrix.array as Float32Array;
-  const drops = trunks.geometry.getAttribute(TRUNK_DROP);
-  for (let i = 0; i < trunks.drawCount; i += 1) {
-    const at = i * 16;
-    const drop = drops ? drops.getX(i) : 0;
-    const x = m[at + 12] - m[at + 4] * drop;
-    const z = m[at + 14] - m[at + 6] * drop;
-    const [sx, sz] = groundSlope(ground, x, z);
-    slopes[i * 2] = Math.round(sx * 127);
-    slopes[i * 2 + 1] = Math.round(sz * 127);
-  }
-  return new InstancedBufferAttribute(slopes, 2, true);
 }
 
 /** The scene's crown materials and their uniforms (sceneCrowns). */
@@ -1748,7 +1662,6 @@ function* buildTrees(
   trees: Placement[],
   extras: TreeInstance[],
   crownMats: CrownMaterials,
-  ground: GroundContext,
   footMat?: FootMaterials,
   sun?: UniformNode<"vec3", Vector3>
 ): Steps<{
@@ -1805,7 +1718,6 @@ function* buildTrees(
       geosOf(cell),
       trunkMatOf(cell),
       crownMats,
-      ground,
       footMat
     );
     meshes.push(...built.meshes);
@@ -1836,42 +1748,12 @@ export interface LooseFeet {
 }
 
 /**
- * Loads the DOP NDVI PNG into a CPU sampler (EPSG → 0..1). The bytes are
- * inflated as written (lib/city/png-raster.ts), never through the browser's
- * image decoder, which colour-manages untagged greyscale on WebKit. Returns
- * null on any failure (no raster, a decode error, a network failure past
- * an optional file's retries) so crowns fall back to the hash-only sage —
- * graceful degradation, see docs/portability.md. Rethrows an abort.
- */
-export async function loadNdviSampler(
-  url: string,
-  bounds: TerrainBounds,
-  signal?: AbortSignal
-): Promise<RasterSampler | null> {
-  // retried like any raster; decoded in the site's raster turn, so on a
-  // phone it never overlaps another raster's decode (raster-upload.ts)
-  try {
-    const png = await fetchRasterBytes(url, signal);
-    return await inRasterTurn(
-      async () => maxWindowSampler(await decodeGreyPng(png), bounds),
-      signal
-    );
-  } catch (error) {
-    if (isAbortError(error)) {
-      throw error;
-    }
-    return null;
-  }
-}
-
-/**
- * Builds stylized vegetation from the ATKIS veg04 rows GeoJSON (the tree
- * rows) and, when given, the DOM1-derived canopy GeoJSON (area trees scaled to
- * their measured height). Everything is drawn with `Instances` sets so tens of
- * thousands of plants stay cheap; each is dropped onto the terrain via
- * `heightAt` and points off the tile are skipped. Empty inputs yield an empty
- * group; the sets are freed with the scene (disposeObject3D), the
- * scene-wide materials with the last app.
+ * Builds a tile's trees from its dressing files' (lib/city/tree-table.ts):
+ * the canopy's and the rows' placements and the register's precomputed
+ * trees, each on its ground already. Everything is drawn with `Instances`
+ * sets of stand records, so tens of thousands of plants stay cheap. No
+ * trees yield an empty group; the sets are freed with the scene
+ * (disposeObject3D), the scene-wide materials with the last app.
  */
 export function buildVegetation(
   features: VegetationFeatures,
@@ -1880,13 +1762,8 @@ export function buildVegetation(
   return finished(vegetationSteps(features, ctx));
 }
 
-/** Canopy points and rows placed per step (build-steps.ts). */
-const PLACEMENT_RUN = 256;
-const ROW_RUN = 16;
-
-/** `buildVegetation` in steps: per run of rows and canopy points, per
- *  250 m cell of trees (build-steps.ts).
- *  @yields {void} once per finished run, to hand the thread back. */
+/** `buildVegetation` in steps: per 250 m cell of trees (build-steps.ts).
+ *  @yields {void} once per finished cell, to hand the thread back. */
 export function* vegetationSteps(
   features: VegetationFeatures,
   ctx: VegetationContext
@@ -1901,31 +1778,12 @@ export function* vegetationSteps(
   let chunks: VegetationChunk[] = [];
   let seasons: SeasonalCrowns[] = [];
   let loose: LooseFeet[] = [];
-
-  const { ndviAt, keepTree } = features;
-  // whole rows per run: a row's trees are seeded by their place along it
-  // The DLM's hedge rows are not planted here: low-vegetation-layer.ts
-  // draws them with the OSM hedges, as one kind of hedge.
-  const treeRows = features.rows.filter((f) => f.properties?.kind !== "hedge");
-  const rows = yield* inRuns(treeRows, ROW_RUN, (run) => [
-    rowPlacements(run, ctx, ndviAt, keepTree),
-  ]);
-  // concat, never push(...): a dense canopy places tens of thousands of
-  // trees, past what a worker's smaller stack takes as arguments
-  const trees = rows
-    .flatMap((r) => r.trees)
-    .concat(
-      yield* inRuns(features.canopy, PLACEMENT_RUN, (run) =>
-        canopyPlacements(run, ctx, ndviAt, keepTree)
-      )
-    );
   const extras = features.extraTrees ?? [];
-  if (trees.length + extras.length > 0) {
+  if (features.trees.length + extras.length > 0) {
     const built = yield* buildTrees(
-      trees,
+      features.trees,
       extras,
       crownMats,
-      ctx,
       ctx.footMaterial?.(crownMats.uniforms.sunDirection),
       crownMats.uniforms.sunDirection
     );

@@ -19,9 +19,13 @@ const tile = (id: string): LedgerTile => ({
         dressing: { tram: "tram.geojson", lamps: "l.geojson", none: "" },
         sportTable: "sport.json",
         ndvi: "ndvi.png",
+        coarseDressing: "d.c.drs.gz",
       },
     },
-    1: { uri: "coarse.glb.gz", extras: { coarse: { crowns: "c.crw.gz" } } },
+    1: {
+      uri: "coarse.glb.gz",
+      extras: { coarse: { dressingCoarse: "d.c.drs.gz" } },
+    },
   },
 });
 
@@ -51,7 +55,9 @@ test("the watched tiles, each under what it is watched for, with the fine level'
         files: 3,
         kinds: { lamps: 9, sportTable: 10, tram: 12 },
       },
-      coarse: { bytes: 8, files: 1, kinds: { crowns: 8 } },
+      coarse: { bytes: 10, files: 1, kinds: { dressingCoarse: 10 } },
+      // the fine level's own files and the coarse level's it reads too
+      visit: { bytes: 12 + 9 + 10 + 10, files: 4 },
     },
   });
 });

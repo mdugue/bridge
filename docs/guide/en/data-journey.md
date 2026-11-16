@@ -154,11 +154,18 @@ writes each city into a folder of its own, `public/data/dresden/`,
    8–11 MB CityJSON. A small index file, `tileset.json`, in the open
    **3D Tiles** format, lists every tile's buildings and its two terrain
    levels, and says from how close the detailed level replaces the coarse
-   one. The land-use class PNG gets a 2048² and a 512² copy. Results are cached in
+   one. The land-use class PNG gets a 2048² and a 512² copy. **The trees
+   are placed here, too**: every tree of a tile is stood on the detailed
+   terrain, and what was measured of it — where it stands, the ground's
+   height and slope there, its height, how green the aerial photo is — is
+   written as a row of twelve or twenty bytes into one compact table per
+   terrain level (a third of the trees for the coarse level, the rest for
+   the detailed one). The browser no longer reads a tree file, the ground
+   or the photo to stand a tree. Results are cached in
    `.cache/` and only redone when an input or the bake code changed.
 2. **Publishes** every file into the city's folder under a name that contains
    a fingerprint of its content (for example
-   `canopy_33412_5656_2_sn.55a26a2d.geojson`), and writes a
+   `lamps_33412_5656_2_sn.b161fd62.geojson`), and writes a
    `manifest.json` that maps the plain names to the fingerprinted ones.
 3. **Prunes** files the manifest no longer mentions, so a removed source
    really switches its feature off instead of lingering.

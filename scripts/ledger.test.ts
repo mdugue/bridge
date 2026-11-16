@@ -196,15 +196,22 @@ test("the fine set's side files are those tile-stream.ts fetches", () => {
   const text = source("app/_components/tile-stream.ts");
   const fine = functionText(text, "buildDressing");
   const kinds = [
-    ...fine.matchAll(/\bget(?:Points)?(?:<\w+>)?\(\s*"(?<kind>\w+)"\s*\)/gu),
+    ...fine.matchAll(/\bget(?:<\w+>)?\(\s*"(?<kind>\w+)"\s*\)/gu),
+    ...fine.matchAll(/\bfetchPack\(d\.(?<kind>\w+),/gu),
   ].map((m) => m.groups?.kind ?? "");
   // each dressing kind is fetched, once: the set counts every one of them
   expect(kinds.toSorted()).toEqual([...DRESSING_KINDS].toSorted());
-  // and beside them the sports table and the NDVI, on every tier
+  // and beside them the sports table, on every tier
   expect(fine).toContain(
     "fetchOptionalJson<SportTable>(url(extras.sportTable)"
   );
-  expect(fine).toContain("loadNdviSampler(url(extras.ndvi)");
+  // no raster is read for the dressing: the trees come placed
+  expect(fine).not.toContain("extras.ndvi");
+  // the coarse level's dressing file, read too: it is the set `far`'s
+  // (lib/city/ledger.ts `tileSet`)
+  expect(fine).toContain(
+    "fetchPack(extras.coarseDressing, url, treesLost(ctx, tile), signal)"
+  );
   // the coarse level's side files, all of them
   const coarse = functionText(text, "buildCoarseDressing");
   expect(
@@ -264,7 +271,7 @@ const level = (t: string, n: 0 | 1): TerrainFiles => ({
         surfaceFar: `surface_${t}.r1024.png`,
         dressing: { lamps: `lamps_${t}.geojson` },
       }
-    : { coarse: { crowns: `crowns_${t}.json` } }),
+    : { coarse: { dressingCoarse: `crowns_${t}.json` } }),
 });
 
 const baked = (t: string, x: number): BakedTile => ({

@@ -25,7 +25,6 @@ import {
 } from "./context";
 import { publishLevels, publishPlatforms } from "./lines";
 import {
-  publishCanopy,
   publishClassRaster,
   publishColonies,
   publishSvfBlocks,
@@ -113,10 +112,11 @@ export async function publishSideFiles(): Promise<void> {
     ][];
     for (const [kind, artifact] of artifacts) {
       // A `built` row has no committed source and this loop does not
-      // publish it: the coarse crowns are baked from the tree files on the
-      // fine ground (`publishCrowns`), the phones' colony raster is cropped
-      // with the colony raster (`publishColonies`).
-      if (artifact.built) {
+      // publish it: the dressing files are baked from the tree files on
+      // the fine ground (prepare/dressing.ts), the phones' colony raster
+      // is cropped with the colony raster (`publishColonies`). A `source`
+      // row is read by such a bake and never served.
+      if (artifact.built || artifact.source) {
         continue;
       }
       if (
@@ -129,13 +129,6 @@ export async function publishSideFiles(): Promise<void> {
           names.cultivatedRaster = colonies.cultivatedRaster;
           names.cultivatedLow = colonies.cultivatedLow;
         }
-        continue;
-      }
-      if (
-        (kind === "canopy" || kind === "canopyx") &&
-        existsSync(at(sideFileSource(SITE, artifact.file)))
-      ) {
-        names[kind] = await publishCanopy(tile, artifact.file);
         continue;
       }
       if (

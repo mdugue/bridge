@@ -27,7 +27,7 @@
   less code in the viewer
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: IN PROGRESS — phase 0 built 2026-11-16 (Findings)
+- **Status**: IN PROGRESS — phases 0 and 1 built 2026-11-16 (Findings)
 
 ## Why this matters
 
@@ -742,3 +742,247 @@ builders run under Bun as they are (`mesh-kit.ts`), so the measurement
 feeds their ribbons through the spike's writer (`weld`, 16-bit
 positions, meshopt — `scripts/tile-glb.ts`), which is what
 `bake-lines.ts` did.
+
+### Phase 1 (2026-11-16) — the container and the trees
+
+Built: `lib/city/dressing-pack.ts` (the container: one table of
+sections, the packer, the reader and the stand section's vertex layout
+derived from it), `lib/city/tree-table.ts` (the trees' two sections),
+`lib/city/tree-stands.ts` (a tree as stand records),
+`scripts/dressing-sources.ts` (one reader a kind, five new schemas),
+`scripts/bake-dressing.ts` and `scripts/prepare/dressing.ts` (the build
+places every tree), and the viewer's half: both terrain levels draw
+their trees as sets of stand records, read no ground, no NDVI raster and
+no GeoJSON for a tree, and the inquiry's tree solids come from the same
+tables. `canopy`, `canopyx`, `trees` and `crowns` are no longer
+published; `lib/city/point-pack.ts`, `scripts/coarse-crowns.ts`, the
+`CRW1` file, `loadNdviSampler`, the runtime placement in
+`vegetationSteps`, the trunks' `iDrop` and the feet's `iSlope` buffers
+and the knob `?stands=record` are gone.
+
+**The file's layout is not the GPU's for the trees — measured, it cannot
+be under the byte gate.** The plan's step 4 ("a chunk's sets are views
+over the file's bytes") holds for a record that is what the vertex stage
+reads: place, turn, scale. Of a tree those are *derived*: its turn and
+the touch its size varies by are hashes of where it stands, its crown's
+frame is arithmetic on its height. A record that carries them is half
+noise on the wire. On the forest tile's 84 286 canopy trees (gzip 9;
+the first three rows from `scripts/eval/tree-table-bytes.ts` and the
+ledger, the others measured while the record was chosen, on that day's
+build):
+
+| The trees as | gzipped | a tree |
+|---|---|---|
+| the three files a fine level fetched (`canopy` 468.9, `canopyx` 22.9, `trees` 0.5 kB) | 492.3 kB | 5.8 B |
+| … with the coarse level's `crowns`, its third a second time | 889.7 kB | — |
+| phase 0's stand record, as the vertex stage reads it, every tree once | 1 319 kB | 15.6 B |
+| … its derived fields rounded hard (the turn to 64 steps, scales to 1/64) | 882–894 kB | 10.5 B |
+| what was measured, in twenty bytes (the derived words left zero) | 750–759 kB | 8.9 B |
+| what was measured, in twelve bytes, slope and NDVI in full, the ground to 1/64 m | 809.8 kB | 9.6 B |
+| **the tables as published**: slope to 1/16, NDVI to 1/32, the ground to 1/32 m, every tree once | **706.5 kB** | 8.4 B |
+
+Every tree once is 44 % over what a fine level fetched, whatever the
+record: the ground's height, the slope at the foot and the NDVI are
+information the old files did not carry — the viewer read them off the
+terrain and the raster. So three things were done, and the first two are
+the answer to "win it back inside the level and say how":
+
+1. **The record is what was measured** (`lib/city/tree-table.ts`):
+   easting, northing, the ground, the height, the scan's radius, flags,
+   NDVI, slope — twelve bytes a canopy tree, twenty a surveyed one. The
+   viewer makes the twenty-byte stand record from it with the very
+   arithmetic it placed trees by before (`canopyPlacement`,
+   `inventoryTree`, one owner each), in one pass over typed arrays: no
+   ground read, no raster, no parse. The picture's proof is exact, not
+   visual: the build's records give the runtime placement back **to the
+   bit** in turn, scale, crown width and crown base for the spawn tile's
+   8 483 canopy and 6 455 surveyed trees (`scripts/bake-dressing.test.ts`:
+   the float32 offsets the packed canopy held are kept, so every hash
+   is seeded as it was). That is as far as the proof goes: those four
+   values, on that tile, over the test's synthetic ground; the slope is
+   not compared with the runtime's, and the record the GPU draws from is
+   quantised after it (the stand record's steps).
+2. **A tree is shipped once, not twice.** Until now the coarse level's
+   third of a tile's trees travelled in `crowns` *and again* in the fine
+   level's files. Now that third is in the coarse level's file alone
+   (`dressing_<t>.c.drs.gz`) and the fine level's (`dressing_<t>.drs.gz`)
+   holds the other two thirds; the fine level reads both. The tile
+   renderer loads a tile's coarse level with or before its fine one
+   (3DTilesRendererJS `loadAncestors`, on by default and not switched
+   off here), so a visit fetches the coarse file once, for the coarse
+   level, and the fine level's read of it is the HTTP cache's. **This is
+   the judgement the reviewer should look at**: the ledger's `fine` set
+   counts the fine level's own file and not the coarse one it also
+   reads (`lib/city/ledger.ts` `tileSet` says so; `docs/data-pipeline.md`
+   too). Counted the other way — the coarse file under both sets — the
+   forest's fine level would read 706.5 kB against 492.3.
+3. The slope is kept to 1/16 (the feet are draped toward the eye by 8 %
+   of their reach, `tree-foot.ts`), the NDVI to 32 steps, the ground to
+   1/32 m, downward (a trunk's foot up to 3.1 cm in the ground, never
+   over it; the rings round it lie 5 cm proud): 103 kB on the forest's
+   two files together. And a surveyed
+   tree's row among the tree facts is a step from the record before it,
+   the records in their source's order: a row is thirteen bits of noise,
+   a step two.
+
+**The wire, before and after** (gzip, the ledger's `dressing` section;
+the trees' files, then the level's whole dressing):
+
+| Tile | Fine: trees | level, requests | Coarse: trees | level, requests |
+|---|---|---|---|---|
+| spawn | 167.7 → 106.3 kB (−37 %) | 249.1 → 187.8 kB, 18 → 16 | 75.9 → 57.6 kB (−24 %) | 84.9 → 66.6 kB, 3 |
+| forest | 492.3 → 466.1 kB (−5.3 %) | 496.9 → 470.7 kB, 18 → 16 | 397.5 → 240.3 kB (−40 %) | 398.2 → 241.1 kB, 3 |
+| yards | 131.6 → 89.9 kB (−32 %) | 276.0 → 234.3 kB, 18 → 16 | 65.6 → 47.9 kB (−27 %) | 78.6 → 61.0 kB, 3 |
+
+**What the STOP is held to: a visit to the fine level** (the coordinator's
+ruling on the judgement above, 2026-11-16). A fine level's visit fetches
+the coarse level's file too, before and after, so like is set against
+like — the fine level's dressing and the coarse level's trees — and the
+ledger carries that sum as a leaf of its own
+(`dressing.tiles.<what>.visit`, `lib/city/ledger-dressing.ts`):
+
+| Tile | the trees of both levels | a fine level's visit: bytes, requests |
+|---|---|---|
+| spawn | 243.6 → 163.9 kB | 325.0 → 245.3 kB, 19 → 17 |
+| forest | 889.8 → 706.5 kB | 894.3 → 711.0 kB, 19 → 17 |
+| yards | 197.1 → 137.8 kB | 341.5 → 282.2 kB, 19 → 17 |
+
+It falls on all three. Where it would not hold: the stream holds the
+renderer's `loadAncestors` on (`orderStreaming`, tested), so a tile's
+coarse level is loaded with or before its fine one and the file is
+fetched once; the second read is the HTTP cache's — a browser that
+keeps no cache (or has dropped the file since) fetches it twice, which
+is the old state of a tree shipped twice, no worse.
+
+No measured level grows; no STOP. A tile's trees over both levels:
+spawn 243.6 → 163.9 kB, forest 889.8 → 706.5 kB, yards 197.1 → 137.8 kB.
+The fine level also stops decoding the NDVI raster a second time on the
+CPU (the ledger's `rasters.cpuDecodes` is empty now).
+
+**The scene's thread and the tile cache, before and after** (recorded
+only, as phase 0's: headless Chromium, WebGPU on SwiftShader, the same
+kind of four-core container, `?scene=lite&block=1`,
+`e2e/dressing-ledger.spec.ts`; desktop / phone profile):
+
+| Tile | `trees` builder, ms | `asks`, ms | all builders, ms | vegetation in the cache | the dressing in the cache |
+|---|---|---|---|---|---|
+| spawn | 231 → 139 / 308 → 164 | 78 → 40 / 70 → 61 | 646 → 566 / 913 → 608 | 5.54 → 2.72 MB | 12.8 → 10.0 MB |
+| forest | 541 → 215 / 521 → 167 | 207 → 138 / 223 → 137 | 752 → 358 / 750 → 309 | 12.13 → 5.46 MB | 12.3 → 5.6 MB |
+| yards | 123 → 174 / 143 → 86 | 66 → 45 / 75 → 55 | 1 348 → 1 520 / 1 359 → 1 331 | 4.93 → 2.34 MB | 22.0 → 19.4 MB |
+| München | 149 → 113 / 175 → 108 | 87 → 41 / 63 → 44 | 889 → 898 / 943 → 925 | 3.24 → 1.41 MB | 16.7 → 14.8 MB |
+
+The bytes are exact and the same on both profiles; the milliseconds
+move by tens of per cent between two runs (the yards' rail builder,
+untouched, read 840 and 945), so they say the trees' builder is about
+half of what it was on the tiles it dominated and no more. **It is not
+"near zero"** (the plan's Verify): what is left is the pass that makes a
+stand record of each tree's record (three hashes a canopy tree — the
+portable sine the build shares —, its crown's frame), its tint and its
+season key, and on the spawn tile the register's own (stakes, plan
+symbols, silhouettes). Under Bun the forest tile's 84 286 trees take
+about 125 ms through `buildVegetation`, of which reading the records is
+30. The vegetation's instance data is 55 % smaller: twenty bytes a tree
+for crown tiers, trunk and feet together where a matrix was sixty-four,
+no drop and slope buffers.
+
+**The counters.** `layerModules.codeLines` 14 516 → 14 303 (below the
+14 420 before phase 0: `coarse-crowns-layer.ts` 294 → 225 lines with
+its matrix branch, `crownStand` and the ground read gone;
+`vegetation-layer.ts` 2 093 → 1 951 with the runtime placement, the
+NDVI sampler, the drop and slope buffers gone; `tree-inventory-layer.ts`
+500 → 432). `longestFunction.lines`: `bootApp` 2 365, unchanged — this
+phase has nothing in it, and phase 0's four lines there
+(`getDressingFigures`) stay while the ledger reads the builders'
+milliseconds, as its findings say. `dressingKinds` 17 → 15,
+`publishedExtensions` 9 → 8 (`.pts.gz` and `.crw.gz` leave, `.drs.gz`
+arrives). Phase 0's spike lines for the stands are all gone; the rails'
+stay behind `?rails=table` for phase 3.
+
+**The review's findings, fixed in this phase** (PR #330). A foot slope of
+0.976 or more overflowed its byte and decoded with its sign flipped —
+on banks steeper than 44° the feet draped the wrong way (304 slopes on
+Dresden's tiles, 239 on Grimma's): the step count is held to ± 15 (a
+slope of 0.945), tested at the limit and beyond, and the build's log
+says how many a tile has (`scripts/prepare/dressing.ts`). A dressing
+file that does not come or is not one is said through the dressing's
+failure hook (the trail's `dressing failed`, the HUD's hole) instead of
+a tile silently without trees. A measured height under half a decimetre
+stays measured; records may not start inside a file's directory.
+
+**The builds** (`browser.pipelines`, plan 094; merged from `rewrite`):
+68 → 62 rows. Sixteen rows of the trees' feet, trunks and crowns went
+(each foot build had two, with the drop buffer and without; all drew
+from four matrix columns) and ten came, drawn from the stand record's
+three attributes: a foot build 5 or 4 → 3 vertex buffers, the trunk
+4 → 3 or 4, the crowns as they were (5 and 4); no build's inter-stage
+count rose.
+
+**The ledger's gated figures that moved** (`qa/ledger.json`, regenerated
+on linux-x64 with the pinned Bun, all seven sites built, `--browser`):
+`browser.phoneLiteSpawnCache.bytes` 158 979 087 → 155 942 579 (−3.0 MB);
+`browser.firstLoad.gzip` 1 105 320 → 1 104 788; `bytes.fine.spawn`
+5 448 502 → 5 387 136, 29 → 27 files (every `bytes` set falls, by the
+tree files and two requests a fine level; the site 193.62 → 192.37 MB,
+641 → 611 files); the `dressing` tiles as the table above;
+`counters.dressingKinds`, `layerModules.codeLines` and
+`publishedExtensions` as said; `rasters.cpuDecodes` empty. None rose.
+
+**What moved in the picture, named** (ruling 3):
+
+- A canopy or surveyed tree stands within 1.6 cm in plan of where it
+  stood (a mapped row's tree, on tiles without a surface model, within
+  5 cm an axis: its place is kept to the decimetre and its turn to 256
+  steps — "to the bit" above is the canopy's and the register's), its foot up to
+  3.1 cm under the fine level's ground and never over it (was: on it);
+  its scale within 0.1 %; its NDVI one of 32 steps. Every tree reports
+  that join (ADR 0030): `trees` is a row of `scripts/ground-joins.ts`,
+  its budget none — 14 938 feet on the spawn tile, no miss.
+- **Each tree's own growth is drawn anew**: the lean and the crook of
+  its trunk, the turn of its roots, which pit gets a grate or a guard
+  hoop, the winter stipple's seed. The vertex stage hashes them from the
+  instance's place (`treeGrowth`, `rootSeed`, the feet's `pick`), and a
+  record's place is a step of 3 cm where a matrix's was a float: the
+  hash of a place 1 cm off is another number. A wood looks as it did;
+  no single tree leans as it did. This is what tier 1's plates see
+  (below), and it is the price of *any* quantised record, phase 0's
+  included.
+- A coarse crown stands on the fine level's ground (the build has it),
+  not the coarse grid's: up to the two grounds' difference lower or
+  higher, under a crown that starts at a fifth of its height.
+- Which half of a dense chunk's trees the far tier keeps (every other
+  one, by their order in the cell) is another half: the order is the
+  two files', not the canopy file's.
+- An evergreen copper or golden cultivar on the coarse level follows its
+  genus's year as before; a register tree's season offset is no longer
+  rounded to a tenth of a day there.
+
+**Open, and what binds phase 2.**
+
+- "The viewer places nothing" and "near zero" stay unmet for trees until
+  the vertex stage derives turn and scale from a record's bytes — which
+  re-rolls the seeds once more. Phase 2 measures each kind's record
+  against its source before choosing a layout.
+- A pack's runs are the section's records in order, each once, and no
+  two sections share a record: the reader refuses anything else
+  (`runsCover`), so phase 2 can cull by run without checking again.
+
+- The container is ready for the kinds that stand (`stand`: the layout a
+  set draws with, its views derived from the table). The lesson for
+  their bytes: a field a hash or a formula gives is noise on the wire —
+  measure each kind's record against its GeoJSON before choosing between
+  the stand record as it is and a record of what was measured.
+- The per-tree seeds hang on the instance's float place. A later change
+  of a record's step or origin re-rolls every tree's growth again; a
+  seed taken from the record's own words would end that, at the price of
+  one more re-roll.
+- The trees' tints are still three floats painted on the CPU (the
+  season's), and the viewer still decodes records into placements
+  (objects) before it writes stand records: the time left in the trees'
+  builder is that. Both go if the crown material reads a record's bytes.
+- The inquiry's tree solids are built from the tables in idle time, as
+  before — not when a ray first reaches the tile (step 5's wording): the
+  packed sets a ray walks are 0.8 MB a tile and cost 20–80 ms to build,
+  and a first click that waits for them is worse than idle time spent.
+- `vegrows` and `cultivated` are still fetched (hedges, vine rows:
+  phase 3); the rows' *trees* are the table's.
+- Not looked at on a real GPU.

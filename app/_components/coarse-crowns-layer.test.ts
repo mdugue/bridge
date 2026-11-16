@@ -1,24 +1,18 @@
 import { expect, test } from "bun:test";
 import { Color, Matrix4, Vector3 } from "three/webgpu";
 import type { Object3D } from "three/webgpu";
-import {
-  COARSE_TREE_WIDEN,
-  coarseCrowns,
-  packCrowns,
-  unpackCrowns,
-} from "@/lib/city/coarse-crowns";
-import type { CoarseCrown } from "@/lib/city/coarse-crowns";
+import { COARSE_TREE_WIDEN, drawnCoarse } from "@/lib/city/coarse-crowns";
 import type { CanopyFeature, TreeFeature } from "@/lib/city/features";
 import { inventoryTrees } from "@/lib/city/tree-inventory";
 import { canopyPlacements } from "@/lib/city/tree-placement";
+import type { Placement } from "@/lib/city/tree-placement";
 import { buildCoarseCrowns } from "./coarse-crowns-layer";
 import { isInstances } from "./instancing";
 import type { Instances } from "./instancing";
 import { buildTreeInventory } from "./tree-inventory-layer";
 import { buildCrownGeo, buildVegetation } from "./vegetation-layer";
-import type { VegetationContext } from "./vegetation-layer";
 
-const ctx: VegetationContext = {
+const ground = {
   offset: { cx: 411_000.37, cy: 5_657_000.81 },
   heightAt: () => 100,
 };
@@ -43,7 +37,8 @@ function sets(root: Object3D): Instances[] {
   return out;
 }
 
-/** Every drawn instance's matrix and tint, keyed by where it stands. */
+/** Every drawn instance's matrix and tint, keyed by where it stands (to
+ *  the decimetre: a record's place is a step of 3 cm). */
 function drawn(list: Instances[]): Map<string, { m: Matrix4; c: Color }> {
   const out = new Map<string, { m: Matrix4; c: Color }>();
   for (const set of list) {
@@ -54,7 +49,7 @@ function drawn(list: Instances[]): Map<string, { m: Matrix4; c: Color }> {
       const c = tints
         ? new Color(tints[i * 3], tints[i * 3 + 1], tints[i * 3 + 2])
         : new Color(1, 1, 1);
-      out.set(`${t.x},${t.z}`, { m, c });
+      out.set(`${Math.round(t.x)},${Math.round(t.z)}`, { m, c });
     }
   }
   return out;
@@ -62,6 +57,9 @@ function drawn(list: Instances[]): Map<string, { m: Matrix4; c: Color }> {
 
 const column = (m: Matrix4, i: number) =>
   new Vector3().setFromMatrixColumn(m, i).length();
+
+const third = <T extends { x: number; z: number }>(list: T[]): T[] =>
+  list.filter((t) => drawnCoarse(t.x, t.z));
 
 test("a coarse crown stands where its fine tree does, as tall and wider", () => {
   const points = Array.from({ length: 200 }, (_, i) =>
@@ -71,28 +69,24 @@ test("a coarse crown stands where its fine tree does, as tall and wider", () => 
       6 + (i % 7) * 2
     )
   );
-  const register = Array.from({ length: 30 }, (_, i) =>
-    lime(411_050.5 + i * 7.1, 5_656_880.25)
+  const register = inventoryTrees(
+    Array.from({ length: 30 }, (_, i) =>
+      lime(411_050.5 + i * 7.1, 5_656_880.25)
+    ),
+    ground
   );
-  const inventory = buildTreeInventory(register, ctx);
-  const fine = buildVegetation(
-    {
-      rows: [],
-      canopy: points,
-      keepTree: inventory.keepTree,
-      extraTrees: inventory.instances,
-    },
-    ctx
-  );
+  const trees = canopyPlacements(points, ground);
+  const inventory = buildTreeInventory(register, {});
+  const fine = buildVegetation({ trees, extraTrees: inventory.instances }, {});
   // the fine level's crowns before any far-tier thinning
   const all = drawn(fine.chunks.map((c) => c.mid));
 
-  const crowns = coarseCrowns(
-    canopyPlacements(points, ctx, undefined, inventory.keepTree),
-    inventoryTrees(register, ctx)
+  const coarse = drawn(
+    sets(
+      buildCoarseCrowns({ trees: third(trees), register: third(register) }, {})
+        .group
+    )
   );
-  const file = unpackCrowns(packCrowns(crowns).buffer as ArrayBuffer) ?? [];
-  const coarse = drawn(sets(buildCoarseCrowns(file, ctx).group));
   // a third of them, register and canopy both
   expect(coarse.size).toBeGreaterThan(all.size * 0.2);
   expect(coarse.size).toBeLessThan(all.size * 0.5);
@@ -102,7 +96,7 @@ test("a coarse crown stands where its fine tree does, as tall and wider", () => 
     if (!twin) {
       continue;
     }
-    // the same height (to the file's units), COARSE_TREE_WIDEN wider
+    // the same height (to the record's units), COARSE_TREE_WIDEN wider
     expect(column(m, 1)).toBeCloseTo(column(twin.m, 1), 2);
     expect(column(m, 0) / column(twin.m, 0)).toBeCloseTo(COARSE_TREE_WIDEN, 2);
     expect(m.elements[13]).toBeCloseTo(twin.m.elements[13], 2);
@@ -114,11 +108,11 @@ test("a coarse crown stands where its fine tree does, as tall and wider", () => 
 });
 
 test("a coarse conifer stands on its own cone, as its fine tree does", () => {
-  const crowns: CoarseCrown[] = [
-    { kind: "canopy", x: 10, z: 10, rot: 0, s: 2 },
-    { kind: "canopy", x: 14, z: 10, rot: 0, s: 3, evergreen: true },
+  const trees: Placement[] = [
+    { x: 10, y: 100, z: 10, rot: 0, s: 2 },
+    { x: 14, y: 100, z: 10, rot: 0, s: 3, evergreen: true },
   ];
-  const all = sets(buildCoarseCrowns(crowns, ctx).group);
+  const all = sets(buildCoarseCrowns({ trees, register: [] }, {}).group);
   expect(all).toHaveLength(2);
   const cone = all.find((s) => s.userData.styleCrown === undefined);
   const lobed = all.find((s) => s.userData.styleCrown === "far");
@@ -131,6 +125,9 @@ test("a coarse conifer stands on its own cone, as its fine tree does", () => {
     Object.keys(lobed?.geometry.attributes ?? {}).sort()
   );
   expect(cone?.material).toBe(lobed?.material);
+  // drawn from records: no matrix is written
+  expect(cone?.stands).not.toBeNull();
+  expect(cone?.geometry.hasAttribute("iMat0")).toBe(false);
 });
 
 test("a coarse pine stands on the pine's crown, high on its stem, as its fine tree", () => {
@@ -144,11 +141,12 @@ test("a coarse pine stands on the pine's crown, high on its stem, as its fine tr
     },
     properties: { h: 16 + (i % 5), l: "e", pine: 1 },
   }));
-  const fine = buildVegetation({ rows: [], canopy: pines }, ctx);
+  const trees = canopyPlacements(pines, ground);
+  const fine = buildVegetation({ trees }, {});
   const all = drawn(fine.chunks.map((c) => c.mid));
-  const crowns = coarseCrowns(canopyPlacements(pines, ctx), []);
-  const file = unpackCrowns(packCrowns(crowns).buffer as ArrayBuffer) ?? [];
-  const built = sets(buildCoarseCrowns(file, ctx).group);
+  const built = sets(
+    buildCoarseCrowns({ trees: third(trees), register: [] }, {}).group
+  );
   // only the pine's form: no cone, no lobed crown
   expect(built.every((s) => s.userData.styleCrown === undefined)).toBe(true);
   const lobed = buildCrownGeo(0);
@@ -168,64 +166,5 @@ test("a coarse pine stands on the pine's crown, high on its stem, as its fine tr
       expect(column(m, 1)).toBeCloseTo(column(twin.m, 1), 2);
       expect(m.elements[13]).toBeCloseTo(twin.m.elements[13], 2);
     }
-  }
-});
-
-test("crowns drawn from stand records stand where the matrices put them (plan 090's spike)", () => {
-  const crowns: CoarseCrown[] = [
-    ...Array.from({ length: 120 }, (_, i): CoarseCrown => ({
-      kind: "canopy",
-      x: -300 + (i % 12) * 61.7,
-      z: 200 + Math.floor(i / 12) * 43.3,
-      rot: i * 0.37,
-      s: 1 + (i % 5) * 0.6,
-      w: 1.2 + (i % 3),
-      base: i % 4 === 0 ? undefined : 2.5,
-      ...(i % 6 === 0 ? { evergreen: true } : {}),
-    })),
-    {
-      kind: "register",
-      x: 12.3,
-      z: 45.6,
-      rot: 2,
-      colour: "leaf",
-      ext: { crownBase: 3, crownTop: 14, crownWidth: 8 },
-      genus: 3,
-      jitter: 0.5,
-    },
-  ];
-  const hilly = {
-    ...ctx,
-    heightAt: (x: number, y: number) => 100 + Math.sin(x / 50) * 9 + y * 1e-6,
-  };
-  const byMatrix = sets(buildCoarseCrowns(crowns, hilly).group);
-  const byRecord = sets(
-    buildCoarseCrowns(crowns, { ...hilly, standRecord: true }).group
-  );
-  expect(byRecord.map((s) => s.drawCount)).toEqual(
-    byMatrix.map((s) => s.drawCount)
-  );
-  // every set a view of one buffer of the tile's records, in its order
-  const buffers = new Set(byRecord.map((s) => s.stands?.buffer.array.buffer));
-  expect(buffers.size).toBe(1);
-  expect(byRecord.every((s) => !s.geometry.hasAttribute("iMat0"))).toBe(true);
-  const a = new Matrix4();
-  const b = new Matrix4();
-  for (const [k, set] of byMatrix.entries()) {
-    for (let i = 0; i < set.drawCount; i += 1) {
-      set.getMatrixAt(i, a);
-      byRecord[k].getMatrixAt(i, b);
-      for (let e = 0; e < 16; e += 1) {
-        // the place within a step (3 cm), turn and scale within a
-        // thousandth of the crown
-        expect(Math.abs(a.elements[e] - b.elements[e])).toBeLessThan(
-          e >= 12 ? 0.017 : 0.02
-        );
-      }
-    }
-    // the tints are painted as before
-    expect(byRecord[k].instanceTints?.array).toEqual(
-      set.instanceTints?.array as Float32Array
-    );
   }
 });
