@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
+import { VARIANT_KINDS } from "../lib/city/ledger-rasters";
 import { LEDGER_FILE, viewerReads } from "./ledger";
 
 /** A fine level's extras as the tileset names them (published names). */
@@ -44,4 +45,18 @@ test("the ledger reads a level's rasters by the viewer's own rule", () => {
 
 test("the ledger is committed", () => {
   expect(existsSync(LEDGER_FILE)).toBe(true);
+});
+
+test("the raster table's program key follows terrain-layer.ts splatVariant", async () => {
+  const text = await Bun.file(
+    new URL("../app/_components/terrain-layer.ts", import.meta.url)
+  ).text();
+  const body = text.slice(
+    text.indexOf("const splatVariant"),
+    text.indexOf("...splatSize(splat)")
+  );
+  const read = [...body.matchAll(/splat\.(?<kind>\w+) \?/gu)].map((m) =>
+    (m.groups?.kind ?? "").replace(/Texture$/u, "")
+  );
+  expect(read).toEqual([...VARIANT_KINDS]);
 });

@@ -13,6 +13,7 @@
  * tile on another machine, and those figures were recorded only).
  */
 import { gzipSync } from "node:zlib";
+import type { RasterLedger } from "./ledger-rasters";
 import { TERRAIN_RASTER_KEYS } from "./tileset";
 
 /** The extensions a static host sends as they are: compressed already. */
@@ -513,6 +514,8 @@ export interface Ledger {
   dated: string;
   /** every file the manifest names */
   published: Weight;
+  /** every built site's rasters (plan 091 phase 0, ledger-rasters.ts) */
+  rasters: RasterLedger;
   site: string;
   tiles: number;
   version: typeof LEDGER_VERSION;
@@ -577,5 +580,6 @@ export function datedLedger(
     bytes: fresh.bytes,
     buildings: fresh.buildings,
     counters: fresh.counters,
+    rasters: fresh.rasters,
   };
 }
