@@ -48,7 +48,8 @@ ADR 0037 (fetch → bake → build). Deep reference: the `city-walker` skill,
 8. **Things on the ground** take their feet and edges from
    `lib/city/ground-join.ts` and are listed in `JOIN_PARTS` (ADR 0030).
 9. **Tests:** a pytest in `pipeline/tests/`; `bun run test:pipeline`
-   (pytest + ruff) and `bun run verify`.
+   (pytest + ruff + the types: a new module starts with no finding) and
+   `bun run verify`.
 10. **Docs:** follow the `docs-upkeep` skill (ledger row, data-flow,
     data-sources page in both languages).
 

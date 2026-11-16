@@ -132,6 +132,7 @@ bun run bake dresden --force        # every step again, even one whose code
                                     #   and inputs did not change (see "What
                                     #   a re-bake runs" below)
 bun run test:pipeline               # pytest + ruff check + ruff format --check
+                                    #   + the bakes' types (typecheck.py)
 ```
 
 `scripts/pipeline.ts` turns the site into one JSON spec (provider, CRS,
@@ -168,8 +169,23 @@ gridding, the OSM class mapping, the spec, the monument kinds, the DLM ↔ OSM
 fountain conflation and the relief measurement), and runs the `walls` and `stairs`
 steps end to end against a synthetic DGM and a small OSM XML file (GDAL's
 OSM driver reads `.osm` as well as `.osm.pbf`). CI's `pipeline` job runs it
-with ruff after `uv sync --locked`. Fetch and bakes need the network and
-the raw downloads and run on the maintainer's machine.
+with ruff after `uv sync --locked`, and then type-checks `bake/` with
+pyright (pinned in the dev group, set in `pyproject.toml`) against
+`pipeline/typecheck-baseline.json` (plan 089): `typecheck.py` keys each
+finding by file, rule, the function it stands in and its message (never
+by line) and fails on any count above the baseline — a new finding, or a
+new escape: `type: ignore`, `pyright: ignore`, a `# pyright:` directive,
+`@no_type_check`, `typing.cast` — and on any below it, so that a fix
+lowers the baseline in the same PR: `cd pipeline && uv run python
+typecheck.py --update` writes the lower counts and refuses to raise one.
+It also fails when pyright did not read every module of `bake/` or a
+setting beyond the known ones relaxes it, and in CI when the baseline
+holds what the base branch's does not, unless the PR's description says
+why in a line `Typecheck-baseline-raise: …`.
+Neither the checker nor the script re-keys a bake: both live outside
+`bake/` and the dev group is not in `locked_runtime`. Fetch and bakes
+need the network and the raw downloads and run on the maintainer's
+machine.
 
 ### The layouts
 
@@ -1178,9 +1194,11 @@ polygons on a tile for lack of it).
 ## Measuring what the browser downloads
 
 The figures live in [`qa/ledger.json`](../qa/ledger.json), the rewrite
-series' ledger (plan 087). `bun run ledger` writes it from the reference
-site's published files — `public/data/dresden/`, so after a build or
-`bun scripts/prepare-sites.ts dresden` — and `bun run ledger -- --check`
+series' ledger (plan 087). `bun run ledger` writes it from the published
+files — the reference site's (`public/data/dresden/`) for the bytes and
+counters, every site a build serves for the rasters, so after a build or
+`bun scripts/prepare-sites.ts`; it writes the file formatted as committed
+— and `bun run ledger -- --check`
 names each figure that differs and exits 1; CI's build-check shard runs the
 check after its build. Every figure is a function of the tree: a pull
 request that moves one commits the new file, and its diff is what the
@@ -1240,6 +1258,50 @@ today), gave a tile 4.0–9.7 MB and the site ≈ 98.9 MB. A visit fetches
 less than a set's site figure: streaming loads a tile's content only when it is in view, and a far tile stops at its far
 set. Sources on disk that are never served: the DGM GeoTIFF
 (12.9–15.6 MB a tile) and the CityJSON (2.7–13.6 MB a tile).
+
+### The rasters, every site
+
+The ledger's `rasters` section (plan 091 phase 0; the arithmetic in
+`lib/city/ledger-rasters.ts`, the reading in `scripts/ledger-rasters.ts`)
+holds, for every site a build serves, what a terrain level's rasters
+weigh. It decodes each published raster with the viewer's decoder and asks
+the viewer's own rules which file a level reads on a tier (`rasterFiles`),
+how its texture is laid out (the kinds table's looks) and what it weighs on
+the GPU (`textureBytes`, and `splatScaleFor` for the colour splat painted
+from the classes). Per site: each raster and table artifact's files, wire
+bytes and texture shapes; each kind's GPU bytes on the spawn tile and the
+largest, per tier and level — the fine level near the camera (`fine`) and
+beyond the ground detail's reach (`fineFar`, the far twins), and the coarse
+level (the float tables are not weighed, as in the viewer); the fine level
+by sort at both reaches — **exact** ids (class,
+paving, sports grounds, markings), **measured** fields (edges, colonies),
+**soft** fields (NDVI, sky view, horizon) and the splat; the share of
+texels that carry anything in the sparse rasters (paving, sports grounds,
+markings, colonies) and of their bounding box, against the full tile
+raster, over the tiles whose fine level holds the raster on a desktop; and the ground programs (`splatVariant` keys) the levels ask for.
+`cpuDecodes` names what the viewer decodes on the CPU without uploading —
+today the NDVI, for the crowns' greenness (`vegetation-layer.ts`); a new
+caller of the PNG decoder fails the ledger until it is named there. Every
+figure is gated: all are functions of the published files and the code.
+
+Baseline, 2026-11-16 (MiB on the GPU; the largest tile; *programs* over
+both levels; *cover* the mean share of carrying texels, the sports
+grounds' bounding box in brackets):
+
+| Site (tiles) | Phone, fine level: exact / measured / soft / splat = total | Soft | Phone, fine, beyond reach | Desktop, fine | Coarse level | Programs desktop / phone | Cover: paving / markings / sport (box) / colonies |
+|---|---|---|---|---|---|---|---|
+| Dresden (15) | 24.0 / 9.9 / 4.7 / 21.3 = 59.9 | 7.8 % | 41.9 | 105.7 | 11.0 | 4 / 3 | 35.5 % / 11.6 % / 1.2 % (66 %) / 4.8 % |
+| Grimma (2) | 24.0 / 9.8 / 4.7 / 21.3 = 59.8 | 7.8 % | 41.8 | 105.0 | 11.0 | 2 / 2 | 46.7 % / 8.0 % / 0.4 % (17 %) / 5.6 % |
+| Hamburg (4) | 24.0 / 8.0 / 4.7 / 21.3 = 58.0 | 8.0 % | 40.0 | 98.0 | 11.0 | 2 / 2 | 33.5 % / 17.3 % / 0.5 % (30 %) / — |
+| Leipzig (4) | 24.0 / 10.0 / 4.7 / 21.3 = 60.0 | 7.8 % | 42.0 | 106.0 | 11.0 | 2 / 2 | 43.7 % / 16.8 % / 0.9 % (73 %) / 2.3 % |
+| Meißen (1) | 24.0 / 10.0 / 4.7 / 21.3 = 60.0 | 7.8 % | 42.0 | 105.9 | 11.0 | 2 / 2 | 31.2 % / 12.2 % / 0.7 % (75 %) / 6.1 % |
+| München (4) | 24.0 / 8.3 / 4.7 / 21.3 = 58.3 | 8.0 % | 40.3 | 99.2 | 11.0 | 3 / 3 | 39.2 % / 14.9 % / 1.1 % (82 %) / 0.4 % |
+| Unna (2) | 24.0 / 8.3 / 4.7 / 21.3 = 58.3 | 8.0 % | 40.3 | 99.1 | 11.0 | 3 / 3 | 46.4 % / 12.1 % / 0.7 % (77 %) / 0.3 % |
+
+A coarse level is the 1024² class raster (1.0), its splat (5.3) and the
+three soft fields (4.7, 42.4 %), which both levels of a tile share.
+Beyond the ground detail's reach a phone's fine level reads the 1024²
+twins of the paving and markings (4 MiB each) and the edges (2 MiB).
 
 ## Provenance
 
