@@ -356,9 +356,10 @@ const baseName = (path: string): string =>
   path.slice(path.lastIndexOf("/") + 1);
 
 /**
- * The viewer's mesh builders: the modules named `*-layer.ts` (or `.tsx`),
- * tests left out, wherever they lie among the sources handed in — how
- * many, and their lines of code (`codeLines`: no comment, no blank line).
+ * The viewer's mesh builders: the modules named `*-layer.ts` (or `.tsx`;
+ * a test's name ends otherwise), wherever they lie among the sources
+ * handed in — how many, and their lines of code (`codeLines`: no comment,
+ * no blank line).
  *
  * Cannot see: a builder under another name (`tile-stream.ts` builds
  * meshes too), nor one renamed away from `-layer`: a rename shows as a
@@ -368,8 +369,8 @@ export function layerModules(files: readonly SourceText[]): {
   codeLines: number;
   files: number;
 } {
-  const layers = files.filter(
-    ({ path }) => /-layer\.tsx?$/u.test(baseName(path)) && !isTest(path)
+  const layers = files.filter(({ path }) =>
+    /-layer\.tsx?$/u.test(baseName(path))
   );
   return {
     files: layers.length,

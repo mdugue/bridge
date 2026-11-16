@@ -358,6 +358,9 @@ test("the workarounds: the register's entries and the marked comments", () => {
         " */",
         "// wrapped over two lines, an upstream",
         "// workaround all the same",
+        "const c = 3;",
+        "/* and in a block: upstream",
+        "   workaround */",
         'const s = "upstream workaround";',
         "// a workaround of our own, nothing upstream",
         "const b = 2; // Upstream   Workaround"
@@ -367,7 +370,7 @@ test("the workarounds: the register's entries and the marked comments", () => {
   ];
   expect(upstreamWorkarounds(files, REGISTER)).toEqual({
     entries: 3,
-    sites: 4,
+    sites: 5,
   });
   expect(upstreamWorkarounds([], REGISTER)).toEqual({ entries: 3, sites: 0 });
   // a register without its section is an error, not no workaround
