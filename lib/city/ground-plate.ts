@@ -16,6 +16,7 @@
  * then per tile `PLATE_N`² uint8 classes. Rows run north to south, columns
  * west to east (the coarse grid's convention).
  */
+import * as PMath from "./portable-math";
 import type { TerrainBounds } from "./terrain-geometry";
 
 /** Vertices along a tile's edge: 62.5 m apart on a 2 km tile. */
@@ -296,7 +297,7 @@ export function plateNormals(
       const dx = slope(heightAt(x + step, y), heightAt(x - step, y), h, step);
       const dy = slope(heightAt(x, y + step), heightAt(x, y - step), h, step);
       // scene z = −Y: the normal is (−∂h/∂x, 1, ∂h/∂Y)
-      const len = Math.hypot(dx, 1, dy);
+      const len = PMath.hypot(dx, 1, dy);
       out[v * 3] = -dx / len;
       out[v * 3 + 1] = 1 / len;
       out[v * 3 + 2] = dy / len;

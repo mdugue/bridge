@@ -1095,6 +1095,34 @@ stale keys dropped first — never the entry itself nor another process's
 part file — so processes baking side by side never read half an entry nor
 delete each other's.
 
+**The machine is not an input.** A bake's bytes are a function of the
+tree: the same commit bakes the same files on a desk, on CI's runner and
+on the host's builder, which is what lets a file be published once under
+its content hash and checked against what git bakes (plan 088). What
+would make the machine an input is the maths: in Bun `Math.hypot`, the
+trigonometric, exponential and power functions (and `**` to anything but
+a whole literal) are the C library's, whose last bits differ between
+glibc versions and between processors it gives its FMA variants and
+those it does not — and a corner test, a weld of equal vertices or a
+smallest rectangle that reads such a value decides differently (Dresden's
+near buildings differed by one to three vertices a tile between glibc
+2.39 and 2.43, 2026-11-16). So every module `prepare-data.ts` reaches
+computes with `PMath` (`lib/city/portable-math.ts`): the same functions
+in the operations IEEE 754 rounds exactly. `scripts/bake-entries.test.ts`
+holds those modules to it — any use of `Math` but its exactly rounded
+members (`sqrt`, `abs`, `floor`, `round`, `min`, `max`, the constants …),
+any `**` but to a whole literal up to 1000 (what JavaScriptCore multiplies
+out), and the methods of three's maths that call the C library inside
+fail it — and `lib/city/portable-math.test.ts` pins the functions' bits.
+What a dependency computes where no bake module asks the test cannot see
+(today the CityJSON loader's material colours, which no baked file
+carries): that is held by the ledger's check in CI, which compares every
+baked byte with a file another machine wrote (ADR 0024). `sin`, `cos` and
+`tan` answer up to 2^50 and are NaN past it; a hash's large angle (an OSM
+id times its constant) is folded, good to about 1e−15 and the same bits
+everywhere. The gzip (libdeflate, level 9) and meshopt's codecs gave
+the same bytes on both machines.
+
 **Shared cache.** Vercel restores each branch's build cache from that
 branch's last build (production's for a new branch), so branches rebased
 onto the same main each baked the same entries cold, side by side. Behind
@@ -1276,19 +1304,15 @@ raster. A set where a phone reads other files has a `phone` row beside the
 desktop's. Each set is recorded as the spawn tile, the median tile (the
 lower of an even count), the largest tile and the site (each file once).
 
-Some figures are recorded only, never compared: the buildings' vertices,
-decoded bytes and wire bytes (`city_<tile>.glb.gz`, near and far), and the
-bytes of the tileset JSONs, which name the buildings by their content
-hash. The near buildings' weld gives 1–3 vertices more or fewer a tile on
-another machine (CI against a cloud container, 2026-11-16), so the gated
-sets count these files but leave their bytes out, `buildings` gates each
-tile's triangles (the same everywhere), and `recorded` keeps the rest with
-the machine and the day it was read on; `--check` prints it and never
-compares it. They return to the gate once the bake fix (PR #310) has
-merged.
+Every figure is gated, the buildings' among them: `buildings` holds each
+tile's vertices, triangles and decoded bytes, near and far, and the sets
+count the buildings' glTF and the tileset JSONs (which name them by
+content hash) at their full bytes. That holds because a bake's bytes do
+not depend on the machine ("Cache and publish"): CI's check passing on a
+runner that did not bake the committed file is the standing proof.
 
-Baseline, 2026-11-16 (Dresden, fifteen tiles; MB = 10⁶ bytes on the wire,
-the buildings in them, as `recorded` holds them; files in brackets):
+Baseline, 2026-11-16 (Dresden, fifteen tiles; MB = 10⁶ bytes on the wire;
+files in brackets):
 
 | Set | Spawn tile | Median tile | Largest tile | Site |
 |---|---|---|---|---|
