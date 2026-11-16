@@ -214,22 +214,17 @@ baseline of bytes, requests and counters, dated.
 - `qa/ledger.json` (version 1) has `bytes` (the five sets, each with
   `spawn`, `median`, `largest`, `site`, and `phone` where a phone reads
   other files — today the fine level only), `published` (the whole
-  manifest), `buildings` and `counters`, all gated, and `recorded`, which
-  `--check` prints and never compares. `ledgerDiff` skips `dated` and
-  `recorded` at the top level (`UNCOMPARED`); phase 2's `timings` joins
+  manifest), `buildings` (each tile's vertices, triangles and decoded
+  bytes, near and far) and `counters`, all gated. `ledgerDiff` skips
+  `dated` at the top level (`UNCOMPARED`); phase 2's `timings` joins
   that set.
-- **Recorded only, not gated** (the coordinator's ruling after this
-  phase's STOP): the buildings' vertices, decoded bytes and wire bytes,
-  and the bytes of the tileset JSONs that name them by content hash —
-  the near buildings' weld gives 1–3 vertices more or fewer a tile on
-  another machine (CI against a cloud container, 2026-11-16). The gated
-  sets count those files without their bytes (`MACHINE_BOUND`),
-  `buildings` gates each tile's triangles, and `recorded` keeps the rest
-  with the machine and day. They return to the gate when PR #310 (the
-  bake fix) has merged: drop `MACHINE_BOUND`, gate `glbFigures` whole.
-- `datedLedger` keeps the committed date while no gated figure moves, and
-  the committed record while its own figures hold, so a second run writes
-  the same file.
+- **The buildings are under the gate** since PR #310: this phase's STOP
+  found the near buildings' weld 1–3 vertices a tile apart between two
+  machines, and until the bake's maths was made portable
+  (`lib/city/portable-math.ts`) their vertices and bytes, and the tileset
+  JSONs' bytes, were recorded only.
+- `datedLedger` keeps the committed date while no figure moves, so a
+  second run writes the same file.
 - `publishedFiles(site)` in `scripts/ledger.ts` is the one reader of the
   published site (088 repoints it). Which rasters a level reads is the
   viewer's `rasterFiles`, handed in as `RasterReads`; a change to that
