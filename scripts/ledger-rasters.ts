@@ -5,7 +5,8 @@
  * (`rasterFiles`), how its texture is laid out (`RASTER_KINDS`' looks) and
  * what it weighs on the GPU (`textureBytes`, `splatScaleFor`), and hands
  * the figures to lib/city/ledger-rasters.ts. scripts/ledger.ts writes the
- * result into `qa/ledger.json`'s `rasters` section, every built site.
+ * result into `qa/ledger.json`'s `rasters` section, every site git tracks
+ * (`trackedSites`), each of which must be built.
  */
 import { existsSync } from "node:fs";
 import nodePath from "node:path";
@@ -78,14 +79,42 @@ export const CPU_DECODES: readonly CpuDecode[] = [
 /** The module that decodes a raster to upload it. */
 export const UPLOAD_PATH = "app/_components/raster-upload.ts";
 
-/** The sites a build serves: every one whose data is ready, as
- *  scripts/prepare-sites.ts picks them. */
-export function readySites(root = process.cwd()): SiteId[] {
+/** The sites a build serves: every one whose data is ready under `root`,
+ *  as scripts/prepare-sites.ts picks them (what lies on the disk, fetched
+ *  or committed: the census's flight, never a gated figure). */
+export function readySites(root: string): SiteId[] {
   // (the report names its files from the repository's root)
   const exists = (file: string) => existsSync(nodePath.resolve(root, file));
   return (Object.keys(SITES) as SiteId[]).filter((id) =>
     siteReport(SITES[id], exists).every((t) => t.next === "ready")
   );
+}
+
+/**
+ * The ledger's sites: every configured site whose data git tracks under
+ * `root` (`data/<site>/`), in the sites' order. Tracked, not what lies on
+ * the disk: a site fetched here but never committed (`data/` is ignored
+ * but for the committed sites) is no site of the ledger, whose figures are
+ * functions of the tree. Each must be built — the sections read its
+ * published files, and one not built is an error naming it
+ * (`publishedFiles`). None where `root` is no work tree.
+ */
+export function trackedSites(root: string): SiteId[] {
+  const listed = Bun.spawnSync(["git", "ls-files", "-z", "--", "data"], {
+    cwd: root,
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  if (listed.exitCode !== 0) {
+    return [];
+  }
+  const tracked = new Set(
+    listed.stdout
+      .toString()
+      .split("\u0000")
+      .map((path) => /^data\/(?<site>[^/]+)\//u.exec(path)?.groups?.site)
+  );
+  return (Object.keys(SITES) as SiteId[]).filter((id) => tracked.has(id));
 }
 
 /** Which viewer kind an extras key names (as its file, a twin, or its

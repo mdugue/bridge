@@ -18,8 +18,14 @@ import {
 import type { RasterKind } from "../app/_components/tile-rasters";
 import type { Ledger } from "../lib/city/ledger";
 import { VARIANT_KINDS } from "../lib/city/ledger-rasters";
-import { COARSE_DRESSING_KINDS, DRESSING_KINDS } from "../lib/city/tile";
+import { tileReport } from "../lib/city/site-report";
+import {
+  COARSE_DRESSING_KINDS,
+  DRESSING_KINDS,
+  tileIds,
+} from "../lib/city/tile";
 import { buildTileset } from "../lib/city/tileset";
+import { SITES } from "../sites";
 import type {
   BakedTile,
   ContentExtras,
@@ -39,6 +45,7 @@ import {
 } from "./ledger";
 import { measureBakeStore } from "./ledger-bake-store";
 import { measureDressing } from "./ledger-dressing";
+import { readySites, trackedSites } from "./ledger-rasters";
 
 /* -------------------------------------------- the viewer's rule, and ours */
 
@@ -576,6 +583,72 @@ test("a write, then a check that holds; a second write is the same file", async 
   // four runs of the script and the formatter's process: under coverage
   // on a CI runner that took 5.02 s against the default 5
 }, 60_000);
+
+/** Writes a file into a fixture, its folders made. */
+const put = (root: string, path: string, text = "") => {
+  const file = nodePath.join(root, path);
+  mkdirSync(nodePath.dirname(file), { recursive: true });
+  writeFileSync(file, text);
+};
+
+/** Makes `root` a work tree that tracks everything in it so far. */
+function track(root: string): void {
+  for (const args of [
+    ["init", "-q"],
+    ["add", "-A"],
+  ]) {
+    expect(Bun.spawnSync(["git", ...args], { cwd: root }).exitCode).toBe(0);
+  }
+}
+
+test("a site fetched here and never committed is no site of the ledger", async () => {
+  const { root } = fixture();
+  track(root);
+  await runOn(root, []);
+  const written = ledgerOf(root);
+  // Berlin's data, as `bun run fetch` and `bun run bake` leave it: ready
+  // to build, and ignored by git
+  for (const tile of tileIds(SITES.berlin)) {
+    for (const path of tileReport(SITES.berlin, tile, () => false).missing) {
+      put(root, path);
+    }
+  }
+  expect(readySites(root)).toContain("berlin");
+  expect(trackedSites(root)).toEqual([]);
+  expect(await runOn(root, ["--check"])).toEqual({
+    code: 0,
+    report:
+      "the browser figures were not compared (no --browser)\nqa/ledger.json holds\n",
+  });
+  expect(ledgerOf(root)).toBe(written);
+  expect((JSON.parse(written) as Ledger).rasters.sites).toEqual({});
+}, 60_000);
+
+test("the ledger's sites are those git tracks under the root it is given", async () => {
+  const { root } = fixture();
+  put(root, "data/meissen/provenance.json", "{}");
+  // the raw downloads are no site, whatever lies in them
+  put(root, "data/_raw/sn/dlm/veg01_f.shp");
+  track(root);
+  put(root, "data/grimma/provenance.json", "{}");
+  expect(trackedSites(root)).toEqual(["meissen"]);
+  // a tracked site must be built: unbuilt, the check names it
+  await expect(runOn(root, ["--check"])).rejects.toThrow(
+    /no public\/data\/meissen\/manifest\.json — build first/u
+  );
+  // no work tree, no site
+  expect(
+    trackedSites(mkdtempSync(nodePath.join(tmpdir(), "ledger-test-")))
+  ).toEqual([]);
+});
+
+test("the committed ledger's sites are the committed tree's", () => {
+  const repo = nodePath.join(import.meta.dir, "..");
+  const committed = JSON.parse(
+    readFileSync(nodePath.join(repo, LEDGER_PATH), "utf-8")
+  ) as Ledger;
+  expect(Object.keys(committed.rasters.sites)).toEqual(trackedSites(repo));
+});
 
 test("a ledger written without a day given is dated today", async () => {
   const { root } = fixture();

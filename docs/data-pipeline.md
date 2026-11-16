@@ -1361,7 +1361,8 @@ polygons on a tile for lack of it).
 The figures live in [`qa/ledger.json`](../qa/ledger.json), the rewrite
 series' ledger (plan 087). `bun run ledger` writes it from the published
 files — the reference site's (`public/data/dresden/`) for the bytes and
-counters, every site a build serves for the rasters, so after a build or
+counters, every site whose data git tracks for the rasters (a site only
+on the disk is none of the ledger's), so after a build or
 `bun scripts/prepare-sites.ts`; it writes the file formatted as committed
 — and `bun run ledger -- --check`
 names each figure that differs and exits 1; CI's build-check shard runs the
@@ -1542,8 +1543,12 @@ it.
 
 The ledger's `rasters` section (plan 091 phase 0; the arithmetic in
 `lib/city/ledger-rasters.ts`, the reading in `scripts/ledger-rasters.ts`)
-holds, for every site a build serves, what a terrain level's rasters
-weigh. It decodes each published raster with the viewer's decoder and asks
+holds, for every site whose data git tracks (`data/<site>/`,
+`trackedSites`), what a terrain level's rasters weigh. The sites come from
+the tree, not the disk: a site fetched and baked here but never committed
+(Berlin's `data/berlin/`, ignored by git) is no site of the ledger and
+moves no figure; a tracked site must be built, and one that is not fails
+the run with its name (`build first`). It decodes each published raster with the viewer's decoder and asks
 the viewer's own rules which file a level reads on a tier (`rasterFiles`),
 how its texture is laid out (the kinds table's looks) and what it weighs on
 the GPU (`textureBytes`, and `splatScaleFor` for the colour splat painted
@@ -1585,7 +1590,8 @@ twins of the paving and markings (4 MiB each) and the edges (2 MiB).
 ### The sky view as blocks (the trial)
 
 The ledger's `blocks` section (plan 091 phase 2; `lib/city/ledger-blocks.ts`,
-read by `scripts/ledger-blocks.ts`) holds, for every site a build serves,
+read by `scripts/ledger-blocks.ts`) holds, for every site git tracks (as
+the rasters),
 its tiles' sky views as the PNG the viewer reads and as the two block
 files a build with `SVF_BLOCKS=1` publishes beside it — encoded here from
 the published PNG by the build's own call (`publishedBlockFile`), so a

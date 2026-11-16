@@ -21,9 +21,10 @@
  * Any other argument is refused (exit 2) and nothing is written: a
  * mistyped `--check` must not pass as a write. It reads
  * public/data/<site>/, so a build (or `bun scripts/prepare-sites.ts`) comes
- * first: the reference site for the bytes and counters, and every site a
- * build serves for the `rasters` and `blocks` sections (plan 091 phases 0
- * and 2, scripts/ledger-rasters.ts and scripts/ledger-blocks.ts). A write
+ * first: the reference site for the bytes and counters, and every site
+ * whose data git tracks for the `rasters` and `blocks` sections (plan 091
+ * phases 0 and 2, scripts/ledger-rasters.ts and scripts/ledger-blocks.ts;
+ * an untracked site on the disk is none of the ledger's). A write
  * formats the file with oxfmt, as it is committed; `--check` compares values, not layout. `--browser` reads the
  * NEXT_PUBLIC_POC_DEBUG=1 build too; without it the committed browser
  * figures stand, and `--check` says it did not compare them.
@@ -74,7 +75,7 @@ import { measureBakeStore } from "./ledger-bake-store";
 import { browserSections, timingReport } from "./ledger-browser";
 import { blockLedger } from "./ledger-blocks";
 import { measureDressing } from "./ledger-dressing";
-import { rasterLedger, readySites } from "./ledger-rasters";
+import { rasterLedger, readySites, trackedSites } from "./ledger-rasters";
 
 const ROOT = nodePath.join(import.meta.dir, "..");
 /** The ledger, relative to the repository's root. */
@@ -280,11 +281,11 @@ export function measure(
   };
 }
 
-/** Every built site's rasters (plan 091 phase 0): the sites a build
- *  serves from `root`'s data, each of which must be built. */
+/** Every site's rasters (plan 091 phase 0): the sites whose data git
+ *  tracks under `root` (`trackedSites`), each of which must be built. */
 export async function measureRasters(root = ROOT): Promise<Ledger["rasters"]> {
   return await rasterLedger(
-    readySites(root),
+    trackedSites(root),
     (site) => publishedFiles(site, root),
     sources(root, "app", (name) => /(?<!\.test)\.tsx?$/u.test(name))
   );
@@ -302,9 +303,10 @@ async function blocksPart(
   return read || !blocks ? await measureBlocks(root) : blocks;
 }
 
-/** The `blocks` section: every site a build serves (plan 091 phase 2). */
+/** The `blocks` section: every site git tracks under `root` (plan 091
+ *  phase 2; `trackedSites`), each of which must be built. */
 export async function measureBlocks(root = ROOT): Promise<Ledger["blocks"]> {
-  return await blockLedger(readySites(root), (site) =>
+  return await blockLedger(trackedSites(root), (site) =>
     publishedFiles(site, root)
   );
 }
