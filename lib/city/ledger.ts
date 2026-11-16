@@ -19,8 +19,9 @@ import type { BrowserFigures, Timings } from "./ledger-browser";
 import type { Counters } from "./ledger-counters";
 import { DRESSING_UNCOMPARED } from "./ledger-dressing";
 import type { DressingLedger } from "./ledger-dressing";
+import type { BlockLedger } from "./ledger-blocks";
 import type { RasterLedger } from "./ledger-rasters";
-import { TERRAIN_RASTER_KEYS } from "./tileset";
+import { BLOCK_RASTER_KEYS, TERRAIN_RASTER_KEYS } from "./tileset";
 
 /** The extensions a static host sends as they are: compressed already. */
 export const PACKED_EXTENSIONS = [".png", ".webp", ".gz"] as const;
@@ -353,6 +354,17 @@ const levelNames = (extras: Named): string[] => [
   ...names(extras.coarse),
 ];
 
+/** The files the buildings' extras name that a visit reads: not the sky
+ *  view's GPU blocks, which only `?svf=blocks` reads (`BLOCK_RASTER_KEYS`). */
+const cityReads = (extras: Named): string[] =>
+  names(
+    Object.fromEntries(
+      Object.entries(extras).filter(
+        ([key]) => !(BLOCK_RASTER_KEYS as readonly string[]).includes(key)
+      )
+    )
+  );
+
 const unique = (files: string[]): string[] =>
   [...new Set(files.filter((f) => f !== ""))].toSorted();
 
@@ -378,7 +390,7 @@ export function tileSet(
     case "far": {
       return unique([
         tile.cityFar,
-        ...names(tile.cityExtras),
+        ...cityReads(tile.cityExtras),
         coarse.uri,
         ...reads(coarse.extras, 1, phone, "beyond"),
         ...names(coarse.extras.coarse),
@@ -703,6 +715,9 @@ export interface Ledger {
   dressing: DressingLedger;
   /** every built site's rasters (plan 091 phase 0, ledger-rasters.ts) */
   rasters: RasterLedger;
+  /** every built site's sky view as GPU blocks (plan 091 phase 2's trial,
+   *  ledger-blocks.ts) */
+  blocks: BlockLedger;
   site: string;
   tiles: number;
   /** the browser's timings, recorded, never compared */

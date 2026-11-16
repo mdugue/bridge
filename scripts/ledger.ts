@@ -16,8 +16,8 @@
  * mistyped `--check` must not pass as a write. It reads
  * public/data/<site>/, so a build (or `bun scripts/prepare-sites.ts`) comes
  * first: the reference site for the bytes and counters, and every site a
- * build serves for the `rasters` section (plan 091 phase 0,
- * scripts/ledger-rasters.ts). A write formats the file with oxfmt, as it is
+ * build serves for the `rasters` and `blocks` sections (plan 091 phases 0
+ * and 2, scripts/ledger-rasters.ts and scripts/ledger-blocks.ts). A write formats the file with oxfmt, as it is
  * committed; `--check` compares values, not layout. `--browser` reads the
  * NEXT_PUBLIC_POC_DEBUG=1 build too; without it the committed browser
  * figures stand, and `--check` says it did not compare them.
@@ -65,6 +65,7 @@ import type { ContentExtras } from "../lib/city/tileset";
 import { TILESET_FILE, TILESET_SPAWN_FILE } from "../lib/city/tileset";
 import { REFERENCE_SITE } from "../sites";
 import { browserSections, timingReport } from "./ledger-browser";
+import { blockLedger } from "./ledger-blocks";
 import { measureDressing } from "./ledger-dressing";
 import { rasterLedger, readySites } from "./ledger-rasters";
 
@@ -231,7 +232,7 @@ function refuseUnserved(published: PublishedFiles): void {
 export function measure(
   site: string,
   root = ROOT
-): Omit<Ledger, "dated" | "dressing" | "rasters"> {
+): Omit<Ledger, "blocks" | "dated" | "dressing" | "rasters"> {
   const published = publishedFiles(site, root);
   const wireOf = new Map<string, number>();
   const wire = (served: string) => {
@@ -279,6 +280,13 @@ export async function measureRasters(root = ROOT): Promise<Ledger["rasters"]> {
     readySites(root),
     (site) => publishedFiles(site, root),
     sources(root, "app", (name) => /(?<!\.test)\.tsx?$/u.test(name))
+  );
+}
+
+/** The `blocks` section: every site a build serves (plan 091 phase 2). */
+export async function measureBlocks(root = ROOT): Promise<Ledger["blocks"]> {
+  return await blockLedger(readySites(root), (site) =>
+    publishedFiles(site, root)
   );
 }
 
@@ -367,6 +375,7 @@ export async function run(
   const fresh = {
     ...measure(site, root),
     rasters: await measureRasters(root),
+    blocks: await measureBlocks(root),
     dressing: measureDressing(
       site,
       root,

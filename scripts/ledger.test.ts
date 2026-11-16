@@ -31,6 +31,7 @@ import {
   LEDGER_PATH,
   main,
   measure,
+  measureBlocks,
   measureRasters,
   publishedFiles,
   run,
@@ -535,6 +536,7 @@ test("a write, then a check that holds; a second write is the same file", async 
   expect(ledger).toEqual({
     ...measure(SITE, root),
     rasters: await measureRasters(root),
+    blocks: await measureBlocks(root),
     dressing: measureDressing(SITE, root, publishedFiles, {
       committed: null,
       today: "2026-11-16",

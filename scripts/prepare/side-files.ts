@@ -28,6 +28,7 @@ import {
   publishCanopy,
   publishClassRaster,
   publishColonies,
+  publishSvfBlocks,
 } from "./side-bakes";
 
 // --- 1. side files --------------------------------------------------------------
@@ -75,6 +76,19 @@ async function bakedTwin(artifact: TileArtifact): Promise<string | undefined> {
     fail(`missing source file ${source}${HINT}`);
   }
   return undefined;
+}
+
+/** The sky view as committed and its GPU blocks (plan 091 phase 2's
+ *  trial) — the PNG first: the manifest lists the files in publish order.
+ *  None where the tile has no sky view (optional). */
+async function publishSvf(tile: string, file: string): Promise<Published> {
+  const src = at(sideFileSource(SITE, file));
+  if (!existsSync(src)) {
+    log(`optional source absent, skipping ${file}`);
+    return {};
+  }
+  const svf = publish(file, readFileSync(src));
+  return { svf, ...(await publishSvfBlocks(tile)) };
 }
 
 /** Publishes every side file of the tiles this run bakes, into `sideFiles`.
@@ -128,6 +142,10 @@ export async function publishSideFiles(): Promise<void> {
         existsSync(at(sideFileSource(SITE, artifact.file)))
       ) {
         names[kind] = await publishPlatforms(artifact.file);
+        continue;
+      }
+      if (kind === "svf") {
+        Object.assign(names, await publishSvf(tile, artifact.file));
         continue;
       }
       if (artifact.bakedFrom) {

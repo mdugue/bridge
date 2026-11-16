@@ -593,3 +593,26 @@ test("a swap to the same file (a phone's twin) keeps it held and weighed once", 
   await tick();
   expect(trackedBytesOf(near)).toBe(0);
 });
+
+test("the sky view's blocks: read in place of the PNG where asked and named", () => {
+  const level = extrasOf({
+    svf: "svf.png",
+    svfBc4: "svf.bc4.gz",
+    svfEac: "svf.eac.gz",
+  });
+  expect(rasterFiles(level, "svf", false)).toEqual({ raster: "svf.png" });
+  expect(rasterFiles(level, "svf", true, false, "bc4")).toEqual({
+    raster: "svf.bc4.gz",
+  });
+  expect(rasterFiles(level, "svf", false, false, "eac")).toEqual({
+    raster: "svf.eac.gz",
+  });
+  // a build without them: the PNG; a kind without blocks: its own file
+  const plain = extrasOf({ svf: "svf.png", ndvi: "n.png" });
+  expect(rasterFiles(plain, "svf", false, false, "bc4")).toEqual({
+    raster: "svf.png",
+  });
+  expect(rasterFiles(plain, "ndvi", false, false, "bc4")).toEqual({
+    raster: "n.png",
+  });
+});

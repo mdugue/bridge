@@ -29,14 +29,23 @@ import { packMarkingTable } from "@/lib/city/markings";
 import type { MarkingTable } from "@/lib/city/markings";
 import { packSportTable } from "@/lib/city/sport";
 import type { SportTable } from "@/lib/city/sport";
-import type { ContentExtras, TerrainRasterKey } from "@/lib/city/tileset";
+import type { BlockFormat } from "@/lib/city/block-raster";
+import type {
+  BLOCK_RASTER_KEYS,
+  ContentExtras,
+  TerrainRasterKey,
+} from "@/lib/city/tileset";
 import { waterMaskOf } from "@/lib/city/water-mask";
 import type { WaterMask } from "@/lib/city/water-mask";
 import { fetchOptionalJson, untilAborted } from "./fetch-optional";
 import { paintLandcoverSplat, splatScaleFor } from "./landcover-splat";
 import type { LandcoverSplat } from "./landcover-splat";
 import { RasterShares } from "./raster-shares";
-import { loadDataRaster } from "./raster-upload";
+import {
+  isBlockRasterUrl,
+  loadBlockRaster,
+  loadDataRaster,
+} from "./raster-upload";
 import type { RasterLook } from "./raster-upload";
 import { createSharedRasters } from "./shared-rasters";
 import type { SharedRasters } from "./shared-rasters";
@@ -171,6 +180,11 @@ export interface RasterRow {
   readWhen?: (level: 0 | 1, lowRasters: boolean) => boolean;
   /** the extras key of the table it is read through: named only with it */
   table?: TerrainRasterKey;
+  /** the extras keys of its GPU blocks, by format (plan 091 phase 2's
+   *  trial, lib/city/block-raster.ts): read in place of the file where the
+   *  page asked for blocks and the GPU has the format (`createTileRasters`'
+   *  `blocks`) */
+  blocks?: Readonly<Record<BlockFormat, TerrainRasterKey>>;
 }
 
 /** Ids (class, paving, sports grounds, markings): exact texels. */
@@ -248,6 +262,10 @@ export const RASTER_KINDS: Readonly<Record<RasterKind, RasterRow>> = {
   svf: {
     extras: "svf",
     look: { channels: 1, filter: "linear", mipmaps: true },
+    blocks: { bc4: "svfBc4", eac: "svfEac" } satisfies Record<
+      BlockFormat,
+      (typeof BLOCK_RASTER_KEYS)[number]
+    >,
   },
   /** The horizon's eight layers: the far band's four planes, then the near
    *  band's. LINEAR (the angles interpolate), no mipmaps; an older one-band
@@ -264,18 +282,36 @@ export interface RasterFiles {
   table?: string;
 }
 
+/** The block file of `raster` in `blocks`' format, where the row has
+ *  blocks, the extras name them and `raster` is the row's own file (not a
+ *  twin). */
+function blockFileOf(
+  row: RasterRow,
+  named: Partial<Record<TerrainRasterKey, string>>,
+  raster: string,
+  blocks: BlockFormat | null
+): string | undefined {
+  if (!(blocks && row.blocks) || raster !== named[row.extras]) {
+    return undefined;
+  }
+  return named[row.blocks[blocks]];
+}
+
 /**
  * The files `kind` reads for this content, level and tier, or null: not
  * named, gated off, or a pair with one file missing. Not one rule for the
  * twins: `markings` and `colonies` fall back to the full file on a phone,
  * the class raster does not (its row). `far`: the twin a level far from
- * the camera reads, where the row and the extras name one.
+ * the camera reads, where the row and the extras name one. `blocks`: the
+ * block format to read where the row and the extras name its file (plan
+ * 091 phase 2's trial), else the file itself.
  */
 export function rasterFiles(
   extras: ContentExtras,
   kind: RasterKind,
   lowRasters: boolean,
-  far = false
+  far = false,
+  blocks: BlockFormat | null = null
 ): RasterFiles | null {
   const row = RASTER_KINDS[kind];
   // reason: a building tile's extras name only some of these keys
@@ -295,6 +331,10 @@ export function rasterFiles(
   const raster = (far && near && row.far ? named[row.far] : undefined) ?? near;
   if (!raster) {
     return null;
+  }
+  const blockFile = blockFileOf(row, named, raster, blocks);
+  if (blockFile) {
+    return { raster: blockFile };
   }
   if (!row.table) {
     return { raster };
@@ -318,14 +358,23 @@ interface KindHooks<T> {
   textures: (value: T) => Texture[];
 }
 
-/** A row and nothing else: one raster, its own texture. */
+/** A row and nothing else: one raster, its own texture (a block raster's
+ *  where `rasterFiles` picked one). */
 const plainHooks = <T extends Texture>(): KindHooks<T> => ({
   load: async (url, kind, { rank, renderer, signal }) => {
-    const loaded = await loadDataRaster(url, RASTER_KINDS[kind].look, {
-      rank,
-      renderer,
-      signal,
-    });
+    const { look } = RASTER_KINDS[kind];
+    const loaded = isBlockRasterUrl(url)
+      ? await loadBlockRaster(url, {
+          anisotropy: look.anisotropy,
+          rank,
+          renderer,
+          signal,
+        })
+      : await loadDataRaster(url, look, {
+          rank,
+          renderer,
+          signal,
+        });
     // reason: the row's look decides the class (`layers`: an array texture)
     return (loaded?.texture as T | undefined) ?? null;
   },
@@ -479,11 +528,16 @@ export function createTileRasters(opts: {
   url: (file: string) => string;
   /** the tier's twins and gates */
   lowRasters: boolean;
+  /** the block format to read a soft raster in, where its row and the
+   *  extras name one (plan 091 phase 2's trial: `?svf=blocks` and a GPU
+   *  with the format); null or unset, the PNG */
+  blocks?: BlockFormat | null;
   /** another root's share changed: reweigh its tile */
   onShareChange: (root: object) => void;
   renderer: WebGPURenderer;
 }): TileRasters {
   const { lowRasters, onShareChange, renderer, url } = opts;
+  const blocks = opts.blocks ?? null;
   const weighing = new RasterShares();
   /** what each weighed root holds, once each */
   const weighed = new Map<object, Set<Texture>>();
@@ -556,7 +610,7 @@ export function createTileRasters(opts: {
           signal?: AbortSignal,
           how?: { far?: boolean; now?: boolean }
         ): Promise<RasterOf[K] | null> => {
-          const files = rasterFiles(extras, kind, lowRasters, how?.far);
+          const files = rasterFiles(extras, kind, lowRasters, how?.far, blocks);
           if (!files || released || cleared) {
             return null;
           }

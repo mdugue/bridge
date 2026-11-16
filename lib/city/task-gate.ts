@@ -11,9 +11,9 @@
 export interface TaskGate {
   /** runs `task` once a place is free, after every waiter of a lower or
    *  the same `rank` (default 0); rejects with the signal's reason when it
-   *  aborts first */
+   *  aborts first; `task` may be synchronous */
   run: <T>(
-    task: () => Promise<T>,
+    task: () => Promise<T> | T,
     signal?: AbortSignal,
     rank?: number
   ) => Promise<T>;
@@ -79,7 +79,7 @@ export function createTaskGate(
     }
   };
   const run = async <T>(
-    task: () => Promise<T>,
+    task: () => Promise<T> | T,
     signal?: AbortSignal,
     rank = 0
   ): Promise<T> =>

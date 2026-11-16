@@ -84,6 +84,13 @@ export const BAKE_ENTRIES = {
     "scripts/line-levels.ts",
     "lib/city/platform-clearance.ts",
   ],
+  /** the sky view as GPU blocks, BC4 and EAC R11 (plan 091 phase 2) */
+  svfBlocks: [
+    "scripts/prepare/side-bakes.ts",
+    "scripts/block-encode.ts",
+    "lib/city/block-raster.ts",
+    "lib/city/png-raster.ts",
+  ],
   /** a class raster downsampled; the artifact table names its size */
   classRaster: [
     "scripts/prepare/side-bakes.ts",

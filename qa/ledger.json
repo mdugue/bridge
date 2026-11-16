@@ -5,17 +5,17 @@
   "wire": ".png, .webp and .gz at face value; .json and .geojson gzipped at level 6 by the pinned Bun's zlib; any other extension is an error, never a guess. The text figures are this Bun's, not what a host sends: zlib 1.3 gives 0.6–2.2 % other bytes for the same level, and Vercel sends text as brotli. They are a stand-in kept constant so that the figures compare over time, exact once plan 088 stores files in their transport encoding. The committed figures are those of linux-x64 with the pinned Bun: regenerate the ledger there or in a cloud session. `published.server` is bytes on disk: those files never travel.",
   "tiles": 15,
   "published": {
-    "files": 700,
+    "files": 730,
     "boot": {
-      "bytes": 39818,
+      "bytes": 40630,
       "files": 3
     },
     "tiles": {
-      "bytes": 193620659,
-      "files": 641
+      "bytes": 211870200,
+      "files": 671
     },
     "site": {
-      "bytes": 3514754,
+      "bytes": 3514790,
       "files": 39
     },
     "server": {
@@ -30,7 +30,7 @@
       },
       "manifest": {
         "class": "boot",
-        "bytes": 9200,
+        "bytes": 9639,
         "files": 1
       },
       "minimap": {
@@ -75,12 +75,12 @@
       },
       "tileset": {
         "class": "boot",
-        "bytes": 9354,
+        "bytes": 9727,
         "files": 1
       },
       "tileset-spawn": {
         "class": "site",
-        "bytes": 2044,
+        "bytes": 2080,
         "files": 1
       },
       "trams": {
@@ -251,43 +251,43 @@
     "all": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 13786870,
-        "files": 43
+        "bytes": 15066683,
+        "files": 45
       },
       "median": {
-        "tile": "33410_5658_2_sn",
-        "bytes": 13766237,
-        "files": 43
+        "tile": "33412_5656_2_sn",
+        "bytes": 15066683,
+        "files": 45
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 17452843,
-        "files": 43
+        "bytes": 18697804,
+        "files": 45
       },
       "site": {
-        "bytes": 193620659,
-        "files": 641
+        "bytes": 211870200,
+        "files": 671
       }
     },
     "unvisited": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 153059,
-        "files": 1
+        "bytes": 1432872,
+        "files": 3
       },
       "median": {
-        "tile": "33414_5656_2_sn",
-        "bytes": 133590,
-        "files": 1
+        "tile": "33412_5656_2_sn",
+        "bytes": 1432872,
+        "files": 3
       },
       "largest": {
         "tile": "33414_5654_2_sn",
-        "bytes": 207054,
-        "files": 1
+        "bytes": 1561660,
+        "files": 3
       },
       "site": {
-        "bytes": 1961592,
-        "files": 15
+        "bytes": 20211133,
+        "files": 45
       }
     }
   },
@@ -452,8 +452,10 @@
     "coarseDressingKinds": 3,
     "askKinds": 1,
     "publishedExtensions": [
+      ".bc4.gz",
       ".bin.gz",
       ".crw.gz",
+      ".eac.gz",
       ".fpr.gz",
       ".geojson",
       ".glb.gz",
@@ -4295,6 +4297,186 @@
       }
     }
   },
+  "blocks": {
+    "rule": "The sky view (svf) of every tile that has one, as the PNG and as the build's GPU blocks with their mip chain (lib/city/block-raster.ts). wire: the published files (the blocks pre-gzipped). gpu: the texture's bytes, the PNG's as the viewer lays it out (one byte a texel, a third more for the GPU's mips), the blocks' as uploaded (half a byte a texel, the chain in the file). error: |decoded block − PNG byte| over level 0's texels in byte steps, by the formats' rules (scripts/block-encode.ts `decodeLevel`; a GPU may read up to 0.86 below for BC4, 0.12 for EAC: scripts/eval/block-raster-probe.ts) — the mean over the site's texels, the largest tile p99, the largest texel.",
+    "sites": {
+      "dresden": {
+        "tiles": 15,
+        "png": {
+          "gpu": 20971515,
+          "wire": 8240833
+        },
+        "bc4": {
+          "gpu": 10485960,
+          "wire": 9173233,
+          "error": {
+            "mean": 0.738,
+            "p99": 4.571,
+            "max": 14.6
+          }
+        },
+        "eac": {
+          "gpu": 10485960,
+          "wire": 9076308,
+          "error": {
+            "mean": 0.77,
+            "p99": 4.89,
+            "max": 16.919
+          }
+        }
+      },
+      "grimma": {
+        "tiles": 2,
+        "png": {
+          "gpu": 2796202,
+          "wire": 930677
+        },
+        "bc4": {
+          "gpu": 1398128,
+          "wire": 1084443,
+          "error": {
+            "mean": 0.607,
+            "p99": 4.857,
+            "max": 12.857
+          }
+        },
+        "eac": {
+          "gpu": 1398128,
+          "wire": 1068947,
+          "error": {
+            "mean": 0.642,
+            "p99": 4.931,
+            "max": 17.066
+          }
+        }
+      },
+      "hamburg": {
+        "tiles": 4,
+        "png": {
+          "gpu": 5592404,
+          "wire": 1904905
+        },
+        "bc4": {
+          "gpu": 2796256,
+          "wire": 2246757,
+          "error": {
+            "mean": 0.576,
+            "p99": 4,
+            "max": 13.6
+          }
+        },
+        "eac": {
+          "gpu": 2796256,
+          "wire": 2231647,
+          "error": {
+            "mean": 0.619,
+            "p99": 3.974,
+            "max": 14.03
+          }
+        }
+      },
+      "leipzig": {
+        "tiles": 4,
+        "png": {
+          "gpu": 5592404,
+          "wire": 2346956
+        },
+        "bc4": {
+          "gpu": 2796256,
+          "wire": 2629513,
+          "error": {
+            "mean": 0.801,
+            "p99": 4.143,
+            "max": 12
+          }
+        },
+        "eac": {
+          "gpu": 2796256,
+          "wire": 2609668,
+          "error": {
+            "mean": 0.834,
+            "p99": 4.139,
+            "max": 15.821
+          }
+        }
+      },
+      "meissen": {
+        "tiles": 1,
+        "png": {
+          "gpu": 1398101,
+          "wire": 612615
+        },
+        "bc4": {
+          "gpu": 699064,
+          "wire": 655062,
+          "error": {
+            "mean": 0.905,
+            "p99": 4.714,
+            "max": 13.143
+          }
+        },
+        "eac": {
+          "gpu": 699064,
+          "wire": 649825,
+          "error": {
+            "mean": 0.922,
+            "p99": 4.9,
+            "max": 15.782
+          }
+        }
+      },
+      "muenchen": {
+        "tiles": 4,
+        "png": {
+          "gpu": 5592404,
+          "wire": 2344385
+        },
+        "bc4": {
+          "gpu": 2796256,
+          "wire": 2642622,
+          "error": {
+            "mean": 0.762,
+            "p99": 4,
+            "max": 11.286
+          }
+        },
+        "eac": {
+          "gpu": 2796256,
+          "wire": 2621222,
+          "error": {
+            "mean": 0.798,
+            "p99": 4.057,
+            "max": 12.078
+          }
+        }
+      },
+      "unna": {
+        "tiles": 2,
+        "png": {
+          "gpu": 2796202,
+          "wire": 1103683
+        },
+        "bc4": {
+          "gpu": 1398128,
+          "wire": 1217333,
+          "error": {
+            "mean": 0.864,
+            "p99": 4.857,
+            "max": 13.4
+          }
+        },
+        "eac": {
+          "gpu": 1398128,
+          "wire": 1209362,
+          "error": {
+            "mean": 0.878,
+            "p99": 4.934,
+            "max": 14.806
+          }
+        }
+      }
+    }
+  },
   "dressing": {
     "tiles": {
       "spawn": {
@@ -5346,11 +5528,11 @@
     "readWith": "chromium 153.0.8010.12, google / swiftshader",
     "firstLoad": {
       "note": "Every /_next/static/*.js the page or the workers ground, niches, scene fetched themselves (each one's resource timing) at /dresden?scene=lite (a NEXT_PUBLIC_POC_DEBUG=1 production build), cut at: ready, those workers running, then 5 s without a new script; a second read 5 s later must equal it. The BVH worker's own scripts are left out: it starts only if the spawn's buildings have no BVH yet. Each raw body gzipped at level 9 by the pinned Bun, exact. workerOnly: the files those workers fetched and the page did not — not the scene's JavaScript, which the page shares.",
-      "files": 42,
-      "gzip": 1103187,
+      "files": 43,
+      "gzip": 1105251,
       "workerOnly": {
-        "files": 8,
-        "gzip": 34828
+        "files": 9,
+        "gzip": 35837
       }
     },
     "phoneLiteSpawnCache": {
@@ -5371,38 +5553,38 @@
     "desktop": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 62.8,
-        "maxMs": 62.8
+        "totalMs": 2.4,
+        "maxMs": 2.4
       },
       "boot:frame": {
-        "count": 6,
-        "totalMs": 549.7,
-        "maxMs": 411.9
+        "count": 9,
+        "totalMs": 529.8,
+        "maxMs": 451
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 608.7,
-        "maxMs": 608.7
+        "totalMs": 605.6,
+        "maxMs": 605.6
       },
       "boot:light-wait": {
         "count": 1,
-        "totalMs": 3000.3,
-        "maxMs": 3000.3
+        "totalMs": 1942,
+        "maxMs": 1942
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 1491.1,
-        "maxMs": 1491.1
+        "totalMs": 1535.8,
+        "maxMs": 1535.8
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 354.1,
-        "maxMs": 354.1
+        "totalMs": 464.7,
+        "maxMs": 464.7
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 617.8,
-        "maxMs": 617.8
+        "totalMs": 281.6,
+        "maxMs": 281.6
       },
       "boot:scene-compile": {
         "count": 1,
@@ -5411,13 +5593,13 @@
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 119,
-        "maxMs": 119
+        "totalMs": 103.6,
+        "maxMs": 103.6
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 5323.4,
-        "maxMs": 5323.4
+        "totalMs": 4862.8,
+        "maxMs": 4862.8
       },
       "boot:tileset": {
         "count": 1,
@@ -5426,96 +5608,96 @@
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4309.7,
-        "maxMs": 4309.7
+        "totalMs": 4212,
+        "maxMs": 4212
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 1028.8,
-        "maxMs": 775.4
+        "totalMs": 942.3,
+        "maxMs": 732.8
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 12008,
-        "maxMs": 3007.2
+        "totalMs": 12003.5,
+        "maxMs": 3002.7
       }
     },
     "phone": {
       "boot:first-shadow-frame": {
         "count": 1,
-        "totalMs": 124.3,
-        "maxMs": 124.3
+        "totalMs": 73.2,
+        "maxMs": 73.2
       },
       "boot:frame": {
-        "count": 7,
-        "totalMs": 728.3,
-        "maxMs": 474
+        "count": 12,
+        "totalMs": 517.7,
+        "maxMs": 413.9
       },
       "boot:light-to-veil": {
         "count": 1,
-        "totalMs": 606.1,
-        "maxMs": 606.1
+        "totalMs": 607.3,
+        "maxMs": 607.3
       },
       "boot:light-wait": {
         "count": 1,
-        "totalMs": 3000.6,
-        "maxMs": 3000.6
+        "totalMs": 3000.3,
+        "maxMs": 3000.3
       },
       "boot:page-to-viewer": {
         "count": 1,
-        "totalMs": 1514.5,
-        "maxMs": 1514.5
+        "totalMs": 1510.9,
+        "maxMs": 1510.9
       },
       "boot:place": {
         "count": 1,
-        "totalMs": 378.3,
-        "maxMs": 378.3
+        "totalMs": 421.6,
+        "maxMs": 421.6
       },
       "boot:renderer-init": {
         "count": 1,
-        "totalMs": 103.8,
-        "maxMs": 103.8
+        "totalMs": 126.1,
+        "maxMs": 126.1
       },
       "boot:scene-compile": {
         "count": 1,
-        "totalMs": 3000.4,
-        "maxMs": 3000.4
+        "totalMs": 2375.1,
+        "maxMs": 2375.1
       },
       "boot:setup": {
         "count": 1,
-        "totalMs": 86.6,
-        "maxMs": 86.6
+        "totalMs": 66.6,
+        "maxMs": 66.6
       },
       "boot:spawn-wait": {
         "count": 1,
-        "totalMs": 3808.8,
-        "maxMs": 3808.8
+        "totalMs": 4262.8,
+        "maxMs": 4262.8
       },
       "boot:tileset": {
         "count": 1,
-        "totalMs": 0,
-        "maxMs": 0
+        "totalMs": 0.1,
+        "maxMs": 0.1
       },
       "boot:veil-to-loaded": {
         "count": 1,
-        "totalMs": 4189.3,
-        "maxMs": 4189.3
+        "totalMs": 4270.4,
+        "maxMs": 4270.4
       },
       "dressing:build": {
         "count": 2,
-        "totalMs": 901.8,
-        "maxMs": 673.1
+        "totalMs": 996.2,
+        "maxMs": 706.5
       },
       "tile:compile": {
         "count": 4,
-        "totalMs": 10750.5,
-        "maxMs": 3027.8
+        "totalMs": 9060.6,
+        "maxMs": 3004.5
       }
     },
     "phoneHeld": {
-      "attributes": 1211,
-      "attributesSize": 47381554,
-      "geometries": 479,
+      "attributes": 1119,
+      "attributesSize": 47231494,
+      "geometries": 448,
       "indexAttributes": 133,
       "indexAttributesSize": 33979704,
       "indirectStorageAttributes": 0,
@@ -5529,24 +5711,14 @@
       "storageAttributesSize": 0,
       "textures": 63,
       "texturesSize": 71615312,
-      "uniformBuffers": 576,
-      "uniformBuffersSize": 146096,
-      "total": 155118656
+      "uniformBuffers": 543,
+      "uniformBuffersSize": 140288,
+      "total": 154962788
     },
     "firstLoad": [
       {
-        "url": "/_next/static/chunks/0_kjkspq-lasv.js",
-        "gzip": 90216,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/0_y16_q83yhki.js",
         "gzip": 15225,
-        "worker": false
-      },
-      {
-        "url": "/_next/static/chunks/01n94la_98kqw.js",
-        "gzip": 134057,
         "worker": false
       },
       {
@@ -5570,11 +5742,6 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/0iu_x5fsq6oa_.js",
-        "gzip": 8958,
-        "worker": true
-      },
-      {
         "url": "/_next/static/chunks/0oo697a5jcpj1.js",
         "gzip": 21864,
         "worker": false
@@ -5585,29 +5752,34 @@
         "worker": false
       },
       {
+        "url": "/_next/static/chunks/0xsfqi0mra3s-.js",
+        "gzip": 392,
+        "worker": false
+      },
+      {
         "url": "/_next/static/chunks/0zehf7azb3u_7.js",
         "gzip": 13674,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1acvom898pdb5.js",
-        "gzip": 10385,
+        "url": "/_next/static/chunks/1577em244902s.js",
+        "gzip": 90263,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1gf9032yqxdyi.js",
-        "gzip": 8410,
+        "url": "/_next/static/chunks/176ppimva53vx.js",
+        "gzip": 9093,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/1epj-bw2b_031.js",
+        "gzip": 291756,
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1kgvfy450pybk.js",
-        "gzip": 16157,
-        "worker": true
-      },
-      {
-        "url": "/_next/static/chunks/1m_ofslgs3mu1.js",
-        "gzip": 773,
-        "worker": true
+        "url": "/_next/static/chunks/1o23kkyw8hhly.js",
+        "gzip": 10918,
+        "worker": false
       },
       {
         "url": "/_next/static/chunks/1pcw6gskne7pf.js",
@@ -5625,9 +5797,9 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/1v3j7ip4nz0ud.js",
-        "gzip": 11666,
-        "worker": false
+        "url": "/_next/static/chunks/1w-2v-zkb7vku.js",
+        "gzip": 9007,
+        "worker": true
       },
       {
         "url": "/_next/static/chunks/26_jj1pp9j5ek.js",
@@ -5635,8 +5807,13 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/281xse1jmbhyz.js",
-        "gzip": 394,
+        "url": "/_next/static/chunks/26ttnv48r7jq2.js",
+        "gzip": 771,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/2cjt5_7kziiae.js",
+        "gzip": 8404,
         "worker": false
       },
       {
@@ -5670,11 +5847,6 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/2xu6msu6xts86.js",
-        "gzip": 418,
-        "worker": false
-      },
-      {
         "url": "/_next/static/chunks/31903l951_hv_.js",
         "gzip": 8244,
         "worker": false
@@ -5705,8 +5877,8 @@
         "worker": false
       },
       {
-        "url": "/_next/static/chunks/3l3hnqt1cbw6w.js",
-        "gzip": 291279,
+        "url": "/_next/static/chunks/3n3jk_j020a7d.js",
+        "gzip": 11670,
         "worker": false
       },
       {
@@ -5715,13 +5887,23 @@
         "worker": false
       },
       {
+        "url": "/_next/static/chunks/3uaufx4hf_rbs.js",
+        "gzip": 134060,
+        "worker": false
+      },
+      {
+        "url": "/_next/static/chunks/3vw6q3_7nesyi.js",
+        "gzip": 417,
+        "worker": false
+      },
+      {
         "url": "/_next/static/chunks/3vwmuq19siej2.js",
         "gzip": 5525,
         "worker": true
       },
       {
-        "url": "/_next/static/chunks/turbopack-03crpj052a4p0.js",
-        "gzip": 191,
+        "url": "/_next/static/chunks/3xbwm77hp6uul.js",
+        "gzip": 8024,
         "worker": true
       },
       {
@@ -5732,6 +5914,11 @@
       {
         "url": "/_next/static/chunks/turbopack-1e5f49zawb_bt.js",
         "gzip": 176,
+        "worker": true
+      },
+      {
+        "url": "/_next/static/chunks/turbopack-2p_4w7xxibtrb.js",
+        "gzip": 193,
         "worker": true
       },
       {

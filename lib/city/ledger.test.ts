@@ -710,6 +710,7 @@ const LEDGER = {
     upstreamWorkarounds: { entries: 2, sites: 2 },
   },
   rasters: { rule: "rasters", cpuDecodes: [], sites: {}, sorts: SORT_OF },
+  blocks: { rule: "blocks", sites: {} },
   dressing: { tiles: {} },
 } satisfies Ledger;
 
@@ -852,6 +853,7 @@ test("the written ledger is the fresh figures, the heading first", () => {
     "buildings",
     "counters",
     "rasters",
+    "blocks",
     "dressing",
   ]);
   // a further section is written where it was measured, and gated

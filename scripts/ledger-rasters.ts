@@ -114,6 +114,13 @@ const KIND_OF_KEY: ReadonlyMap<string, { kind: RasterKind; table: boolean }> =
     })
   );
 
+/** The extras keys of the soft rasters' GPU blocks (plan 091 phase 2's
+ *  trial): read only behind `?svf=blocks`, so in no tier's table here;
+ *  their own figures are the `blocks` section (scripts/ledger-blocks.ts). */
+export const BLOCK_KEYS: ReadonlySet<string> = new Set(
+  KINDS.flatMap((kind) => Object.values(RASTER_KINDS[kind].blocks ?? {}))
+);
+
 /** The raster artifacts (and tables) a terrain level names, each with the
  *  viewer kind it is read as. */
 const RASTER_ARTIFACTS: readonly {
@@ -122,6 +129,9 @@ const RASTER_ARTIFACTS: readonly {
   table: boolean;
 }[] = TERRAIN_RASTER_KINDS.flatMap(({ kind: artifact, levels }) => {
   const key = [...(levels[0] ?? []), ...(levels[1] ?? [])][0];
+  if (key !== undefined && BLOCK_KEYS.has(key)) {
+    return [];
+  }
   const of = key === undefined ? undefined : KIND_OF_KEY.get(key);
   if (!of) {
     throw new Error(`ledger: no raster kind reads ${artifact}`);

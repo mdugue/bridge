@@ -30,7 +30,7 @@
   files, fewer shader variants)
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: IN PROGRESS — phase 0 measured (the table is in `qa/ledger.json`, `rasters`); phases 2, 3 and 5 decided below
+- **Status**: IN PROGRESS — phase 0 measured (the table is in `qa/ledger.json`, `rasters`); phases 2, 3 and 5 decided below; phase 2's trial built behind `?svf=blocks` and measured (`qa/ledger.json`, `blocks`): it passes its numbers, and a real GPU's look and the reference phone's features are what stand between it and the default
 
 ## Why this matters
 
@@ -476,3 +476,122 @@ the same file is uploaded for the ground).
   16 MiB × (1 − box): 0–15.9 MiB a tile. That is a plan of its own or
   phase 5's first step, desktop only (a phone does not read them).
   *Files*: unchanged, a fine level still fetches 9 rasters and 2 tables.
+
+### Phase 2 — the trial: `svf` as blocks (2026-11-16)
+
+**Built, behind a QA knob.** The build publishes every tile's sky view
+beside its PNG as BC4 and as EAC R11 with a box-filtered mip chain
+(`svf_<t>.bc4.gz`, `.eac.gz`; the file `lib/city/block-raster.ts`, the
+encoders `scripts/block-encode.ts`, bake entry `svfBlocks`), named in both
+levels' and the buildings' extras (`svfBc4`, `svfEac`). With
+`?svf=blocks` a page reads BC4 where the renderer has
+`texture-compression-bc`, else EAC where it has `-etc2`, else the PNG
+(`scene-profile.ts` `blockFormatFor`), as a `CompressedTexture` uploaded
+at once (`raster-upload.ts` `loadBlockRaster`). Without the knob the
+viewer reads what it read before; the plates of the default path do not
+move. The drift check found no in-scope file changed since `5dfa300d`.
+
+**Three r187 (step 1).** `WebGPUBackend` requests every adapter feature;
+`renderer.hasFeature` answers in the scene's worker after `init`.
+`WebGPUTextureUtils` maps `RED_RGTC1_Format` → `bc4-r-unorm` and
+`R11_EAC_Format` → `eac-r11unorm` and writes a `CompressedTexture`'s
+`mipmaps` level by level (`_copyCompressedBufferToTexture`); the mip
+count is the array's length. Public API only: no `_` member. One trap
+of our own: a material slot's stand-in (`material-slots.ts` `stubLike`)
+was a 1 × 1 `DataTexture` of the slot texture's format, which three
+cannot create for a block format ("Unsupported texture format 36283")
+— a compressed slot texture now gets one 4 × 4 block of its format.
+
+**Adapters.** SwiftShader (Chromium 1243, the e2e's flags) reports
+`texture-compression-bc`, `-etc2` and `-astc`, so both formats draw
+headless. Its reads differ from the formats' nominal values a little:
+BC4's interpolation truncated to whole bytes (≤ 0.86 steps), EAC's
+eleven bits widened without repeating them (≤ 0.12) —
+`scripts/eval/block-raster-probe.ts` reads every texel of the spawn
+tile's both encodings back through a fragment pass (a compute pass
+reads compressed textures as zeros there). **The reference phone and the
+reference desktop were not available**; what they report is not
+recorded (see below).
+
+**The encoders (step 2).** TypeScript, integers only, no dependency:
+BC4 an exhaustive search of both modes' endpoints within 2 of the
+block's range, EAC every table with the multipliers around the block's
+span and three bases each. Two encodes of every committed raster are
+the same bytes. 0.25–0.95 s a 1024² raster for BC4, 1.3–2.7 s for EAC,
+once a tile (cached).
+
+**The figures** (every committed site, 32 tiles; `qa/ledger.json`
+`blocks`, the table in `docs/data-pipeline.md`, "The sky view as
+blocks"):
+
+| | PNG today | BC4 | EAC R11 |
+|---|---|---|---|
+| GPU a tile (with mips) | 1.33 MiB | **0.67 MiB** | **0.67 MiB** |
+| Wire, all sites (pre-gzipped) | 16.7 MiB | 18.7 MiB (+12 %) | 18.6 MiB (+11 %) |
+| Error, byte steps: mean (site range) | — | 0.58–0.91 | 0.62–0.92 |
+| p99 (largest tile) | — | 4.0–4.9 | 4.0–4.9 |
+| largest texel | — | 11.3–14.6 | 12.1–17.1 |
+| Encode and stable | — | yes | yes |
+
+Per site the blocks are 7–18 % above the PNG on the wire (gzip 9; brotli
+11 halves that: +7 % over all sites, +5 % for EAC). Decode and upload: a
+block raster is inflated and written as it is, no PNG unfiltering and no
+mips made on the GPU; not timed on a phone.
+
+With the knob, the lite spawn tile's cache weight (`calculateBytesUsed`)
+falls by 699 036 bytes, half of the sky view's 1.33 MiB, a share from
+each level, as the share rule says. What a light error of this size
+does: the ground's ambient term is `mix(1, svf, 0.5)`, so 4 steps (p99)
+move its indirect light by 0.8 %; the facades read twice the sky view
+(`FACADE_SVF_GAIN`), 1.6 %.
+
+**The picture.** Tier 1 (SwiftShader, `lite`, 400 × 250 drawn pixels),
+the eight CI views and the plan's four ground-light views, without and
+with the knob, one build: 8 of 12 identical to the pixel; `across-400`
+11 pixels (largest step 11/255), `fountain-july-day` 16 (10),
+`street-crossings` 10 (7), `street-crossings-comic` 276 pixels (103: the
+Comic style's ink and tone bands flipping at a threshold, scattered
+single pixels). `ao-wall-foot`, `seam-eye`, `low-sun` and `oblique-400`
+— the views that show ground light — identical. Tier 1's noise floor is
+0 (plan 087), so these are the change, and slight (ruling 3).
+
+**Route B (step 3), not built.** KTX2 through `KTX2Loader` saves
+nothing over Route A here: Basis transcodes a one-channel raster only to
+8-bit colour formats (no GPU saving), and a KTX2 holding BC4 or EAC
+blocks is Route A's blocks in another container, which the loader reads
+with 57 kB of script beside it. An encoder for it (`basisu` / `toktx`,
+native, Apache-2.0) would be a new dependency; none was installed or
+measured.
+
+**What it decides**
+
+- **Phase 2's own criteria pass**: the unit test holds the spawn tile's
+  error to the figures above (`scripts/block-encode.test.ts`); the
+  encoders are byte-stable; no dependency; public API only; a phone's
+  GPU bytes fall. The plates are not within the floor (which is 0): four
+  views move slightly, named above, for the PR to show.
+- **Not yet the default.** Two STOP conditions cannot be checked here:
+  what the reference phone reports (neither BC nor ETC2 would stop the
+  plan) and how the blocks look on a real GPU (the plates are
+  SwiftShader's, which truncates BC4). Until both are in, the knob stays
+  and the default path is the PNG. Switching it on is one line
+  (`blockFormatFor`'s `requested`) and the ledger's phone figure.
+- **Phase 3 is carried on these numbers**: block compression halves a
+  soft field's GPU bytes at under a byte step's mean error. The horizon
+  next, as 32 one-channel layers judged against `HORIZON_SOFT_DEG`, behind
+  the same knob; it should wait for the real-GPU look above only for its
+  default, not for its trial.
+- **The cost to name**: 0.67 MiB a tile and a phone's memory, for 7–18 %
+  more bytes on the wire per sky view under gzip (a fetch only with the
+  knob), +2.1 kB of first-load JavaScript (the loader, in every page),
+  +0.8 kB of boot JSON (the two names in the extras), and about 1.2 MB more
+  on the server a tile (18.2 MB for Dresden's fifteen).
+
+**What a real GPU must look at before the default changes**: the four
+ground-light views and `street-crossings-comic` at tier 2 with and
+without `?svf=blocks` (the facades' sky light most of all: doubled
+there); the adapter's features on the reference phone and desktop
+(`navigator.gpu.requestAdapter()` then `adapter.features`); and the
+lite spawn tile's `info.memory` (three's) on a phone with the knob, which
+SwiftShader's run left unexplained (61 textures without the knob, 45
+with, read once each at one moment of the load).
