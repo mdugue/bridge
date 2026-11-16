@@ -245,7 +245,11 @@ async function glbOf(p: Prim = {}): Promise<Uint8Array> {
   const doc = new Document();
   const buffer = doc.createBuffer();
   const acc = (
-    array: Float32Array | Int16Array | Int8Array | Uint16Array,
+    array:
+      | Float32Array<ArrayBuffer>
+      | Int16Array<ArrayBuffer>
+      | Int8Array<ArrayBuffer>
+      | Uint16Array<ArrayBuffer>,
     type: "SCALAR" | "VEC3"
   ) => doc.createAccessor().setType(type).setArray(array).setBuffer(buffer);
   const prim = doc
