@@ -1253,8 +1253,8 @@ check wherever its e2e half runs.
   timings stay as they are.
 
 Baseline, 2026-11-16 (linux-x64 cloud container, Chromium 153 on
-SwiftShader): the first load fetches 42 scripts, 1 089 259 bytes gzip -9
-(1.09 MB; plan 074 counted 904 619 on 2026-10-10), 10 of them, 33 307
+SwiftShader): the first load fetches 42 scripts, 1 089 037 bytes gzip -9
+(1.09 MB; plan 074 counted 904 619 on 2026-10-10), 10 of them, 33 103
 bytes, by the workers alone. A phone at `ready` holds four contents —
 the spawn tile's two terrain levels, 94.6 MB and 24.7 MB with what they
 carry, and its near and far buildings, 27.0 MB and 12.6 MB — 159.0 MB as
