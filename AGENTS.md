@@ -41,7 +41,7 @@ bun run site <site>     # where a site stands (--all: every site)
 bun run fetch <site>    # downloads → data/_raw/<provider>/, sources → data/<site>/
 bun run bake <site>     # offline bakes [tile…] [--step X] [--jobs N] [--force]
 bun run osm-coverage <site>  # OSM's built things no bake decided about
-bun run test:pipeline   # pytest + ruff for pipeline/
+bun run test:pipeline   # pytest + ruff + types for pipeline/
 bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
 bun run docs:matrix     # regenerate the guide's sources-by-city pages
 bun scripts/stadtwissen.ts <site> such|nah|…  # search what the twin knows
@@ -105,7 +105,11 @@ itself). See ADR 0005.
   A material without per-tile data is a `sceneMaterial`.
 - WebGPU draws from at most **eight vertex buffers**, and the clay is
   **two inter-stage variables short** of sixteen. Past either a mesh
-  vanishes (the headless e2e draws WebGPU too, ADR 0027).
+  vanishes (the headless e2e draws WebGPU too, ADR 0027). The e2e
+  "limits" test counts both for the main pass of what the lite scene
+  draws (not traffic, the data layers or a picture style's swap: a
+  layer outside it tests its own count); the clay's two are a number
+  in it, changed only on purpose.
 - A TSL `select` and a `Loop` body are scopes: in per-pixel graphs use
   `mix`/`step`, and take what a loop reads into a `toVar()` before it.
   A packed word or a hash seed reaches the fragment as a FLAT varying.
