@@ -1,15 +1,17 @@
 /**
- * Pure helpers for ground-clamped walking and world<->EPSG mapping.
- * No THREE, no DOM.
+ * Pure helpers for ground-clamped walking, and the world<->EPSG mapping's
+ * old address (the conversions live in `frames.ts`). No THREE, no DOM.
  *
  * World frame: three.js Y-up scene after the -90°-about-X rotation of the
  * data group — x = easting - cx, z = -(northing - cy), y = elevation.
  */
+import * as PMath from "./portable-math";
 
-export interface RecenterOffset {
-  cx: number;
-  cy: number;
-}
+import { worldToEpsg } from "./frames";
+import type { RecenterOffset } from "./frames";
+
+export { epsgToWorld, worldToEpsg } from "./frames";
+export type { RecenterOffset } from "./frames";
 
 /**
  * What every layer needs to drape a feature: the ground at projected
@@ -19,24 +21,6 @@ export interface GroundContext {
   /** ground elevation (world Y) at projected (x, y); null = off the terrain */
   heightAt: (x: number, y: number) => number | null;
   offset: RecenterOffset;
-}
-
-/** World (x, z) -> projected EPSG coordinates. */
-export function worldToEpsg(
-  x: number,
-  z: number,
-  offset: RecenterOffset
-): { x: number; y: number } {
-  return { x: x + offset.cx, y: offset.cy - z };
-}
-
-/** Projected EPSG coordinates -> world (x, z). */
-export function epsgToWorld(
-  x: number,
-  y: number,
-  offset: RecenterOffset
-): { x: number; z: number } {
-  return { x: x - offset.cx, z: -(y - offset.cy) };
 }
 
 /**
@@ -54,7 +38,7 @@ export function approachHeight(
   if (tau <= 0) {
     return target;
   }
-  return current + (target - current) * (1 - Math.exp(-dt / tau));
+  return current + (target - current) * (1 - PMath.exp(-dt / tau));
 }
 
 /** How far apart (m) `groundSlope` reads the ground across a point. */

@@ -12,6 +12,55 @@ what the viewer shows is not ready for review until its description has a
 slow and lies about light and shadow, so add them only when they are cheap
 and say that they are SwiftShader. The JSON is the deliverable.
 
+## The plates hold you to it
+
+CI compares a pull request of this repository with its base
+(`.github/workflows/plates.yml`, ADR 0018, tier 1): views rendered for
+both by the same runner's software renderer, and diffed.
+
+- **Name each view you mean to change under `## Snapshots`**, by its
+  name as a word of its own (`rooftops`), with a word on why it moved.
+  A named view that differs is reported; **a differing view that is not
+  named fails the job**, with the section or without. The heading alone
+  passes nothing. A differing view you did not mean is a finding, not
+  noise: the renderer repeats to the pixel.
+- Base, head and difference image of each differing view are in the
+  run's `plates-report` artifact; the table is in the job's summary.
+  After editing the description, re-run the job.
+- It does not run on a draft, nor on a PR that touches nothing that can
+  move a pixel (the workflow's `paths`).
+- **What its numbers let through** in a view it does render: a change
+  of 4 pixels or fewer at any contrast; a step of 3 of 255 or less over
+  less than about 3 % of the frame; one step over less than 10 %.
+- **A run that flakes** has two remedies only: re-run the job by hand,
+  or name the view. There is no retry; tell the maintainer, because
+  the renderer is meant to repeat to the pixel.
+- **What it does not see.** It renders 8 of the 50 QA views
+  (`TIER1_VIEWS` in `scripts/plates.ts`), all standing on the spawn
+  tile, in the `lite` profile at 400 × 250 drawn pixels. Never seen:
+  the other 42 views, every other tile and every seam, the full
+  profile's shadows, AO and resolution, the data layers, a view's page
+  query (`?safety=3`), late parts that land after the scene says it is
+  settled. A green job says those eight plates are the same; it is no
+  review of a look and no reason to leave the snapshots out.
+
+The same comparison by hand, before pushing:
+
+```bash
+SHOTS_SMALL=1 bun run plates                  # merge base with origin/main against the head
+SHOTS_SMALL=1 bun run plates -- --base origin/rewrite   # a PR against another branch: its base
+SHOTS_SMALL=1 bun run plates -- --views rooftops,shore-eye
+SHOTS_SMALL=1 bun run plates -- --claims rooftops       # meant to differ: reported
+bun run plates                                # tier 2: headed, this machine's GPU, every view
+```
+
+It builds the base in a worktree under the gitignored `plates/` and
+writes `plates/report/` (`report.md`, and per differing view
+`<view>.base.png`, `.head.png`, `.diff.png`). Exit 1: an unnamed view
+differs; exit 2: nothing could be compared (a render failed, a side was
+not held still, a plate is blank). In the cloud container add
+`PW_CHROMIUM=/opt/pw-browsers/chromium`.
+
 ## What counts as visual
 
 Anything a reviewer would judge by eye: a scene material or shader term, a

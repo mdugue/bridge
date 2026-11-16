@@ -129,6 +129,13 @@ import type {
   LatePart,
   LateParts,
 } from "./late-parts";
+import {
+  beginFigures,
+  builderSteps,
+  builderSync,
+  figuresKey,
+  noteDressingBytes,
+} from "./dressing-figures";
 import { streamTimings } from "./stream-timing";
 import { whenIdle } from "./main-yield";
 import { bvhBytesUnder } from "./collision";
@@ -177,6 +184,15 @@ import type { NicheResult } from "./window-niche-client";
 import { nicheInput } from "./window-niche-layer";
 import type { NicheField } from "./window-niche-layer";
 import { pageView } from "./page-view";
+import { railSegmentMeshes } from "./rail-segments";
+import { railSink } from "@/lib/city/rail-table";
+import type { RailSink } from "@/lib/city/rail-table";
+import {
+  blockFormatFor,
+  railTableRequested,
+  standRecordRequested,
+  svfBlocksRequested,
+} from "./scene-profile";
 
 /**
  * The world as it streams in: OGC 3D Tiles (lib/city/tileset.ts) through
@@ -1107,6 +1123,8 @@ async function buildCoarseDressing(
   const { offset } = ctx;
   const files = extras.coarse ?? {};
   const tile = extras.tileId;
+  const figures = figuresKey(tile, "coarse");
+  beginFigures(figures);
   const fetchKind = async <T>(file: string | undefined): Features<T> =>
     file ? await fetchFeatures<T>(url(file), signal) : [];
   const [traffic, bridges, crownBytes] = await Promise.all([
@@ -1123,13 +1141,17 @@ async function buildCoarseDressing(
   const rail =
     bridges.length > 0
       ? await inSlices(
-          railSteps(
-            { bridges, rails: [], ballast: [], platforms: [] },
-            {
-              offset,
-              heightAt: ctx.pinnedGround?.() ?? ctx.heightAt,
-              owns,
-            }
+          builderSteps(
+            figures,
+            "bridges",
+            railSteps(
+              { bridges, rails: [], ballast: [], platforms: [] },
+              {
+                offset,
+                heightAt: ctx.pinnedGround?.() ?? ctx.heightAt,
+                owns,
+              }
+            )
           ),
           { signal }
         )
@@ -1164,11 +1186,16 @@ async function buildCoarseDressing(
   const vegetation =
     crowns.length > 0
       ? await inSlices(
-          coarseCrownSteps(crowns, {
-            heightAt: terrain.heightAt,
-            offset,
-            sunDirection: ctx.sunDirection,
-          }),
+          builderSteps(
+            figures,
+            "crowns",
+            coarseCrownSteps(crowns, {
+              heightAt: terrain.heightAt,
+              offset,
+              sunDirection: ctx.sunDirection,
+              standRecord: standRecordRequested(pageView.search),
+            })
+          ),
           { signal }
         ).catch((error: unknown) => {
           // the bridges and the traffic's slot built, never hung: freed
@@ -1184,6 +1211,27 @@ async function buildCoarseDressing(
     traffic: flows,
     vegetation,
   };
+}
+
+/** Plan 090's spike (`?rails=table`): where the builders put the rails'
+ *  runs instead of their triangles; nothing unless the page asked. */
+const spikeRailSink = (): RailSink | undefined =>
+  railTableRequested(pageView.search) ? railSink() : undefined;
+
+/** The sink's runs as sets of segments, hung with the rails. */
+function hangRailTable(
+  figures: string,
+  sink: RailSink | undefined,
+  rail: Group
+): void {
+  if (!sink) {
+    return;
+  }
+  builderSync(figures, "rail-table", () => {
+    for (const set of railSegmentMeshes(sink)) {
+      rail.add(set);
+    }
+  });
 }
 
 async function buildDressing(
@@ -1284,7 +1332,11 @@ async function buildDressing(
   const fromMapillary = mapillaryParts(mly);
   const lamps = [...osmLamps, ...fromMapillary.lamps];
   const furniture = [...osmFurniture, ...fromMapillary.furniture];
-  const sport = buildSport(terrain, sportTable, ctx);
+  const figures = figuresKey(tile, "fine");
+  beginFigures(figures);
+  const sport = builderSync(figures, "sport", () =>
+    buildSport(terrain, sportTable, ctx)
+  );
   // what is built so far: freed if the build stops (a tile that left, a
   // builder that threw) — never hung, but a lamp's lights and the other
   // parts' own are still theirs to free
@@ -1301,28 +1353,35 @@ async function buildDressing(
       offset: ctx.offset,
       heightAt: ctx.pinnedGround?.() ?? ctx.heightAt,
     };
+    // plan 090's spike (`?rails=table`): the rails' runs, drawn from a
+    // table of segments once both builders have laid them
+    const railTable = spikeRailSink();
     // Orchard trees join the cadastre as its "small" archetype, appended: an
     // index stays the trees file's (and its facts row), the orchard's past it.
     const trees = [...inventory, ...orchardTrees(cultivated)];
     const ownCanopy = offMonuments(canopy, monuments);
     const ownScan = offMonuments(scanTrees, monuments);
     const { vegetation, keepTree } = await inSlices(
-      tileVegetationSteps(
-        {
-          rows,
-          // The laser-scan crowns outside the canopy mask join the canopy as
-          // ordinary trees (they carry the same measured `h`); the bake already
-          // dropped the ones a cadastre tree claims.
-          canopy: [...ownCanopy, ...ownScan],
-          ndviAt: ndviAt ?? undefined,
-        },
-        trees,
-        {
-          offset: ctx.offset,
-          heightAt: terrain.heightAt,
-          sunDirection: ctx.sunDirection,
-          footMaterial: (sun) => footMaterialFor(terrain, sun),
-        }
+      builderSteps(
+        figures,
+        "trees",
+        tileVegetationSteps(
+          {
+            rows,
+            // The laser-scan crowns outside the canopy mask join the canopy as
+            // ordinary trees (they carry the same measured `h`); the bake already
+            // dropped the ones a cadastre tree claims.
+            canopy: [...ownCanopy, ...ownScan],
+            ndviAt: ndviAt ?? undefined,
+          },
+          trees,
+          {
+            offset: ctx.offset,
+            heightAt: terrain.heightAt,
+            sunDirection: ctx.sunDirection,
+            footMaterial: (sun) => footMaterialFor(terrain, sun),
+          }
+        )
       ),
       { signal }
     );
@@ -1332,10 +1391,12 @@ async function buildDressing(
     // the OSM hedges and the DLM's hedge rows, drawn as one kind of hedge
     const lowVegetation =
       hedges.length > 0 || rows.some((f) => f.properties?.kind === "hedge")
-        ? buildLowVegetation(
-            hedges,
-            { offset: ctx.offset, heightAt: terrain.heightAt },
-            rows
+        ? builderSync(figures, "hedges", () =>
+            buildLowVegetation(
+              hedges,
+              { offset: ctx.offset, heightAt: terrain.heightAt },
+              rows
+            )
           )
         : undefined;
     made.lowVegetation = lowVegetation;
@@ -1351,21 +1412,28 @@ async function buildDressing(
           )
         )
       : lamps;
-    const lampControl = buildLamps(
-      ownLamps,
-      { ...ground, heightAt: terrain.heightAt },
-      lampsBy(rails, trams, ownLamps.length)
+    const lampControl = builderSync(figures, "lamps", () =>
+      buildLamps(
+        ownLamps,
+        { ...ground, heightAt: terrain.heightAt },
+        lampsBy(rails, trams, ownLamps.length)
+      )
     );
     made.lamps = lampControl;
     await nextTask(signal);
     const rail = await inSlices(
-      railSteps(
-        { rails, bridges, ballast, platforms },
-        {
-          ...pinned,
-          // a deck across a seam is in both tiles' files; its owner draws it
-          owns: extent ? (x, y) => ownsPoint(extent, x, y) : undefined,
-        }
+      builderSteps(
+        figures,
+        "rail",
+        railSteps(
+          { rails, bridges, ballast, platforms },
+          {
+            ...pinned,
+            // a deck across a seam is in both tiles' files; its owner draws it
+            owns: extent ? (x, y) => ownsPoint(extent, x, y) : undefined,
+            railTable,
+          }
+        )
       ),
       { signal }
     );
@@ -1373,14 +1441,20 @@ async function buildDressing(
     await nextTask(signal);
     // The bake writes only the monuments a tile owns; a basin that reaches
     // past the seam samples the neighbour's ground.
-    const monumentLayer = buildMonuments(monuments, pinned);
+    const monumentLayer = builderSync(figures, "monuments", () =>
+      buildMonuments(monuments, pinned)
+    );
     made.monuments = monumentLayer;
     // Owned by the bake (west/south edges in): stood on this tile's ground.
     const furnitureGroup = await inSlices(
-      furnitureSteps(furniture, {
-        ...ground,
-        heightAt: terrain.heightAt,
-      }),
+      builderSteps(
+        figures,
+        "furniture",
+        furnitureSteps(furniture, {
+          ...ground,
+          heightAt: terrain.heightAt,
+        })
+      ),
       { signal }
     );
     made.furniture = furnitureGroup;
@@ -1388,10 +1462,12 @@ async function buildDressing(
     const vines = vineRows(cultivated);
     const vineyards =
       vines.length > 0
-        ? buildVineyards(vines, {
-            offset: ctx.offset,
-            heightAt: terrain.heightAt,
-          })
+        ? builderSync(figures, "vineyards", () =>
+            buildVineyards(vines, {
+              offset: ctx.offset,
+              heightAt: terrain.heightAt,
+            })
+          )
         : undefined;
     made.vineyards = vineyards;
     // Tracks are cut at the tile edge by the bake; they and the span wires
@@ -1399,13 +1475,23 @@ async function buildDressing(
     await nextTask(signal);
     const tram =
       trams.length > 0
-        ? await inSlices(tramSteps(trams, bridges, pinned), { signal })
+        ? await inSlices(
+            builderSteps(
+              figures,
+              "tram",
+              tramSteps(trams, bridges, { ...pinned, railTable })
+            ),
+            { signal }
+          )
         : undefined;
     made.tram = tram;
+    hangRailTable(figures, railTable, rail);
     // Piers and pontoons are the tile's own; a ferry line or groyne cut at
     // the seam samples the neighbour's ground past it.
     const riverside =
-      river.length > 0 ? buildRiverside(river, pinned) : undefined;
+      river.length > 0
+        ? builderSync(figures, "riverside", () => buildRiverside(river, pinned))
+        : undefined;
     made.riverside = riverside;
     // What the probe can ask, sized as drawn: the trees on the tile's own
     // ground (as the inventory stands them), decks only where this tile
@@ -1453,7 +1539,7 @@ async function buildDressing(
       }
       streamTimings.since("dressing:asks", start, tile);
     };
-    const buildAsks = askSteps();
+    const buildAsks = builderSteps(figures, "asks", askSteps());
     // Sections are cut at the tile edge by the bake; a bridge street rides
     // the decks of this tile's bridge file (which names a seam deck in both).
     // The counted sections are asked on their bodies, while the layer shows;
@@ -1535,11 +1621,17 @@ export function dressingPart(site: DressingSite): LatePart<TileDressing> {
     hangAt: "wait",
     build: site.build,
     objects: (d) => compileRepresentatives(dressingParts(d)),
-    bytes: (d) =>
-      dressingParts(d).reduce(
-        (sum, part) => sum + estimateGeometryBytes(part),
-        0
-      ),
+    bytes: (d) => {
+      const byPart: Record<string, number> = {};
+      for (const name of DRESSING_PART_NAMES) {
+        const part = DRESSING_PARTS[name](d);
+        if (part) {
+          byPart[name] = estimateGeometryBytes(part);
+        }
+      }
+      noteDressingBytes(figuresKey(site.tile, site.level), byPart);
+      return Object.values(byPart).reduce((sum, bytes) => sum + bytes, 0);
+    },
     hang: (d, self) => {
       // taken down, its parts leave the root (or the coarse crowns'
       // stand-in) at once: its free may wait for its compile, and the
@@ -1784,6 +1876,9 @@ export class DressingPlugin {
       renderer: ctx.renderer,
       url: this.url,
       lowRasters: ctx.lowRasters,
+      blocks: blockFormatFor(svfBlocksRequested(pageView.search), (f) =>
+        ctx.renderer.hasFeature(f)
+      ),
       // (a root that left is not reweighed: the renderer may be evicting its
       // tile, and weighing it there adds its bytes back for good)
       onShareChange: (root) => {

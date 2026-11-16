@@ -167,9 +167,12 @@ import {
   notePocRegressed,
   pocFramesHeld,
   pocFrameTime,
+  pocPhase,
   pocVeil,
   tickPocFrame,
 } from "./poc-scene";
+import { pipelineBudget } from "./pipeline-budget";
+import type { PipelineBudget, PipelineBudgetQuery } from "./pipeline-budget";
 import { createPostStack } from "./post-stack";
 import type { FocusInfo, PostStack } from "./post-stack";
 import { createNameplate } from "./nameplate-layer";
@@ -190,7 +193,7 @@ import {
   reversedDepthFromSearch,
   tileCacheBytesFor,
 } from "./scene-profile";
-import type { SceneBudget } from "./scene-profile";
+import type { DeviceTier, SceneBudget } from "./scene-profile";
 import { createSunRig } from "./sun-rig";
 import { createSceneEnvironment, sceneNight } from "./scene-environment";
 import { sunStateAt } from "@/lib/city/sun";
@@ -218,6 +221,9 @@ import type { CpuBytes, DressingPartName, TileDressing } from "./tile-stream";
 import { loadGroundPlate } from "./ground-plate-layer";
 import type { GroundPlate } from "./ground-plate-layer";
 import { createNetworkWatch } from "./tile-retry";
+import { dressingFigures } from "./dressing-figures";
+import type { DressingFigures } from "./dressing-figures";
+import type { TimingStat } from "./stream-timing";
 import { installMainYield, whenIdle } from "./main-yield";
 import {
   bootFrames,
@@ -338,6 +344,8 @@ export interface GpuDebug {
   cpuMB: Readonly<Record<keyof CpuBytes, number>>;
   /** pipeline anchors holding scene-wide pipelines (pipeline-anchors.ts) */
   anchors: number;
+  /** the device tier the scene runs at (scene-profile.ts) */
+  tier: DeviceTier;
   /** the tile cache: bytes it counts against its budget, tiles in it, in use */
   tileCache: {
     bytes: number;
@@ -347,6 +355,10 @@ export interface GpuDebug {
     loaded: number;
     /** each tile's MB as the cache counts it, "u" when in use */
     sizes: string[];
+    /** each tile's content, as the tileset names it, its bytes exactly,
+     *  and whether it has loaded (a requested one is listed at 0 bytes) —
+     *  the ledger's phone figures, plan 087 */
+    tiles: { uri: string; bytes: number; loaded: boolean }[];
   };
 }
 
@@ -357,7 +369,7 @@ const bytesSum = (m: Map<object, number>) =>
 /** Counts the distinct buffers under a scene (shared ones once). */
 function sceneBuffers(
   scene: Object3D
-): Omit<GpuDebug, "held" | "tileCache" | "anchors" | "cpuMB"> {
+): Omit<GpuDebug, "held" | "tileCache" | "anchors" | "cpuMB" | "tier"> {
   const indices = new Map<object, number>();
   const buffers = new Map<object, number>();
   let drawables = 0;
@@ -751,11 +763,27 @@ export interface SceneApp {
    * are a leak.
    */
   getGpuDebug: () => GpuDebug;
+  /** What each level's dressing cost to build, builder by builder, and
+   *  what its parts weigh (dressing-figures.ts; plan 090's baseline),
+   *  beside the stream's timings so far (stream-timing.ts `summary`). */
+  getDressingFigures: () => {
+    levels: DressingFigures;
+    timings: Record<string, TimingStat>;
+  };
+  /**
+   * A row for every build the scene draws with, and what each asks of
+   * WebGPU's per-pipeline limits (pipeline-budget.ts, plan 094): the e2e
+   * "limits" test's read. No rows in a production build.
+   */
+  getPipelineBudget: (query?: PipelineBudgetQuery) => Promise<PipelineBudget>;
   /** Live DoF focus state + last crosshair raycast hit (QA/diagnostics). */
   getFocusDebug: () => FocusInfo & {
     hitDist: number | null;
     hitName: string | null;
   };
+  /** The boot's and the stream's timings so far, by category
+   *  (stream-timing.ts): the ledger's recorded timings (plan 087). */
+  getTimings: () => Record<string, TimingStat>;
   /** current Building footprint polygons (EPSG) — shrinks when demolishing */
   getFootprints: () => MapFootprints;
   getPose: () => PlayerPose;
@@ -3870,8 +3898,8 @@ async function bootApp(
       loadVeil.step(dt, { exporting, model: modelRig.owns() });
       // Advance every tile's water ripple and glitter (its sky tint is the
       // fog colour's node, in lockstep with the sun by construction).
-      setWaterTime(elapsed);
-      lastEquivalent = followView(elapsed, poseTick) ?? 600;
+      setWaterTime(pocPhase(elapsed));
+      lastEquivalent = followView(pocPhase(elapsed), poseTick) ?? 600;
       updateCuts();
     },
     view: ({ elapsed, view }) => {
@@ -3881,10 +3909,10 @@ async function bootApp(
       lens.update(view, lastEquivalent);
       setViewDirection(view);
       // The fountains' jets and water shimmer (one shared uniform).
-      setFountainTime(elapsed);
+      setFountainTime(pocPhase(elapsed));
       // The features that hook the frame (the data layers' light, the
       // timetable trams), once they are here.
-      frameHook.emit(elapsed, performance.now());
+      frameHook.emit(pocPhase(elapsed), performance.now());
     },
     tick: ({ elapsed, poseTick }) => {
       if (poseTick) {
@@ -4428,11 +4456,17 @@ async function bootApp(
       gpuBytes: gpuBytesWith(estimateGeometryBytes(scene)),
       memory: { ...renderer.info.memory },
     }),
+    getDressingFigures: () => ({
+      levels: dressingFigures(),
+      timings: streamTimings.summary(),
+    }),
+    getPipelineBudget: async (query) =>
+      await pipelineBudget(renderer, postStack, scene, activeCamera(), query),
     getGpuDebug: () => {
       const cache = stream.tiles.lruCache as unknown as {
         cachedBytes: number;
         maxBytesSize: number;
-        itemSet: Map<unknown, unknown>;
+        itemSet: Map<{ content?: { uri?: string } }, unknown>;
         usedSet: Set<unknown>;
         loadedSet: Set<unknown>;
         bytesMap: Map<unknown, number>;
@@ -4448,6 +4482,7 @@ async function bootApp(
           ])
         ) as Record<keyof CpuBytes, number>,
         anchors: postStack.anchorCount(),
+        tier: budget.tier,
         tileCache: {
           bytes: cache.cachedBytes,
           maxBytes: cache.maxBytesSize,
@@ -4458,9 +4493,15 @@ async function bootApp(
             (item) =>
               `${Math.round((cache.bytesMap.get(item) ?? 0) / 1_048_576)}${cache.usedSet.has(item) ? "u" : ""}`
           ),
+          tiles: [...cache.itemSet.keys()].map((item) => ({
+            uri: item.content?.uri ?? "",
+            bytes: cache.bytesMap.get(item) ?? 0,
+            loaded: cache.loadedSet.has(item),
+          })),
         },
       };
     },
+    getTimings: () => streamTimings.summary(),
     getFocusDebug: () => ({
       ...postStack.getFocusInfo(),
       hitDist: focus.last()?.dist ?? null,

@@ -132,6 +132,7 @@ bun run bake dresden --force        # every step again, even one whose code
                                     #   and inputs did not change (see "What
                                     #   a re-bake runs" below)
 bun run test:pipeline               # pytest + ruff check + ruff format --check
+                                    #   + the bakes' types (typecheck.py)
 ```
 
 `scripts/pipeline.ts` turns the site into one JSON spec (provider, CRS,
@@ -151,6 +152,7 @@ never from the tile name. The modules in `pipeline/bake/`:
 | `citygml.py` | streaming CityGML (AdV LoD2) → CityJSON, buildings owned by the tile holding their envelope centre (the fetch reads the neighbouring cells, so the rule never drops a building — Bavaria aside, see the adapters' row: Saxony files each building in exactly one 2 km file; the committed Leipzig, Grimma and Meißen CityJSON was fetched before the fetch read the neighbouring cells, so it can still lack buildings at the tile seams until the maintainer re-fetches those sites) |
 | `net.py` | downloads (`.part` until complete), single members of remote ZIPs by HTTP range |
 | `osm.py` | reads the site's `.osm.pbf` (through its index, `osm_index.py`), with a margin in degrees around the tile, reprojected to the tile's CRS; `in_tunnel` (a way in a tunnel or `location=underground`) and `below_ground` (that, or a negative `layer` / `level`) for what is drawn on the terrain; `read_ways`, the `lines` with every way in a tunnel left out, which each bake that paints a way on the terrain or lets one steer what it draws reads |
+| `osm_source.py` | where the extract comes from: the BBBike fallback's coverage check against its published boundary with `MAX_MARGIN_DEG`, the `<extract>.source.json` record, the provenance a bake writes from it (see "Where the OSM extract comes from" below); no step imports it |
 | `osm_index.py` | the extract read once into FlatGeobuf files beside it (`<extract>.index/`), so a tile's bbox read takes hundredths of a second instead of a parse of the whole extract; it gives the OSM driver's own answer, features, fields and order, the driver's relation rule included (see "Reading the OSM extract" below) |
 | `step_cache.py` | what each step read and wrote on each tile, so the next `bake` skips a step whose code and files did not change (see "What a re-bake runs" below) |
 | `landcover.py`, `landcover_osm.py`, `rail.py`, `canopy.py`, `trees.py`, `ndvi.py`, `roof_colour.py`, `osm_buildings.py`, `lamps.py`, `monuments.py`, `furniture.py`, `mapillary.py`, `facades.py` (+ `facade_measure.py`, one panorama measured on one wall; `facade_traits.py`, its trait profiles; `facade_glass.py`, a photo's glass reading), `shopfronts.py`, `windows.py`, `walls.py`, `stairs.py`, `surface.py`, `edges.py`, `markings.py`, `sport.py`, `tram.py`, `riverside.py`, `landmarks.py`, `roofs.py` (+ `roof_planes.py`, the forms a measured face may take), `skyview.py`, `lowveg.py`, `cultivated.py`, `small_buildings.py`, `structures.py`, `doors.py`, `passages.py`, `plinths.py`, `dormers.py` | one step each, in the order of the step table (`STEPS`; the table below) |
@@ -168,8 +170,28 @@ gridding, the OSM class mapping, the spec, the monument kinds, the DLM ↔ OSM
 fountain conflation and the relief measurement), and runs the `walls` and `stairs`
 steps end to end against a synthetic DGM and a small OSM XML file (GDAL's
 OSM driver reads `.osm` as well as `.osm.pbf`). CI's `pipeline` job runs it
-with ruff after `uv sync --locked`. Fetch and bakes need the network and
-the raw downloads and run on the maintainer's machine.
+with ruff after `uv sync --locked`, and then type-checks `bake/` with
+pyright (pinned in the dev group, set in `pyproject.toml`) against
+`pipeline/typecheck-baseline.json` (plan 089): `typecheck.py` keys each
+finding by file, rule, the function it stands in and its message (never
+by line) and fails on any count above the baseline — a new finding, or a
+new escape: `type: ignore`, `pyright: ignore`, a `# pyright:` directive,
+`@no_type_check`, `typing.cast` — and on any below it, so that a fix
+lowers the baseline in the same PR: `cd pipeline && uv run python
+typecheck.py --update` writes the lower counts and refuses to raise one.
+It also fails when pyright did not read every module of `bake/` or a
+setting beyond the known ones relaxes it, and in CI when the baseline
+holds what the base branch's does not, unless the PR's description says
+why in a line `Typecheck-baseline-raise: …`.
+Where a library leaves the bakes' calls untyped, `pipeline/typings/`
+holds partial stub packages for pyright alone — scipy's `ndimage` and
+`fft`, rasterio's package and `windows`, pyogrio's package, laspy's point
+records — each typed from the installed library's source and checked
+against it when that library is bumped (`typings/README.md`).
+Neither the checker, the script nor the stubs re-key a bake: all live
+outside `bake/` and the dev group is not in `locked_runtime`. Fetch and bakes
+need the network and the raw downloads and run on the maintainer's
+machine.
 
 ### The layouts
 
@@ -390,6 +412,122 @@ Geofabrik is unreachable the fetch says so and carries on; put the
 extract at the path it names. The *committed* Dresden lamp, platform and
 bridge-structure data still comes from the old Overpass bakes; the next
 re-bake moves it (see [Provenance](#provenance)).
+
+### Where the OSM extract comes from
+
+The extract is Geofabrik's (`Provider.osm`, or the site's own `Site.osm`).
+Geofabrik resets the connection from the cloud container, so the fetch
+falls back on BBBike's city extract the site names (`Site.bbbike`):
+`pipeline/bake/osm_source.py`. The rules:
+
+- **Only on an outage.** Geofabrik is tried three times (`OSM_TRIES`,
+  10 s and 20 s apart) while it cannot be reached — a cut connection, a
+  timeout, a 5xx (`osm_source.unreachable`); only then does the fetch
+  fall back. A 404 or 410 is a wrong `osm` in the config, a download that
+  fails its published md5 or a full disk would fail the same on any
+  source: no fallback, the fetch says so.
+- **Only where it covers the site, every time.** BBBike publishes each
+  extract's boundary (`<City>.poly`, an Osmosis polygon); the fetch keeps
+  it beside the extract, fetched together with it and recorded with it
+  (its md5 in the extract's record): a boundary that is not the one
+  fetched with the file is refused, and when BBBike publishes another one
+  the fetch fetches the pair again. An extract is taken only if that boundary covers
+  every tile of the site about to read it with the widest margin a bake
+  reads OSM beyond a tile, `MAX_MARGIN_DEG` = 0.05° (the monorail's whole
+  chain, `rail_osm.py`); `test_osm_source.py` holds every margin a bake
+  passes to the OSM readers to it. An extract cut inside that margin
+  would bake a seam's walls, ways and lamps from half the data without a
+  word. The check is made by the fetch and again by every bake
+  (`osm_source.usable`), whoever fetched the file: a Land's sites share
+  one raw folder, so Dresden's `Dresden.osm.pbf` is on disk when Meißen,
+  which it does not cover, asks — Meißen's fetch and bake refuse it, and
+  it stays for Dresden. Short of the margin, the fetch says on which side
+  and by how much and takes nothing; the fetch then exits 1.
+- **A bake needs a covering extract.** A `bake` whose steps read OSM
+  stops before its first step when no extract covers the site
+  (`refuse_without_extract`), and so does one whose extract is not the
+  file its record names (replaced by hand under its record): those steps
+  would skip, but some rewrite their committed files with less (the OSM
+  extract's row in [portability.md](./portability.md#degradation-matrix)).
+  `--without-osm` runs them anyway, for a new site or a test; a step
+  that wrote its files without an extract keeps no day in the
+  provenance, one that skipped (its committed file stays) keeps the day
+  it had. Which
+  steps read OSM is a hand list (`OSM_FREE` in `__main__.py` names the
+  seven whose code reaches `osm.py` only for a helper: skyview, roofs,
+  dormers, windows, facades, plinths, lamp-water); a step on that list
+  that reads the extract after all fails at that read, before it writes
+  and before its run is recorded, so every next bake fails the same way. Geofabrik's extract is
+  a Land's or a Regierungsbezirk's, which holds every site configured on
+  it, so it gets no coverage check.
+- **Each under its own name, and checked.** BBBike's extract lands as
+  `data/_raw/<provider>/osm/<City>.osm.pbf` beside Geofabrik's. The bakes
+  read Geofabrik's where it is there, else the site's BBBike one where it
+  covers the site (`osm_source.resolve`). A file whose md5 is not the one
+  its record names is not taken; the fetch fetches it again, into a file
+  beside it (`<extract>.new`) that takes its place only once complete
+  and checked, so it never deletes an extract it cannot replace. A `.new`
+  left by a download cut short stays beside the extract until the next
+  download, which starts by removing it; no bake reads it. A record
+  without an md5 (none written by this fetch) checks nothing, and its day
+  is taken as the record says. The
+  fallback's URL travels beside the spec (`--osm-fallback`), not in it,
+  and is resolved outside `spec.py`, so no step's code key changes with
+  it. Which extract a step read is in its cache key all the same
+  (`osm_source.identity`, `step_key`'s `osm`): a step baked on BBBike's
+  runs again when Geofabrik's comes, one baked with none when any comes,
+  so sources never mix within a site. On the provider's own Geofabrik
+  extract the key is the one every recorded run already has.
+- **Never silent.** Each extract the fetch writes gets
+  `<extract>.source.json` beside it: source, URL, `Last-Modified` (the
+  day its data is as of), the file's md5 and the one its server
+  publishes, the day it was fetched. The fetch's log and every `bake`
+  start with one line naming the extract, its source and that day; an
+  extract placed by hand has no record and says so. Every step that read
+  the extract (by its recorded reads) is recorded per tile it finished —
+  a failed bake's too, a `--jobs` bake's whichever tile failed — in the
+  site's `provenance.json` as `openstreetmap.baked.<step>.<tile>`:
+  `dataAsOf`, the data's day first, then source and URL, and `on`, the
+  bake's day, apart; only that member of the file is written, every
+  other byte of the hand-kept record stays as it was. An extract with no day (placed by hand, or no
+  `Last-Modified`) is recorded as `unknown`, never as the bake's day:
+  after this lands, the first bake on the maintainer's hand-placed
+  extracts writes `unknown` for each step it runs (`mapillary` first, the
+  one step whose key changes), until the extract is fetched with a
+  record. The
+  Open-Data-Wächter reads the age there (an `unknown` is a finding of its
+  own), and the inquiry card's OSM editions come from it, the oldest day
+  over the site's tiles (`provenance.ts` `bakedStand`); the file has its
+  schema, `lib/city/provenance-file.ts`.
+
+Which BBBike extract covers which site, with the 0.05° margin, from
+BBBike's published boundaries on 2026-11-16 (the room is what is left
+beyond the margin on the tightest side):
+
+| Site | Geofabrik | BBBike (`Site.bbbike`) | Covers | Room |
+|---|---|---|---|---|
+| Dresden | `sachsen` | Dresden (13.43–14.18° E, 50.88–51.23° N) | ✅ | 0.094° |
+| Leipzig | `sachsen` | Leipzig (12.02–12.92° E, 50.98–51.59° N) | ✅ | 0.189° |
+| Grimma | `sachsen` | Leipzig | ✅ | 0.104° |
+| Meißen | `sachsen` | Dresden | ❌ short in the west by 0.025° (the tile starts 1.7 km east of 13.43° E) | — |
+| Hamburg | `hamburg` | Hamburg (9.37–10.57° E, 53.32–53.85° N) | ✅ | 0.163° |
+| München | `bayern/oberbayern` | Muenchen (11.06–12.00° E, 47.80–48.42° N) | ✅ | 0.221° |
+| Berlin | `berlin` | Berlin (12.76–13.98° E, 52.23–52.82° N) | ✅ | 0.221° |
+| Unna | `nordrhein-westfalen/arnsberg-regbez` | Hamm (7.60–8.15° E, 51.46–51.83° N; BBBike has no Unna, its Dortmund ends at 7.65° E) | ✅ | 0.006° (west) |
+
+Meißen therefore needs Geofabrik (or a custom BBBike extract, a request
+by hand on extract.bbbike.org) to re-bake its OSM layers in the cloud;
+its bake there stops before the first step unless `--without-osm`
+(which ran every step on 2026-11-16, and rewrote its trees, rails,
+monuments, kerbs and NDVI with less: not a bake to commit). Its
+committed bakes were made from BBBike's Dresden extract before this check
+existed, under the Geofabrik name. BBBike rebuilds its city extracts
+weekly from the planet (`Last-Modified` 2026-11-14 for all six on
+2026-11-16). Its extracts are OpenStreetMap data under the ODbL, as its
+download index says: "All Data from OpenStreetMap is licensed under the
+OpenStreetMap License" (<https://download.bbbike.org/osm/bbbike/>). The
+credit the HUD and NOTICE give OSM, "© OpenStreetMap-Mitwirkende (ODbL)",
+is the one that licence asks for.
 
 ### Reading the OSM extract
 
@@ -686,8 +824,16 @@ tileset under `public/data/<site>/`
    (`downsampleInterleaved`: no image resize, which would step through
    the channels as if they were pixels), read by a fine level beyond the
    ground detail's reach (`lib/city/ground-reach.ts`; the markings and
-   the colonies have their phone twins for it). A twin exists only
-   beside its source. Which files a tile has, where the
+   the colonies have their phone twins for it). And, only in a build
+   with `SVF_BLOCKS=1`, the sky view's **GPU blocks** (plan 091 phase
+   2's trial, read only behind `?svf=blocks`; a default build publishes
+   none): `svf_<t>.bc4.gz` and `svf_<t>.eac.gz`, the committed
+   PNG encoded as BC4 and as EAC R11 with a box-filtered mip chain
+   (`scripts/block-encode.ts`, integer arithmetic, byte-stable; the file
+   `lib/city/block-raster.ts`; `publishSvfBlocks`, bake entry
+   `svfBlocks`), pre-gzipped, named in both levels' and the buildings'
+   extras as `svfBc4` and `svfEac`. Lossy: only a soft field goes this
+   way. A twin exists only beside its source. Which files a tile has, where the
    viewer finds each (`dressing`, `coarse`, `ask`) and which
    carry the ODbL credit (`osm`, checked by `features.test.ts`) is one
    table, `tileArtifacts` in `lib/city/tile.ts`; the extras' types derive
@@ -1004,6 +1150,34 @@ stale keys dropped first — never the entry itself nor another process's
 part file — so processes baking side by side never read half an entry nor
 delete each other's.
 
+**The machine is not an input.** A bake's bytes are a function of the
+tree: the same commit bakes the same files on a desk, on CI's runner and
+on the host's builder, which is what lets a file be published once under
+its content hash and checked against what git bakes (plan 088). What
+would make the machine an input is the maths: in Bun `Math.hypot`, the
+trigonometric, exponential and power functions (and `**` to anything but
+a whole literal) are the C library's, whose last bits differ between
+glibc versions and between processors it gives its FMA variants and
+those it does not — and a corner test, a weld of equal vertices or a
+smallest rectangle that reads such a value decides differently (Dresden's
+near buildings differed by one to three vertices a tile between glibc
+2.39 and 2.43, 2026-11-16). So every module `prepare-data.ts` reaches
+computes with `PMath` (`lib/city/portable-math.ts`): the same functions
+in the operations IEEE 754 rounds exactly. `scripts/bake-entries.test.ts`
+holds those modules to it — any use of `Math` but its exactly rounded
+members (`sqrt`, `abs`, `floor`, `round`, `min`, `max`, the constants …),
+any `**` but to a whole literal up to 1000 (what JavaScriptCore multiplies
+out), and the methods of three's maths that call the C library inside
+fail it — and `lib/city/portable-math.test.ts` pins the functions' bits.
+What a dependency computes where no bake module asks the test cannot see
+(today the CityJSON loader's material colours, which no baked file
+carries): that is held by the ledger's check in CI, which compares every
+baked byte with a file another machine wrote (ADR 0024). `sin`, `cos` and
+`tan` answer up to 2^50 and are NaN past it; a hash's large angle (an OSM
+id times its constant) is folded, good to about 1e−15 and the same bits
+everywhere. The gzip (libdeflate, level 9) and meshopt's codecs gave
+the same bytes on both machines.
+
 **Shared cache.** Vercel restores each branch's build cache from that
 branch's last build (production's for a new branch), so branches rebased
 onto the same main each baked the same entries cold, side by side. Behind
@@ -1078,6 +1252,41 @@ offers to try again — it no longer falls back to
 and each `/data/<site>/manifest.json` and `/data/sites.json` as `no-cache`
 ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)).
 
+**Comparing two published sites.** While a change keeps the bakes'
+bytes, "the build publishes 0 new files" is its proof. Where it gives
+them up (plan 092 moves the hand-over format and cuts tiles at
+publishing), `bun scripts/compare-tilesets.ts <site-a> <site-b>` compares
+two sites by content: a `public/data/<site>` folder (its manifest and
+every file beside it; the manifest alone says which file a logical name
+is, so a stray file never stands in for one) or one manifest (what it
+names); files are matched by logical name. Everything is compared exactly, and a file that cannot
+be read as its kind is an error (exit 2) even where both sides hold the
+same bytes. A glb's storage is content — every accessor's, whoever
+reads it (a primitive, an animation, an instancing extension): its
+component type,
+normalisation, count, `min` and `max`, the node transforms — and so are
+its stored integers, morph targets and nodes outside any scene; another
+quantisation is a difference. A tolerance is the caller's, never the
+file's: `--within <m>` (and `--within-unit <d>` for normals and
+tangents) compares POSITION, NORMAL and TANGENT placed in the world,
+checks the winding, a tangent's handedness and a normal's length (all
+exact or within the same tolerances), and prints the largest deviation
+found, which the
+PR that accepts it names. The order of a JSON object's keys is free; the
+order of every array is content, a GeoJSON's features included
+(`treefacts_<tile>.json` is a column over the trees' features, a
+markings or sports raster names its table's `1 + row`); a pure
+reordering is reported as such. Rasters compare by decoded value
+(`png-raster.ts`, sharp for WebP; a PNG of another bit depth than 8 is
+refused); `.pts`, `.crw`, `.fpr` and the plate through their readers in
+`lib/city/`; a JSON string naming a served file reads as that file's
+logical name, so a tileset that names a changed file is not itself
+named. A kind without a reader compares as bytes — a new kind of
+published file gets one there (`scripts/compare-tilesets.ts`, with
+`compare-glb.ts` and `compare-json.ts`). What a change derives follows
+it: a tree moved 1 m changes the coarse crowns too when its new place
+falls into the share the coarse level draws.
+
 A `required` side file that is missing fails the build
 (`prepare-data: missing source file data/<site>/dlm/… — run bun run fetch <site> and bun run bake <site>`) rather than becoming a
 404 on every client; so do a missing DGM GeoTIFF or CityJSON. A missing
@@ -1149,62 +1358,378 @@ polygons on a tile for lack of it).
 
 ## Measuring what the browser downloads
 
-The guide's size figures come from this procedure. After
-`bun scripts/prepare-data.ts dresden`, sum the published files per tile, taking
-PNG/WebP/`.gz` at face value and gzipping JSON/GeoJSON at level 6 (what a
-static host sends):
+The figures live in [`qa/ledger.json`](../qa/ledger.json), the rewrite
+series' ledger (plan 087). `bun run ledger` writes it from the published
+files — the reference site's (`public/data/dresden/`) for the bytes and
+counters, every site whose data git tracks for the rasters (a site only
+on the disk is none of the ledger's), so after a build or
+`bun scripts/prepare-sites.ts`; it writes the file formatted as committed
+— and `bun run ledger -- --check`
+names each figure that differs and exits 1; CI's build-check shard runs the
+check after its build. Any other argument is refused (exit 2) and nothing
+is written. Every figure is a function of the tree: a pull request that
+moves one commits the new file, and its diff is what the reviewer reads —
+a figure that shrank as much as one that grew. The shapes and the
+arithmetic are `lib/city/ledger.ts` and `lib/city/ledger-counters.ts`; the
+script finds the files through one function, `publishedFiles`.
 
-```bash
-bun scripts/prepare-data.ts dresden
-python3 - <<'PY'
-import os, gzip, json, re
-d = "public/data/dresden"; man = json.load(open(f"{d}/manifest.json"))["files"]
-tot = {}
-for logical, hashed in man.items():
-    p = f"{d}/{hashed}"; raw = os.path.getsize(p)
-    packed = logical.endswith((".png", ".webp", ".gz"))
-    wire = raw if packed else len(gzip.compress(open(p, "rb").read(), 6))
-    m = re.search(r"\d{5}_\d{4}_\d+(?:_[a-z]+)?", logical)
-    t = tot.setdefault(m.group(0) if m else "(site)", [0, 0])
-    t[0] += raw; t[1] += wire
-for tile, (raw, wire) in sorted(tot.items()):
-    print(tile, f"raw {raw/1e6:.2f} MB", f"wire {wire/1e6:.2f} MB")
-PY
-```
+**Every published file is counted, in exactly one class** (`published`).
+The script lists the site's directory, not the manifest alone:
 
-Measured 2026-09-25 on the current build (Dresden, gzipped wire sizes):
+- **tiles** — every file a tile of the tileset names (the set *all*
+  below, over the site);
+- **boot** — `manifest.json`, the tileset JSON and the ground plate, which
+  every visit of a city fetches before its first frame;
+- **site** — the site-wide files a visit fetches when it asks for them:
+  the lite profile's tileset, the provenance, the landmark
+  facts, the trams' timetable, the murals and their drawings, the walks
+  and their photos, the minimap, the start page's site map;
+- **server** — what no visitor fetches: the inquiry's knowledge
+  (`stadtwissen*.json`) and the start page's `site-stats.json`, in bytes
+  on disk.
 
-| Per tile | Wire |
-|---|---|
-| buildings `city_<t>.glb.gz` | up to 1.9 MB (33416_5658, all forest, holds one building) |
-| fine terrain L0 (the TIN, with walls, stairs and kerb stones) | 1.3–3.6 MB |
-| coarse terrain L1 | 0.41–0.65 MB |
-| minimap picture | one for the site, 87 kB (the footprints, up to 0.08 MB a tile, on demand) |
-| class raster 4096² / 2048² | 0.15–0.29 MB / 0.06–0.11 MB |
-| NDVI 1024² | 0.32–0.77 MB |
-| paving raster 2048² (fine level only) | 0.25–0.97 MB |
-| edge raster 2048² (fine level only) | 0.03–1.97 MB (the forest tiles are the bottom, the southern row the top) |
-| canopy, packed (`canopy_<t>.pts.gz`, `lib/city/point-pack.ts`: 12 bytes a point — stride 5, 20 bytes, once a crown is an evergreen (a pine among them) or reaches over a carriageway (the `flags` float) —, x/y relative to the tile's south-west corner, pre-gzipped) | 0.03–0.40 MB (0.06–0.98 MB raw; the forest tiles 33414_5658 and 33416_5658 are the top). Until 2026-10-03 GeoJSON: 0.04–0.53 MB on the wire but 0.6–9.5 MB to parse in one task (≈ 96 ms in V8 for 33416_5658; unpacked into the same features now ≈ 13 ms) |
-| street furniture GeoJSON | up to 0.02 MB (0.19 MB raw; the forest tile 33416_5658 has seven pieces); with plan 030's signs and fixtures 0.01–0.03 MB (0.07–0.25 MB raw) on the four first tiles |
-| street-tree cadastre + OSM trees GeoJSON | 0.01–0.07 MB (0.1–0.9 MB raw; none on 33416_5658, all forest; the four first tiles with OSM trees 0.04–0.07 MB) |
-| scan trees, packed (`canopyx_<t>.pts.gz`, 16 bytes a point with the crown radius) | 0.02–0.07 MB (0.05–0.14 MB raw; GeoJSON until 2026-10-03, 0.4–1.1 MB raw) |
-| coarse crowns (`crowns_<t>.crw.gz`, `lib/city/coarse-crowns.ts`: 20 bytes a crown — the world x/z as the fine level's matrix holds them, scale or the register crown's extents, turn, NDVI, genus, season offset; a third of the fine level's trees, chosen by where each stands, built by prepare-data from the tile's tree files on its fine ground, `scripts/coarse-crowns.ts`; fetched with the coarse level's other side files) | 0.04–0.29 MB (0.07–0.56 MB raw; 3 700–27 900 crowns, 136 000 over Dresden's fifteen tiles) |
-| OSM hedges GeoJSON | ≤ 0.005 MB |
-| trams GeoJSON (the four first tiles) | 0.003–0.017 MB (0.01–0.09 MB raw) |
-| riverside GeoJSON (the four first tiles) | ≤ 0.004 MB (≤ 0.02 MB raw) |
-| everything else (veg rows, lamps, monuments, walls, rail, bridges, platforms) | ≈ 0.01–0.04 MB together |
-| **tile total** | **4.0–9.7 MB** (phones, without the 4096² raster: 3.8–9.4 MB) |
+The site-wide rows are one table, `SITE_FILES`; `published.kinds` has each
+row's bytes. A published file that no tile and no row names is an
+**error**: whoever publishes a new file adds its row and says who fetches
+it. So bytes cannot leave the gate by moving — a side file inlined into
+the tileset shows as the boot growing by what the file held — nor by a
+name the ledger does not read: a tile that names a file the set *all*
+does not hold (a new extras key, a third content) is an error too, and so
+is any name in the tileset or the lite profile's — at its root, under its
+extras, in a content — that ends like a file and is not served from the
+site's directory (`../common/huge.png`). Beside the sites' directories lies
+`public/data/sites.json`, the build's index of its sites, which the
+server reads and no visitor fetches: it is in no class.
 
-The whole Dresden site is ≈ 98.9 MB on the wire (≈ 95.6 MB for a phone),
-the spawn tile alone — the `lite` profile — ≈ 6.4 MB. A visit fetches
-less: streaming loads a tile's content only when it is in view, and a far
-tile stops at its coarse terrain (≈ 1.3–3.3 MB per tile: buildings,
-footprints, the coarse terrain with its 1024² raster and the NDVI).
-Before the tileset a desktop visit loaded the then four-tile site whole
-at boot, ≈ 10.6 MB; the growth is quantised meshes instead of a heightfield blob
-(≈ 1.4 + 1.5 + 0.4 MB of buildings and terrain per tile now vs
-≈ 1.0 + 1.1 MB). Sources on disk that are never served: the DGM
-GeoTIFF (12.9–15.6 MB/tile) and the CityJSON (2.7–13.6 MB/tile).
+The rule for a file's bytes on the wire: `.png`, `.webp` and `.gz` at face
+value; `.json` and `.geojson` gzipped at level 6; any other extension is an
+error, never a guess. The text figures are the pinned Bun's zlib's, not
+what a host sends (zlib 1.3 gives 0.6–2.2 % other bytes at the same level,
+and the host sends brotli): a stand-in kept constant, so the figure moves
+with the files and with Bun's version only. A request is a file. Per tile,
+the ledger reads the tileset's names in seven sets:
+
+- **far** — what a tile in view costs from afar: the far buildings with
+  their side files (the facade reading, the sky view), the coarse terrain,
+  the rasters it reads and its coarse side files (bridges, traffic,
+  crowns);
+- **fine** — the fine level beyond the ground detail's reach
+  (`lib/city/ground-reach.ts`): the fine terrain, its dressing files, the
+  sports table and the NDVI, and its rasters — the close-range ones
+  (paving, edges, sports grounds, markings, colonies) as their 1024²
+  twins;
+- **approached** — the same level once the camera came within reach: the
+  set *fine* and the full rasters fetched on top of the twins
+  (`terrain-layer.ts` `loadReachSet`). A level that lands within reach —
+  the tile a visit starts on — never fetches the twins, so it costs less
+  than this figure; a visit that flies in pays it;
+- **near** — the buildings as baked (their side files came with the far
+  ones);
+- **ask** — the inquiry card's files (ADR 0042);
+- **all** — every file the tile names: both levels' twins, the minimap's
+  footprints and bridges, the card's;
+- **unvisited** — the files of *all* that none of the sets above fetches
+  on either tier: on Dresden exactly the fifteen footprint files, which
+  the build reads for the minimap. A fetch the viewer drops or adds moves
+  it.
+
+Which rasters a level reads is the viewer's own rule: `rasterFiles`
+(`app/_components/tile-rasters.ts`) over the kinds a level acquires, with
+the far twin for `REACH_KINDS` beyond the reach. The ledger states no
+second rule, and `scripts/ledger.test.ts` holds it against the viewer's
+code: the kinds `loadTerrainRasters` and `loadReachSet` acquire, and the
+side files `buildDressing` fetches. On a phone the class raster's, the
+markings' and the colonies' twins are read at either reach, and no sports
+raster. A set where a phone reads other files has a `phone` row beside the
+desktop's. Each set is recorded as the spawn tile, the median tile (the
+lower of an even count), the largest tile and the site (each file once);
+tiles of the same weight are told apart by their id.
+
+Every figure is gated, the buildings' among them: `buildings` holds each
+tile's vertices, triangles and decoded bytes, near and far, and the sets
+count the buildings' glTF and the boot's JSONs (which name every file by
+its content hash) at their full bytes. That holds because a bake's bytes do
+not depend on the machine ("Cache and publish"): CI's check passing on a
+runner that did not bake the committed file is the standing proof.
+
+**The dressing** has a section of its own (`dressing`, plan 090;
+`lib/city/ledger-dressing.ts`): for three watched tiles — the spawn, a
+forest (`33416_5658_2_sn`) and the Neustadt yards (`33410_5656_2_sn`) —
+each level's side files kind by kind, bytes and requests, gated like the
+sets. On 2026-11-16 a fine level's dressing was 249 kB in 18 requests on
+the spawn tile, 497 kB on the forest (its canopy alone 469 kB) and 276 kB
+on the yards: 3–7 % of the level's bytes and eighteen of its twenty-nine
+requests. Beside it `dressing.recorded`, a part `--check` never
+compares: München's heaviest tile, what a browser measured (the scene
+thread's milliseconds by builder and the bytes a dressing weighs in the
+tile cache: `DRESSING_LEDGER=1 bunx playwright test
+e2e/dressing-ledger.spec.ts`), and the figures of plan 090's two spikes
+(`bun scripts/eval/stand-record-probe.ts --out
+.cache/ledger-dressing/stand-probe.json`,
+`bun scripts/eval/stand-record-bytes.ts`,
+`bun scripts/eval/lines-three-ways.ts`). Those tools leave what they read
+in `.cache/ledger-dressing/`, and `bun run ledger` folds it in; a machine
+that measured nothing writes the section back as it was.
+
+Baseline, 2026-11-16 (Dresden, fifteen tiles; MB = 10⁶ bytes on the wire;
+files in brackets):
+
+| Set | Spawn tile | Median tile | Largest tile | Site |
+|---|---|---|---|---|
+| far | 4.69 (10) | 4.59 | 5.83 | 67.0 (150) |
+| fine | 5.45 (29) | 5.62 | 7.46 | 84.0 (433) |
+| fine, phone | 5.31 (28) | 5.43 | 7.30 | 81.8 (418) |
+| approached | 7.92 (34) | 8.10 | 9.99 | 118.4 (506) |
+| approached, phone | 7.52 (30) | 7.59 | 9.63 | 112.3 (448) |
+| near | 3.04 (1) | 2.45 | 4.25 | 37.1 (15) |
+| ask | 0.04 (1) | 0.02 | 0.04 | 0.35 (15) |
+| all | 13.8 (43) | 13.8 | 17.5 | 193.6 (641) |
+| unvisited | 0.15 (1) | 0.13 | 0.21 | 1.96 (15) |
+
+The published directory holds 700 files: the tiles' 641 (193.6 MB), the
+boot's three (39.8 kB: the manifest 9.2, the tileset 9.4, the plate
+21.3), 39 site-wide (3.51 MB, of which the walks' photos 2.35 and the
+murals' drawings 0.80)
+and the server's 17 (3.86 MB on disk). The last count by hand, 2026-09-25
+with the same rule over every file named after a tile (the set *all*
+today), gave a tile 4.0–9.7 MB and the site ≈ 98.9 MB. A visit fetches
+less than a set's site figure: streaming loads a tile's content only when
+it is in view, and a far tile stops at its far set. Sources on disk that
+are never served: the DGM GeoTIFF (12.9–15.6 MB a tile) and the CityJSON
+(2.7–13.6 MB a tile).
+
+**The complexity counters** (`counters`; each rule and what it cannot see
+is at its function in `lib/city/ledger-counters.ts`) count code, never
+where a file lies or how its text is wrapped — a move, a comment, a blank
+line or a wrapper function moves no count (`longestFunction.path` names
+the module, and follows a move). They read the working tree: an untracked
+source file counts, as it would once committed. The sources are read by
+two small lexers (`lib/city/ts-lexer.ts`, which reads a `.tsx` file's JSX
+as text, and `lib/city/source-lexer.ts` for the bakes' Python), and a file
+whose brackets do not close as read is an error, not a figure:
+
+| Counter | Counts | Dresden's tree, 2026-11-16 |
+|---|---|---|
+| `dressingKinds`, `coarseDressingKinds`, `askKinds` | the artifact table's kinds | 17, 3, 1 |
+| `publishedExtensions` | the distinct extensions among the published files | 9 |
+| `layerModules` | the modules named `*-layer.ts` anywhere under `app/`, `lib/` or `packages/`, and their lines of code (no comment, no blank line) | 27 with 14 420 |
+| `longestFunction` | the longest top-level function of the sources in lines of code — declared, an arrow or a function expression, alone or as a call's argument — or class: the boot, however it is written or wrapped | `bootApp`, 2 354 |
+| `bakeSeamModules` | the modules under `pipeline/bake/` whose code handles a tile's edge — plan 092's five ways by their calls, and any other read with a `margin` | 58 of 84 |
+| `upstreamWorkarounds` | the entries of `docs/rendering.md`, "Workarounds for upstream bugs", and the comments that say *upstream workaround* | 10 entries, 8 sites |
+
+### What the bakes hand over
+
+The ledger's `bakeStore` section (plan 092; the counting in
+`lib/city/ledger-bake-store.ts`, the reading in
+`scripts/ledger-bake-store.ts`) is read from the tree alone — the bake
+modules and the baked files git tracks under `data/<site>/dlm/` and
+`dop/`, so a site that is fetched but not committed and a file an
+interrupted bake left behind are none —, needs no build and no bake, and
+falls as plan 092's phases land:
+
+| Figure | Counts | The tree, 2026-11-16 |
+|---|---|---|
+| `fileKinds` | the distinct `<kind>.<format>` among the files named for a tile, in all and by format — the union over the committed sites (Leipzig, München and Unna have 50 of them, Hamburg 49); `formats` is how many formats | 51 in 3: 28 GeoJSON, 13 JSON, 10 PNG |
+| `mixedKeyOrder` | the feature kinds whose rows, over all sites, have no single key order (two keys turned round between rows, or more in a circle): a reader that returns rows in a schema's order does not return these as written. `furniture` is mixed within single files; `traffic` has one order in each site, Dresden's another than the others' | `furniture`, `traffic` |
+| `stepCacheCodeLines` | `pipeline/bake/step_cache.py`'s lines of code (no comment, no blank line): the ledger of rewrites lives there | 503 |
+| `neighboursModules` | the bake modules that call `Tile.neighbours()` | 14 |
+
+The bake modules that call `owns` are `counters.bakeSeamModules.ways.owns`
+(17), counted there. Which step writes into another step's file is in a
+bake's manifests only, so it is no figure here: plan 092's *Findings* hold
+it.
+
+### The rasters, every site
+
+The ledger's `rasters` section (plan 091 phase 0; the arithmetic in
+`lib/city/ledger-rasters.ts`, the reading in `scripts/ledger-rasters.ts`)
+holds, for every site whose data git tracks (`data/<site>/`,
+`trackedSites`), what a terrain level's rasters weigh. The sites come from
+the tree, not the disk: a site fetched and baked here but never committed
+(Berlin's `data/berlin/`, ignored by git) is no site of the ledger and
+moves no figure; a tracked site must be built, and one that is not fails
+the run with its name (`build first`). The list is git's index
+(`scripts/git-tracked.ts`, as for the bake store), so a site staged but not
+yet committed counts; the ledger runs at the repository's top (its `root`),
+with git's own variables (`GIT_DIR`, `GIT_INDEX_FILE`) dropped, and a git
+that fails there is an error in git's words, never an empty list — only a
+root that is no work tree (a test's fixture) has no sites. The test that
+holds the committed ledger's sites to the tree needs the checkout's `.git`. It decodes each published raster with the viewer's decoder and asks
+the viewer's own rules which file a level reads on a tier (`rasterFiles`),
+how its texture is laid out (the kinds table's looks) and what it weighs on
+the GPU (`textureBytes`, and `splatScaleFor` for the colour splat painted
+from the classes). Per site: each raster and table artifact's files, wire
+bytes and texture shapes; each kind's GPU bytes on the spawn tile and the
+largest, per tier and level — the fine level near the camera (`fine`) and
+beyond the ground detail's reach (`fineFar`, the far twins), and the coarse
+level (the float tables are not weighed, as in the viewer); the fine level
+by sort at both reaches — **exact** ids (class,
+paving, sports grounds, markings), **measured** fields (edges, colonies),
+**soft** fields (NDVI, sky view, horizon) and the splat; the share of
+texels that carry anything in the sparse rasters (paving, sports grounds,
+markings, colonies) and of their bounding box, against the full tile
+raster, over the tiles whose fine level holds the raster on a desktop; and the ground programs (`splatVariant` keys) the levels ask for.
+`cpuDecodes` names what the viewer decodes on the CPU without uploading —
+today the NDVI, for the crowns' greenness (`vegetation-layer.ts`); a new
+caller of the PNG decoder fails the ledger until it is named there. Every
+figure is gated: all are functions of the published files and the code.
+
+Baseline, 2026-11-16 (MiB on the GPU; the largest tile; *programs* over
+both levels; *cover* the mean share of carrying texels, the sports
+grounds' bounding box in brackets):
+
+| Site (tiles) | Phone, fine level: exact / measured / soft / splat = total | Soft | Phone, fine, beyond reach | Desktop, fine | Coarse level | Programs desktop / phone | Cover: paving / markings / sport (box) / colonies |
+|---|---|---|---|---|---|---|---|
+| Dresden (15) | 24.0 / 9.9 / 4.7 / 21.3 = 59.9 | 7.8 % | 41.9 | 105.7 | 11.0 | 4 / 3 | 35.5 % / 11.6 % / 1.2 % (66 %) / 4.8 % |
+| Grimma (2) | 24.0 / 9.8 / 4.7 / 21.3 = 59.8 | 7.8 % | 41.8 | 105.0 | 11.0 | 2 / 2 | 46.7 % / 8.0 % / 0.4 % (17 %) / 5.6 % |
+| Hamburg (4) | 24.0 / 8.0 / 4.7 / 21.3 = 58.0 | 8.0 % | 40.0 | 98.0 | 11.0 | 2 / 2 | 33.5 % / 17.3 % / 0.5 % (30 %) / — |
+| Leipzig (4) | 24.0 / 10.0 / 4.7 / 21.3 = 60.0 | 7.8 % | 42.0 | 106.0 | 11.0 | 2 / 2 | 43.7 % / 16.8 % / 0.9 % (73 %) / 2.3 % |
+| Meißen (1) | 24.0 / 10.0 / 4.7 / 21.3 = 60.0 | 7.8 % | 42.0 | 105.9 | 11.0 | 2 / 2 | 31.2 % / 12.2 % / 0.7 % (75 %) / 6.1 % |
+| München (4) | 24.0 / 8.3 / 4.7 / 21.3 = 58.3 | 8.0 % | 40.3 | 99.2 | 11.0 | 3 / 3 | 39.2 % / 14.9 % / 1.1 % (82 %) / 0.4 % |
+| Unna (2) | 24.0 / 8.3 / 4.7 / 21.3 = 58.3 | 8.0 % | 40.3 | 99.1 | 11.0 | 3 / 3 | 46.4 % / 12.1 % / 0.7 % (77 %) / 0.3 % |
+
+A coarse level is the 1024² class raster (1.0), its splat (5.3) and the
+three soft fields (4.7, 42.4 %), which both levels of a tile share.
+Beyond the ground detail's reach a phone's fine level reads the 1024²
+twins of the paving and markings (4 MiB each) and the edges (2 MiB).
+
+### The sky view as blocks (the trial)
+
+The ledger's `blocks` section (plan 091 phase 2; `lib/city/ledger-blocks.ts`,
+read by `scripts/ledger-blocks.ts`) holds, for every site git tracks (as
+the rasters),
+its tiles' sky views as the PNG the viewer reads and as the two block
+files a build with `SVF_BLOCKS=1` publishes beside it — encoded here from
+the published PNG by the build's own call (`publishedBlockFile`), so a
+default build serves: the wire bytes, the GPU bytes (the PNG's as laid
+out with the GPU's mips, a third more; the blocks' as uploaded, the chain
+in the file) and the error of what the shader reads from the blocks
+against the PNG's byte, in byte steps — over level 0 the mean over the
+site's texels, the largest tile p99 and the largest texel; over levels 1
+on the largest texel against the box-filtered chain — by the formats'
+nominal decode, not a GPU's read (SwiftShader reads up to 0.86 below it
+for BC4, truncating to whole bytes, and 0.12 for EAC, widening its eleven
+bits without repeating them: `scripts/eval/block-raster-probe.ts`). The
+encodes take about two minutes for the seven sites, so the section is
+read anew only with `bun run ledger -- --blocks`; without it the
+committed section stands and `--check` does not compare it, as with
+`--browser`. The rasters' table above does not count the blocks: no tier
+reads them by default.
+
+| Site (tiles) | PNG wire / GPU, MiB | BC4 wire / GPU | BC4 error mean / p99 / max | EAC wire / GPU | EAC error mean / p99 / max |
+|---|---|---|---|---|---|
+| Dresden (15) | 7.86 / 20.00 | 8.75 / 10.00 | 0.74 / 4.57 / 14.6 | 8.66 / 10.00 | 0.77 / 4.89 / 16.9 |
+| Grimma (2) | 0.89 / 2.67 | 1.03 / 1.33 | 0.61 / 4.86 / 12.9 | 1.02 / 1.33 | 0.64 / 4.93 / 17.1 |
+| Hamburg (4) | 1.82 / 5.33 | 2.14 / 2.67 | 0.58 / 4.00 / 13.6 | 2.13 / 2.67 | 0.62 / 3.97 / 14.0 |
+| Leipzig (4) | 2.24 / 5.33 | 2.51 / 2.67 | 0.80 / 4.14 / 12.0 | 2.49 / 2.67 | 0.83 / 4.14 / 15.8 |
+| Meißen (1) | 0.58 / 1.33 | 0.62 / 0.67 | 0.91 / 4.71 / 13.1 | 0.62 / 0.67 | 0.92 / 4.90 / 15.8 |
+| München (4) | 2.24 / 5.33 | 2.52 / 2.67 | 0.76 / 4.00 / 11.3 | 2.50 / 2.67 | 0.80 / 4.06 / 12.1 |
+| Unna (2) | 1.05 / 2.67 | 1.16 / 1.33 | 0.86 / 4.86 / 13.4 | 1.15 / 1.33 | 0.88 / 4.93 / 14.8 |
+
+Levels 1 on, the largest texel against the box-filtered chain: BC4
+14.0–15.7, EAC 15.0–22.0. Baseline 2026-11-16. On the wire the blocks are 7–18 % above the PNG
+(gzip; brotli would take about half that back: plan 088's transport); on
+the GPU half, 0.67 MiB a tile for 1.33.
+
+### What a browser reads
+
+`bun run ledger -- --browser` (plan 087, phase 2) adds what only a
+browser can say, read by `e2e/ledger.spec.ts` (ignored unless `LEDGER=1`,
+never retried) at `/dresden?scene=lite` from a `NEXT_PUBLIC_POC_DEBUG=1`
+production build on SwiftShader — a running `next start` is reused, else
+Playwright builds and starts one. The spec hands what it read to
+`scripts/ledger-browser.ts`, which weighs it with the pinned Bun — and
+refuses a build environment that inlines what CI does not set
+(`NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_RELEASE`, `VERCEL_GIT_COMMIT_SHA`, …)
+or a running server that does not serve `.next`'s current build; the
+shapes are `lib/city/ledger-browser.ts`, and each gated figure carries a
+`note` saying what it is. Both are gated exactly. CI's build-check shard
+runs the check with `--browser` wherever its e2e half runs; without the
+flag the committed figures stand and `--check` says they were not
+compared.
+
+- **The first load's JavaScript** (`browser.firstLoad`): every
+  `/_next/static/*.js` the page and its workers fetch until the set is
+  cut — `ready`, the named workers `scene`, `ground` and `niches`
+  running, then five seconds without a new script — and a second read
+  five seconds later must name the same files (the BVH worker is not in
+  it: it starts at the first move near buildings). Each raw body is
+  gzipped at level 9 by the pinned Bun (plan 074's method, the same
+  `scene=lite` page). `workerOnly` is the files no page fetch named (the
+  page's resource timing), whichever worker fetched them: not the scene's
+  JavaScript, which the page shares. The chunks' names, content hashes
+  that move with any change, are in `timings.firstLoad`.
+- **A phone's tile cache** (`browser.phoneLiteSpawnCache`): a context
+  with `isMobile` and `hasTouch`, the scene's own tier asserted `mobile`;
+  the cache's own accounting (`calculateBytesUsed`, as its budget counts
+  it) of its loaded contents, each by the manifest's logical name, once
+  two reads four seconds apart (more than a late part's compile wait)
+  agree with no compile queued. Under the lite profile that is the
+  spawn tile alone, one of fifteen. It is not the phone's memory: what a
+  tile holds on the GPU that never reaches `calculateBytesUsed` moves
+  nothing here, and three's `info.memory` at `ready`
+  (`timings.phoneHeld`) is recorded only, since two reads of one build
+  differ by a few geometries, textures and programs that come and go.
+- **The timings** (`timings`): `getTimings()` — the scene's
+  `streamTimings.summary()` (`app/_components/stream-timing.ts`) — at
+  `ready` on both pages: the `boot:*` marks, `dressing:build`,
+  `tile:compile`, and `longtask` where the scene counts it (`?trace=1`).
+  Recorded with the machine and the day, never compared: on SwiftShader
+  a timing depends on the runner drawn. `browser.readWith` names the
+  browser and adapter beside the figures, uncompared too.
+- **The builds against WebGPU's limits** (`browser.pipelines`, plan
+  094): on the phone page, once its cache has settled with no compile
+  queued (on the desktop page the wait for that cost a minute), every
+  build the lite spawn draws with, from `handle.getPipelineBudget()` (the e2e
+  "limits" test's probe), named `key [draw: layout] shadowed camera`,
+  each with the vertex buffers, attributes and inter-stage variables it
+  takes of WebGPU's 8, 16 and 16 and the variables it has spare
+  (`lib/city/ledger-census.ts` `pipelineFigures`). Gated exactly: a row
+  that moves is a layer coming nearer a limit, and the diff says which.
+
+### The census of builds
+
+`bun run ledger -- --census` (plan 094, phase 2; implies `--browser`)
+also flies every built site, one test of `e2e/ledger.spec.ts` each
+(`LEDGER_CENSUS`), and writes the `census` section — recorded, never
+compared (it is in `UNCOMPARED` whole): what lands when is the machine's
+frame rate's. Each site in the whole-site profile
+(`?scene=lite&block=1`, 400×300) reads its counters at `ready`, switches
+on every data layer it has — Dresden's bicycle counts answered by the
+spec (`e2e/scene-fixtures.ts`), a design block loaded there — and reads
+them again once the spawn has settled (`dressed`); the flight's window
+is `dressed` → end. It then flies `censusFlight`: an overview from
+2.5 km over the site's middle (the far building level), and low oblique
+stops over up to four tiles, the spawn and those farthest from the ones
+seen. A stop waits for the view to rest, the stream to be quiet and no
+compile queued in two reads two seconds apart (at most four minutes;
+`settled` says whether it got there) and reads `getPipelineBudget` —
+every build the scene holds, so the whole site's builds are held to the
+limits too (`probeBuilt`: programs the read itself made; `left`, `unread`:
+what it could not read). Dresden is then entered in Modell (`M`) from
+its spawn and read once more. Per site: every build met by name with
+what it takes of the limits (`builds.rows`; two rows of one name keep
+the tighter), the distinct builds (key × draw × layout × shadow receipt
+× camera), the distinct keys and each key family with more than one key
+(`keyFamily`: what comes before the first value — the sets made from
+data), `framedBuilds` and `programs` at `ready`, `dressed` and the
+flight's end, the compile timings over the window (`tile:compile` is
+what a landing tile waited for, capped at 3 s; `compile:turn-wait` is a
+compile's place in a burst's queue, not a landing's wait), the tightest
+builds by each limit, and the errors met. SwiftShader's WGSL and limits
+only. Tens of minutes on SwiftShader, so never on CI; run it on
+linux-x64 after building every site.
+
+Baseline, 2026-11-16 (linux-x64 cloud container, Bun 1.4.4, Chromium 153
+on SwiftShader): the first load fetches 42 scripts, 1 103 124 bytes gzip
+-9 (1.10 MB; plan 074 counted 904 619 on 2026-10-10, gzipped elsewhere),
+8 of them, 34 829 bytes, by the three workers alone. A phone's cache at
+the spawn holds four loaded contents — the tile's two terrain levels,
+94.6 MB and 24.7 MB with what they carry, its near and far buildings,
+27.0 MB and 12.6 MB — 159.0 MB in all. Its boot on SwiftShader:
+`boot:spawn-wait` 3.6–4.5 s, `boot:veil-to-loaded` 4.2–4.3 s,
+`dressing:build` 0.9–1.1 s for two tiles, `tile:compile` 9–12 s over four
+compiles (each capped at 3 s).
 
 ## Provenance
 
@@ -1251,20 +1776,24 @@ its edition must be noted at download time: the ZIP carries
 every committed Saxon site is baked from since 2026-11-05), recorded as
 `geosn["Basis-DLM"].lastModified` in each Saxon site's `provenance.json`.
 
-**Where the OSM values come from.** The pipeline reads the Geofabrik
-extract in `data/_raw/<provider>/osm/`; its timestamp is printed by
-`osmium fileinfo -e <file>.osm.pbf` (`osmosis_replication_timestamp`).
-Geofabrik resets connections from the cloud container, so the extract is
-placed by hand under the Geofabrik name the spec expects (`spec.osm`):
-BBBike's city extracts (Dresden for Dresden and Meißen, Leipzig for
-Leipzig and Grimma, Hamburg, München) and openstreetmap.fr's Arnsberg
-region for Unna — every committed site was re-baked from them on
-2026-11-01 (and again on 2026-11-05, from the same BBBike extracts and a
-newer Arnsberg one), except the two steps that need the laser scan GeoSN did not
-serve that day (`lowveg`, `small-buildings` on the Saxon sites). The
-extract's date is its `Last-Modified` (BBBike) or `state.txt`
-(openstreetmap.fr), recorded as each product's `dataAsOf` in the site's
-`provenance.json`.
+**Where the OSM values come from.** The pipeline reads the extract in
+`data/_raw/<provider>/osm/`: Geofabrik's, or where Geofabrik cannot be
+reached the site's BBBike city extract that covers it (see "Where the OSM
+extract comes from"). The fetch records each one's source and
+`Last-Modified` in `<extract>.source.json`, and each bake writes the day
+into `provenance.json` per step and tile it ran (`openstreetmap.baked`;
+`unknown` where the extract names no day). Before
+the fetch fell back by itself, the extract was placed by hand under the
+Geofabrik name the spec expects: BBBike's city extracts (Dresden for
+Dresden and Meißen, Leipzig for Leipzig and Grimma, Hamburg, München) and
+openstreetmap.fr's Arnsberg region for Unna — every committed site was
+re-baked from them on 2026-11-01 (and again on 2026-11-05, from the same
+BBBike extracts and a newer Arnsberg one), except the two steps that need
+the laser scan GeoSN did not serve that day (`lowveg`, `small-buildings`
+on the Saxon sites). Those records are hand-written: the extract's date
+is its `Last-Modified` (BBBike) or `state.txt` (openstreetmap.fr), as
+each product's `dataAsOf`; when a re-bake's `baked` records replace them,
+drop the old ones, or the Wächter keeps reading the oldest day.
 
 **Licences.** Per provider in `sites/providers.ts` (`licence`, `credit`):
 *Datenlizenz Deutschland – Namensnennung 2.0* for GeoSN and Hamburg,

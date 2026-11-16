@@ -31,7 +31,8 @@
   frame), less complexity (the compile choreography)
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: TODO
+- **Status**: IN PROGRESS — phases 0–2 done (2026-11-16), see *Findings*;
+  phase 2 decided that phase 3 stays, before 093
 
 ## Why this matters
 
@@ -341,7 +342,7 @@ Whether or not phase 4 applies:
       fixture is pushed past a limit
 - [ ] AGENTS.md's rule on the limits names the test; `qa/ledger.json`
       holds a row a build
-- [ ] Phase 2's census is in *Findings*, with the decision on phase 3
+- [x] Phase 2's census is in *Findings*, with the decision on phase 3
 - [ ] If phase 3 is built: no `sceneMaterial` or `setGraph` key is made
       from a value in the data (`pipeline-register.test.ts` scans the
       call sites); the flight test passes on every committed site;
@@ -395,4 +396,312 @@ Whether or not phase 4 applies:
 
 ## Findings
 
-(Empty. Phases 0 and 2 write their tables here.)
+### Phase 0 — the spike (2026-11-16, three r187, headless Chromium on SwiftShader)
+
+**The counts can be had on public API.**
+`renderer.debug.getShaderAsync(scene, camera, object)` returns the two
+WGSL texts of a drawable's build; nothing private is touched. What the
+call needs around it:
+
+- It runs a `compileAsync`, so it takes a compile's turn
+  (`compileInTurn`), and it reads the build back for **the render target
+  set once that compile has resolved** — so the scene's target stays set
+  over the whole call, not only over its synchronous half as a compile's
+  does. A frame that gets in meanwhile ends on the canvas, and the read
+  would then look the drawable up under the canvas's context (and make a
+  render object for it). `PostStack.shadersOf` therefore compiles the
+  drawable first (`compileNow`), after which the read's own compile
+  awaits nothing a frame fits into, checks the target after the read and
+  reads again if it changed.
+- It looks the drawable up under the render context's own clipping
+  context, not a `ClippingGroup`'s: under a held Ausschnitt the read
+  would miss the build that is drawn. `shadersOf` answers null while a
+  cut is held.
+- Measured: reading all 69 builds of the lite scene took 0.2 s, and
+  `info.memory.programs` (182; 261 in Modell) and `framedBuilds`
+  (59 other, 22 shadow) were the same before and after, and 8 s later.
+  The probe builds nothing.
+
+**What counts** (WebGPU specification, "validating inter-stage
+interfaces" and "validating GPURenderPipelineDescriptor", read
+2026-11-16): the vertex stage may write `maxInterStageShaderVariables`
+(16) user-defined outputs — one fewer on a point list, one fewer for
+every four `clip_distances`, which also lower the highest location; the
+fragment stage may read as many user-defined inputs, one fewer for each
+of `front_facing`, `sample_index`, `sample_mask`, `primitive_index` and
+the two subgroup builtins it names. `position` counts on neither side.
+A pipeline has at most `maxVertexBuffers` (8) buffers and
+`maxVertexAttributes` (16) attributes. three writes the vertex stage's
+attributes as `main`'s parameters and the varyings as `VaryingsStruct`;
+it makes one buffer layout for each attribute and one for an interleaved
+buffer (`WebGPUAttributeUtils.createShaderVertexBuffers`), so the buffers
+are the distinct `attribute` / `attribute.data` objects among those the
+vertex stage names. The device is made without `requiredLimits` and
+reports 16 / 16 / 8.
+
+**The counts explain the known limits**: the clay passes thirteen
+variables and reads `front_facing`, two spare — the skill's sentence.
+
+| Build | Camera | Vertex buffers (of 8) | Attributes (of 16) | Variables out / in | Counting builtins | Spare variables |
+|---|---|---|---|---|---|---|
+| `clay\|niches` — the spawn tile, near level, openings cut | walk/fly | 4 (`featureId`, `facade`, `position`, `normal`) | 4 | 13 / 13 | `front_facing` | **2** |
+| `clay` — the far building level, from 3.5 km | walk/fly | 4 | 4 | 13 / 13 | `front_facing` | **2** |
+| `clay` — near level in Modell (no niches there) | parallel | 4 | 4 | 12 / 12 | `front_facing` | **3** |
+| `clay\|double` — the Schnitt (Modell's `section` preset) | parallel | 4 | 4 | 12 / 12 | `front_facing` | **3** |
+| `window-niche` — an `Instances` set (`iMat0`–`3` interleaved: one buffer) | walk/fly | 4 | 7 | 12 / 12 | — | 4 |
+| `window-niche` | parallel | 4 | 7 | 11 / 11 | — | 5 |
+| `terrain\|ndvi\|surface\|edges\|sport\|markings\|colonies\|svf\|horizon\|2000\|2000` — the spawn tile's ground, every raster | walk/fly | 2 | 2 | 4 / 4 | — | 12 |
+| the same ground | parallel | 2 | 2 | 3 / 3 | — | 13 |
+
+Over the lite scene's 69 builds (spawn tile, every layer of it): at most
+5 vertex buffers (the trees' feet, `crown-bare`, the instanced
+`monument-clay`, `furniture-hands`) and 8 attributes; after the clay and
+the niches the fewest spare variables are 7 (`crown-bare`, the feet's
+`tree-earth`, `-litter`, `-shade`). No attribute a vertex stage names is
+missing on its geometry.
+
+**A parallel camera's build passes one variable fewer**, every lit
+material alike: `v_positionViewDirection` is not a varying where the
+direction to the eye is one for the whole view. The clay's budget is
+therefore the walk/fly camera's.
+
+The fixtures are the clay's texts, `lib/city/__fixtures__/wgsl-budget/`
+(`clay.*` = `clay|niches` under the walk/fly camera, `clay-parallel.*` =
+`clay` under Modell's).
+
+### Phase 1 — the counting test (2026-11-16)
+
+- `lib/city/wgsl-budget.ts` (pure; `wgslBudget`, `budgetSpare`,
+  `budgetBreaches`) with its unit test: the fixtures, hand-made texts at
+  and over each limit, a builtin that counts and one that does not.
+- The probe is `app/_components/pipeline-budget.ts`, behind `pocEnabled`
+  (a production build answers with no rows), reached as the handle's
+  value call `getPipelineBudget()` beside `getGpuDebug` — no new message
+  in `scene-protocol.ts`, the call rides the existing `call`.
+- The e2e test "limits: every build is within WebGPU's limits, the clay
+  two variables short" (`@desktop-render`): the lite scene at the spawn
+  (`clay|niches`), from far off (`clay`, the far level), and inside the
+  Modell test under the parallel camera (`clay`), which on its way out
+  switches to the Schnitt for `clay|double` (the preset's `poche` turns the clay
+  two-sided through `setClaySection`; only `setCutOut` makes the
+  `ClippingGroup`, so the Schnitt is readable). The budget is
+  `CLAY_SPARE_VARIABLES` (2, parallel 3) and `CLAY_VERTEX_BUFFERS` (4) in
+  the spec.
+- Seen to fail: with one more varying on the clay
+  (`varying(float(0.25))` added to its colour, not committed) the e2e
+  test fails with `clay|niches […]: 1 spare` where it expects `2 spare`.
+  The ninth plain attribute is a unit test
+  (`pipeline-budget.test.ts`: eight buffers pass, the ninth is a
+  breach) — a real ninth buffer in the scene would log a failed
+  pipeline and trip the spec's error watch before the count.
+
+- What it costs the `@desktop-render` shard (headless, four cores
+  here): the limits test 1.1 min — the far flight and its compiles —
+  and about 0.5 min in the Modell test, on a shard of about 3.2 min
+  before. No test was retried on CI. If the shards' balance asks for
+  it, the far flight is the part to give up: the far level's `clay`
+  differs from the near `clay|niches` by the openings' mask alone, and
+  both measured the same thirteen variables and four buffers.
+
+**Open after phases 0–1**
+
+- **The ledger** (phase 1 step 4): `qa/ledger.json` (plan 087) is
+  written by a script from the published files, without a browser; the
+  rows here need the headless scene. They go in with phase 2's census,
+  which runs the scene over the whole site anyway. This PR moves one of
+  the ledger's counters: `bootAppLines` 3088 → 3090, the two lines that
+  hand `getPipelineBudget` out of `bootApp`.
+- **The clip distances** (and `clay|double|niches`, which needs the
+  walk/fly camera on a two-sided clay and does not come about): the
+  probe does not read under a held Ausschnitt (above). By the
+  specification a cut's clip distances (up to four) take one output and
+  one location on the vertex side, where the clay has three spare
+  outputs — the fragment side's two stay the tighter bound; unmeasured.
+- **A picture style's swap** (Papier, Strich, Schwarzplan): the
+  buildings are drawn with `scene.overrideMaterial`, a second lit build
+  on the clay's layout with varyings of its own. The probe reads
+  `object.material`. three's hook would read the override, but once its
+  compile has resolved, and the swap (`paper-scene.ts` `swapped`) holds
+  the override for a compile's synchronous half only; held over the
+  await, a frame would draw as paper. Unread — a read needs either a
+  swap that can be held with the frames held, or the override's texts
+  from a build of its own.
+- **Outside the scene**: the nameplate's overlay scene, the outline's
+  mask and blur, the post passes are not under the root the probe walks.
+- **Builds the lite scene does not draw** — **the traffic bodies**, the
+  layer that once vanished, first of all; tram cars, bridges' ribs, the
+  data layers, the designs: the probe reads whatever is in the scene, so
+  **phase 2's census over the whole site holds them to the limits with
+  the same call** (switch the data layers on for it); until then
+  `traffic-layer.test.ts` keeps its own count.
+- **The shadow pass's builds** are not read (`getShaderAsync` reads the
+  main pass's build).
+- **For phase 2's census**: the rows are `compileRepresentatives` of the
+  scene, drawn or not — a drawable hidden for good is a row, and the
+  probe compiles it to read it (in the lite scene nothing new was built:
+  the boot compiles the whole scene; over a flight this may differ, so
+  compare `info.memory.programs` around the call). A tile that leaves
+  during the read is counted as `left` and never compiled.
+- Seen beside the work, not caused by it: entering Modell **before any
+  inquiry** (no nameplate built yet) headless logs
+  three's `Async render pipeline creation failed
+  (renderPipeline_nameplate-shadow_…): The fragment stage has fewer
+  output components (2) than the color format` once, with and without
+  the probe — in each of four such runs here; the shard's order, with
+  the inquiry tests before the Modell test, did not log it. The spec's
+  error watch fails on it, so `--grep "Modell"` alone is red.
+
+### Phase 2 — the census (2026-11-16, three r187, headless Chromium 153 on SwiftShader, four cores)
+
+**How it was counted.** `bun run ledger -- --census` (a switch of the
+ledger, `FLAGS`; it implies `--browser`) runs a test of
+`e2e/ledger.spec.ts` for every built site (`LEDGER_CENSUS`), beside the
+browser figures, through the same read (`scripts/ledger-browser.ts`): no
+second mechanism. Each site at `?scene=lite&block=1` (the whole site,
+lite's render cost; 400×300):
+
+1. `ready`: the counters are read (`ready`).
+2. Every data layer the site has is switched on — Dresden: traffic,
+   bikes (their counts answered by the spec, `e2e/scene-fixtures.ts`),
+   trams and a design block by the Albertplatz; Hamburg: traffic and
+   bikes, the bike counts fetched live from the city's feed; Leipzig
+   and München: trams; Grimma, Meißen, Unna: traffic — and the spawn
+   settles again (`dressed`). **The flight's window is `dressed` → end**:
+   the layers' and the design's own builds land before it opens.
+3. `censusFlight` (`lib/city/ledger-census.ts`): an overview from 2.5 km
+   over the site's middle (the far building level) and low oblique
+   stops over up to four tiles — the spawn, then the tile farthest from
+   those seen. A stop waits four frames, then for two reads two seconds
+   apart that find the view at rest, the stream quiet and no compile
+   queued (capped at four minutes; every stop of every site settled,
+   the longest in 9 s), then reads its counters and `getPipelineBudget`
+   — every representative of a build in the scene, held to the limits.
+   The reads built no program (`probeBuilt` 0), met no tile leaving
+   (`left` 0) and had a text for every representative (`unread` 0) at
+   every stop.
+4. Dresden is then put back at its spawn, entered in Modell with `M`
+   and read once settled (its window: the moment before `M` → after).
+
+The run took 30 min. The figures are the ledger's `census` section:
+recorded, in `UNCOMPARED` whole, since what lands when is the frame
+rate's — every build met by name with its four counts
+(`builds.rows`), the stops, the window's counters and compile timings.
+Two rows of one name (two per-tile materials that share a name and a
+layout) keep the one that asks most of the limits, in whatever order
+they came (`distinctBuilds`).
+
+The gated half is phase 1's step 4: `browser.pipelines`, a row a build
+of the lite spawn (68), each with its vertex buffers, attributes,
+variables written and variables spare, read on the phone page of
+`--browser` once its cache has settled with no compile queued (`unread`
+and `left` 0 asserted). Two reads here gave the same rows (the write,
+then `--check --browser`: "holds"), and CI's Ledger step on a hosted
+runner held them too (run 43932631424, `--check --browser`, "holds").
+Read on the desktop page instead it had to wait for the compile queue
+to drain after `ready`, which made that test 41 s → 1.7 min; on the
+phone page that wait is already paid.
+
+**The figures** (`ready` → `dressed` → end of the flight):
+
+| Site | tiles | builds | keys | in-frame other | in-frame shadow | programs |
+|---|---|---|---|---|---|---|
+| Dresden | 15 | 88 | 77 | 86 → 87 → 92 | 30 → 34 → 50 | 164 → 206 → 216 |
+| Grimma | 2 | 57 | 47 | 72 → 72 → 72 | 19 → 27 → 28 | 147 → 186 → 186 |
+| Hamburg | 4 | 77 | 65 | 78 → 78 → 80 | 29 → 31 → 40 | 158 → 198 → 206 |
+| Leipzig | 4 | 80 | 70 | 74 → 74 → 76 | 28 → 31 → 38 | 156 → 191 → 195 |
+| Meißen | 1 | 68 | 58 | 67 → 67 → 67 | 20 → 24 → 27 | 152 → 189 → 191 |
+| München | 4 | 73 | 62 | 70 → 70 → 73 | 26 → 28 → 36 | 152 → 197 → 201 |
+| Unna | 2 | 64 | 52 | 66 → 66 → 66 | 22 → 28 → 29 | 146 → 198 → 198 |
+| Dresden, Modell | — | 24 | 23 | 92 → 97 | 51 → 53 | 216 → 316 |
+
+A build is key × draw × layout × shadow receipt × camera; Modell's row
+counts the builds at its one stop, all under the parallel camera. The
+in-frame builds at `ready` are the boot's (the post passes' first
+frames, the shadow pass's casters).
+
+- **Keys made from data** (a key family with more than one key,
+  `keyFamily`): mesh-kit's `rail:<colour>:<roughness>:<offset>:<glint>`
+  — the rails and the bridges' steel, ribs and trusses among them — 3
+  to **17** keys (Dresden 17, Leipzig 16, Hamburg 11, München 10,
+  Meißen 9, Unna 5, Grimma 3), the largest open set and the one the
+  plan's list named only as "mesh-kit's `key`"; `bridge-deck:<kind>:<colour>`
+  3–4; `tram-car:` 3 (Dresden, Leipzig, München); `wire-<ink>` 2;
+  `riverside-column:<colour>` 2 where the stops met two (Hamburg,
+  Leipzig, Meißen; Dresden's first run met two, this one none);
+  `bridge-stone:` 1 a site. The rest that come in more than one are
+  graph variants of a tile's rasters, not colours: `terrain|…` 2–4 (and
+  `|design-cut` under a design), the tree feet's `tree-shade|…` and
+  `trunk|…` 2, Hamburg's `clay` and `clay|niches`. Three per-tile
+  materials have no key and are named by their type
+  (`MeshBasicNodeMaterial`, `MeshStandardNodeMaterial`, `NodeMaterial`).
+- **In-frame builds over the flight** (`dressed` → end): `other` +0 on
+  Grimma, Meißen and Unna, +2 Hamburg and Leipzig, +3 München, +5
+  Dresden; `shadow` +1 to +16 (ADR 0027's accepted gap). Switching the
+  layers on and loading the design (`ready` → `dressed`) made `other`
+  +1 on Dresden only, `shadow` +2 to +8, and 35–52 programs — compiled
+  before they show, as a late part should. Entering Modell: `other` +5,
+  `shadow` +2, programs +100.
+- **Programs over the flight**: +0 to +10.
+- **What a landing tile waited for** is `tile:compile` — its compile, in
+  turn, capped at `COMPILE_WAIT_MS` (3 s), after which the tile shows
+  with its compile still running: Dresden 19× 0.78 s mean, Hamburg 6×
+  1.23 s, Leipzig 3× 2.04 s, München 6× 1.31 s, each site's longest
+  3.0–3.4 s, i.e. at the cap (Grimma, Meißen and Unna landed nothing in
+  the window). A late part's: `traffic:compile` (the traffic bodies)
+  Dresden 11× 0.69 s, Hamburg 4× 1.42 s; `dressing:compile` 1.3–2.3 s
+  mean. `compile:call`, a compile's own call, 77–137 ms mean.
+  `compile:turn-wait` is not a landing's wait: it is a compile's place
+  in the queue of a burst — compiles queued before `ready` among them,
+  and the probe's own reads take turns too (`PostStack.shadersOf`) —
+  and is recorded, not read here. In Modell `compile:call` 66× 1.28 s
+  mean, 57 s at most (the warm-up of the parallel camera's builds).
+- **The limits**, over every build of every flight and Modell, by name
+  in `builds.rows` — the traffic bodies (`traffic-glass`: 5 buffers, 5
+  attributes, 5 variables written, 11 spare), the tram cars
+  (`tram-car:*`: 3–4 buffers, 6–7 attributes), the bike columns
+  (`bike-glass`, `bike-pool`: 5, 8), the wires (4, 4), the bridges'
+  decks (3, 3) and stone (2, 2), the steel (`rail:*`: 2, 2), the design
+  (`design-white`: 2, 2): **no breach, no attribute without a buffer,
+  nothing unread**. The tightest: 5 of 8 vertex buffers (9–12 builds a
+  site: the bikes, the traffic bodies, `furniture-hands`,
+  `monument-clay`, the tree feet's sets, `vegetation-crown-bare`), 8 of
+  16 attributes, and after the clay (2 spare, its own test)
+  `window-niche` with 4 spare variables (5 under Modell's camera).
+  These are SwiftShader's WGSL and limits: no real GPU read them.
+  `traffic-layer.test.ts`'s own count stays the unit-level guard; the
+  census is the whole-site one, by hand.
+- **Modell before any inquiry** (phase 1's note): the census met it —
+  the `nameplate-shadow` pipeline fails ("fewer output components (2)
+  than the color format") on entering, and with it
+  `copyFramebufferToTexture: Source and destination formats do not
+  match. rgba8unorm rgba16float`, not seen in phase 1 (data layers on
+  here). Neither moves the rows: the nameplate draws outside the scene
+  the probe walks; its build is one of Modell's +5 in-frame `other`.
+  Recorded, not fixed (out of this phase).
+
+**Not covered**: a real GPU (every figure is SwiftShader's), the shadow
+pass's builds (counted only as in-frame `shadow`, never read), a
+picture style's swap, the Ausschnitt's clip distances, a phone's tier
+over a flight, the designs other than a glTF block (IFC, OBJ, a
+landscape plan), Berlin (not committed), and Modell on other sites than
+Dresden. Hamburg's bike counts came live from the city's feed, not from
+a fixture. The stops are four tiles at most: on Dresden's fifteen the
+low stops saw four, the overview all at the far level; a build only a
+tile off the route has is not in the census.
+
+**What it decides for phase 3**: the condition for closing it is not
+met. The flights build inside frames — the shadow pass's on every site,
+and `other` beyond the boot's on four of seven flights (+2 to +5) and on
+entering Modell (+5) — and a landing tile's compile reaches the 3 s cap
+on every site that landed one, so it shows before its compile is done.
+So phase 3 stays, and goes before 093 as the plan says (with 093 tiles
+land many times as often, and each waits for its compile). The census
+sizes it: 47–77 keys a site under the walk/fly camera, 24 more builds
+under Modell's, of which the open sets to close in step 1 are, by size,
+mesh-kit's `rail:` (up to 17, the rails' and bridges' steel colours —
+090's rails are where they close), `bridge-deck:` (4), `tram-car:` (3),
+`wire-` (2) and `riverside-column:` (2); the ground's and the tree
+feet's raster variants are 091 phase 5's. What phase 3's flight test
+must hold to 0 is the `other` column's growth over the window (with its
+composition read first: the census counts it, it does not name it), and
+`programs` not rising past what the register built at boot.

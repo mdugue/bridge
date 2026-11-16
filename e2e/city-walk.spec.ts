@@ -2,7 +2,6 @@ import { SHADOW_RINGS } from "../lib/city/shadow-rings";
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import path from "node:path";
-import { Document, WebIO } from "@gltf-transform/core";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { fromArrayBuffer } from "geotiff";
@@ -17,6 +16,11 @@ import {
   snapshotHref,
 } from "../lib/city/snapshot";
 import { tfwToBounds } from "../lib/city/tfw";
+import {
+  BIKE_COUNTS_BODY,
+  BIKE_COUNTS_ROUTE,
+  designBlockGlb,
+} from "./scene-fixtures";
 import { SWIFTSHADER_WEBGPU } from "./swiftshader-webgpu";
 
 /**
@@ -47,6 +51,20 @@ const LITE = `${SITE}?scene=lite`;
 const DESKTOP_VIEWPORT = { width: 800, height: 600 };
 
 /**
+ * The clay's budget (plan 094), which the "limits" test holds it to: the
+ * inter-stage variables it could still pass before WebGPU refuses its
+ * pipeline — of sixteen, `front_facing` takes one and the clay thirteen —
+ * (Modell's parallel camera passes one fewer: its direction to the eye
+ * is one for the whole view) — and the vertex buffers a building tile
+ * draws from, of eight. A budget,
+ * not a measurement to keep in step: a change that takes a variable or a
+ * buffer edits the number here, and its PR says what took it. three's own
+ * lighting and fog pass variables too, so a bump of three may take one.
+ */
+const CLAY_SPARE_VARIABLES = { parallel: 3, perspective: 2 } as const;
+const CLAY_VERTEX_BUFFERS = 4;
+
+/**
  * The whole-site spec's viewport. It needs no sidebar, and with several tiles
  * in view a SwiftShader frame is bound by its pixels: at 400×300 the site
  * reaches `ready` in about a third of the time it takes at 800×600 (54 s vs
@@ -63,49 +81,6 @@ test.use({ launchOptions: SWIFTSHADER_WEBGPU });
 interface ErrorLog {
   console: string[];
   page: string[];
-}
-
-/**
- * A design as a planner's export: a 40 × 30 m block, 20 m high (x east,
- * y up, z south), under a node at `at` — the Land's coordinates, NHN.
- */
-async function designBlockGlb(at: [number, number, number]) {
-  const doc = new Document();
-  const buffer = doc.createBuffer();
-  const [x0, x1, y0, y1, z0, z1] = [-20, 20, 0, 20, -15, 15];
-  const c = [
-    [x0, y0, z0],
-    [x1, y0, z0],
-    [x1, y0, z1],
-    [x0, y0, z1],
-    [x0, y1, z0],
-    [x1, y1, z0],
-    [x1, y1, z1],
-    [x0, y1, z1],
-  ];
-  const faces = [
-    [4, 7, 6, 5],
-    [0, 1, 2, 3],
-    [3, 2, 6, 7],
-    [1, 0, 4, 5],
-    [2, 1, 5, 6],
-    [0, 3, 7, 4],
-  ];
-  const positions = faces.flatMap(([a, b, d, e]) =>
-    [a, b, d, a, d, e].flatMap((i) => c[i])
-  );
-  const accessor = doc
-    .createAccessor()
-    .setType("VEC3")
-    .setArray(new Float32Array(positions))
-    .setBuffer(buffer);
-  const mesh = doc
-    .createMesh("block")
-    .addPrimitive(doc.createPrimitive().setAttribute("POSITION", accessor));
-  doc
-    .createScene()
-    .addChild(doc.createNode("block").setTranslation(at).setMesh(mesh));
-  return await new WebIO().writeBinary(doc);
 }
 
 /**
@@ -607,6 +582,82 @@ async function aimAtBuilding(page: Page): Promise<void> {
   // scene graph the render loop maintains; demolishing in the same tick as
   // the fly has been seen to pick nothing on a loaded runner.
   await waitForFrames(page, 1);
+}
+
+/**
+ * WebGPU's per-pipeline limits, counted (plan 094): past eight vertex
+ * buffers, sixteen attributes or sixteen inter-stage variables a pipeline
+ * is invalid and its mesh draws nothing, with no error a spec would see.
+ * Reads a row for every build the scene draws with under the camera that
+ * shows (pipeline-budget.ts: three's own WGSL through its public debug
+ * hook, the buffers off the geometry) and holds each to the device's
+ * limits — and the clay to its budget.
+ */
+async function expectWithinLimits(
+  target: Page,
+  expected: {
+    camera: "parallel" | "perspective";
+    /** the clay's builds that must be among the rows */
+    clay: string[];
+    /** the fewest rows: a probe that walked next to nothing has counted
+     *  nothing */
+    builds: number;
+  }
+): Promise<void> {
+  const budget = await target.evaluate(async () => {
+    const handle = window.__poc?.handle;
+    if (!handle) {
+      throw new Error("handle not published");
+    }
+    return await handle.getPipelineBudget();
+  });
+  // the device was asked for no more than WebGPU's defaults
+  expect(budget.limits).toEqual({
+    maxInterStageShaderVariables: 16,
+    maxVertexAttributes: 16,
+    maxVertexBuffers: 8,
+  });
+  const row = (r: (typeof budget.rows)[number]) =>
+    `${r.key} [${r.draw}: ${r.layout}]`;
+  expect(budget.rows.length).toBeGreaterThanOrEqual(expected.builds);
+  expect(budget.rows.every((r) => r.camera === expected.camera)).toBe(true);
+  // every build was read, and every attribute its vertex stage names is
+  // one the geometry has
+  expect(budget.unread).toBe(0);
+  expect(budget.rows.filter((r) => r.unmatched.length > 0).map(row)).toEqual(
+    []
+  );
+  expect(
+    budget.rows
+      .filter((r) => r.breaches.length > 0)
+      .map((r) => `${row(r)}: ${r.breaches.join(", ")}`)
+  ).toEqual([]);
+  const clay = budget.rows.filter((r) => r.key.split("|")[0] === "clay");
+  expect(clay.map((r) => r.key)).toEqual(expect.arrayContaining(expected.clay));
+  const spare = CLAY_SPARE_VARIABLES[expected.camera];
+  for (const r of clay) {
+    expect(`${row(r)}: ${r.spare.interStage} spare`).toBe(
+      `${row(r)}: ${spare} spare`
+    );
+    expect(`${row(r)}: ${r.vertexBuffers} buffers`).toBe(
+      `${row(r)}: ${CLAY_VERTEX_BUFFERS} buffers`
+    );
+  }
+}
+
+/** Resolves once every compile queued on the scene's renderer has run: a
+ *  tile shows after its compile wait on SwiftShader, its compile later. */
+async function compilesSettled(target: Page): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        await target.evaluate(async () => {
+          const info = await window.__poc?.handle?.getRenderInfo();
+          return info?.compilesQueued ?? -1;
+        }),
+      { timeout: slow(120_000) }
+    )
+    .toBe(0);
 }
 
 /**
@@ -1222,32 +1273,11 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // for it (two counters on the spawn tile), so CI never waits on the
     // city's server and the counts are known.
     await page.route(
-      "**/kommisdd.dresden.de/**",
+      BIKE_COUNTS_ROUTE,
       async (route) =>
         await route.fulfill({
           contentType: "application/geo+json",
-          body: JSON.stringify({
-            type: "FeatureCollection",
-            features: [
-              ["F01092", "Albertbrücke", 412_610, 5_657_020, 309, 482],
-              ["F01093", "Glacisstraße", 412_900, 5_657_300, 0, 123],
-            ].map(([id, name, x, y, w1, w2]) => ({
-              type: "Feature",
-              geometry: { type: "Point", coordinates: [x, y] },
-              properties: {
-                fremd_id: id,
-                bezeichnung: name,
-                lage: "",
-                r1: "Richtung Nord",
-                w1,
-                r2: "Richtung Süd",
-                w2,
-                messzeit: "01.10.2026 07:00:00",
-                winkel: 0,
-                inaktiv: "0",
-              },
-            })),
-          }),
+          body: BIKE_COUNTS_BODY,
         })
     );
     const traffic = page.getByRole("switch", { name: "Kfz-Verkehr" });
@@ -1308,7 +1338,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     expect(off?.trafficLayer).toBe(false);
     expect(off?.bikeLayer).toBe(false);
     expect(off?.tramLayer).toBe(false);
-    await page.unroute("**/kommisdd.dresden.de/**");
+    await page.unroute(BIKE_COUNTS_ROUTE);
     expectNoErrors(errors);
   });
 });
@@ -1319,6 +1349,55 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
  */
 test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
   bootDesktopViewer();
+
+  test("limits: every build is within WebGPU's limits, the clay two variables short", async () => {
+    // The spawn tile near the eye: its clay cuts its windows' openings
+    // (`clay|niches`), and the dressing's builds are all there.
+    await compilesSettled(page);
+    await expectWithinLimits(page, {
+      builds: 40,
+      camera: "perspective",
+      clay: ["clay|niches"],
+    });
+    // From far off the far building level shows, its clay uncut.
+    const home = await page.evaluate(() => {
+      const handle = window.__poc?.handle;
+      if (!handle) {
+        throw new Error("handle not published");
+      }
+      const state = handle.getCameraState();
+      const { x, y, z } = state.pos;
+      handle.flyTo({ x, y: y + 2500, z: z + 2500 }, { x, y, z });
+      return state;
+    });
+    try {
+      await expect
+        .poll(
+          async () => {
+            await waitForFrames(page, 2);
+            await compilesSettled(page);
+            return await page.evaluate(async () => {
+              const budget = await window.__poc?.handle?.getPipelineBudget();
+              return budget?.rows.some((r) => r.key === "clay") ?? false;
+            });
+          },
+          { timeout: slow(120_000) }
+        )
+        .toBe(true);
+      await expectWithinLimits(page, {
+        builds: 5,
+        camera: "perspective",
+        clay: ["clay"],
+      });
+    } finally {
+      // back at the spawn for the tests after
+      await page.evaluate((state) => {
+        window.__poc?.handle?.applyCameraState(state);
+      }, home);
+      await waitForFrames(page, 2);
+    }
+    expectNoErrors(errors);
+  });
 
   test("a snapshot applied mid-flight wins over the glide", async () => {
     // A scenic flight owns the camera for up to 3.8 s; a pose set from outside
@@ -1534,6 +1613,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
   });
 
   test("Modell: M enters a parallel view that turns, keeps its snapshot and leaves", async () => {
+    // (two dolly zooms, a turn, a preset's glide and two reads of the
+    // builds: more frames than the default budget)
+    test.setTimeout(slow(300_000));
     // Plan 055: the dolly zoom ends in the parallel camera; Q turns by a
     // quarter; the snapshot carries the Modell state; M glides back.
     const before = await page.evaluate(() =>
@@ -1559,6 +1641,14 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(entered?.tiltDeg).toBeCloseTo(35.264, 2);
     expect((((entered?.turnDeg ?? 0) % 90) + 90) % 90).toBeCloseTo(45, 3);
     expect(entered?.scale).toBeGreaterThanOrEqual(250);
+    // limits: the parallel camera's builds are their own (three r187
+    // keys a build by the kind of camera)
+    await compilesSettled(page);
+    await expectWithinLimits(page, {
+      builds: 40,
+      camera: "parallel",
+      clay: ["clay"],
+    });
 
     await page.keyboard.press("KeyQ");
     await page.waitForFunction(
@@ -1575,6 +1665,28 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(snapshot?.model?.preset).toBe("iso");
     // the perspective pose Modell leaves to stays a valid walk/fly pose
     expect(["walk", "fly"]).toContain(snapshot?.mode);
+
+    // limits: the Schnitt draws the clay from both sides, a build of its
+    // own (`clay|double`: the preset fills the cut faces, it holds no
+    // Ausschnitt). Read here, on the way out: Modell is left from it.
+    await page.evaluate(() => {
+      window.__poc?.handle?.setModelPreset("section");
+    });
+    await page.waitForFunction(
+      () => {
+        const hud = window.__poc?.handle?.getModelHud();
+        return hud?.preset === "section" && !hud.transitioning;
+      },
+      undefined,
+      { timeout: slow(90_000) }
+    );
+    await waitForFrames(page, 2);
+    await compilesSettled(page);
+    await expectWithinLimits(page, {
+      builds: 40,
+      camera: "parallel",
+      clay: ["clay|double"],
+    });
 
     await page.keyboard.press("KeyM");
     await page.waitForFunction(

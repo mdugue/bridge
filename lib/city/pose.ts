@@ -6,6 +6,7 @@
  * World frame (Y-up): north = -Z, east = +X. A heading is a compass bearing
  * (0 = north, clockwise positive, so 90° = east); pitch tilts towards +Y.
  */
+import * as PMath from "./portable-math";
 import type { CameraStateJson } from "./snapshot";
 
 export const DEG2RAD = Math.PI / 180;
@@ -50,20 +51,20 @@ export function clampPitch(pitch: number): number {
 
 /** Unit view direction for a compass heading and a pitch (both radians). */
 export function directionOf(heading: number, pitch: number): Xyz {
-  const cp = Math.cos(pitch);
+  const cp = PMath.cos(pitch);
   return {
-    x: Math.sin(heading) * cp,
-    y: Math.sin(pitch),
-    z: -Math.cos(heading) * cp,
+    x: PMath.sin(heading) * cp,
+    y: PMath.sin(pitch),
+    z: -PMath.cos(heading) * cp,
   };
 }
 
 /** Compass heading and pitch (radians) of a view direction. */
 export function headingPitchOf(dir: Xyz): { heading: number; pitch: number } {
-  const length = Math.hypot(dir.x, dir.y, dir.z) || 1;
+  const length = PMath.hypot(dir.x, dir.y, dir.z) || 1;
   return {
-    heading: Math.atan2(dir.x, -dir.z),
-    pitch: Math.asin(Math.min(Math.max(dir.y / length, -1), 1)),
+    heading: PMath.atan2(dir.x, -dir.z),
+    pitch: PMath.asin(Math.min(Math.max(dir.y / length, -1), 1)),
   };
 }
 

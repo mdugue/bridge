@@ -198,10 +198,13 @@ export async function bakeCity(tile: string): Promise<{
   // glb: a sky-view raster or a facade reading that changes re-bakes no
   // building. The facades' ambient light reads the terrain's sky-view
   // raster, their relief and tone what street photos saw of them.
-  const svf = sideFiles.get(tile)?.svf;
+  const { svf, svfBc4, svfEac } = sideFiles.get(tile) ?? {};
   const facades = sideFiles.get(tile)?.facades;
+  // (the sky view's blocks only beside it, as the terrain names them)
   const files: CityFiles = {
     ...(svf ? { svf } : {}),
+    ...(svf && svfBc4 ? { svfBc4 } : {}),
+    ...(svf && svfEac ? { svfEac } : {}),
     ...(facades ? { facades } : {}),
   };
   const extras: CityContent = { kind: "city", tileId: tile };

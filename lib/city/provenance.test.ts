@@ -5,13 +5,16 @@ import { BERLIN } from "../../sites/berlin";
 import { DRESDEN } from "../../sites/dresden";
 import { HAMBURG } from "../../sites/hamburg";
 import { UNNA } from "../../sites/unna";
+import { bakeFileProblems } from "./bake-file";
 import {
+  bakedStand,
   isSiteProvenance,
   leadingDate,
   parseLod2Stand,
   siteProvenance,
 } from "./provenance";
 import type { ProvenanceRecord } from "./provenance";
+import { PROVENANCE_FILE_SPEC } from "./provenance-file";
 import { tileIds } from "./tile";
 
 const record = JSON.parse(
@@ -121,4 +124,50 @@ test("Unna's OSM stand comes from its openstreetmap.fr extract", () => {
   const unna = siteProvenance(unnaRecord, tileIds(UNNA), UNNA);
   expect(unna.sources.osm.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
   expect(unna.sources.osm.stands?.buildings).toBe(unna.sources.osm.stand);
+});
+
+/** One baked step's run on a tile, as the bake records it. */
+const run = (dataAsOf: string) => ({ dataAsOf, on: "2026-11-16" });
+
+test("the bake's own record of a step names its products' edition, unknown as none", () => {
+  const hand: ProvenanceRecord = {
+    openstreetmap: {
+      bbbike: {
+        products: {
+          osmBuildings: { dataAsOf: "2026-10-31 (re-baked …)" },
+          trees: { dataAsOf: "2026-10-31 (re-baked …)" },
+        },
+      },
+      baked: {
+        "osm-buildings": {
+          a: run("2026-11-14 (BBBike extract Leipzig.osm.pbf, …)"),
+          b: run("2026-11-07 (BBBike extract Leipzig.osm.pbf, …)"),
+          // another site's tile is not this manifest's
+          z: run("2020-01-01 (…)"),
+        },
+        trees: { a: run("unknown (sachsen-latest.osm.pbf placed by hand, …)") },
+      },
+    },
+  };
+  const { osm } = siteProvenance(hand, ["a", "b"], HAMBURG).sources;
+  // the oldest day over the site's tiles, over the hand-kept one
+  expect(osm.stand).toBe("2026-11-07");
+  expect(osm.stands?.buildings).toBe("2026-11-07");
+  // an extract without a day claims no edition, not the hand-kept one
+  expect(osm.stands?.trees).toBeUndefined();
+  expect(bakedStand(hand.openstreetmap?.baked, "rail", ["a"])).toBeUndefined();
+});
+
+test("the provenance schema holds the bake's member to what the bake writes", () => {
+  const ok = {
+    openstreetmap: {
+      baked: { lamps: { a: { dataAsOf: "x", on: "2026-11-16" } } },
+    },
+    anything: { the: "hand-kept rest" },
+  };
+  expect(bakeFileProblems(PROVENANCE_FILE_SPEC, ok)).toEqual([]);
+  for (const entry of [{ dataAsOf: "x" }, { dataAsOf: "x", on: "today" }]) {
+    const bad = { openstreetmap: { baked: { lamps: { a: entry } } } };
+    expect(bakeFileProblems(PROVENANCE_FILE_SPEC, bad)).not.toEqual([]);
+  }
 });

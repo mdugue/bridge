@@ -1,4 +1,5 @@
 import type { Mesh } from "three/webgpu";
+import type { RailSink } from "@/lib/city/rail-table";
 import {
   Color,
   CylinderGeometry,
@@ -82,6 +83,14 @@ const WIRE_STRIDE = 2; // the contact wire at every other rail sample (4 m)
 const RAIL_HALF = 0.075; // rail-layer's drawn rail
 /** a street rail shows only the 2 cm it stands out of the road */
 const STREET_RAIL_WEB = 0.04;
+/** an open track's rail: rail-layer.ts's `addRail` depth */
+const TRAM_RAIL_WEB = 0.11;
+
+/** The ground, and where the rails go in plan 090's phase-0 spike
+ *  (`?rails=table`): into a table of segments instead of triangles. */
+export interface TramContext extends GroundContext {
+  railTable?: RailSink;
+}
 const BED_HALF: Record<TramBed, number> = {
   street: 0,
   grass: 1.3,
@@ -395,10 +404,21 @@ function addTrack(
   run: TrackRun,
   bed: TramBed,
   gauge = TRAM_GAUGE,
-  lawn?: LawnHalves
+  lawn?: LawnHalves,
+  table?: RailSink
 ): void {
   const half = gauge / 2;
   if (bed === "street") {
+    if (table) {
+      table.runs.push({
+        gauge,
+        lateral: 0,
+        look: "tram-street",
+        pts: run.pts,
+        web: STREET_RAIL_WEB,
+      });
+      return;
+    }
     for (const side of [-1, 1]) {
       addRibbon(
         acc.streetRail,
@@ -410,8 +430,18 @@ function addTrack(
     }
     return;
   }
-  addRail(acc.rail, run.pts, half);
-  addRail(acc.rail, run.pts, -half);
+  if (table) {
+    table.runs.push({
+      gauge,
+      lateral: 0,
+      look: "tram",
+      pts: run.pts,
+      web: TRAM_RAIL_WEB,
+    });
+  } else {
+    addRail(acc.rail, run.pts, half);
+    addRail(acc.rail, run.pts, -half);
+  }
   const strip = run.pts.map((p) => ({ ...p, y: p.y - BED_BELOW_RAIL }));
   if (bed === "grass" && lawn) {
     addLawn(acc.grass, strip, lawn);
@@ -612,7 +642,7 @@ function buildMasts(masts: Point2[], ctx: GroundContext): Instances | null {
 function* buildTracks(
   tracks: TramFeature[],
   decks: DeckPoly[],
-  ctx: GroundContext,
+  ctx: TramContext,
   w: Wires,
   held: WirePoint[]
 ): Steps<Mesh[]> {
@@ -649,7 +679,7 @@ function* buildTracks(
   );
   for (const { bed, coords, f, runs } of laid) {
     for (const run of runs) {
-      addTrack(acc, run, bed, f.properties?.g, halves.get(run));
+      addTrack(acc, run, bed, f.properties?.g, halves.get(run), ctx.railTable);
     }
     let length = 0;
     for (let i = 1; i < coords.length; i += 1) {
@@ -736,7 +766,7 @@ export function buildTram(
 export function* tramSteps(
   features: TramFeature[],
   bridges: BridgeFeature[],
-  ctx: GroundContext
+  ctx: TramContext
 ): Steps<Group> {
   const group = new Group();
   group.name = "tram";

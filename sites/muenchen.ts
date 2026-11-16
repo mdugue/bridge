@@ -15,6 +15,7 @@ export const MUENCHEN: Site = {
   dataLayers: { trams: { operator: "MVG" } },
   osm: "europe/germany/bayern/oberbayern",
   mapillary: { objects: false },
+  bbbike: "Muenchen",
   spawn: "marienplatz",
   tiles: [
     { e: 690, n: 5334 },

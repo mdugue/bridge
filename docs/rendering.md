@@ -58,7 +58,15 @@ tile's object texture, while the live look uniforms are shared nodes
 crowns, trunks, hedges, fountains, furniture, wires — is one node material
 for the whole scene (`three-utils.ts` `sceneMaterial`), and instanced layers
 draw through `Instances` (`instancing.ts`) so every set with the same
-material shares one node build. Everything a tile adds —
+material shares one node build. A set is placed by sixteen floats an
+instance, written on the CPU; plan 090's phase 0 gave it a second way in,
+behind QA knobs only: a table of twenty-byte stand records
+(`lib/city/stand-record.ts`, `Instances.ofStands`) whose bytes are the
+instance buffer and whose matrix the vertex stage composes
+(`?stands=record`: a coarse level's crowns), and rails as a table of
+segments an instanced profile expands (`lib/city/rail-table.ts`,
+`rail-segments.ts`; `?rails=table`). What three's public API does with
+such a record, and the numbers, are in plan 090's *Findings*. Everything a tile adds —
 material, object texture, BVH, splat, water, dressing — is disposed with it
 (`disposeTile` in `tile-stream.ts`).
 
@@ -80,7 +88,10 @@ thing whatever their `renderOrder`.
 `x = epsgX − cx`, `z = −(epsgY − cy)`, `y = elevation`, with `(cx, cy)` the
 recenter offset captured from the spawn tile's CityJSON at bake time, carried
 in the tileset's root `extras` (`lib/city/tileset.ts`) and shared by every
-tile (`lib/city/recenter.ts`, `lib/city/ground-clamp.ts`).
+tile (`lib/city/recenter.ts`). The conversions between the projected, the
+data and the scene frame live in `lib/city/frames.ts`, whose types brand each
+coordinate with its frame (`EpsgX`, `DataY`, `SceneZ`, …; erased at runtime);
+`lib/city/ground-clamp.ts` re-exports the two older ones.
 
 **Materials derive data-frame positions from world space.** The streamed
 glTF positions are quantised (the dequantisation sits on the node), so
@@ -1059,6 +1070,24 @@ stays their measure; the tile cache counts true bytes.
   kept only where a tile's numbers equal the site's: −6 MiB per coarse
   tile after the first, on the GPU and the CPU), and it carries only its
   coarse crowns, traffic and bridges.
+- **The sky view as GPU blocks — a trial behind `SVF_BLOCKS=1` and
+  `?svf=blocks`** (plan 091 phase 2). A build with the flag publishes
+  each tile's sky view beside its PNG
+  as BC4 and as EAC R11 blocks with their mip chain
+  (`lib/city/block-raster.ts`, encoded by `scripts/block-encode.ts`),
+  half a byte a texel: 0.67 MiB a tile instead of 1.33, shared by both
+  levels and the buildings as the PNG is. With the knob a page reads BC4
+  where the GPU has `texture-compression-bc`, else EAC where it has
+  `-etc2`, else the PNG (`scene-profile.ts` `blockFormatFor`), and
+  uploads it as a `CompressedTexture` at once on every tier
+  (`raster-upload.ts` `loadBlockRaster`: no decode, no mips made on the
+  GPU), falling back to the PNG where the blocks fail; a material
+  slot's stand-in for it is one block of its format
+  (`material-slots.ts` `stubLike`). three's `info.memory` counts a
+  compressed texture as one byte: the tracked bytes are its weight.
+  Without the knob, or on a build without the flag, nothing changes.
+  The figures and what a real GPU must still show are in plan 091's
+  *Findings* and the ledger's `blocks` section.
 - **The close-range rasters follow the view** (`lib/city/ground-reach.ts`,
   `ground-reach-follow.ts`, since 2026-11-12). The kerb lines, paving
   patterns and lawn edges fade out by the metres a pixel spans (gone at
@@ -1902,7 +1931,10 @@ the table once loaded and 20 s later (`console.table`). The long tasks
 (`longtask`) and the crash trail's `heapMB` are the page's alone: a
 worker reports neither, so they are counted only with `?thread=main`
 (Chromium; Safari reports no long tasks). The names are a contract for
-later perf work: add one rather than rename one. None of it reaches the
+later perf work: add one rather than rename one. A dressing's builders
+are counted apart (`dressing:trees`, `dressing:rail`, `dressing:tram`, …;
+`dressing-figures.ts`): the time inside each builder's own slices, the
+pauses between them left out. None of it reaches the
 crash trail or the reports — a tile's id names where the player was.
 
 **The renderer itself: `?inspect=1`** (`inspector.ts`) puts three's own
@@ -1918,7 +1950,10 @@ the stream, not the passes.
 
 Each entry is a bug in a dependency, the code that works around it and
 what to undo once a release fixes it. The comments at those sites say
-*upstream workaround* (`grep -rni "upstream workaround" app lib`). On a
+*upstream workaround* (`grep -rni "upstream workaround" app lib`), and
+the ledger counts both, the entries here (each opens its paragraph in
+bold) and the comments (`qa/ledger.json`, `counters.upstreamWorkarounds`):
+an entry added or dropped is a figure a pull request commits. On a
 bump of the dependency, check each entry against its release notes, and
 drop the entry with its workaround.
 
@@ -2038,8 +2073,109 @@ heal calls `resetFailedTiles()` alone. Not reported yet.
 
 Headless CI runs the lite profile under SwiftShader and asserts *presence*
 (a per-layer scene census on `__poc.stats.layerStats`, frame counts,
-shadow re-render counts), never looks. Anything visual is judged on a real
-GPU with the snapshot harness: drop a Snapshot JSON into `shots/` and run
-`bun run shots`. Judge from oblique angles. The streaming tuning (error
-thresholds, cache budget, tile seams, the painted shoreline) is still
-waiting for that look: [plan 019](./plans/019-gpu-verification.md).
+shadow re-render counts), never looks. Whether a picture is good is judged
+on a real GPU with the snapshot harness: drop a Snapshot JSON into
+`shots/` and run `bun run shots`. Judge from oblique angles. The streaming
+tuning (error thresholds, cache budget, tile seams, the painted shoreline)
+is still waiting for that look:
+[plan 019](./plans/019-gpu-verification.md).
+
+Whether a picture *changed* is compared by a machine
+([ADR 0018](./adr/0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md),
+[plan 087](./plans/087-rewrite-measuring-stick.md)): `bun run plates`
+(`scripts/plates.ts`) builds the base commit in a worktree under the
+gitignored `plates/`, serves base and head each on a port of its own,
+renders the QA views of both with the head's harness
+(`e2e/snapshot-shot.spec.ts`, every view from one booted page) and diffs
+each pair (`lib/city/plate-diff.ts`: per pixel the largest channel
+difference; a pixel differs above a level, a view above a share). No
+reference image is stored. Two tiers share that code:
+
+| | Tier 1 | Tier 2 |
+|---|---|---|
+| Where | CI, every pull request of this repository (`.github/workflows/plates.yml`); `SHOTS_SMALL=1 bun run plates` by hand | a machine with a GPU: `bun run plates` (headed) — not in CI; where it runs is the maintainer's choice |
+| Renderer | WebGPU on SwiftShader's Vulkan, 800 × 500, `?scene=lite` (the spawn tile alone) | the browser's own adapter, the full profile, 1600 × 1000 @2× |
+| Views | eight that stand on the spawn tile (`TIER1_VIEWS`): 25–55 s each there | all of `qa/views/` |
+| Says | *changed*, as a tripwire — never *good* | *changed*, in the light a visitor sees |
+| Tolerance | `TIER1_TOLERANCE`: a pixel differs above 3 of 255; a view above 4 such pixels, or 0.1 of 255 on average. The floor: ten same-commit pairs moved no pixel, two builds of one commit 3 pixels by one step | its own floor, still to measure |
+
+In a view it renders, tier 1's numbers let through a change of 4 pixels
+or fewer at any contrast, a step of 3 of 255 or less over less than
+about 3 % of the frame, and one step over less than 10 %. A run that
+flakes is re-run by hand or answered by naming the view; nothing
+retries.
+
+Tier 1 draws at `lite`'s pixel ratio of 0.5: a plate is 400 × 250 drawn
+pixels shown twice as large. It never sees the other 42 views, any tile
+but the spawn's, the full profile's shadows, AO and resolution, the data
+layers, a view's page query, or late parts landing after the scene
+reports itself settled; and it does not run on a draft or on a PR
+outside the workflow's `paths`.
+
+A frame repeats because the harness holds it. `__poc.still` lets no time
+pass in what animates: the scene's phase clock (water, crowns, flags,
+fountains, the lamps' reflections) and three's TSL `time` (the clouds,
+the film grain, Sin City's rain) read one instant, while the loop's own
+clock runs on, at `__poc.frameMs` a frame, so the lens, the regression
+and the eye still settle (`poc-scene.ts`). Without it two renders of one
+build differed in five of nine views — the clouds over 6–7 % of a plate,
+the crowns' sway along their edges. Both probes exist only in a build
+with `NEXT_PUBLIC_POC_DEBUG`. The harness applies a view, waits for the
+scene to have heard it (`handle.sync()`), and takes the plate once the
+stream, the shadow rings and the lens have been quiet for three frames
+on end and the camera stands where the snapshot says.
+
+A PR names the views it means to change under `## Snapshots` in its
+description: those are reported. A differing view that is not named
+fails the job, as does a side that was not held still, a view that does
+not settle in three minutes, a pose that was not applied, a blank plate
+or two views with the same pixels (the `pr-snapshots` skill).
+
+**WebGPU's per-pipeline limits are counted** (plan 094). A pipeline with
+a ninth vertex buffer, a seventeenth attribute or more inter-stage
+variables than the device passes is invalid, and its mesh draws nothing
+without an error a spec sees. The e2e "limits" test
+(`e2e/city-walk.spec.ts`) asks the scene for a row a build
+(`handle.getPipelineBudget()`, `pipeline-budget.ts`): for each
+representative of a material, draw kind and layout
+(`compileRepresentatives`) the WGSL three built, through its public
+`renderer.debug.getShaderAsync` in the compiles' turn
+(`PostStack.shadersOf`), counted by `lib/city/wgsl-budget.ts` after the
+WebGPU specification's validation of inter-stage interfaces — sixteen
+variables, of which each of the fragment stage's `front_facing`,
+`sample_index`, `sample_mask` and `primitive_index` takes one, and every
+four clip distances one on the vertex side — and the distinct buffers the
+vertex stage's attributes come from on the geometry. The test holds
+every row to the device's limits and the clay to its budget, a number in
+the spec: 2 spare variables under the walk/fly camera (13 passed, one to
+`front_facing`), 3 under Modell's parallel one, 4 vertex buffers. It
+reads the lite scene at the spawn, from far off (the far building level)
+and in Modell, with the Schnitt's two-sided clay.
+
+What the test does **not** read, so that nobody takes it for more than
+it is:
+
+- what the lite scene does not draw: the traffic bodies (the layer that
+  once vanished past eight buffers: `traffic-layer.test.ts` counts its
+  attributes), tram cars, the data layers, a visitor's design, and
+  whatever only another tile of the site has. The ledger's census
+  (`bun run ledger -- --census`, `docs/data-pipeline.md`, "The census of
+  builds") reads those with the same probe over a flight of every site
+  with its data layers on and a design loaded — by hand, not on CI;
+- the clay under a held Ausschnitt: three's hook looks a drawable up
+  outside its `ClippingGroup`, so the probe answers nothing while a cut
+  is held, and the clip distances' variable on the vertex side is not
+  counted;
+- a picture style's swap (Papier, Strich, Schwarzplan:
+  `scene.overrideMaterial`, `paper-scene.ts`): three's hook reads the
+  override once its compile has resolved, the swap holds it for a
+  compile's synchronous half only, and holding it longer would let a
+  frame draw as paper;
+- the shadow pass's builds (the hook reads the main pass's);
+- what is drawn outside the scene: the nameplate's overlay, the
+  outline's mask and blur, the post passes.
+
+The rows are what a compile would walk (`compileRepresentatives`), drawn
+or not: a drawable hidden for good is a row too, and the probe compiles
+it to read it.
+

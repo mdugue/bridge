@@ -46,3 +46,24 @@ def test_a_tile_without_the_file_still_gets_its_empty_one(tmp_path, run, name, s
     tile = _tile(tmp_path)
     run(tile)
     assert '"features": []' in (tile.data / "dlm" / name).read_text().replace("[ ]", "[]")
+
+
+def test_mapillary_without_the_osm_extract_skips_and_keeps_its_file(tmp_path, capsys):
+    # the Mapillary cache is here, the OSM extract is not: the step skips
+    # with a note (it weighs the lamps against OSM's) instead of stopping
+    # the bake, and leaves the committed file as it is
+    tile = _tile(tmp_path)
+    tile = Tile(**{**tile.__dict__, "osm": tmp_path / "raw" / "osm" / "absent.osm.pbf"})
+    cache = mapillary.cache_path(tile)
+    cache.parent.mkdir(parents=True)
+    cache.write_text('{"features": []}')
+    out = tile.out("dlm", "mly_t.geojson")
+    out.write_text(KEPT)
+    mapillary.run(tile)
+    assert out.read_text() == KEPT
+    printed = capsys.readouterr().out
+    assert "no OSM extract" in printed and "leaving mly_t.geojson as it is" in printed
+    # a tile without the file gets its empty one (every tile carries it)
+    out.unlink()
+    mapillary.run(tile)
+    assert '"features": []' in out.read_text().replace("[ ]", "[]")

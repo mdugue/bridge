@@ -10,6 +10,7 @@
  * which products are open, the OSM extract — is the `Provider`, shared by
  * every site of that Land (ADR 0037).
  */
+import * as PMath from "./portable-math";
 
 export type MovementMode = "fly" | "walk";
 
@@ -69,7 +70,7 @@ export function overlook(
   if (!(pitchDeg < 0)) {
     throw new Error(`overlook ${frame.id}: pitch must look down`);
   }
-  const back = altitude / Math.tan((-pitchDeg * Math.PI) / 180);
+  const back = altitude / PMath.tan((-pitchDeg * Math.PI) / 180);
   const heading = (headingDeg * Math.PI) / 180;
   return {
     id: frame.id,
@@ -77,8 +78,8 @@ export function overlook(
     description: frame.description,
     mode: "fly",
     epsg: {
-      x: Math.round(target.x - Math.sin(heading) * back),
-      y: Math.round(target.y - Math.cos(heading) * back),
+      x: Math.round(target.x - PMath.sin(heading) * back),
+      y: Math.round(target.y - PMath.cos(heading) * back),
     },
     aboveGround: altitude,
     headingDeg,
@@ -207,6 +208,16 @@ export interface Site {
   /** a smaller Geofabrik extract than the provider's, when one covers the
    *  site (same form as `Provider.osm`) */
   osm?: string;
+  /**
+   * BBBike's city extract the fetch falls back on when the Geofabrik one
+   * cannot be had (its name under download.bbbike.org/osm/bbbike/, e.g.
+   * "Dresden"): a source, not a look (ADR 0012). The fetch takes it only
+   * where its published boundary covers the site's tiles with the widest
+   * margin a bake reads OSM beyond a tile (pipeline/bake/osm.py
+   * `MAX_MARGIN_DEG`) and says so otherwise
+   * (docs/data-pipeline.md#where-the-osm-extract-comes-from).
+   */
+  bbbike?: string;
   provider: Provider;
   /** the city's street-tree register, where it publishes one openly */
   treeCadastre?: TreeCadastre;
@@ -382,4 +393,23 @@ export function siteAttribution(site: Site): string[] {
 /** The Geofabrik URL of the site's OSM extract. */
 export function osmExtractUrl(site: Site): string {
   return `https://download.geofabrik.de/${site.osm ?? site.provider.osm}-latest.osm.pbf`;
+}
+
+/** The URL of the BBBike city extract the fetch falls back on, or null
+ *  where the site names none (`Site.bbbike`). */
+export function osmFallbackUrl(site: Site): string | null {
+  const city = site.bbbike;
+  return city === undefined
+    ? null
+    : `https://download.bbbike.org/osm/bbbike/${city}/${city}.osm.pbf`;
+}
+
+/** The file names the site's extract may have under the provider's
+ *  `osm/` folder, in the order the bakes take them: Geofabrik's, then
+ *  BBBike's (pipeline/bake/osm_source.py `resolve`). */
+export function osmExtractFiles(site: Site): string[] {
+  const fallback = osmFallbackUrl(site);
+  return [osmExtractUrl(site), ...(fallback === null ? [] : [fallback])].map(
+    (url) => url.split("/").at(-1) ?? ""
+  );
 }

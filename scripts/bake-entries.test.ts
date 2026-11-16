@@ -18,6 +18,7 @@ const ROOT = nodePath.join(import.meta.dir, "..");
  */
 const NOT_A_BAKE: Record<string, string> = {
   "lib/city/provenance.ts": "published uncached every run",
+  "lib/city/provenance-file.ts": "checked uncached every run",
   "lib/city/tram-timetable.ts": "published uncached every run",
   "lib/city/landmark-facts.ts": "published uncached every run",
   "lib/city/landmark-facts-file.ts": "checked uncached every run",
@@ -151,5 +152,121 @@ test("a value module exports only what reaches keys as values", () => {
     expect([...exports, ...types].toSorted()).toEqual(
       Object.keys(VALUE_EXPORTS[path] ?? {}).toSorted()
     );
+  }
+});
+
+/** What of `Math` rounds exactly, on every machine: the members a bake
+ *  module may name. Everything else of `Math` is the C library's (or, for
+ *  `random`, no function of the tree at all). */
+const EXACT_MATH = [
+  "abs",
+  "ceil",
+  "clz32",
+  "floor",
+  "fround",
+  "imul",
+  "max",
+  "min",
+  "round",
+  "sign",
+  "sqrt",
+  "trunc",
+  "E",
+  "LN10",
+  "LN2",
+  "LOG10E",
+  "LOG2E",
+  "PI",
+  "SQRT1_2",
+  "SQRT2",
+];
+/** Any use of `Math` but one of those members: a call of another
+ *  (`Math.hypot`), an index (`Math["sin"]`), a destructuring or `Math`
+ *  handed on (`const { hypot } = Math`, `f(Math)`). */
+const MACHINE_MATHS = new RegExp(
+  `\\bMath\\b(?!\\.(?:${EXACT_MATH.join("|")})\\b)`,
+  "u"
+);
+/** `**` to anything but a whole literal from 0 to 1000, which
+ *  JavaScriptCore multiplies out; any other power (`2.4`, `1e3`, `1001`,
+ *  a variable, `**=`) is the C library's `pow`. */
+const MACHINE_POWER = /\*\*(?!\s*(?:1000|\d{1,3})(?![\w.]))/u;
+/** Methods of three's maths that call the C library inside (angles,
+ *  rotations, colour spaces): a bake module calls none. What a dependency
+ *  does where no bake module asks — the CityJSON loader's material
+ *  colours, which no baked file carries — the rule cannot see: that is
+ *  held by CI's ledger check, which compares every baked byte with a file
+ *  another machine wrote (docs/data-pipeline.md, "Cache and publish"). */
+const MACHINE_METHODS =
+  /\.(?:angle|angleTo|applyAxisAngle|applyEuler|convertLinearToSRGB|convertSRGBToLinear|getHSL|lookAt|makeRotation\w*|rotate[XYZ]|rotateOn(?:World)?Axis|setFromAxisAngle|setFromCylindrical\w*|setFromEuler|setFromSpherical\w*|setFromUnitVectors|setHSL|setHex|setStyle|slerp\w*)\(/u;
+
+const machineMaths = (line: string): boolean =>
+  MACHINE_MATHS.test(line) ||
+  MACHINE_POWER.test(line) ||
+  MACHINE_METHODS.test(line);
+
+test("no module the bake runs calls the machine's maths", () => {
+  // a bake's bytes are a function of the tree, on any machine: whatever
+  // prepare-data.ts reaches computes with PMath (lib/city/portable-math.ts),
+  // which is held to the same rule
+  const modules = moduleGraph("scripts/prepare-data.ts", ROOT);
+  expect(modules.length).toBeGreaterThan(100);
+  expect(modules).toContain("lib/city/portable-math.ts");
+  const calls: string[] = [];
+  for (const path of modules) {
+    const code = readFileSync(nodePath.join(ROOT, path), "utf-8")
+      // comments say `**` and name Math's functions freely
+      .replaceAll(/\/\*[\s\S]*?\*\//gu, "")
+      .replaceAll(/\/\/.*$/gmu, "");
+    for (const line of code.split("\n")) {
+      if (machineMaths(line)) {
+        calls.push(`${path}: ${line.trim()}`);
+      }
+    }
+  }
+  expect(calls).toEqual([]);
+});
+
+test("the maths rule reads every way to the machine's maths", () => {
+  for (const line of [
+    "Math.hypot(a, b)",
+    "Math.sin(x)",
+    "Math.atan2(y, x)",
+    "Math.asinh(x)",
+    "Math.log10(x)",
+    "Math.random()",
+    'Math["sin"](x)',
+    "const { hypot } = Math;",
+    "const m = Math;",
+    "points.map(Math.cbrt)",
+    "c ** 2.4",
+    "a ** b",
+    "10 ** d",
+    "x ** 1001",
+    "x ** 2000",
+    "x ** 1e3",
+    "x **= 2",
+    "2 ** -26",
+    "const turn = a.angleTo(b);",
+    "q.setFromEuler(e)",
+    "colour.setHex(0xff_00_00)",
+    "m.makeRotationZ(a)",
+  ]) {
+    expect(machineMaths(line)).toBe(true);
+  }
+  for (const line of [
+    "Math.sqrt(x * x + y * y)",
+    "Math.round(x)",
+    "(deg * Math.PI) / 180",
+    "Math.max(...values)",
+    "PMath.hypot(a, b)",
+    "(a - b) ** 2",
+    "2 ** 32",
+    "x ** 1000",
+    "N ** 4 / 64",
+    "v.length()",
+    "angle(a, b)",
+  ]) {
+    expect(machineMaths(line)).toBe(false);
   }
 });

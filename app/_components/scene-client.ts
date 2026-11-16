@@ -104,13 +104,16 @@ const TOLD = [
 type Told = (typeof TOLD)[number];
 
 /** The calls that answer: the HUD waits on a promise. */
-const ASKED = [
+export const ASKED = [
   "captureImage",
   "captureViewpoint",
   "disposeForReload",
+  "getDressingFigures",
   "getFocusDebug",
   "getGpuDebug",
+  "getPipelineBudget",
   "getRenderInfo",
+  "getTimings",
   "inquireAt",
   "releaseGpu",
   "selectCandidate",
@@ -656,7 +659,13 @@ export async function startScene(
 function pocProbeNow(): PocProbe {
   const poc = typeof window === "undefined" ? undefined : window.__poc;
   return poc
-    ? { hold: poc.hold, step: poc.step, frameMs: poc.frameMs, veil: poc.veil }
+    ? {
+        hold: poc.hold,
+        step: poc.step,
+        frameMs: poc.frameMs,
+        still: poc.still,
+        veil: poc.veil,
+      }
     : {};
 }
 

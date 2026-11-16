@@ -30,7 +30,7 @@ seam where it was:
 - the baked data lives in git and is baked again inside the web build;
 - looks are judged by hand on a GPU nobody has in CI.
 
-The maintainer chose all of it, with three aims and two rulings.
+The maintainer chose all of it, with three aims and four rulings.
 
 ## The three aims, and how each is counted
 
@@ -42,7 +42,7 @@ row and waits for the maintainer's word, as ADR 0047's exceptions do.
 |---|---|---|
 | **Faster on the device** | time to the first frame and to *ready*; CPU a landing tile costs the scene's thread; frames kept while tiles stream | a fine level's dressing 1.65–2.90 s on SwiftShader (PR #156, 2026-10-10); before they were sliced, on the phone profile: rails 1.3 s, trees 0.8–1.3 s, tram 0.7 s a tile (`docs/rendering.md`, "The frame budget") |
 | **Fewer bytes on the wire** | gzip bytes of the first load's JavaScript; bytes and requests of the spawn tile, of a fine level, of a far tile, of the site | 1.0 MB of JavaScript for `/dresden` (audit 2026-11-11); a tile 4.0–9.7 MB, Dresden ≈ 98.9 MB (`docs/data-pipeline.md`, measured 2026-09-25: stale, 087 measures again) |
-| **Less complexity** | kinds of side file and formats a tile has; lines of mesh building in the viewer; modules that handle a tile's seam; rules AGENTS.md has to state because nothing checks them | 17 dressing kinds, 4 hand-made binary formats beside GeoJSON; 27 `*-layer.ts` with 18 769 lines; 52 of 77 bake modules mention neighbours, seams or margins; `bootApp` 3 088 lines |
+| **Less complexity** | kinds of side file and formats a tile has; lines of mesh building in the viewer; modules that handle a tile's seam; rules AGENTS.md has to state because nothing checks them | 17 dressing kinds, 4 hand-made binary formats beside GeoJSON; 27 `*-layer.ts` with 14 420 lines of code (18 770 with comments and blank lines); 58 of 84 bake modules handle a tile's edge in their code (plan 092's five ways, or another read with a margin; "52 of 77" was the count of modules that *mention* neighbours, seams or margins, nine of which never touch an edge); `bootApp` 2 354 lines of code (3 090 as written) — as `qa/ledger.json` counts them since plan 087's hardening |
 
 Beside them, counted but not an aim of its own: a phone's memory
 (ADR 0047 stays — it must not grow), the repository's size (`data/`
@@ -60,6 +60,24 @@ Beside them, counted but not an aim of its own: a phone's memory
    series: every bump of three is a risk to the look, which plan 087's
    plates exist to catch; and plan 094 waits for what upstream does
    with `compileAsync` before it builds machinery around it.
+3. **The result need not equal today's.** A slight deviation — in the
+   picture, in a published byte, in a value a bake writes — is
+   acceptable where it serves one of the three aims. Wherever a plan of
+   the series says "identical", "the same bytes" or "no pixel changes",
+   read: identical, **or** a deviation that is slight, named in the PR
+   and shown there (a plate or a snapshot before and after, the
+   ledger's figures). Identity stays the cheapest proof for a change
+   that means none — a move, a refactor — and the plans keep using it
+   for those. What is not slight is a fault as before: a layer that is
+   gone, a thing visibly displaced, ground painted as the wrong class,
+   a phone's memory that grew.
+4. **A decision record may be questioned.** A plan that finds an ADR in
+   its way does not work around it: it says which one, why its reason
+   no longer holds or what it costs the aims, and rewrites it in the
+   same PR, as `docs/adr/README.md` says a record is rewritten. Still
+   the maintainer's to grant first: rulings 1 and 2 above, and what
+   AGENTS.md lists under "When in doubt, ask before" (a backend, a
+   heavy dependency, a second render path, committing raw data).
 
 ## The plans, in the order they go
 
@@ -84,6 +102,72 @@ re-bake: a step's key hashes its module's bytes
 tile of every site. 094's counting test goes at any time; 095's frame
 types too, the rest of 095 last; 096 runs beside everything.
 
+## How the series is built (the maintainer's word, 2026-11-16)
+
+- **One branch, `rewrite`.** Every PR of the series targets it, not
+  main. It is main plus what the series has merged; main is merged
+  into it daily, so it does not drift.
+- **Reviewed before it merges.** A PR goes into `rewrite` when an
+  independent code review of its head has run, the findings that
+  matter are fixed by the session that owns the PR, and CI is green on
+  that head. The coordinating session does this; a reviewer has not
+  seen the PR's own session, and reads the branch as fetched then.
+- **Milestones go to main, by the maintainer alone.** A milestone is a
+  PR from `rewrite` to main with the ledger's figures before and
+  after: about one for each line below, not one for each phase.
+
+  1. *The measuring stick* — nothing a visitor sees: the ledger, the
+     comparison of published tilesets, plates in CI, the buildings'
+     bake the same on every machine, the counting test, the type
+     checker's gate, a BBBike extract where Geofabrik cannot be
+     reached. It goes first and alone because it is what guards main
+     from then on — for every PR, the series' or not — and because the
+     bake fix changes published bytes once: a later difference in the
+     picture is then some other change's.
+  2. *The dressing arrives GPU-ready* (090), a family of layers at a
+     time.
+  3. *Rasters* (091).
+  4. *Tiles as a data product* (088), once the maintainer has decided
+     the store.
+  5. *The bake store* (092).
+  6. The decision on 093, then *packages and frames* (095).
+- **The rows of `docs/plans/README.md` are the coordinator's.** A
+  session sends its row's text and leaves the file alone: nine PRs'
+  rows side by side conflict.
+- **Who does what.** Fable 5.2 coordinates, reviews, and builds the
+  plans that are hard (088 from phase 1, 090, 092, 093, 094's
+  register, the plates); Opus 5.5 builds the rest.
+- **Every milestone PR opens with two lists**: what it holds, with the
+  ledger's figures before and after; and the table below as it stands
+  that day.
+
+## What waits for the maintainer
+
+One list, kept by the coordinating session; a plan's own *Findings*
+holds the detail. A row leaves when its answer is written into the plan
+it belongs to. "Default" is what the series does if nothing is said.
+
+A question reaches the maintainer on its own, never inside a status
+report, and only with figures an independent review has read. It names
+the options, the recommendation and what happens if nothing is said.
+An answer closes it: a figure corrected later is written into the
+record, and the question comes back only if the correction would turn
+the trade around.
+
+| # | What | Default or recommendation | Needed before | Detail |
+|---|---|---|---|---|
+| 1 | The store the tiles are published to; whether the browser reads it through the site's own host or a second one; who publishes (three decisions) — and an account with a write credential for a ten-file trial | No default. The site stays where it is; only the tile files move. The team is on Vercel's Pro plan (read from its billing, 2026-11-16), so two of 088's four objections to Vercel Blob do not apply: the trial runs on Blob first (no new account, no new processor), then on R2 if Blob fails on the stored encoding or the cache header. Publishing by a CI job | Milestone 4 (088); 092's phase 4 if its format is binary | [088](./088-rewrite-tiles-as-a-data-product.md), *Findings*, decisions 1–3 |
+| 2 | A machine with a GPU that renders the plates (tier 2) | The maintainer's Mac, once a visible milestone; until then a visible PR is judged on CI's software renderer, which only says "changed" | Milestone 2 (the first that changes the picture) | [087](./087-rewrite-measuring-stick.md), "Two tiers" |
+| 3 | When the bake modules may be edited for their types (decision B): it re-runs every step on every tile | With 092's re-bake, so nothing is baked twice | 089's phases 3–4 | [089](./089-rewrite-python-types.md), "Decision B" |
+| 4 | The format of the bake store — only if the maintainer wants a binary one | Taken by default after 092's phase 0 and its review: GeoJSON under the one schema, no new dependency, phase 4 skipped. GeoParquet would need `pyarrow` (171 MB) for files 1–1.3 times smaller than gzipped GeoJSON | — (say so to reopen it) | [092](./092-rewrite-bake-store.md), *Findings* |
+| 5 | A full re-bake of every site on the maintainer's machine (an action, not a decision) | — | Milestone 5 (092) | [092](./092-rewrite-bake-store.md), *Status* |
+| 6 | How far the frame types go (095's part B2) | The narrower scope its spike recommends | Milestone 6 | [095](./095-rewrite-packages-and-frames.md), *Findings* |
+| 7 | The lines at which a phone's figures still ask for the quadtree (093's gate) | None: put to the maintainer with the figures after 090 and 091 | Milestone 6 | [093](./093-rewrite-streaming-quadtree.md) |
+
+Answered so far: the rails as a segment table (2026-11-16;
+[090](./090-rewrite-dressing-gpu-ready.md), "What the maintainer has
+granted").
+
 ## What each plan may assume of the others
 
 The series is built whole. A plan is therefore written for the state the
@@ -91,12 +175,20 @@ others leave, not for today's alone. These are the joints.
 
 1. **Measure first.** Nothing that changes the picture merges before
    087's plates exist, and every plan writes its numbers into 087's
-   ledger. A plate is compared with main rendered on the same machine,
-   so no reference image is kept anywhere; a PR with a *Snapshots*
-   section claims a change and the plates report it, a PR without one
-   claims none and a differing view fails it. The reason is the series' own history: PR #156 (plan 074
-   part A's spike) has waited since 2026-10-11 for a look on a real
-   GPU, and plan 019 since September.
+   ledger. The plates come in two tiers (ruling 4 reopened ADR 0018's
+   rejection of pixel comparison on SwiftShader): in CI, base against
+   head on the same runner's software renderer, as a tripwire for a
+   change nobody meant — it says *changed*, never *good*; and on a real
+   GPU, where light, shadow and anti-aliasing are the product's. A
+   plate is compared with the base rendered on the same machine, so no
+   reference image is kept anywhere. A PR with a *Snapshots* section
+   claims a change, and the plates report which views it changed; a PR
+   without one claims none, and a differing view fails its check until
+   the PR names the change and shows it (ruling 3: named and shown, a
+   slight deviation is acceptable — unnamed, it is not). The reason is
+   the series' own history: PR #156 (plan 074 part A's spike) has
+   waited since 2026-10-11 for a look on a real GPU, and plan 019
+   since September.
 2. **Data leaves git before a binary hand-over format enters it**
    (088 before 092). GeoJSON's one merit is the diff a re-bake shows in
    git; a binary table in git has neither a diff nor a delta. Which
@@ -130,7 +222,8 @@ others leave, not for today's alone. These are the joints.
    format in one place and not in every baker a second time.
 8. **Format, site-wide tables and steps that overwrite nothing are one
    plan** (092): all three rewrite the same input and output layer of
-   every bake step. Together they cost less than apart. The proof this repository leans
+   every bake step. Together they cost less than apart. The proof this
+   repository leans
    on — "a cold bake publishes 0 new files" — holds through 092's
    schema, its own-output rule, its store and even its change of
    format; only the last step, windows in place of tiles, changes
@@ -173,9 +266,10 @@ others leave, not for today's alone. These are the joints.
 - **074 part A** (bake the static dressing) and its spike **PR #156**:
   taken over by 090, which starts from the spike's numbers.
 - **019** (the GPU checklist): 087 turns its reference views into
-  compared plates and rewrites ADR 0018, which rejects pixel
-  comparison — on SwiftShader, where it stays rejected; whether a
-  picture is good, the two phones and the deploy host stay 019's.
+  compared plates and rewrites ADR 0018, which rejected pixel
+  comparison on SwiftShader: it stays rejected for judging a look and
+  is taken up as tier 1's tripwire (ruling 4); whether a picture is
+  good, the two phones and the deploy host stay 019's.
 - **070** (raster diet, partial) and 074's backlog item "one raster
   stack per tile": continued by 091. 076's and 077's rejection of KTX2
   stands for every exact raster (block compression would change ids);
