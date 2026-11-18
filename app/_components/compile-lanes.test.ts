@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { compileInLanes, compileInTurn } from "./compile-lanes";
+import {
+  compileInLanes,
+  compileInTurn,
+  resizeCompileTarget,
+} from "./compile-lanes";
 import type { Compiling } from "./compile-lanes";
 
 interface Item {
@@ -148,4 +152,53 @@ test("the compiles on one renderer run in turn, each once the one before has set
   await settle();
   expect(third).toEqual({ settled: true, error: undefined });
   expect(other.settled).toBe(true);
+});
+
+/** A target that notes its sizes, and a renderer that notes what it is
+ *  asked to make again. */
+function sizedTarget() {
+  const target = {
+    width: 4,
+    height: 4,
+    sizes: [] as string[],
+    setSize(width: number, height: number) {
+      target.width = width;
+      target.height = height;
+      target.sizes.push(`${width}x${height}`);
+    },
+  };
+  const made: unknown[] = [];
+  const renderer = {
+    initRenderTarget: (which: typeof target) => {
+      made.push(which);
+    },
+  };
+  return { target, renderer, made };
+}
+
+test("a target resized while a compile is in flight gets its textures back at once, and never otherwise", async () => {
+  const { target, renderer, made } = sizedTarget();
+  // no compile: the next frame that draws into it makes them
+  resizeCompileTarget(renderer, target, 8, 8);
+  expect(target.sizes).toEqual(["8x8"]);
+  expect(made).toEqual([]);
+
+  const { step, end } = heldSteps();
+  const compiling = compileInTurn(
+    renderer,
+    async () => await step({ id: "tile", material: "m" })
+  );
+  await settle();
+  // the same size disposes nothing: nothing to make again
+  resizeCompileTarget(renderer, target, 8, 8);
+  expect(made).toEqual([]);
+  // a new one, with the compile still to make its pipelines
+  resizeCompileTarget(renderer, target, 6, 6);
+  expect(target.sizes).toEqual(["8x8", "6x6"]);
+  expect(made).toEqual([target]);
+
+  end("tile");
+  await compiling;
+  resizeCompileTarget(renderer, target, 5, 5);
+  expect(made).toEqual([target]);
 });

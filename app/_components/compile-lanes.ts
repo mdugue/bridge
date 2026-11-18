@@ -71,6 +71,42 @@ export async function compileInTurn(
   }
 }
 
+/** A target a compile is made against, as far as a resize needs it. */
+interface CompileTarget {
+  width: number;
+  height: number;
+  setSize: (width: number, height: number) => void;
+}
+
+/**
+ * Resizes a render target that compiles are made against.
+ *
+ * An upstream workaround (docs/rendering.md, "Workarounds for upstream
+ * bugs"): a new size disposes the target's GPU textures, and three makes
+ * them again in the next frame that draws into it — but a `compileAsync`
+ * in flight against the target reads each texture's GPU format only when
+ * it makes its pipelines, after its awaits. Resized in between, they have
+ * none, and every pipeline of that compile fails (`GPUDepthStencilState`:
+ * `Required member is undefined`). So while a compile is queued or in
+ * flight the textures are made again at once, before it resumes. With
+ * none, nothing is made here: a target that is not drawn (the outline's)
+ * stays unallocated.
+ */
+export function resizeCompileTarget<T extends CompileTarget>(
+  renderer: { initRenderTarget: (target: T) => void },
+  target: T,
+  width: number,
+  height: number
+): void {
+  if (target.width === width && target.height === height) {
+    return;
+  }
+  target.setSize(width, height);
+  if (compilesQueued(renderer) > 0) {
+    renderer.initRenderTarget(target);
+  }
+}
+
 /** A drawable's step as the record holds it: the material it compiled
  *  for, and the step itself. */
 export interface Compiling {

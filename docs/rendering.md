@@ -1593,7 +1593,8 @@ adapter; a script that never arrives is the network's ("network: …",
 not fetch before `alive` (the bundler's classic bootstrap pulls the
 scene's chunks with `importScripts`, and a failed one throws a
 NetworkError) — one that throws or stays silent "Die Ansicht startet
-nicht." An aborted boot (a StrictMode remount, a navigation) stops
+nicht.", and the crash trail notes which of the two (`worker  no hello:
+threw` or `silent`). An aborted boot (a StrictMode remount, a navigation) stops
 waiting at once and ends the worker, so the next boot does not wait on
 it.
 Where that matches the page, the page hands it the canvas as an
@@ -1983,20 +1984,27 @@ reported yet.
 dressing* under [the frame budget](#the-frame-budget). Nothing works
 around it; report it with the first entry.
 
-**three r187 (likely a regression): a compile builds colourless
-pipelines without a depth format.** Now and then — on a cold start, at
-the boot or as Modell is entered, a run in three or so — `compileAsync`
-builds a few casters' pipelines (crowns, ground plates, clay) for a
-render context with no colour target whose depth has no GPU format, and
-three logs `Async render pipeline creation failed …
-GPUDepthStencilState: Required member is undefined`. It is the shadow
-pass or a context like it, and not our depth-only shadow map: with
-three's own map it happens as well. The frames draw on (whether the
-failed pipeline costs a caster its shadow is not checked). Nothing works
-around it; first seen after main's
-motion blur came in (2026-10-30), never in the runs before. Not reported
-yet: find the context first (a hook on `createRenderPipelineAsync` shows
-the descriptor).
+**three r187: a render target resized under a compile loses its
+formats.** `RenderTarget.setSize` disposes the target's GPU textures, and
+three makes them again in the next frame that draws into it; a
+`compileAsync` in flight against that target reads each texture's GPU
+format only as it makes its pipelines, after its awaits. Resized in
+between — the frame meter's resolution step at the boot, a window
+resize — the textures have none, and three logs `Async render pipeline
+creation failed … GPUDepthStencilState: Required member is undefined`
+for the pipelines of that compile. The frames draw on: in the
+reproduction the next frame built the pipeline itself. First seen
+2026-10-30, a cold start in three or so, and taken for the shadow pass's
+context; placed 2026-11-18 from a crash trail whose error came 53 ms
+after a resolution step, and reproduced with one target, one compile and
+one `setSize` (the sightings as Modell is entered were not looked at
+again). *Worked around* in `resizeCompileTarget`
+(`compile-lanes.ts`), which the post stack's scene target and the
+selection outline's three go through: while a compile is queued or in
+flight the textures are made again at once (`renderer.initRenderTarget`),
+before the compile resumes. *Once fixed* (a compile takes the formats
+with its render context, or makes the textures it finds gone): a plain
+`setSize`. Not reported yet.
 
 **three r187: an attribute whose GPU buffer failed to allocate stays
 half made** — its entry without a buffer — and the dispose of its
