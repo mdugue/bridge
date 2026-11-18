@@ -24,7 +24,8 @@ export const RETRY_BASE_MS = 500;
 export const RETRY_CAP_MS = 15_000;
 /** The longest a Retry-After is honoured for. */
 export const RETRY_AFTER_CAP_MS = 60_000;
-/** How long a tile's content is retried (ms of a visible page). */
+/** How long a tile's content is retried (ms of a visible page, from its
+ *  first failure). */
 export const TILE_FETCH_BUDGET_MS = 20_000;
 /** …an optional side file (lamps, rails, …): it must not hold up the
  *  tile's serial dressing chain for long. */
@@ -266,7 +267,10 @@ async function nextWait<T>(
 /**
  * Runs `attempt` until it answers with a status that is not transient (ok,
  * absent, fatal: the caller decides), retrying network errors and
- * transient statuses for `budgetMs` of a visible page. The first try goes
+ * transient statuses for `budgetMs` of a visible page, counted from the
+ * first failure — the first try's own time is not the retries' (a long
+ * body read that broke at its 20th second used to give up at once, with
+ * one attempt and no retry). The first try goes
  * at once; each later one after its backoff and once the page is usable
  * (`whenUsable`: the wait for a visible page to come online counts). An
  * abort rejects at once with an AbortError; a fatal error rejects as it
@@ -277,7 +281,9 @@ export async function withRetry<T>(
   opts: RetryOptions
 ): Promise<FetchAnswer<T>> {
   const { budgetMs, env, signal, onRetry } = opts;
-  const start = env.visibleMs();
+  // the clock starts at the first failure, not the first try: a download
+  // that ran past the budget before it broke still gets its retries
+  let firstFailure: number | undefined;
   for (let tries = 1; ; tries += 1) {
     if (signal?.aborted) {
       throw abortError();
@@ -286,7 +292,8 @@ export async function withRetry<T>(
     if ("answer" in next) {
       return next.answer;
     }
-    const spent = env.visibleMs() - start;
+    firstFailure ??= env.visibleMs();
+    const spent = env.visibleMs() - firstFailure;
     if (spent + next.delayMs > budgetMs) {
       const state = env.describe?.();
       throw new NetworkError(
