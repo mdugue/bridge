@@ -192,7 +192,7 @@ WALL_SUPPORT = {"wall", "wall_mounted"}  # a flag on a facade: not mapped as suc
 ROOF = "roof"  # a flag on a roof (`support`/`location`): the roof is not drawn
 ROOF_LOCATIONS = frozenset({ROOF, "rooftop"})
 # a tagged flagpole height outside this is left out (m; lib/city/furniture.ts
-# FLAG_HEIGHT_MAX)
+# FLAG_HEIGHT_MIN, FLAG_HEIGHT_MAX)
 FLAG_H = (3.0, 30.0)
 # The flags the viewer draws in their colours, by `flag:name`/`country`/`subject`
 # (lower case); every other flag flies a pale cloth.
