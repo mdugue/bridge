@@ -16,6 +16,7 @@ import type { LookState } from "@/lib/city/look-state";
 import { siteHoldsPoint } from "@/lib/city/geolocation";
 import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
 import { METHODS } from "@/lib/city/methods";
+import { sunDirectionEnu } from "@/lib/city/sun";
 import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
 import type { RenderStyle } from "@/lib/city/render-style";
 import type { Site } from "@/lib/city/site";
@@ -276,7 +277,7 @@ export function useAskScene(
           handleRef.current?.stopGlide();
         }
       },
-      show: (view) => {
+      show: (view, ground) => {
         const h = handleRef.current;
         if (!h) {
           return false;
@@ -284,6 +285,7 @@ export function useAskScene(
         const mine = {};
         glides.answer = mine;
         h.flyToViewpoint(view, {
+          ...(ground === undefined ? {} : { ground }),
           onProgress: (t) => {
             if (t >= 1 && glides.answer === mine) {
               glides.answer = null;
@@ -293,6 +295,19 @@ export function useAskScene(
         return true;
       },
       within: (x, y) => siteHoldsPoint(site, x, y),
+      frameView: async (places, from) => {
+        const h = handleRef.current;
+        if (!h) {
+          return null;
+        }
+        const sun = sunDirectionEnu(current(), h.latLng.lat, h.latLng.lng);
+        // framed in the scene, where the buildings' sight lines are
+        return await h.frameView(
+          places,
+          from,
+          sun.up > 0 ? { east: sun.east, north: sun.north } : null
+        );
+      },
       setTime: (change) => {
         const at = instantAt(current(), change);
         setInstant(at);

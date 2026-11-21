@@ -3,11 +3,15 @@ import { chat, maxIterations } from "@tanstack/ai";
 import { fakeText } from "@tanstack/ai/testing";
 import { ChatClient, stream } from "@tanstack/ai-client";
 import { lookTool, SCENE_TOOLS } from "@/lib/city/ask-tools";
-import { sceneTools } from "./ask-scene-tools";
+import { frameTargets } from "@/lib/city/ask-view";
+import { AERIAL_REACH, sceneTools, showPlaces } from "./ask-scene-tools";
 import type { AskScene } from "./ask-scene-tools";
+import type { ViewpointGeometry } from "@/lib/city/site";
 
 const STUB: AskScene = {
   from: () => null,
+  frameView: async (places, from) =>
+    await Promise.resolve(frameTargets(places, { aspect: 1.5, from })),
   haltAnswerGlide: () => {},
   look: async () => ({}),
   setLayer: () => true,
@@ -25,6 +29,80 @@ test("the card runs every scene tool the server hands the browser", () => {
   expect(bound.sort((a, b) => a.localeCompare(b))).toEqual(
     SCENE_TOOLS.map((t) => t.name).sort((a, b) => a.localeCompare(b))
   );
+});
+
+test("zeige frames the places together, or the first alone when they lie too far apart", async () => {
+  const shown: ViewpointGeometry[] = [];
+  const scene = {
+    ...STUB,
+    show: (v: ViewpointGeometry) => {
+      shown.push(v);
+      return true;
+    },
+  };
+  const near = [
+    { name: "Kreuzkirche", x: 0, y: 0, z: 110, h: 90, r: 30 },
+    { name: "Frauenkirche", x: 250, y: 150, z: 112, h: 90, r: 30 },
+  ];
+  const together = await showPlaces(scene, { ziele: near });
+  expect(together.gezeigt).toEqual(["Kreuzkirche", "Frauenkirche"]);
+  expect(together.abstand_m as number).toBeLessThanOrEqual(AERIAL_REACH);
+  const far = [near[0], { ...near[1], x: 4000 }];
+  const apart = await showPlaces(scene, { ziele: far });
+  expect(apart.gezeigt).toEqual(["Kreuzkirche"]);
+  expect(apart.hinweis).toBeDefined();
+  const first = await showPlaces(scene, { ziele: near, alle: false });
+  expect(first.gezeigt).toEqual(["Kreuzkirche"]);
+  const street = await showPlaces(scene, { ziele: near, aus_der_luft: false });
+  expect(street.gezeigt).toEqual(["Kreuzkirche"]);
+  expect(shown.at(-1)?.mode).toBe("walk");
+  expect(shown.slice(0, 3).every((v) => v.mode === "fly")).toBe(true);
+});
+
+test("zeige leaves out places off the city, refuses when none is on it, and waits for the scene", async () => {
+  const place = { name: "Kreuzkirche", x: 0, y: 0, z: 110, h: 90, r: 30 };
+  const off = { ...place, name: "Weit weg", x: 51, y: 13 };
+  const inside = { ...STUB, within: (x: number) => x === 0 };
+  const outside = await showPlaces(inside, { ziele: [off] });
+  expect(outside.ausserhalb).toBe(true);
+  const left = await showPlaces(inside, { ziele: [off, place] });
+  expect(left.gezeigt).toEqual(["Kreuzkirche"]);
+  const loading = { ...STUB, show: () => false };
+  const waits = await showPlaces(loading, { ziele: [place] });
+  expect(waits.ok).toBe(false);
+  const unborn = {
+    ...STUB,
+    frameView: async () => await Promise.resolve(null),
+  };
+  const none = await showPlaces(unborn, { ziele: [place] });
+  expect(none.ok).toBe(false);
+});
+
+test("zeige takes the eye over the places' ground and shows eight at most", async () => {
+  const grounds: (number | undefined)[] = [];
+  let shown = 0;
+  const scene = {
+    ...STUB,
+    show: (v: ViewpointGeometry, ground?: number) => {
+      grounds.push(ground);
+      shown = v.aboveGround;
+      return true;
+    },
+  };
+  const place = { name: "Kirche", x: 0, y: 0, z: 140, h: 40, r: 20 };
+  await showPlaces(scene, { ziele: [place] });
+  expect(grounds).toEqual([140]);
+  expect(shown).toBeGreaterThan(0);
+  // a place whose ground nobody knew: the glide measures it
+  await showPlaces(scene, { ziele: [{ ...place, z: undefined }] });
+  expect(grounds[1]).toBeUndefined();
+  const many = Array.from({ length: 12 }, (_, i) => ({
+    ...place,
+    name: `Ort ${i}`,
+    x: i * 20,
+  }));
+  const eight = await showPlaces(scene, { ziele: many });
+  expect(eight.gezeigt).toHaveLength(8);
 });
 
 test("setze_zeit refuses a time no clock or calendar has, and sets none", async () => {
