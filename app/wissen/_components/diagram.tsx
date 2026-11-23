@@ -1,14 +1,8 @@
 "use client";
 
 import { Maximize2Icon, MinusIcon, PlusIcon, ScanIcon } from "lucide-react";
-import {
-  type CSSProperties,
-  type PointerEvent,
-  type ReactNode,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useRef, useState } from "react";
+import type { CSSProperties, PointerEvent, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -61,7 +55,7 @@ const clamp = (s: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
  * fitted to the column; when that shrinks it, a click opens it in a dialog
  * at a size of the reader's choosing, panned by scrolling or dragging.
  */
-export function Diagram({
+export const Diagram = ({
   children,
   height,
   lang,
@@ -73,7 +67,7 @@ export function Diagram({
   lang: Lang;
   title: string | null;
   width: number;
-}) {
+}) => {
   const t = LABEL[lang];
   const figure = useRef<HTMLElement>(null);
   const [shrunk, setShrunk] = useState(false);
@@ -81,14 +75,19 @@ export function Diagram({
 
   useEffect(() => {
     const el = figure.current;
-    if (!el) {
-      return;
-    }
-    const measure = () => setShrunk(width > el.clientWidth - 32);
+    const measure = () => {
+      if (el) {
+        setShrunk(width > el.clientWidth - 32);
+      }
+    };
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
+    if (el) {
+      observer.observe(el);
+    }
+    return () => {
+      observer.disconnect();
+    };
   }, [width]);
 
   return (
@@ -125,9 +124,9 @@ export function Diagram({
       </Dialog>
     </figure>
   );
-}
+};
 
-function ZoomView({
+const ZoomView = ({
   children,
   height,
   labels: t,
@@ -139,7 +138,7 @@ function ZoomView({
   labels: (typeof LABEL)[Lang];
   title: string | null;
   width: number;
-}) {
+}) => {
   const stage = useRef<HTMLDivElement | null>(null);
   const drag = useRef<{
     x: number;
@@ -293,4 +292,4 @@ function ZoomView({
       </div>
     </>
   );
-}
+};

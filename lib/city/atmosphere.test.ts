@@ -22,16 +22,17 @@ test("atmosphereAt clamps to the day palette above the highest stop", () => {
   expect(atmosphereAt(89)).toEqual(atmosphereAt(60));
 });
 
+const rgb = (hex: string) =>
+  [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
+
 test("atmosphereAt blends smoothly between stops", () => {
-  const rgb = (hex: string) =>
-    [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
   const keys = ["fog", "hemiSky", "hemiGround"] as const;
   // -1.5 lies between the blue-hour stop (-2) and the sunrise one (1)
   const lo = atmosphereAt(-2);
   const hi = atmosphereAt(1);
   const dusk = atmosphereAt(-1.5);
   for (const key of keys) {
-    expect(dusk[key]).toMatch(/^#[0-9a-f]{6}$/);
+    expect(dusk[key]).toMatch(/^#[0-9a-f]{6}$/u);
     expect(dusk[key]).not.toBe(lo[key]);
     expect(dusk[key]).not.toBe(hi[key]);
     // each channel on its way from one stop's to the other's

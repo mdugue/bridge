@@ -7,11 +7,11 @@ import {
   Group,
   InterleavedBuffer,
   InterleavedBufferAttribute,
-  type Material,
   Mesh,
   MeshBasicNodeMaterial,
   Object3D,
 } from "three/webgpu";
+import type { Material } from "three/webgpu";
 import {
   aloneUnder,
   cpuArrayBytes,
@@ -19,12 +19,14 @@ import {
   dropCpuCopies,
   estimateGeometryBytes,
   markSceneShared,
+  paddedPositionBytes,
   releaseRenderState,
   retainSceneMaterials,
   sceneMaterial,
   sceneShared,
   sceneSharedBytes,
   textureBytes,
+  withMaterialsShown,
 } from "./three-utils";
 import { Instances } from "./instancing";
 
@@ -85,10 +87,10 @@ test("a geometry left half made by a failed allocation is disposed past it, and 
   let through = 0;
   poisoned.addEventListener("dispose", () => {
     if (throws > 0) {
-      throws--;
+      throws -= 1;
       throw new TypeError("undefined is not an object (data.buffer.destroy)");
     }
-    through++;
+    through += 1;
   });
   const healthy = new BoxGeometry();
   const healthyCalls = countDisposals(healthy);
@@ -309,7 +311,9 @@ test("a released drawable dispatches dispose, even on a scene-wide material", ()
   const listen = (o: Object3D, name: string) =>
     (
       o as unknown as { addEventListener: (t: string, f: () => void) => void }
-    ).addEventListener("dispose", () => seen.push(name));
+    ).addEventListener("dispose", () => {
+      seen.push(name);
+    });
   listen(drawable, "drawable");
   listen(group, "group");
   releaseRenderState(root);
@@ -346,4 +350,77 @@ test("a compile under a group sees the object alone there, and then all is back"
   ).toThrow("lost device");
   expect(group.children).toEqual([city, hidden]);
   expect(city.visible).toBe(true);
+});
+
+test("a compile sees a drawable's materials shown, and then each as it was", () => {
+  const hidden = new MeshBasicNodeMaterial();
+  hidden.visible = false;
+  const shown = new MeshBasicNodeMaterial();
+  // hidden for good: not among those shown for a compile
+  const off = new MeshBasicNodeMaterial();
+  off.visible = false;
+  const among = new Set([hidden, shown]);
+  const mesh = new Mesh(new BoxGeometry(), [hidden, shown, off]);
+  const seen = withMaterialsShown(mesh, among, () => [
+    hidden.visible,
+    shown.visible,
+    off.visible,
+  ]);
+  expect(seen).toEqual([true, true, false]);
+  expect([hidden.visible, shown.visible]).toEqual([false, true]);
+  // a single material, put back even when the compile throws
+  const single = new Mesh(new BoxGeometry(), hidden);
+  expect(() =>
+    withMaterialsShown(single, among, () => {
+      expect(hidden.visible).toBe(true);
+      throw new Error("lost device");
+    })
+  ).toThrow("lost device");
+  expect(hidden.visible).toBe(false);
+  // nothing to show on an empty group
+  expect(withMaterialsShown(new Group(), among, () => 1)).toBe(1);
+});
+
+test("a compile of a group sees its descendants' night-only materials shown", () => {
+  const night = new MeshBasicNodeMaterial();
+  night.visible = false;
+  const day = new MeshBasicNodeMaterial();
+  const root = new Group();
+  const inner = new Group();
+  root.add(new Mesh(new BoxGeometry(), day), inner);
+  // shared by two drawables: still put back hidden
+  inner.add(
+    new Mesh(new BoxGeometry(), night),
+    new Mesh(new BoxGeometry(), [night, day])
+  );
+  expect(
+    withMaterialsShown(root, new Set([night]), () => [
+      night.visible,
+      day.visible,
+    ])
+  ).toEqual([true, true]);
+  expect([night.visible, day.visible]).toEqual([false, true]);
+});
+
+test("quantised positions weigh the two bytes a vertex they are padded with", () => {
+  const quantised = new BufferGeometry();
+  quantised.setAttribute(
+    "position",
+    new BufferAttribute(new Int16Array(3 * 100), 3, true)
+  );
+  expect(paddedPositionBytes(quantised)).toBe(200);
+  // interleaved, as a meshopt glTF arrives
+  const interleaved = new BufferGeometry();
+  interleaved.setAttribute(
+    "position",
+    new InterleavedBufferAttribute(
+      new InterleavedBuffer(new Int16Array(4 * 50), 4),
+      3,
+      0,
+      true
+    )
+  );
+  expect(paddedPositionBytes(interleaved)).toBe(100);
+  expect(paddedPositionBytes(new BoxGeometry())).toBe(0);
+  expect(paddedPositionBytes(new BufferGeometry())).toBe(0);
 });

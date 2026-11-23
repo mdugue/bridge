@@ -12,6 +12,10 @@
 
 ## Status
 
+- **Status**: BUILT (2026-11-05) — A and B; the link is a **query**,
+  `?snap=` (Findings, decision 1: built first as a fragment, the
+  maintainer chose the query the same day); the ADR 0018 line and the
+  GPU plates wait for the maintainer.
 - **Priority**: P3 (direction option, chosen by the maintainer on 2026-10-01)
 - **Effort**: S–M (A: S–M, B: S)
 - **Risk**: LOW
@@ -138,14 +142,128 @@ GPU, say so).
 
 ## Findings
 
-(Executor: lengths from A1, decisions, open questions, the ADR 0018 draft.)
+### 2026-11-05 — built
+
+**Drift since `a28de75`** (54 files, +3 503/−3 327 in the check's
+paths and `docs/adr/`). What moved, and what the build follows:
+
+- `lib/city/snapshot.ts`: the look is one percent row (`fogPct`), the
+  crown switch, the style and three data layers; Modell's view rides in
+  `camera.model`; retired keys are ignored (`RETIRED_SNAPSHOT_KEYS`).
+  ADR 0018 point 5 now calls the Snapshot "a validated contract".
+- The recovery is no longer a `restore` after the first frame: plan 079
+  made it a session (`app/_components/gpu-recovery.ts`) peeked before
+  the boot, and `lib/city/gpu-recovery.ts` `arrivalOf` decides where a
+  page starts — the snapshot's time and look before the boot, its
+  camera as the boot's `initialCamera`, gated by the safety level (from
+  level 2 no picture style, no Modell). The link is a second input to
+  that function (`linked`), not a second restore path.
+- Plan 058 moved the arrival hand-off from `?at=` to the fragment
+  (`#at=`) because a query reaches the host's request log, the crash
+  trail and the crash card; `arrivalOf(hash)` read only a fragment.
+  (Reversed 2026-11-05 with decision 1: `?at=` again, the trail keeping
+  only the QA knobs.)
+- `e2e/snapshot-shot.spec.ts` gained `SHOTS_QUERY`, `SHOTS_TAG`,
+  `SHOTS_SITE`, `SHOTS_AT`, `SHOTS_SMALL` and a frame-counted settle.
+- Plan 019 has sections M (the phone crash fixes) and N (left by the
+  plans closed on 2026-11-04); plan 038 step 5 is in
+  (`applyCameraState` ends the follow), so the dependency holds.
+
+**A1 — lengths** (a full `encodeSnapshot` of the default look, a camera
+with unrounded floats; `bun` on the codec):
+
+| Form | Characters |
+|---|---|
+| JSON | 352 |
+| `encodeURIComponent(JSON)` | 546 |
+| base64url(JSON), every key | 470 |
+| base64url(JSON), default look keys dropped | 334 |
+| base64url(JSON) with a Modell view | 648 |
+
+**Decisions** (the conservative defaults the task asked for: ADRs 0001,
+0043, 0054 kept — the page stays static, nothing new leaves the
+browser, a link carries only view state):
+
+1. **A query: `/<site>?snap=<base64url(JSON)>`.** Built first as a
+   fragment (`#snap=`, so the camera's place — after *Standort*/*Live*
+   the visitor's own — never reached the host, as plan 058 had done for
+   `#at=`); the maintainer reversed that on 2026-11-05: **URL parameters
+   go in the query**, so a link shows in the host's request log for
+   diagnosis and several parameters sit side by side. `?at=` moved back
+   with it. `snapshotFromSearch` reads `location.search`; the crash
+   trail keeps only the QA knobs of a query (`TRAIL_QUERY`) and the
+   reports only the path (`crash-reports.ts`), so nothing of a link
+   reaches a report. Nothing is stored. The privacy page says that the
+   link carries the camera's place and that opening it puts that in
+   Vercel's request log.
+2. **The whole snapshot, as *Kopieren* writes it**, not a compact form:
+   470–650 characters is short enough, and a link then means exactly
+   what pasting its JSON means (missing look keys keep the current
+   value) — no second meaning to define, no "defaults first" reset, no
+   change to ADR 0018's contract. Over 4 KB a param is refused unread.
+3. **One validator.** `snapshotFromParam` decodes base64url and hands
+   the text to `parseSnapshot`; nothing else parses it (the STOP
+   condition held).
+4. **Recovery wins.** A snapshot waiting from a lost GPU or a
+   *Qualität* reset is used over the link (a reload keeps the address);
+   a place picked while loading wins over both. A link is gated by the
+   safety level as a recovery is (`arrivalOf`), so a device at level 2
+   does not open Modell in Comic. The trail notes `view link` (no
+   position). A broken link boots at the spawn and says *Der Link
+   enthält keine gültige Ansicht*.
+5. **The link is the site's page with `snap` alone**
+   (`origin + pathname + ?snap=…`): `?scene=lite`, a pinned `?safety=`
+   or `?trail=1` are this device's knobs, not the view's; a QA view that
+   needs one carries it in its index link, before `snap`
+   (`snapshotHref` keeps a path's query).
+   **The address keeps `snap`** (no `replaceState`): a reload opens the
+   view again. Another link is another page load (a new query is a
+   navigation, and nothing in the app routes to one), so the boot is the
+   one reader; the fragment version's `hashchange` handler is gone.
+6. **The QA views live in `qa/views/`** as the plan said, written by
+   `scripts/qa-views.ts` from the data (no GPU here to capture them):
+   places from `sites/dresden.ts` and the baked monuments, furniture,
+   trees, bridges, riverside and sport tables, heights from the
+   committed DGM1, `pos` in the spawn tile's frame. Their index,
+   `qa/views/README.md`, gives each view what it checks and its link
+   (path form: put the preview's or production's origin in front). The
+   parse test is `scripts/qa-views.test.ts`, beside the generator (not
+   `lib/city/`): it also holds every `pos` to its `epsg` in the site's
+   frame and the index to the files.
+7. `low-sun` is at **09:00**, not 07:30, on 21 December: the sun rises
+   in Dresden at ≈ 08:10 that day. `seam-eye` faces east at 17:30 in
+   July, so it is also section M's "tile seam with the sun behind".
+
+**Open questions for the maintainer:**
+
+- **ADR 0018, point 5 — proposed text** (not merged): "A Snapshot also
+  travels as a view link, `/<site>?snap=<base64url of its JSON>`: in the
+  query, like every URL parameter, so the host's request log shows it
+  and the privacy page names it; read through the same `parseSnapshot`, refused over 4 KB; its `v`
+  handled as a pasted one's (unknown versions accepted, non-numbers
+  refused). A waiting recovery wins over a link, and a link is gated by
+  the safety level as a recovery is." ADR 0001 needs no change: a link
+  persists nothing.
+- **`?style=noir` as a short form?** Not built: it would be a second
+  meaning for a link. A whole snapshot in Film noir is ≈ 470
+  characters; if a short form is wanted, it is `?style=` beside
+  `?snap=`, read by the same reader.
+- The QA views' poses were computed, not looked at: the first GPU
+  session should fix any badly framed one in the table of
+  `scripts/qa-views.ts` and write the files again.
+
+**Verified:** `bun run verify`; the codec's units (round trip, malformed,
+oversized, read beside other parameters); `arrivalOf`'s link cases; the QA view test
+(and its negative control: an `epsg` moved 10 m fails two tests); e2e
+*a view link* (`@desktop-render`, headless lite against a production
+build). `bun run shots` on a GPU: not run (no GPU in the container).
 
 ## Done criteria
 
-- [ ] A1 measurements and the encoding decision in "Findings"
-- [ ] A2 prototype with unit tests + one e2e; `bun run verify` exits 0
-- [ ] B: `qa/views/*.json` committed, harness reads them, parse test passes
-- [ ] Plan 019 and AGENTS.md point to `qa/views/`
+- [x] A1 measurements and the encoding decision in "Findings"
+- [x] A2 prototype with unit tests + one e2e; `bun run verify` exits 0
+- [x] B: `qa/views/*.json` committed, harness reads them, parse test passes
+- [x] Plan 019 and AGENTS.md point to `qa/views/`
 
 ## STOP conditions
 

@@ -11,7 +11,7 @@ const LINK = "underline underline-offset-2 hover:text-foreground";
  * so the walk is still there to come back to. `children` are further
  * links the place puts in the same row (the sidebar's Wissen).
  */
-export function LegalLinks({
+export const LegalLinks = ({
   children,
   className,
   newTab = false,
@@ -19,7 +19,7 @@ export function LegalLinks({
   children?: ReactNode;
   className?: string;
   newTab?: boolean;
-}) {
+}) => {
   const target = newTab ? { rel: "noopener", target: "_blank" } : {};
   return (
     <nav aria-label="Rechtliches" className={cn("flex gap-3", className)}>
@@ -32,4 +32,4 @@ export function LegalLinks({
       {children}
     </nav>
   );
-}
+};

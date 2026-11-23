@@ -15,7 +15,7 @@
 
 export const WISSEN = "/wissen";
 export const REPO_URL = "https://github.com/mdugue/bridge";
-export const LANGS = ["de", "en"] as const;
+const LANGS = ["de", "en"] as const;
 export type Lang = (typeof LANGS)[number];
 
 const GUIDE = "docs/guide/";
@@ -39,7 +39,7 @@ export function routeOf(file: string): string | null {
       ? `${WISSEN}/${lang}/${rest[0]}`
       : null;
   }
-  const inner = file.slice("docs/".length, -3).replace(/(^|\/)README$/u, "");
+  const inner = file.slice("docs/".length, -3).replace(/(?:^|\/)README$/u, "");
   return inner ? `${WISSEN}/dev/${inner}` : `${WISSEN}/dev`;
 }
 

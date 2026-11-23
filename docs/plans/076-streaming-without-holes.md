@@ -1,6 +1,6 @@
 # 076 — Streaming without holes: the ground first, a plate under everything, coarse buildings and trees from the start
 
-**Status:** IN PROGRESS (2026-10-25) — steps 1–3 built; 4 open.
+**Status:** BUILT (2026-11-04) — all four steps in the code: load order (`stream-order.ts`), ground plate (`aefc090b`), far buildings (`a08c6813`), trees from the start (`4eafaf42`). Open: the plan's promise of no cost in phone memory and frame time is unmeasured on a device (step 3 rests on "a sixth of the triangles, half the bytes"); measure on a phone, then condense into `completed.md`.
 Asked by the maintainer on 2026-10-25: the spawn tile loads in full while
 others show nothing, trees come late, long flights show large holes in the
 ground; everything should be there from the start and refine smoothly,

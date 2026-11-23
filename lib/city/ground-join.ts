@@ -138,7 +138,7 @@ export function followGround(
       }
     }
   };
-  for (let i = 0; i < points.length; i++) {
+  for (let i = 0; i < points.length; i += 1) {
     const p = points[i];
     out.push([p[0], p[1]]);
     const q = points[i + 1];
@@ -176,7 +176,7 @@ export function reachLevel(
 ): number | null {
   const tolerance = opts.tolerance ?? 0;
   const n = Math.floor(opts.reach / opts.step + 1e-9);
-  for (let k = 0; k <= n; k++) {
+  for (let k = 0; k <= n; k += 1) {
     const d = k * opts.step;
     const g = groundAt(d);
     if (g === null) {
@@ -212,7 +212,7 @@ export function farthestNear(
     const s = sign(i);
     const g = group(i);
     let far = v;
-    for (let k = i - radius; k <= i + radius; k++) {
+    for (let k = i - radius; k <= i + radius; k += 1) {
       const other = values[k];
       if (other !== null && other !== undefined && group(k) === g) {
         far = s > 0 ? Math.max(far, other) : Math.min(far, other);
@@ -262,7 +262,7 @@ export function joinsAlong(
 ): JoinPoint[] {
   const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / every));
   const out: JoinPoint[] = [];
-  for (let k = 0; k < n; k++) {
+  for (let k = 0; k < n; k += 1) {
     const t = k / n;
     out.push({
       kind,
@@ -304,17 +304,17 @@ export function checkJoins(
   for (const join of joins) {
     const g = heightAt(join.x, join.y);
     if (g === null) {
-      report.unknown++;
+      report.unknown += 1;
       continue;
     }
     const above = join.z - g;
     if (join.kind === "foot") {
-      report.feet++;
+      report.feet += 1;
       if (above > FOOT_SLACK_M) {
         report.misses.push({ join, by: above });
       }
     } else {
-      report.edges++;
+      report.edges += 1;
       if (above > tolerance) {
         report.misses.push({ join, by: above - tolerance });
       }

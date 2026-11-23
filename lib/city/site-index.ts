@@ -5,7 +5,8 @@
  * static params read. Written by scripts/prepare-sites.ts; pure, no DOM.
  */
 
-import { parseSiteStats, type SiteStats } from "./site-stats";
+import { parseSiteStats } from "./site-stats";
+import type { SiteStats } from "./site-stats";
 
 /** The index of built sites, at the root of the data folder. */
 export const SITE_INDEX_FILE = "sites.json";
@@ -22,6 +23,10 @@ export interface SiteIndexEntry {
   /** the map picture's served path (`/data/<id>/site-map.<hash>.webp`), when
    *  the land cover was there to paint it */
   map?: string;
+  /** the whole site's tileset as served (`/data/<id>/tileset.<hash>.json`:
+   *  what every profile but `?scene=lite` and a safety fallback streams),
+   *  which the site's page preloads */
+  tileset?: string;
 }
 
 export interface SiteIndex {

@@ -17,40 +17,36 @@ import {
   burnStairs,
   raiseTerraces,
   stairColors,
-  type StairLine,
   stairRails,
-  type StairSurround,
   stairGeometry,
-  type Terrace,
 } from "../lib/city/stairs";
-import { carvePassages, type Passage } from "../lib/city/passages";
-import { BED_TIN_ERROR, type Bed, burnBeds } from "../lib/city/track-beds";
-import { raiseWater, type WaterLift } from "../lib/city/water-bodies";
+import type { StairLine, StairSurround, Terrace } from "../lib/city/stairs";
+import { carvePassages } from "../lib/city/passages";
+import type { Passage } from "../lib/city/passages";
+import { BED_TIN_ERROR, burnBeds } from "../lib/city/track-beds";
+import type { Bed } from "../lib/city/track-beds";
+import { raiseWater } from "../lib/city/water-bodies";
+import type { WaterLift } from "../lib/city/water-bodies";
 import { ownsPoint } from "../lib/city/tileset";
-import { conflateWalls, type WallLine } from "../lib/city/terrain-conflate";
-import {
-  wallColors,
-  type WallOptions,
-  type WallRibbon,
-  wallGeometry,
-} from "../lib/city/walls";
-import {
-  type FenceLine,
-  fenceGeometry,
-  type GatePoint,
-} from "../lib/city/fences";
-import { kerbGeometry, type KerbLine } from "../lib/city/kerbs";
+import { conflateWalls } from "../lib/city/terrain-conflate";
+import type { WallLine } from "../lib/city/terrain-conflate";
+import { wallColors, wallGeometry } from "../lib/city/walls";
+import type { WallOptions, WallRibbon } from "../lib/city/walls";
+import { fenceGeometry } from "../lib/city/fences";
+import type { FenceLine, GatePoint } from "../lib/city/fences";
+import { kerbGeometry } from "../lib/city/kerbs";
+import type { KerbLine } from "../lib/city/kerbs";
 import {
   buildTerrainGeometryData,
   sampleHeightfield,
-  type TerrainBounds,
 } from "../lib/city/terrain-geometry";
+import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import {
   buildTinGeometryData,
-  type TerrainTin,
   TinIndex,
   tinSurface,
 } from "../lib/city/terrain-tin";
+import type { TerrainTin } from "../lib/city/terrain-tin";
 import { tfwToBounds } from "../lib/city/tfw";
 import { tinFromGrid } from "./bake-terrain-tin";
 import type { MeshInput } from "./tile-glb";
@@ -88,7 +84,8 @@ export async function readDgm(
   tfw: string | null,
   size: number | "native"
 ): Promise<Dgm> {
-  const image = await (await fromArrayBuffer(tif)).getImage();
+  const geotiff = await fromArrayBuffer(tif);
+  const image = await geotiff.getImage();
   const width = image.getWidth();
   const height = image.getHeight();
   if (size === "native" && width !== height) {
@@ -106,13 +103,13 @@ export async function readDgm(
   let bounds: TerrainBounds;
   if (embedded && !isPixelSpaceBounds(embedded, width, height)) {
     bounds = embedded as TerrainBounds;
-  } else if (tfw !== null) {
-    bounds = tfwToBounds(tfw, width, height);
-  } else {
+  } else if (tfw === null) {
     throw new Error(
       "DGM GeoTIFF has no embedded georeferencing and no readable .tfw sidecar. " +
         "Re-run `bun run fetch` (it writes the georeferencing), or embed it: gdal_translate -a_srs EPSG:<the provider's CRS> in.tif out.tif"
     );
+  } else {
+    bounds = tfwToBounds(tfw, width, height);
   }
   const raster = await image.readRasters(
     size === "native"
@@ -130,8 +127,8 @@ export async function readDgm(
   }
   const noData = image.getGDALNoData();
   const elevations = new Float32Array(n * n);
-  for (let i = 0; i < elevations.length; i++) {
-    const z = Number((raster as unknown as ArrayLike<number>)[i]);
+  for (let i = 0; i < elevations.length; i += 1) {
+    const z = (raster as unknown as ArrayLike<number>)[i];
     elevations[i] = noData !== null && z === noData ? Number.NaN : z;
   }
   return { bounds, elevations, n };
@@ -165,7 +162,7 @@ function terrainNormals(
   surfaceVertexCount: number
 ): Float32Array {
   const normals = normalsOf(positions, indices.subarray(0, surfaceIndexCount));
-  for (let i = surfaceVertexCount; i < positions.length / 3; i++) {
+  for (let i = surfaceVertexCount; i < positions.length / 3; i += 1) {
     normals[3 * i] = 0;
     normals[3 * i + 1] = 0;
     normals[3 * i + 2] = 1;
@@ -266,7 +263,7 @@ export function shapeDgm(
 /** The highest surface vertex of the first `count`. */
 function maxZ(positions: Float32Array, count: number): number {
   let max = Number.NEGATIVE_INFINITY;
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     max = Math.max(max, positions[i * 3 + 2]);
   }
   return max;

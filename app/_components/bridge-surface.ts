@@ -24,7 +24,7 @@ import {
 } from "three/tsl";
 import { LANDCOVER_CLASSES } from "@/lib/city/landcover";
 import { MARKING_PATTERN } from "@/lib/city/markings";
-import { gdBand, gdHash, gdNoise } from "./ground-detail";
+import { gdBand, gdHash, gdNoise } from "./shader-chunks";
 import type { F, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 
@@ -35,7 +35,7 @@ import { sceneMaterial } from "./three-utils";
  * - **The deck's surface** (`deckMaterial`, per deck kind). The deck's top
  *   carries its frame as an attribute, `aDeck` = (station along the axis,
  *   offset across it, the outline's left and right offsets there;
- *   rail-layer.ts `deckFrame`), so the road bridge's top is laid out as
+ *   bridge-layer.ts `addDeckFrame`), so the road bridge's top is laid out as
  *   the street it carries: footways along both parapets in the pavement's
  *   colour with their slabs, a kerb stone and a gutter at their edge, the
  *   carriageway in the road's colour with its grain and, on a wide one,
@@ -78,7 +78,7 @@ const classColour = (key: string): V3 => {
 const PAVEMENT = classColour("builtup");
 /** Road paint (road-markings.ts). */
 const PAINT: V3 = linear([226, 223, 214]);
-/** The ballast a rail deck's track bed is (rail-layer.ts COLORS.ballast). */
+/** The ballast a rail deck's track bed is (mesh-kit.ts COLORS.ballast). */
 const BALLAST: V3 = linear([154, 143, 133]);
 
 /** The pixel's footprint in metres. */
@@ -241,7 +241,7 @@ function railTop(_base: V3, l: Layout, aa: F): V3 {
   // (the photos of every rail bridge on the sites): the track bed in the
   // ballast's colour and grain, the sleepers on it the rail layer's
   // (track-bed.ts) — a truss's open floor theirs too
-  const walkway = float(1).sub(smoothstep(1.0 - 0.05, 1.0 + 0.05, l.edge));
+  const walkway = float(1).sub(smoothstep(1 - 0.05, 1 + 0.05, l.edge));
   const grain = gdNoise(positionWorld.xz.mul(4.1))
     .sub(0.5)
     .mul(0.12)

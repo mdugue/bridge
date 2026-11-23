@@ -20,7 +20,8 @@
  * the streamed glTF's positions) for everything the viewer stands on it.
  * No THREE, no DOM.
  */
-import { SKIRT_DEPTH, type TerrainBounds } from "./terrain-geometry";
+import { SKIRT_DEPTH } from "./terrain-geometry";
+import type { TerrainBounds } from "./terrain-geometry";
 
 /** A TIN: grid-space vertices + elevations + CCW triangles. */
 export interface TerrainTin {
@@ -55,7 +56,7 @@ function sortVertices(coords: ArrayLike<number>): {
 } {
   const count = coords.length / 2;
   const order = new Uint32Array(count);
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     order[i] = i;
   }
   order.sort(
@@ -63,7 +64,7 @@ function sortVertices(coords: ArrayLike<number>): {
       coords[2 * a + 1] - coords[2 * b + 1] || coords[2 * a] - coords[2 * b]
   );
   const remap = new Uint32Array(count);
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     remap[order[i]] = i;
   }
   return { order, remap };
@@ -78,7 +79,7 @@ function canonicalTriangles(
 ): Uint32Array {
   const count = triangles.length / 3;
   const tris = new Uint32Array(triangles.length);
-  for (let t = 0; t < count; t++) {
+  for (let t = 0; t < count; t += 1) {
     const ia = triangles[3 * t];
     let ib = triangles[3 * t + 1];
     let ic = triangles[3 * t + 2];
@@ -103,14 +104,14 @@ function canonicalTriangles(
     tris[3 * t + 2] = c;
   }
   const idx = new Uint32Array(count);
-  for (let t = 0; t < count; t++) {
+  for (let t = 0; t < count; t += 1) {
     idx[t] = t;
   }
   idx.sort(
     (p, q) => tris[3 * p] - tris[3 * q] || tris[3 * p + 1] - tris[3 * q + 1]
   );
   const sorted = new Uint32Array(tris.length);
-  for (let t = 0; t < count; t++) {
+  for (let t = 0; t < count; t += 1) {
     sorted.set(tris.subarray(3 * idx[t], 3 * idx[t] + 3), 3 * t);
   }
   return sorted;
@@ -130,7 +131,7 @@ export function tinFromMesher(src: TinSource): TerrainTin {
   const gx = new Uint16Array(count);
   const gy = new Uint16Array(count);
   const z = new Float32Array(count);
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     const x = coords[2 * order[i]];
     const y = coords[2 * order[i] + 1];
     const h = src.heightAt(x, y);
@@ -161,13 +162,23 @@ export function tinVertexXY(tin: TerrainTin): Float64Array {
   const dx = (maxX - minX) / n;
   const dy = (maxY - minY) / n;
   const xy = new Float64Array(gx.length * 2);
-  for (let i = 0; i < gx.length; i++) {
+  for (let i = 0; i < gx.length; i += 1) {
     const col = gx[i];
     const row = gy[i];
-    xy[2 * i] =
-      col === 0 ? minX : col === n - 1 ? maxX : minX + (col + 0.5) * dx;
-    xy[2 * i + 1] =
-      row === 0 ? maxY : row === n - 1 ? minY : maxY - (row + 0.5) * dy;
+    let x = minX + (col + 0.5) * dx;
+    if (col === 0) {
+      x = minX;
+    } else if (col === n - 1) {
+      x = maxX;
+    }
+    let y = maxY - (row + 0.5) * dy;
+    if (row === 0) {
+      y = maxY;
+    } else if (row === n - 1) {
+      y = minY;
+    }
+    xy[2 * i] = x;
+    xy[2 * i + 1] = y;
   }
   return xy;
 }
@@ -193,11 +204,19 @@ function borderRuns(tin: TerrainTin): {
   const south: number[] = [];
   const west: number[] = [];
   const east: number[] = [];
-  for (let i = 0; i < gx.length; i++) {
-    if (gy[i] === 0) north.push(i);
-    if (gy[i] === n - 1) south.push(i);
-    if (gx[i] === 0) west.push(i);
-    if (gx[i] === n - 1) east.push(i);
+  for (let i = 0; i < gx.length; i += 1) {
+    if (gy[i] === 0) {
+      north.push(i);
+    }
+    if (gy[i] === n - 1) {
+      south.push(i);
+    }
+    if (gx[i] === 0) {
+      west.push(i);
+    }
+    if (gx[i] === n - 1) {
+      east.push(i);
+    }
   }
   north.sort((a, b) => gx[a] - gx[b]);
   south.sort((a, b) => gx[a] - gx[b]);
@@ -224,7 +243,7 @@ export function buildTinGeometryData(
     runs.north.length + runs.south.length + runs.west.length + runs.east.length;
   const positions = new Float32Array((v + skirtCount) * 3);
   let minElevation = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < v; i++) {
+  for (let i = 0; i < v; i += 1) {
     positions[3 * i] = xy[2 * i] - offset.cx;
     positions[3 * i + 1] = xy[2 * i + 1] - offset.cy;
     positions[3 * i + 2] = tin.z[i];
@@ -238,9 +257,9 @@ export function buildTinGeometryData(
       positions[3 * s] = positions[3 * i];
       positions[3 * s + 1] = positions[3 * i + 1];
       positions[3 * s + 2] = positions[3 * i + 2] - SKIRT_DEPTH;
-      s++;
+      s += 1;
     }
-    for (let k = 0; k < top.length - 1; k++) {
+    for (let k = 0; k < top.length - 1; k += 1) {
       const [tp, tq, bp, bq] = [top[k], top[k + 1], base + k, base + k + 1];
       if (ccwTop) {
         skirt.push(tp, tq, bq, tp, bq, bp);
@@ -310,9 +329,12 @@ export function planTriangles<T extends IndexArray>(
       (positions[b] - ax) * (positions[c + 2] - az) -
       (positions[b + 2] - az) * (positions[c] - ax);
     if (cross !== 0) {
-      kept[n++] = index[t];
-      kept[n++] = index[t + 1];
-      kept[n++] = index[t + 2];
+      kept[n] = index[t];
+      n += 1;
+      kept[n] = index[t + 1];
+      n += 1;
+      kept[n] = index[t + 2];
+      n += 1;
     }
   }
   return kept.slice(0, n) as T;
@@ -341,7 +363,7 @@ export function planOf<T extends PositionArray>(
   const plan = new (positions.constructor as new (length: number) => T)(
     count * 2
   );
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     const at = i * stride + offset;
     plan[2 * i] = positions[at];
     plan[2 * i + 1] = positions[at + 2];
@@ -357,7 +379,7 @@ export function sameNumbers(
   if (a.length !== b.length) {
     return false;
   }
-  for (let i = 0; i < a.length; i++) {
+  for (let i = 0; i < a.length; i += 1) {
     if (a[i] !== b[i]) {
       return false;
     }
@@ -399,6 +421,9 @@ export interface TinBuckets {
   triangles: number;
 }
 
+const typed = (a: ArrayLike<number>) =>
+  ArrayBuffer.isView(a) ? a.byteLength : 0;
+
 /**
  * Point → triangle lookup for `heightAt`: a uniform bucket grid over the tile
  * (CSR layout: `start[b] … start[b+1]` in `items`), each triangle listed in
@@ -423,7 +448,7 @@ export class TinIndex {
     const fits =
       built.triangles === Math.floor(surface.triangles.length / 3) &&
       built.start.length === built.cols * built.rows + 1 &&
-      built.start[built.start.length - 1] === built.items.length;
+      built.start.at(-1) === built.items.length;
     if (!fits) {
       throw new Error("TinIndex: the buckets are not this surface's");
     }
@@ -453,17 +478,18 @@ export class TinIndex {
     const ranges = this.bucketRanges();
     const counts = new Uint32Array(this.cols * this.rows + 1);
     this.eachBucket(ranges, (b) => {
-      counts[b + 1]++;
+      counts[b + 1] += 1;
     });
-    for (let b = 1; b < counts.length; b++) {
+    for (let b = 1; b < counts.length; b += 1) {
       counts[b] += counts[b - 1];
     }
     this.start = counts;
-    this.items = new Uint32Array(counts[counts.length - 1]);
+    this.items = new Uint32Array(counts.at(-1) ?? 0);
     const fill = counts.slice(0, -1);
     const { items } = this;
     this.eachBucket(ranges, (b, t) => {
-      items[fill[b]++] = t;
+      items[fill[b]] = t;
+      fill[b] += 1;
     });
   }
 
@@ -474,7 +500,7 @@ export class TinIndex {
     const { cell, cols, rows } = this;
     const count = Math.floor(triangles.length / 3);
     const ranges = new Int32Array(count * 4);
-    for (let t = 0; t < count; t++) {
+    for (let t = 0; t < count; t += 1) {
       const a = 2 * triangles[3 * t];
       const b = 2 * triangles[3 * t + 1];
       const c = 2 * triangles[3 * t + 2];
@@ -495,11 +521,11 @@ export class TinIndex {
     visit: (bucket: number, tri: number) => void
   ): void {
     const { cols } = this;
-    for (let t = 0; t < ranges.length / 4; t++) {
+    for (let t = 0; t < ranges.length / 4; t += 1) {
       const c0 = ranges[4 * t];
       const c1 = ranges[4 * t + 1];
-      for (let r = ranges[4 * t + 2]; r <= ranges[4 * t + 3]; r++) {
-        for (let col = c0; col <= c1; col++) {
+      for (let r = ranges[4 * t + 2]; r <= ranges[4 * t + 3]; r += 1) {
+        for (let col = c0; col <= c1; col += 1) {
           visit(r * cols + col, t);
         }
       }
@@ -519,8 +545,6 @@ export class TinIndex {
    * which are the mesh's own index (counted with the mesh).
    */
   get bytes(): number {
-    const typed = (a: ArrayLike<number>) =>
-      ArrayBuffer.isView(a) ? a.byteLength : 0;
     const { xy, z } = this.surface;
     return this.items.byteLength + this.start.byteLength + typed(xy) + typed(z);
   }
@@ -535,7 +559,7 @@ export class TinIndex {
     const row = Math.min(this.rows - 1, Math.floor((y - minY) / this.cell));
     const b = row * this.cols + col;
     const { triangles, xy, z } = this.surface;
-    for (let k = this.start[b]; k < this.start[b + 1]; k++) {
+    for (let k = this.start[b]; k < this.start[b + 1]; k += 1) {
       const t = this.items[k];
       const a = triangles[3 * t];
       const bb = triangles[3 * t + 1];

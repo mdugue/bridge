@@ -53,7 +53,7 @@ export function createFrameTiming(): FrameTiming {
   const intervals: number[] = [];
   return {
     frame: (cpuMs, renderMs, sinceMs) => {
-      frames++;
+      frames += 1;
       cpuSum += cpuMs;
       cpuMax = Math.max(cpuMax, cpuMs);
       renderSum += renderMs;
@@ -69,7 +69,7 @@ export function createFrameTiming(): FrameTiming {
       // (a pool that resolved before any pass ran reads 0)
       if (Number.isFinite(ms) && ms > 0) {
         gpuSum += ms;
-        gpuCount++;
+        gpuCount += 1;
       }
     },
     take: () => {

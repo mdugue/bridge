@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { type BootInputs, createBootPhases } from "./boot-phases";
+import { createBootPhases } from "./boot-phases";
+import type { BootInputs } from "./boot-phases";
 
 const at = (over: Partial<BootInputs> = {}): BootInputs => ({
   siteTiles: 15,
@@ -15,7 +16,7 @@ const at = (over: Partial<BootInputs> = {}): BootInputs => ({
 const fraction = (
   step: ReturnType<ReturnType<typeof createBootPhases>["update"]>,
   id: string
-) => step.stages.filter((s) => s.id === id).at(-1)?.fraction;
+) => step.stages.findLast((s) => s.id === id)?.fraction;
 
 test("before the gate only the surroundings move, and never back", () => {
   const boot = createBootPhases();

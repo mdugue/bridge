@@ -4,32 +4,38 @@
  * footprints, the glTF and its far twin (bake-entries.ts `city`).
  */
 import { existsSync } from "node:fs";
-import type { FacadeMaterial, RoofColours } from "../../lib/city/building-tint";
+import type { z } from "zod";
+import { parseBakeFile } from "../../lib/city/bake-file";
+import type { BakeFile } from "../../lib/city/bake-file";
 import {
-  type OsmBuildingLut,
-  type WallMaterial,
+  OBJECT_SOURCE_DOOR,
+  OBJECT_SOURCE_PLINTH,
   withoutTrafficStructures,
 } from "../../lib/city/city-mesh";
-import type { LandmarkFile } from "../../lib/city/landmarks";
-import type {
-  DoorFeature,
-  ShopfrontFile,
-  PlinthFeature,
-  DormerFeature,
-  PassageFeature,
-  FeatureCollection,
-  MeasuredRoofFeature,
-  SmallBuildingFeature,
-  StructureFeature,
-} from "../../lib/city/features";
+import { DOORS_FILE } from "../../lib/city/doors-file";
+import { DORMERS_FILE } from "../../lib/city/dormers-file";
+import { packFootprints } from "../../lib/city/footprint-pack";
+import { withLandmarks } from "../../lib/city/landmark-lut";
+import { MEASURED_ROOFS_FILE } from "../../lib/city/measured-roofs-file";
+import { OSM_BUILDINGS_FILE } from "../../lib/city/osm-buildings-file";
+import { PASSAGES_FILE } from "../../lib/city/passages-file";
+import { PLINTHS_FILE } from "../../lib/city/plinths-file";
+import { ROOF_COLOURS_FILE } from "../../lib/city/roof-colours-file";
+import { SHOPFRONTS_FILE } from "../../lib/city/shopfronts-file";
+import { SMALL_BUILDINGS_FILE } from "../../lib/city/small-buildings-file";
+import { STRUCTURES_FILE } from "../../lib/city/structures-file";
 import { onFormations } from "../../lib/city/track-formation";
+import { withPhotoGlass } from "../../lib/city/photo-glass";
+import { WINDOWS_FILE } from "../../lib/city/windows-file";
 import { cityMeshSourceFiles } from "../../lib/city/tile";
-import { type CityExtras, FAR_CITY_SIMPLIFY } from "../../lib/city/tileset";
+import { FAR_CITY_SIMPLIFY } from "../../lib/city/tileset";
+import type { CityContent, CityFiles } from "../../lib/city/tileset";
 import type { CityJsonDocument } from "../../lib/city/types";
-import type { WindowFile } from "../../lib/city/windows";
-import { type BakedCityMesh, bakeCityMesh, cityMesh } from "../bake-city-mesh";
+import { bakeCityMesh, cityMesh } from "../bake-city-mesh";
+import type { BakedCityMesh } from "../city-bake";
 import { BAKE_ENTRIES } from "../bake-entries";
 import { simplifyGlb, writeMeshGlb } from "../tile-glb";
+import type { PropertyTable } from "../tile-glb";
 import {
   HINT,
   SITE,
@@ -53,34 +59,14 @@ import { groundFile, heightOver } from "./ground";
 
 // --- 2. content -----------------------------------------------------------------
 
-/**
- * The OSM facts per object with the tile's landmarks folded in: each of a
- * landmark's objects is marked, and takes the wall material Wikidata names
- * where OSM names none.
- */
-function withLandmarks(
-  lut: OsmBuildingLut | undefined,
-  file: LandmarkFile | undefined
-): OsmBuildingLut | undefined {
-  if (!file?.landmarks.length) {
-    return lut;
-  }
-  const out: OsmBuildingLut = { ...lut };
-  for (const lm of file.landmarks) {
-    for (const id of lm.objects) {
-      const own = out[id];
-      out[id] = {
-        ...own,
-        landmark: 1,
-        wikidata: lm.id,
-        material: own?.material ?? (lm.material as WallMaterial | undefined),
-        ...(!own?.material && lm.material
-          ? { materialFrom: "wikidata" as const }
-          : {}),
-      };
-    }
-  }
-  return out;
+/** A tile's source file as its schema describes it, or none (ADR 0059). */
+function tileSource<S extends z.ZodType>(
+  spec: BakeFile<S>,
+  file: string
+): z.infer<S> | undefined {
+  return existsSync(at(file))
+    ? parseBakeFile(spec, readJson(at(file)), file)
+    : undefined;
 }
 
 function parseCity(
@@ -94,7 +80,7 @@ function parseCity(
   // a top a track runs on, lowered to its bed (lib/city/track-formation.ts)
   // (the bridges' slabs left out first: bakeCityMesh drops them anyway)
   const formed = onFormations(
-    withoutTrafficStructures(readJson<CityJsonDocument>(at(src.city))),
+    withoutTrafficStructures(readJson(at(src.city)) as CityJsonDocument),
     bedsIn(tile)
   );
   if (formed.lowered.length > 0) {
@@ -102,58 +88,38 @@ function parseCity(
       `${tile}: ${formed.lowered.length} tops under tracks lowered to their beds`
     );
   }
-  const doc = formed.doc;
+  const { doc } = formed;
   const lowered = new Set(formed.lowered);
-  const roofColours = existsSync(at(src.roofColor))
-    ? readJson<RoofColours>(at(src.roofColor))
-    : undefined;
-  const osmDoc = existsSync(at(src.osmBuild))
-    ? readJson<{ context?: FacadeMaterial; objects?: OsmBuildingLut }>(
-        at(src.osmBuild)
-      )
-    : undefined;
+  const roofColours = tileSource(ROOF_COLOURS_FILE, src.roofColor);
+  const osmDoc = tileSource(OSM_BUILDINGS_FILE, src.osmBuild);
   const osmLut = withLandmarks(osmDoc?.objects, landmarkFile(tile));
-  const scan = existsSync(at(src.smallBuild))
-    ? readJson<FeatureCollection<SmallBuildingFeature>>(at(src.smallBuild))
-        .features
+  const scan = tileSource(SMALL_BUILDINGS_FILE, src.smallBuild)?.features;
+  const gaps = tileSource(STRUCTURES_FILE, src.structures)?.features;
+  // a lowered top keeps its new height, not the scan's over it
+  const measured = tileSource(
+    MEASURED_ROOFS_FILE,
+    src.measuredRoofs
+  )?.features.filter((f) => !lowered.has(f.properties.id));
+  const plinths = tileSource(PLINTHS_FILE, src.plinths)?.features;
+  const doors = tileSource(DOORS_FILE, src.doors)?.features;
+  const dormers = tileSource(DORMERS_FILE, src.dormers)?.features;
+  const passages = tileSource(PASSAGES_FILE, src.passages)?.features;
+  const shopfrontFile = tileSource(SHOPFRONTS_FILE, src.shopfronts);
+  const shopfronts = shopfrontFile
+    ? Object.values(shopfrontFile.buildings).flat()
     : undefined;
-  const gaps = existsSync(at(src.structures))
-    ? readJson<FeatureCollection<StructureFeature>>(at(src.structures)).features
+  const windowFile = tileSource(WINDOWS_FILE, src.windows);
+  const windows = windowFile
+    ? Object.values(windowFile.buildings).flat()
     : undefined;
-  const measured = existsSync(at(src.measuredRoofs))
-    ? readJson<FeatureCollection<MeasuredRoofFeature>>(
-        at(src.measuredRoofs)
-      ).features?.filter(
-        // a lowered top keeps its new height, not the scan's over it
-        (f) => !f.properties || !lowered.has(f.properties.id)
-      )
-    : undefined;
-  const plinths = existsSync(at(src.plinths))
-    ? readJson<FeatureCollection<PlinthFeature>>(at(src.plinths)).features
-    : undefined;
-  const doors = existsSync(at(src.doors))
-    ? readJson<FeatureCollection<DoorFeature>>(at(src.doors)).features
-    : undefined;
-  const dormers = existsSync(at(src.dormers))
-    ? readJson<FeatureCollection<DormerFeature>>(at(src.dormers)).features
-    : undefined;
-  const passages = existsSync(at(src.passages))
-    ? readJson<FeatureCollection<PassageFeature>>(at(src.passages)).features
-    : undefined;
-  const shopfronts = existsSync(at(src.shopfronts))
-    ? Object.values(
-        readJson<ShopfrontFile>(at(src.shopfronts)).buildings
-      ).flat()
-    : undefined;
-  const windows = existsSync(at(src.windows))
-    ? Object.values(readJson<WindowFile>(at(src.windows)).buildings).flat()
-    : undefined;
+  // the walls the street photos read as glass, where no source names one
+  const lut = withPhotoGlass(osmLut, windowFile);
   return bakeCityMesh(
     tile,
     doc,
     roofColours,
     tile === TILES[0] ? null : spawnFrame().matrix,
-    osmLut,
+    lut,
     scan,
     osmDoc?.context ?? "render",
     gaps,
@@ -162,10 +128,23 @@ function parseCity(
   );
 }
 
-/** A tile's buildings: footprints JSON + glTF, both from one parse. */
-export async function bakeCity(
-  tile: string
-): Promise<{ far: string; file: string; footprints: string; maxZ: number }> {
+/** A tile's buildings: packed footprints + glTF, both from one parse. */
+/** The objects the far buildings leave out (column `source`): the doors,
+ *  and the plinths with their cornices and eave bands — a few centimetres
+ *  proud of their wall, nothing at the far level's distance (≥ 260 m), yet
+ *  a third of the near level's triangles. Their rows stay in the table. */
+const FAR_CITY_DROPPED: ReadonlySet<number> = new Set([
+  OBJECT_SOURCE_DOOR,
+  OBJECT_SOURCE_PLINTH,
+]);
+
+export async function bakeCity(tile: string): Promise<{
+  far: string;
+  file: string;
+  files: CityFiles;
+  footprints: string;
+  maxZ: number;
+}> {
   const src = cityMeshSourceFiles(SITE, tile);
   // the ground-floor windows clear the tile's fine ground
   const ground = await groundFile(tile);
@@ -189,30 +168,43 @@ export async function bakeCity(
   // the beds reaching into the tile lower the tops the tracks run on
   const key = cacheKey(inputs, bake, offset, shapeDigest(bedsIn(tile)));
   let mesh: ReturnType<typeof cityMesh> | null = null;
+  // the mesh's table, kept for the far glb when the writer has the mesh
+  let table: PropertyTable | undefined;
   const built = () => {
-    mesh ??= cityMesh(parseCity(tile, heightOver(tile, ground)));
+    if (!mesh) {
+      mesh = cityMesh(parseCity(tile, heightOver(tile, ground)));
+      // the parse's documents and dressing, gone before the glb is written
+      Bun.gc(true);
+    }
     return mesh;
   };
-  const footprintsFile = `footprints_${tile}.json`;
+  // Packed, not JSON (lib/city/footprint-pack.ts): the minimap read 11 MB
+  // of it at every start. Pre-gzipped like the glTF (static hosts do not
+  // compress binary types).
+  const footprintsFile = `footprints_${tile}.fpr.gz`;
   const footprints = publish(
     footprintsFile,
-    await cached(footprintsFile, key, () => utf8(built().footprints))
+    await cached(footprintsFile, key, () =>
+      gz(packFootprints(built().footprints))
+    )
   );
-  const { maxZ } = parse<{ maxZ: number }>(
+  const { maxZ } = parse(
     await cached(`city_${tile}.json`, key, () =>
       utf8({ maxZ: built().maxElevation })
     )
-  );
+  ) as { maxZ: number };
+  // The side files the buildings are dressed with are named on their
+  // tiles in the tileset (lib/city/tileset.ts `CityFiles`), not in the
+  // glb: a sky-view raster or a facade reading that changes re-bakes no
+  // building. The facades' ambient light reads the terrain's sky-view
+  // raster, their relief and tone what street photos saw of them.
   const svf = sideFiles.get(tile)?.svf;
   const facades = sideFiles.get(tile)?.facades;
-  const extras: CityExtras = {
-    kind: "city",
-    tileId: tile,
-    // The facades' ambient light reads the terrain's sky-view raster.
+  const files: CityFiles = {
     ...(svf ? { svf } : {}),
-    // ...and their relief and tone what street photos saw of them.
     ...(facades ? { facades } : {}),
   };
+  const extras: CityContent = { kind: "city", tileId: tile };
   const name = `city_${tile}.glb.gz`;
   const glbKey = cacheKey(
     inputs,
@@ -227,27 +219,45 @@ export async function bakeCity(
         ...built().input,
         name: "city",
         extras: { ...extras },
+        // nothing reads the mesh after it: the far glb is made of the glb
+        owned: true,
       })
     )
   );
+  // the mesh and its writer's copies, gone before the far glb is
+  // simplified: only its table goes back on that one
+  if (mesh) {
+    ({ table } = (mesh as ReturnType<typeof cityMesh>).input);
+    mesh = null;
+    Bun.gc(true);
+  }
+  const parsed = table !== undefined;
   // the same buildings for far off: every vertex the shape does not need
-  // dropped (lib/city/tileset.ts `FAR_CITY_SIMPLIFY`)
+  // dropped (lib/city/tileset.ts `FAR_CITY_SIMPLIFY`), and what stands a
+  // few centimetres off a wall with them (`FAR_CITY_DROPPED`)
   const farName = `city_${tile}_far.glb.gz`;
   const farGlb = await cached(
     farName,
-    cacheKey(inputs, bake, glbKey, FAR_CITY_SIMPLIFY),
+    cacheKey(inputs, bake, glbKey, FAR_CITY_SIMPLIFY, [...FAR_CITY_DROPPED]),
     async () =>
       gz(
         await simplifyGlb(
           Bun.gunzipSync(glb as Uint8Array<ArrayBuffer>),
           FAR_CITY_SIMPLIFY,
-          built().input.table
+          table ?? built().input.table,
+          FAR_CITY_DROPPED
         )
       )
   );
+  // the simplifier's copies, gone before the tile's terrain is written
+  if (mesh || parsed) {
+    mesh = null;
+    Bun.gc(true);
+  }
   return {
     far: publish(farName, farGlb),
     file: publish(name, glb),
+    files,
     footprints,
     maxZ,
   };

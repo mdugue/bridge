@@ -109,7 +109,7 @@ export interface NetworkWatch {
 
 export interface NetworkWatchOptions {
   tiles: HealableTiles;
-  trail?: CrashTrail;
+  trail?: Pick<CrashTrail, "note">;
   /** the first frame is up, or the app is gone: the boot waits no more */
   bootOver: () => boolean;
   /** the boot gives up on the network (its error's message starts
@@ -239,7 +239,11 @@ function createHealer(tiles: HealableTiles, onClear?: () => void) {
       } else {
         rootFailed = true;
       }
-      timer ??= setTimeout(heal, healDelayMs(step++));
+      if (timer === undefined) {
+        const delay = healDelayMs(step);
+        step += 1;
+        timer = setTimeout(heal, delay);
+      }
     },
     landed: (tile: object): boolean => {
       const healed = retried.delete(tile);

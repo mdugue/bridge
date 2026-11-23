@@ -1,21 +1,18 @@
 import type { Object3D } from "three/webgpu";
 import type { AskSet } from "@/lib/city/ask-solids";
 import type { BikeCounter } from "@/lib/city/bike-counts";
-import {
-  BIKE_FEED_READERS,
-  type BikeFeedId,
-  type BikeFeedReader,
-} from "@/lib/city/bike-feeds";
+import { BIKE_FEED_READERS } from "@/lib/city/bike-feeds";
+import type { BikeFeedId, BikeFeedReader } from "@/lib/city/bike-feeds";
 import type { DataLayerKey } from "@/lib/city/data-layers";
 import type { BridgeFeature } from "@/lib/city/features";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import {
-  type TrafficHourStatus,
   trafficFactor,
   trafficHourStatus,
   trafficSpeed,
 } from "@/lib/city/traffic-hours";
+import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import type { TramTimetable } from "@/lib/city/tram-timetable";
 import { bikeAskSets } from "./bike-ask";
 import { createBikeFeed, createBikeLayer } from "./bike-layer";
@@ -24,13 +21,10 @@ import {
   fetchOptionalJson,
   isAbortError,
 } from "./fetch-optional";
-import { buildDeckTable } from "./rail-layer";
+import { buildDeckTable } from "./bridge-deck";
 import { setTrafficClock } from "./traffic-flow";
-import {
-  createTramCars,
-  type TramCars,
-  type TramCarsStatus,
-} from "./tram-cars";
+import { createTramCars } from "./tram-cars";
+import type { TramCars, TramCarsStatus } from "./tram-cars";
 
 /**
  * The site-wide data layers (lib/city/data-layers.ts) — the ones not cut
@@ -88,6 +82,9 @@ export interface DataOverlayOptions {
   onBikeCounts?: (counters: BikeCounter[]) => void;
   /** something a layer draws changed (the stats follow) */
   onChange?: () => void;
+  /** a layer put its marks into the scene or took them out (a style's
+   *  swap gathers them again) */
+  onMarksMoved?: () => void;
   /** the traffic's hour, about once a second while its layer is on; null
    *  when it is switched off */
   onTrafficHour?: (status: TrafficHourStatus | null) => void;
@@ -130,10 +127,12 @@ function bikeOverlay(
           () => {
             compiled = true;
             built.group.visible = on && alive();
+            return null;
           },
           () => {
             // the next counts try again
             compiling = false;
+            return null;
           }
         );
       }
@@ -150,6 +149,7 @@ function bikeOverlay(
           layer = createBikeLayer(opts.ground);
           layer.group.visible = false;
           opts.parent.add(layer.group);
+          opts.onMarksMoved?.();
         }
         layer.group.visible = compiled;
         feed.start();
@@ -247,6 +247,7 @@ function tramOverlay(
       built = createTramCars(timetable, decks, opts.ground);
       built.group.visible = false;
       opts.parent.add(built.group);
+      opts.onMarksMoved?.();
       built.update(clock(performance.now()));
       await opts.compile(built.group);
       if (!alive()) {
@@ -256,15 +257,21 @@ function tramOverlay(
       built = null;
       cars.group.visible = on;
       opts.onChange?.();
-    } catch (err) {
+    } catch (error) {
       // a missing or broken file is no crash: the HUD says so
-      if (!isAbortError(err)) {
+      if (!isAbortError(error)) {
         failed();
       }
     } finally {
       // not the layer's (a throw, a rejected compile, a page gone): freed,
       // its group out of the scene
-      built?.dispose();
+      if (built) {
+        built.dispose();
+        // (a page gone takes its post stack with it: nothing to gather)
+        if (alive()) {
+          opts.onMarksMoved?.();
+        }
+      }
       loading = false;
     }
   };

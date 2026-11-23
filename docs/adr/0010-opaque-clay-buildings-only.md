@@ -1,7 +1,7 @@
 # ADR 0010: The look — opaque clay on a painted ground, colours within one palette, detail drawn softly
 
 - **Status:** accepted
-- **Date:** 2026-06, rewritten 2026-10
+- **Date:** 2026-06, rewritten 2026-10; the glass veto lifted 2026-11
 
 ## Context
 
@@ -27,22 +27,32 @@ from data, read the same on every house, and stay calm.
    (`lib/city/landcover.ts`): the bake writes class ids only, so a colour
    change is a code change, not a re-bake.
 4. **Windows are drawn by the clay's fragment shader on every house** —
-   a recess with a sill, never glass, panes or mullions. Their rhythm per
+   a recess with a sill, its back a muted pane that mirrors a little sky
+   at a grazing view. Their rhythm per
    building is measured where open street photos saw it (Panoramax,
    Mapillary — never Google Street View), else a neighbour's, else its
-   type's. None on party walls, over doors or shopfronts; a monumental
+   type's. None on party walls, over doors or a measured shopfront; a monumental
    facade gets no town-house windows (listed palaces a kind of their own,
    churches none). No window row below the ground in front of the wall.
+   Within 250 m the openings are cut and real niches stand behind them,
+   laid on the shader's own grid, so drawn and real windows are one
+   window; a house turns as a whole, never a wall in part.
 5. **Facade parts are soft, abstract geometry**: plinths, cornices, doors
-   from OSM entrances, dormers, shopfronts — rounded profiles, never hard
+   from OSM entrances, dormers, shop fascias — rounded profiles, never hard
    bevels, relief lit from above and never darker than the wall.
    Landmarks get none of the generic parts.
-6. **One named exception to "no glass":** a shop's ground floor shows
-   muted glass at the back of a soft niche, without mullions.
+6. **Glass where it helps the facade read**: a shop window is an opening
+   cut into its wall, reveals in the wall's clay and glass at its back, as
+   a window is a recess (a real one at every distance, as wide as the
+   measured bay). Panes and glass walls mirror the street's skyline and
+   the sky above it, read from the baked horizon — a stand-in house below
+   the skyline, never a second render of the scene. A glass wall shows its
+   frame — mullions and a transom a storey — the one grid on a facade.
 7. **Night:** walls do not glow; every unlit or additive layer is dimmed by
    the one night factor.
 8. **Water is matte** (a sun path, glints, gentle waves); fountains keep
-   their sky mirror.
+   their sky mirror. After dark the river mirrors the lamps by the water,
+   as points of light on the waves, never the scene.
 
 ## Consequences
 
@@ -56,10 +66,16 @@ from data, read the same on every house, and stay calm.
 
 - **Ghost (transmission) or raw LoD styles:** a style that halves the frame
   rate is a trap.
-- **A window grid, a window texture, glass panes:** the veto's core.
-- **Geometry niches for windows:** plump at the mesh's precision and only
-  on measured walls; a street with every thirtieth house windowed was
-  rejected.
+- **A uniform window grid or a window texture over every facade:** read
+  as an office block over historic silhouettes.
+- **No glass at all** (until 2026-11): windows seen obliquely read as
+  flat paint; a pane's grazing sky is what tells their depth.
+- **Geometry niches baked into the mesh:** plump at the mesh's precision
+  and only on measured walls; a street with every thirtieth house windowed
+  was rejected. Niches at runtime on the shader's grid (2026-11) have
+  neither fault.
+- **Niches cut on every tile:** a discard costs the clay its early depth
+  test, so only the tiles near the eye build it.
 - **Blending roofs toward terracotta:** destroyed the real copper greens.
 - **Raw OSM colours:** pure hues in a pastel city.
 - **A palette lookup per fragment:** class ids cannot be mipmapped.

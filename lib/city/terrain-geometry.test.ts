@@ -94,7 +94,7 @@ test("buildTerrainGeometryData rejects degenerate bounds", () => {
       bounds: [10, 0, 10, 3],
       offset: { cx: 0, cy: 0 },
     })
-  ).toThrow(/Degenerate/);
+  ).toThrow(/Degenerate/u);
 });
 
 test("sampleHeightfield interpolates bilinearly and respects NoData", () => {

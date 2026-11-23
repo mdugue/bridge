@@ -32,13 +32,11 @@ height over 0.5 m beyond each (kerbs.ts `RAMP_M`).
 
 from __future__ import annotations
 
-import re
-
 import numpy as np
 import shapely
 
 from .common import Tile, column
-from .osm import has_extract, read_osm, read_ways, tag
+from .osm import has_extract, osm_metres, read_osm, read_ways, tag
 
 LOWERED_H = 0.03  # m over the road
 FLUSH_H = 0.0
@@ -171,8 +169,9 @@ def crossing_ways(tile: Tile, kerbs: Kerbs) -> None:
 
 
 def half_width(other_tags: str | None) -> float:
-    m = re.match(r"\s*(\d+(?:\.\d+)?)", tag(other_tags, "width") or "")
-    w = float(m.group(1)) if m else DRIVEWAY_W
+    w = osm_metres(tag(other_tags, "width"))
+    if w is None or w <= 0:
+        w = DRIVEWAY_W
     return max(CROSSING_HALF_M, min(w, 2 * DRIVEWAY_W) / 2)
 
 

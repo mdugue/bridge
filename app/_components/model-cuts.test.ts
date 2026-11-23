@@ -8,9 +8,10 @@ const cut = (cx: number) => ({
   turnDeg: 0,
 });
 
+const flat = () => 0;
+
 test("an Ausschnitt shows only once revealed, and stays as it moves", () => {
   const cuts = createModelCuts();
-  const flat = () => 0;
   const [, plinth] = cuts.objects;
   cuts.setCutOut(cut(0), flat, 1);
   // set but not shown: its programs are still being built

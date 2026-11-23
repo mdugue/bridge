@@ -6,7 +6,7 @@ test("a passage opens the fill along its line, as wide as its tracks, and no wid
   // street beyond it) along the south edge
   const n = 40;
   const elevations = new Float32Array(n * n).fill(117);
-  for (let col = 0; col < n; col++) {
+  for (let col = 0; col < n; col += 1) {
     elevations[(n - 1) * n + col] = 108;
   }
   const out = carvePassages({

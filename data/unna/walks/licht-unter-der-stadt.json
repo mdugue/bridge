@@ -1,0 +1,103 @@
+{
+  "id": "licht-unter-der-stadt",
+  "title": "Licht unter der Stadt",
+  "teaser": "Unna am Hellweg: eine Brauerei, in deren Kellern heute nur Licht gezeigt wird, und eine Kirche, in der während der Pest zwei der bekanntesten Kirchenlieder entstanden.",
+  "by": "Claude",
+  "written": "2026-10-30",
+  "minutes": 8,
+  "stops": [
+    {
+      "id": "lichtkunst",
+      "title": "Ein Museum nur aus Licht",
+      "from": [
+        408683,
+        5709882,
+        85
+      ],
+      "ground": 115.7,
+      "at": [
+        408813,
+        5710108,
+        134.5
+      ],
+      "hour": 20.5,
+      "text": "Hier wurde Bier gebraut, in der Lindenbrauerei. Seit 2001 zeigt das Gelände etwas ganz anderes: Das Zentrum für Internationale Lichtkunst ist nach eigenem Anspruch das einzige Museum der Welt, das nur Lichtkunst zeigt. Die Werke liegen unter der Erde, in alten Gängen, Kühlräumen und Gärbecken, wo es sonst dunkel wäre. James Turrell hat dort eine Camera obscura gebaut, Olafur Eliasson einen Raum. Und oben auf dem Schornstein leuchtet eine Zahlenreihe von Mario Merz: die Fibonacci-Folge.",
+      "closer": "Die Ziffern laufen am Schornstein hinauf, jede die Summe der zwei davor.",
+      "facts": [
+        {
+          "claim": "Das Zentrum für Internationale Lichtkunst eröffnete 2001 in den Gebäuden der ehemaligen Lindenbrauerei.",
+          "source": "https://de.wikipedia.org/wiki/Zentrum_für_Internationale_Lichtkunst"
+        },
+        {
+          "claim": "Es gilt als das weltweit einzige Museum, das sich ausschließlich der Lichtkunst widmet; die Installationen liegen in unterirdischen Gängen, Kühlräumen und Gärbecken.",
+          "source": "https://de.wikipedia.org/wiki/Zentrum_für_Internationale_Lichtkunst"
+        },
+        {
+          "claim": "James Turrells Camera obscura „Third Breath“ gehört seit 2009 zur Sammlung; Mario Merz' Fibonacci-Zahlen am Schornstein sind das Wahrzeichen des Zentrums.",
+          "source": "https://de.wikipedia.org/wiki/Zentrum_für_Internationale_Lichtkunst"
+        }
+      ],
+      "refs": [
+        "Q191212",
+        "Q1145709"
+      ],
+      "photo": {
+        "file": "Lindenbrauerei Unna Kamin 2008 IMGP6397 wp.jpg",
+        "caption": "Der Schornstein der Lindenbrauerei",
+        "author": "smial (talk)",
+        "licence": "FAL",
+        "licenceUrl": "http://artlibre.org/licence/lal/en",
+        "page": "https://commons.wikimedia.org/wiki/File:Lindenbrauerei_Unna_Kamin_2008_IMGP6397_wp.jpg",
+        "h": 1105,
+        "w": 800
+      }
+    },
+    {
+      "id": "stadtkirche",
+      "title": "Lieder nach der Pest",
+      "from": [
+        409025,
+        5709929,
+        95
+      ],
+      "ground": 111.5,
+      "at": [
+        409255,
+        5710122,
+        118.3
+      ],
+      "hour": 9,
+      "text": "Die Stadtkirche ist eine gotische Hallenkirche, der Chor wurde 1396 fertig, der Turm brauchte sechzig Jahre, von 1407 bis 1467, und ist heute 84 Meter hoch. Von 1596 an war hier Philipp Nicolai Pfarrer. Er erlebte die Pest in Unna und schrieb danach den „Freudenspiegel des ewigen Lebens“, gedruckt 1599. Darin standen zum ersten Mal zwei Lieder, die bis heute in jedem Gesangbuch stehen: „Wie schön leuchtet der Morgenstern“ und „Wachet auf, ruft uns die Stimme“.",
+      "closer": "Der Chor im Osten: Die Seitenschiffe laufen als Umgang um ihn herum, ungewöhnlich für Westfalen.",
+      "seasons": {
+        "winter": "Im Advent wird „Wie schön leuchtet der Morgenstern“ überall gesungen. Entstanden ist es in dieser Stadt."
+      },
+      "facts": [
+        {
+          "claim": "Der Chor wurde 1396 fertig, der Westturm 1407–1467 gebaut; er ist 84 Meter hoch.",
+          "source": "https://de.wikipedia.org/wiki/Evangelische_Stadtkirche_(Unna)"
+        },
+        {
+          "claim": "Philipp Nicolai war seit 1596 Pfarrer in Unna; der „Freudenspiegel des ewigen Lebens“ erschien 1599, geschrieben nach der Pest in Unna.",
+          "source": "https://de.wikipedia.org/wiki/Philipp_Nicolai"
+        },
+        {
+          "claim": "Im Freudenspiegel wurden „Wie schön leuchtet der Morgenstern“ und „Wachet auf, ruft uns die Stimme“ erstmals gedruckt.",
+          "source": "https://de.wikipedia.org/wiki/Philipp_Nicolai"
+        }
+      ],
+      "refs": [
+        "Q14906631"
+      ],
+      "photo": {
+        "file": "Stadtkirche Unna1.JPG",
+        "author": "Chris06",
+        "licence": "CC BY-SA 4.0",
+        "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+        "page": "https://commons.wikimedia.org/wiki/File:Stadtkirche_Unna1.JPG",
+        "h": 1602,
+        "w": 800
+      }
+    }
+  ]
+}

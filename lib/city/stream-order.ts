@@ -37,6 +37,8 @@ export interface OrderedTile {
     distanceFromCamera: number;
     error: number;
     inFrustum: boolean;
+    /** the renderer's frame count when the traversal last visited it */
+    lastFrameVisited?: number;
     used: boolean;
   } | null;
 }
@@ -56,10 +58,10 @@ export const CONTENT_RANK = {
 } as const;
 
 const NAMED_RANKS: readonly [RegExp, number][] = [
-  [/^terrain_.*_l1\./, CONTENT_RANK.coarse],
-  [/^terrain_.*_l0\./, CONTENT_RANK.fine],
-  [/^city_.*_far\./, CONTENT_RANK.cityFar],
-  [/^city_/, CONTENT_RANK.city],
+  [/^terrain_.*_l1\./u, CONTENT_RANK.coarse],
+  [/^terrain_.*_l0\./u, CONTENT_RANK.fine],
+  [/^city_.*_far\./u, CONTENT_RANK.cityFar],
+  [/^city_/u, CONTENT_RANK.city],
 ];
 
 export function contentRank(uri: string | undefined): number {
@@ -76,13 +78,16 @@ export function contentRank(uri: string | undefined): number {
 export function siteTileOf(uri: string | undefined): string | null {
   const name = uri?.slice(uri.lastIndexOf("/") + 1) ?? "";
   return (
-    /^(?:city|terrain)_(.+?)(?:_far|_l\d)?\.[^.]+\.glb/.exec(name)?.[1] ?? null
+    /^(?:city|terrain)_(?<id>.+?)(?:_far|_l\d)?\.[^.]+\.glb/u.exec(name)?.groups
+      ?.id ?? null
   );
 }
 
 /** A content's site tile, read once per tile (a name scan). */
 const siteTiles = new WeakMap<object, string | null>();
-function siteTileOfTile(tile: CachedTile): string | null {
+export function siteTileOfTile(tile: {
+  content?: { uri?: string } | null;
+}): string | null {
   let id = siteTiles.get(tile);
   if (id === undefined) {
     id = siteTileOf(tile.content?.uri);

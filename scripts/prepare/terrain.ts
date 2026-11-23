@@ -12,27 +12,31 @@ import {
   COARSE_DRESSING_KINDS,
   DRESSING_KINDS,
   pickFiles,
-  type TileArtifactKind,
   dgmSourceFiles,
   sideFileSource,
   tileArtifacts,
 } from "../../lib/city/tile";
-import { TERRAIN_LEVELS, type TerrainExtras } from "../../lib/city/tileset";
+import type { TileArtifactKind } from "../../lib/city/tile";
+import { TERRAIN_LEVELS, terrainRasterExtras } from "../../lib/city/tileset";
+import type {
+  TerrainContent,
+  TerrainExtras,
+  TerrainFiles,
+} from "../../lib/city/tileset";
 import { bakeCoarseCrowns } from "../coarse-crowns";
 import { BAKE_ENTRIES } from "../bake-entries";
 import {
   fenceMesh,
   kerbMesh,
   stairMesh,
-  type TerrainMesh,
   terrainMesh,
   wallMesh,
   gridMesh,
   stairRailLines,
   tinMesh,
 } from "../bake-tiles";
+import type { TerrainMesh } from "../bake-tiles";
 import { FINE_TIN_MAX_ERROR } from "../bake-terrain-tin";
-import type { ColonyCrop } from "../crop-raster";
 import { unpackGround } from "../ground-pack";
 import { writeMeshGlb } from "../tile-glb";
 import {
@@ -57,7 +61,7 @@ import {
   utf8,
 } from "./context";
 import { shapedBy, siteShapes } from "./lines";
-import { type Published, colonyCrops, sideFiles } from "./side-files";
+import { colonyCrops, sideFiles } from "./side-files";
 import { offset } from "./frame";
 import {
   groundFeatures,
@@ -100,7 +104,7 @@ const terrains = new Map<
   string,
   Promise<TerrainMesh & { bounds: TerrainBounds }>
 >();
-function shapedTerrain(
+async function shapedTerrain(
   tile: string,
   level: 0 | 1
 ): Promise<TerrainMesh & { bounds: TerrainBounds }> {
@@ -128,7 +132,7 @@ function shapedTerrain(
     })();
     terrains.set(memo, built);
   }
-  return built;
+  return await built;
 }
 
 /** Frees a baked tile's shaped terrain (its meshes' arrays). */
@@ -166,36 +170,6 @@ async function fineChildren(
     cut.leaves
   );
   return [stairs, walls, kerbs, fences].filter((m) => m !== null);
-}
-
-/** The fine level's allotment colonies (plan 028) and road markings (plan
- *  026) and both levels' baked light (plan 033): only the rasters the tile
- *  has. */
-function paintAndLight(
-  names: Published,
-  level: 0 | 1,
-  crop: ColonyCrop | undefined
-): Partial<TerrainExtras> {
-  return {
-    ...(level === 0 && names.cultivatedRaster && crop
-      ? {
-          cultivated: names.cultivatedRaster,
-          cultivatedCrop: crop,
-          ...(names.cultivatedLow
-            ? { cultivatedLow: names.cultivatedLow }
-            : {}),
-        }
-      : {}),
-    ...(level === 0 && names.markings && names.markingsTable
-      ? {
-          markings: names.markings,
-          markingsTable: names.markingsTable,
-          ...(names.markingsLow ? { markingsLow: names.markingsLow } : {}),
-        }
-      : {}),
-    ...(names.svf ? { svf: names.svf } : {}),
-    ...(names.horizon ? { horizon: names.horizon } : {}),
-  };
 }
 
 /**
@@ -238,7 +212,7 @@ async function publishCrowns(tile: string): Promise<string | undefined> {
     ...terrainInputs(tile),
   ];
   const [minX, minY] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
-  const file = a.crowns.file;
+  const { file } = a.crowns;
   const bytes = await cached(
     file,
     cacheKey(inputs, BAKE_ENTRIES.coarseCrowns, offset, shapedBy(tile)),
@@ -263,6 +237,7 @@ export async function bakeTerrain(
   level: 0 | 1
 ): Promise<{
   file: string;
+  files: TerrainFiles;
   ground?: number[];
   maxZ: number;
   minZ: number;
@@ -283,27 +258,24 @@ export async function bakeTerrain(
   const inputs =
     level === 0 ? TILES.flatMap(terrainInputs) : terrainInputs(tile);
   const stem = `terrain_${tile}_l${level}`;
+  // The side files the level is dressed with are named on its tile in the
+  // tileset (lib/city/tileset.ts `TerrainFiles`), not in the glb: a lamp
+  // or tree file that changes neither re-bakes the ground nor renames it.
+  const files: TerrainFiles = {
+    // the rasters the tile has, by the artifact table's `terrain` column
+    // (the coarse level reads its 1024² class raster on every tier,
+    // lib/city/tile.ts COARSE_RASTER_PX)
+    ...terrainRasterExtras(names, level, colonyCrops.get(tile)),
+    ...(level === 0
+      ? { dressing: pickFiles(names, DRESSING_KINDS) }
+      : { coarse: pickFiles(names, COARSE_DRESSING_KINDS) }),
+  };
   const described = {
     kind: "terrain" as const,
     tileId: tile,
     level,
     n,
-    // the coarse level reads its 1024² raster on every tier
-    // (lib/city/tile.ts COARSE_RASTER_PX)
-    landcover: (level === 0 ? names.landcover : names.landcoverCoarse) ?? "",
-    landcoverLow:
-      (level === 0 ? names.landcoverLow : names.landcoverCoarse) ?? "",
-    ...(names.ndvi ? { ndvi: names.ndvi } : {}),
-    ...(level === 0 && names.surface ? { surface: names.surface } : {}),
-    ...(level === 0 && names.edges ? { edges: names.edges } : {}),
-    ...(names.sport && names.sportTable
-      ? { sport: names.sport, sportTable: names.sportTable }
-      : {}),
-    ...paintAndLight(names, level, colonyCrops.get(tile)),
     ...waterExtras(tile, level),
-    ...(level === 0
-      ? { dressing: pickFiles(names, DRESSING_KINDS) }
-      : { coarse: pickFiles(names, COARSE_DRESSING_KINDS) }),
   };
   // The passages come from every tile's lines and decks (line-levels.ts);
   // the fine level's walls, kerbs, stairs and fences stand on every tile's
@@ -311,13 +283,7 @@ export async function bakeTerrain(
   const opened = level === 0 ? siteShapes : shapedBy(tile);
   const bake = BAKE_ENTRIES.terrain;
   const key = cacheKey(inputs, bake, offset, described, opened);
-  const meta = parse<{
-    bounds: TerrainExtras["bounds"];
-    ground?: number[];
-    maxZ: number;
-    minZ: number;
-    tin?: TerrainExtras["tin"];
-  }>(
+  const meta = parse(
     await cached(
       `${stem}.json`,
       cacheKey(inputs, bake, offset, described, opened, "ground"),
@@ -332,28 +298,36 @@ export async function bakeTerrain(
         });
       }
     )
-  );
-  const extras: TerrainExtras = {
+  ) as {
+    bounds: TerrainExtras["bounds"];
+    ground?: number[];
+    maxZ: number;
+    minZ: number;
+    tin?: TerrainExtras["tin"];
+  };
+  const extras: TerrainContent = {
     ...described,
     bounds: meta.bounds,
     minElevation: meta.minZ,
     ...(meta.tin ? { tin: meta.tin } : {}),
   };
   const name = `${stem}.glb.gz`;
-  const glb = await cached(name, key, async () =>
-    gz(
+  const glb = await cached(name, key, async () => {
+    const { input } = await shapedTerrain(tile, level);
+    return gz(
       await writeMeshGlb({
-        ...(await shapedTerrain(tile, level)).input,
+        ...input,
         name: "terrain",
         extras: { ...extras },
         // The fine level carries the tile's stairs and walls, baked from the
         // same files the ground was shaped with.
         children: level === 0 ? await fineChildren(tile, meta.bounds) : [],
       })
-    )
-  );
+    );
+  });
   return {
     file: publish(name, glb),
+    files,
     ground: meta.ground,
     minZ: meta.minZ,
     maxZ: meta.maxZ,
@@ -369,8 +343,8 @@ function groundSamples(m: {
   const [x0, y0, x1, y1] = m.bounds;
   const out: number[] = [];
   const n = 32;
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
+  for (let i = 0; i < n; i += 1) {
+    for (let j = 0; j < n; j += 1) {
       const h = m.heightAt(
         x0 + ((i + 0.5) / n) * (x1 - x0),
         y0 + ((j + 0.5) / n) * (y1 - y0)

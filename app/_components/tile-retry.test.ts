@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, jest, test } from "bun:test";
 import { NetworkError } from "@/lib/city/fetch-retry";
 import type { CrashTrail } from "./crash-trail";
-import { createNetworkWatch, type HealableTiles } from "./tile-retry";
+import { createNetworkWatch } from "./tile-retry";
+import type { HealableTiles } from "./tile-retry";
 
 /** 3d-tiles-renderer's loading states (FAILED, UNLOADED, LOADING). */
 const FAILED = -1;
@@ -35,9 +36,15 @@ function fakeTiles() {
         return true;
       },
     },
-    resetFailedTiles: () => calls.push("reset"),
-    addEventListener: (_, listener) => listeners.add(listener),
-    removeEventListener: (_, listener) => listeners.delete(listener),
+    resetFailedTiles: () => {
+      calls.push("reset");
+    },
+    addEventListener: (_, listener) => {
+      listeners.add(listener);
+    },
+    removeEventListener: (_, listener) => {
+      listeners.delete(listener);
+    },
   };
   const update = (...wanted: FakeTile[]) => {
     for (const tile of wanted) {
@@ -72,7 +79,7 @@ test("a tile that gave up on the network leaves the cache before the failed tile
   const watch = createNetworkWatch({
     tiles,
     bootOver: () => true,
-    onBootGiveUp: () => undefined,
+    onBootGiveUp: () => {},
   });
   const a = failedTile("a");
   const b = failedTile("b");
@@ -91,7 +98,7 @@ test("the network's word goes once the last tile it failed lands, not before", (
   const watch = createNetworkWatch({
     tiles,
     bootOver: () => true,
-    onBootGiveUp: () => undefined,
+    onBootGiveUp: () => {},
   });
   const a = failedTile("a");
   const b = failedTile("b");
@@ -114,10 +121,10 @@ test("a tile asked for again that the renderer no longer wants does not hold the
     const watch = createNetworkWatch({
       tiles,
       bootOver: () => true,
-      onBootGiveUp: () => undefined,
+      onBootGiveUp: () => {},
       onClear: told
         ? () => {
-            cleared++;
+            cleared += 1;
           }
         : undefined,
     });
@@ -139,7 +146,7 @@ test("the tileset itself is reset without a cache entry; a failure that is not t
   const watch = createNetworkWatch({
     tiles,
     bootOver: () => true,
-    onBootGiveUp: () => undefined,
+    onBootGiveUp: () => {},
   });
   const http = new Error("Failed to load model with error code 404");
   expect(watch.failed({ id: "x" }, http, "/x", false)).toBe(false);
@@ -156,7 +163,7 @@ test("a tile the cache let go of before the heal is left alone: in view again, i
   const watch = createNetworkWatch({
     tiles,
     bootOver: () => true,
-    onBootGiveUp: () => undefined,
+    onBootGiveUp: () => {},
   });
   const landed = failedTile("landed");
   const loading = failedTile("loading");
@@ -184,7 +191,7 @@ test("a tile failing again waits longer before the next try", () => {
   const watch = createNetworkWatch({
     tiles,
     bootOver: () => true,
-    onBootGiveUp: () => undefined,
+    onBootGiveUp: () => {},
   });
   const a = failedTile("a");
   watch.failed(a, lost(), "/a", false);
@@ -203,7 +210,7 @@ test("a disposed watch asks for nothing more", () => {
   const watch = createNetworkWatch({
     tiles,
     bootOver: () => true,
-    onBootGiveUp: () => undefined,
+    onBootGiveUp: () => {},
   });
   watch.failed(failedTile("a"), lost(), "/a", false);
   watch.dispose();
@@ -218,7 +225,7 @@ test("a network give-up is noted with the page's state, and one at the boot as a
     tiles,
     trail,
     bootOver: () => false,
-    onBootGiveUp: () => undefined,
+    onBootGiveUp: () => {},
   });
   watch.failed(failedTile("a"), lost(), "/a", false);
   watch.failed(failedTile("s"), lost(), "/spawn", true);
@@ -233,7 +240,9 @@ test("the boot gives up on the network after a minute of a usable page without i
   const watch = createNetworkWatch({
     tiles,
     bootOver: () => booted,
-    onBootGiveUp: (error) => given.push(error),
+    onBootGiveUp: (error) => {
+      given.push(error);
+    },
   });
   watch.failed(failedTile("s"), lost(), "/spawn", true);
   jest.advanceTimersByTime(58_000);
@@ -246,7 +255,9 @@ test("the boot gives up on the network after a minute of a usable page without i
   const second = createNetworkWatch({
     tiles,
     bootOver: () => booted,
-    onBootGiveUp: (error) => given.push(error),
+    onBootGiveUp: (error) => {
+      given.push(error);
+    },
   });
   second.failed(failedTile("s"), lost(), "/spawn", true);
   booted = true;
@@ -261,7 +272,9 @@ test("the boot's wait ends when what it waited for lands, and a later give-up wa
   const watch = createNetworkWatch({
     tiles,
     bootOver: () => false,
-    onBootGiveUp: (error) => given.push(error),
+    onBootGiveUp: (error) => {
+      given.push(error);
+    },
   });
   const spawn = failedTile("spawn");
   watch.failed(null, lost(), "/tileset.json", true);

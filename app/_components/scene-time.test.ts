@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { composeDate, frameGate, splitDate } from "./scene-time";
+import { composeDate, frameGate, splitDate, tweenMinutes } from "./scene-time";
 
 test("a day and a minute compose to a local instant and split back", () => {
   const day = new Date(2026, 11, 21);
@@ -22,9 +22,11 @@ function fakeFrames() {
   let next = 1;
   const waiting = new Map<number, () => void>();
   return {
-    schedule: (callback: () => void) => {
-      waiting.set(next, callback);
-      return next++;
+    schedule: (job: () => void) => {
+      const handle = next;
+      waiting.set(handle, job);
+      next += 1;
+      return handle;
     },
     unschedule: (handle: number) => {
       waiting.delete(handle);
@@ -32,8 +34,8 @@ function fakeFrames() {
     frame: () => {
       const due = [...waiting.values()];
       waiting.clear();
-      for (const callback of due) {
-        callback();
+      for (const job of due) {
+        job();
       }
     },
   };
@@ -44,7 +46,7 @@ test("a drag's steps reach the scene once a frame, the first at once and the las
   let runs = 0;
   const gate = frameGate(
     () => {
-      runs++;
+      runs += 1;
     },
     frames.schedule,
     frames.unschedule
@@ -69,7 +71,7 @@ test("a cancelled gate drops the step still waiting for its frame", () => {
   let runs = 0;
   const gate = frameGate(
     () => {
-      runs++;
+      runs += 1;
     },
     frames.schedule,
     frames.unschedule
@@ -81,4 +83,20 @@ test("a cancelled gate drops the step still waiting for its frame", () => {
   expect(runs).toBe(1);
   gate.request();
   expect(runs).toBe(2);
+});
+
+test("the hour glides as the camera does, in whole minutes, and lands", () => {
+  expect(tweenMinutes(600, 990, 0)).toBe(600);
+  expect(tweenMinutes(600, 990, 0.5)).toBe(795);
+  expect(tweenMinutes(600, 990, 1)).toBe(990);
+  // eased: slow at the start, as the glide leaves
+  expect(tweenMinutes(600, 990, 0.1)).toBeLessThan(600 + 39);
+  // back to an earlier hour, and past the ends held
+  expect(tweenMinutes(990, 600, 0.5)).toBe(795);
+  expect(tweenMinutes(600, 990, 1.4)).toBe(990);
+  expect(tweenMinutes(600, 990, -1)).toBe(600);
+  // through the night, not back through the day
+  expect(tweenMinutes(22 * 60, 6 * 60, 0.5)).toBe(2 * 60);
+  expect(tweenMinutes(22 * 60, 6 * 60, 1)).toBe(6 * 60);
+  expect(tweenMinutes(1 * 60, 23 * 60, 0.5)).toBe(0);
 });

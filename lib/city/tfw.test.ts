@@ -23,7 +23,7 @@ test("tfwToBounds shifts the pixel-center origin by half a pixel", () => {
 });
 
 test("tfwToBounds rejects malformed content", () => {
-  expect(() => tfwToBounds("1 2 3", 10, 10)).toThrow(/Invalid \.tfw/);
-  expect(() => tfwToBounds("1\n0.5\n0\n-1\n0\n0", 10, 10)).toThrow(/Rotated/);
-  expect(() => tfwToBounds("1\n0\n0\n1\n0\n0", 10, 10)).toThrow(/north-up/);
+  expect(() => tfwToBounds("1 2 3", 10, 10)).toThrow(/Invalid \.tfw/u);
+  expect(() => tfwToBounds("1\n0.5\n0\n-1\n0\n0", 10, 10)).toThrow(/Rotated/u);
+  expect(() => tfwToBounds("1\n0\n0\n1\n0\n0", 10, 10)).toThrow(/north-up/u);
 });

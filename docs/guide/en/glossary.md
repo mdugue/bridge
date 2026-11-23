@@ -185,16 +185,16 @@ them for Dresden; the first is the *spawn tile*. The viewer streams them
 ## Rendering
 
 **three.js** — the JavaScript library that talks to the graphics card
-through WebGPU (or WebGL2); the whole scene is built with it.
+through WebGPU; the whole scene is built with it.
 
-**WebGPU / WebGL2** — the browser's interfaces to the graphics card. The
-viewer uses WebGPU, the newer and faster one, and falls back to WebGL2
-where a browser lacks it; one of the two is required.
+**WebGPU** — the browser's newer interface to the graphics card. The
+viewer needs it; a browser without it (older iPhones, Firefox on some
+systems) gets a message instead of the city.
 
 **Shader / node material** — the small programs the graphics card runs to
 colour each pixel. Here every material is written as a *node material*
 (three.js's TSL): the look is assembled from building blocks, which
-three.js translates for WebGPU or WebGL2.
+three.js translates for WebGPU.
 
 **Mesh / triangle** — everything drawn is triangles. A mesh is a set of
 triangles with a material. The buildings of a tile are one mesh; a
@@ -246,8 +246,8 @@ come from sampling it several times (PCF).
 objects meet the ground, computed from the depth buffer. The viewer uses
 one of them, *GTAO* (ground-truth ambient occlusion), at half resolution.
 
-**Depth of field (DoF)** — the photographic blur beyond the focus
-distance (the foreground stays sharp); here always focused on the centre of the view. Not on phones.
+**Depth of field (DoF)** — the photographic blur before and beyond the focus
+distance; here always focused on the centre of the view. Not on phones.
 
 **Post-processing** — effects applied to the finished image: contact
 shadows, depth of field, anti-aliasing (SMAA; on phones the lighter
@@ -337,8 +337,8 @@ changes whenever the content changes, so caches never serve stale data.
 half resolution; for automated tests only.
 
 **Snapshot** — the JSON text that captures camera, date/time, the
-picture style, the fog, the crown switch and the data layers, used to
-reproduce a view.
+picture style, the fog and the data layers, used to
+reproduce a view; a view link (`?snap=`) carries one in its address.
 
 **Scenic view / Aussichtspunkt** — one of the authored vantages the
 camera can glide to; one of them is the start view.

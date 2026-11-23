@@ -5,22 +5,29 @@
  * fails when the committed pages differ from what this writes.
  */
 import { existsSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { type Lang, sourceMatrixPage } from "../lib/city/source-matrix";
+import path from "node:path";
+import { sourceMatrixPage } from "../lib/city/source-matrix";
+import type { Lang } from "../lib/city/source-matrix";
 import type { Site } from "../lib/city/site";
 import { REFERENCE_SITE, SITES } from "../sites";
 
-const ROOT = join(import.meta.dir, "..");
+const ROOT = path.join(import.meta.dir, "..");
 
 /** The sites in the table's column order, and those whose data is here. */
 export function matrixInputs(root = ROOT) {
   const all = Object.values(SITES);
   const built = new Set(
-    all.filter((s) => existsSync(join(root, "data", s.id))).map((s) => s.id)
+    all
+      .filter((s) => existsSync(path.join(root, "data", s.id)))
+      .map((s) => s.id)
   );
   // the reference site first, then the built ones, then the configured ones
-  const rank = (s: Site) =>
-    s.id === REFERENCE_SITE ? 0 : built.has(s.id) ? 1 : 2;
+  const rank = (s: Site) => {
+    if (s.id === REFERENCE_SITE) {
+      return 0;
+    }
+    return built.has(s.id) ? 1 : 2;
+  };
   const sites = [...all].sort(
     (a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, "de")
   );
@@ -28,7 +35,7 @@ export function matrixInputs(root = ROOT) {
 }
 
 export function matrixPath(lang: Lang, root = ROOT): string {
-  return join(root, "docs", "guide", lang, "sources-by-city.md");
+  return path.join(root, "docs", "guide", lang, "sources-by-city.md");
 }
 
 if (import.meta.main) {

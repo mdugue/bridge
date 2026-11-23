@@ -1,13 +1,10 @@
 import { expect, test } from "bun:test";
 import type { MeshStandardNodeMaterial } from "three/webgpu";
 import type { FurnitureFeature } from "@/lib/city/features";
-import { Vector3 } from "three/webgpu";
-import {
-  buildFurniture,
-  setClockTime,
-  showFurnitureNear,
-} from "./furniture-layer";
-import { type Instances, isInstances } from "./instancing";
+import { Box3, Matrix4, Quaternion, Vector3 } from "three/webgpu";
+import { buildFurniture, showFurnitureNear } from "./furniture-layer";
+import { isInstances } from "./instancing";
+import type { Instances } from "./instancing";
 
 const ctx = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
 
@@ -66,12 +63,10 @@ test("the street's signs and fixtures each build an instanced model", () => {
   }
 });
 
+const build = () =>
+  buildFurniture([at({ k: "column" }), at({ k: "column", lit: true }, 5)], ctx);
+
 test("every tile wears the scene's node materials", () => {
-  const build = () =>
-    buildFurniture(
-      [at({ k: "column" }), at({ k: "column", lit: true }, 5)],
-      ctx
-    );
   const byName = (g: ReturnType<typeof build>, name: string) =>
     g.getObjectByName(name) as Instances<MeshStandardNodeMaterial>;
   const [a, b] = [build(), build()];
@@ -106,18 +101,9 @@ test("a playground's slab is a flush, polygon-offset plain mesh", () => {
   const slab = group.getObjectByName("furniture-playgrounds");
   expect(slab).toBeDefined();
   expect(isInstances(slab)).toBe(false);
-  const material = (slab as Instances<MeshStandardNodeMaterial>).material;
+  const { material } = slab as Instances<MeshStandardNodeMaterial>;
   expect(material.polygonOffset).toBe(true);
   expect(material.vertexColors).toBe(true);
-});
-
-test("the clock hands move on the minute only", () => {
-  const t = new Date(2026, 5, 15, 14, 30, 5);
-  setClockTime(t);
-  expect(setClockTime(new Date(2026, 5, 15, 14, 30, 50))).toBe(false);
-  expect(setClockTime(new Date(2026, 5, 15, 14, 31, 0))).toBe(true);
-  // 2:31 and 14:31 read the same on a dial
-  expect(setClockTime(new Date(2026, 5, 15, 2, 31, 0))).toBe(false);
 });
 
 test("a piece on a bridge stands on its deck, not on the ground below", () => {
@@ -188,4 +174,76 @@ test("a clock's hands go with its cell", () => {
     "furniture-clock",
     "furniture-clock-hands",
   ]);
+});
+
+const position = (set: Instances) => set.geometry.getAttribute("position");
+
+test("a flagpole casts, its cloth flies in its design and casts at rest", () => {
+  const group = buildFurniture(
+    [
+      at({ k: "flag" }),
+      at({ k: "flag", c: "de", h: 10.5 }, 5),
+      at({ k: "flag" }, 10),
+    ],
+    ctx
+  );
+  const byName = new Map(group.children.map((c) => [c.name, c]));
+  const mast = byName.get("furniture-flag") as Instances;
+  const plain = byName.get("furniture-flag-plain") as Instances;
+  const german = byName.get("furniture-flag-de") as Instances;
+  expect(mast.drawCount).toBe(3);
+  expect(mast.castShadow).toBe(true);
+  expect(plain.drawCount).toBe(2);
+  expect(german.drawCount).toBe(1);
+  for (const cloth of [plain, german]) {
+    // the shadow pass draws the sheet at rest, never the wave
+    expect(cloth.castShadow).toBe(true);
+    const mat = cloth.material as MeshStandardNodeMaterial;
+    expect(mat.castShadowPositionNode).not.toBeNull();
+    // ...and the cloth looks its shadow up there, or the wave falls into it
+    expect(mat.receivedShadowPositionNode).not.toBeNull();
+    // the cloths show and hide with every mast of their cell
+    expect(cloth.userData.furnitureCell).toEqual(mast.userData.furnitureCell);
+  }
+  // the cloth hangs at the mast's top, at its own size: a 10.5 m mast
+  // lifts it, never stretches it
+  const top = new Vector3();
+  const scale = new Vector3();
+  const m = new Matrix4();
+  german.getMatrixAt(0, m);
+  m.decompose(top, new Quaternion(), scale);
+  expect(top.y).toBeCloseTo(110.5);
+  expect(scale.y).toBeCloseTo(1);
+  // one cloth per design for the tile: its cells' sets draw from it, and
+  // it goes with the tile (another tile has its own)
+  const two = buildFurniture(
+    [at({ k: "flag" }), at({ k: "flag" }, 1200)],
+    ctx
+  ).children.filter((c) => c.name === "furniture-flag-plain") as Instances[];
+  expect(two.length).toBe(2);
+  expect(position(two[0])).toBe(position(two[1]));
+  expect(position(two[0])).not.toBe(position(plain));
+  expect(position(german)).not.toBe(position(plain));
+});
+
+test("a flagpole shows from further than a bench", () => {
+  const group = buildFurniture([at({ k: "flag" }), at({ k: "bench" }, 5)], ctx);
+  // the eye 600 m off: the bench's cell hides, the mast's and its cloth's
+  // stay
+  const changed = new Box3();
+  showFurnitureNear(group, new Vector3(600, 110, 0), (box) => {
+    changed.union(box);
+  });
+  // what changed is the bench's cell alone: the rings that can hold it
+  // redraw, not every one
+  expect(changed.min.x).toBeCloseTo(5 - 3);
+  expect(changed.max.x).toBeCloseTo(5 + 3);
+  const shown = group.children
+    .filter((c) => c.userData.furnitureCell)
+    .map((c) => [c.name, c.visible]);
+  expect(Object.fromEntries(shown)).toEqual({
+    "furniture-bench": false,
+    "furniture-flag": true,
+    "furniture-flag-plain": true,
+  });
 });

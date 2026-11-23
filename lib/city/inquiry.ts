@@ -9,46 +9,76 @@
  */
 import { BUILDING_FUNCTION, ROOF_TYPE } from "./adv-codes";
 import {
-  type CityObjectTable,
   OBJECT_FLAG_HERITAGE,
   OBJECT_FLAG_SHOP,
   OBJECT_SOURCE_GAP,
   OBJECT_SOURCE_SCAN,
   hasObjectFlag,
-  type Rgb,
 } from "./city-mesh";
+import type { CityObjectTable, Rgb } from "./city-mesh";
 import { decodeDrawn } from "./drawn-facts";
 import {
-  type CardCredits,
-  type CardFact,
   factLines,
   germanDates,
-  type InquiryCard,
   metres,
   osmSource,
   squareMetres,
   stated,
   whole,
 } from "./card-lines";
+import type {
+  CardCredits,
+  CardFact,
+  CardHeading,
+  InquiryCard,
+} from "./card-lines";
 import {
   bridgeCard,
-  type FeatureInquiry,
+  bridgeHeading,
+  canopyCard,
+  canopyHeading,
+  furnitureCard,
+  furnitureHeading,
+  HEDGE_HEADING,
+  hedgeCard,
+  isPlay,
+  lampCard,
+  lampHeading,
+  landingCard,
+  landingHeading,
   monumentCard,
-  type TreeFacts,
+  monumentHeading,
+  stopCard,
+  stopHeading,
   treeCard,
+  treeHeading,
 } from "./inquiry-features";
-import { moreCard } from "./inquiry-more";
+import type { FeatureInquiry, TreeFacts } from "./inquiry-features";
 import type { Stated } from "./methods";
-import { bikeCard, trafficCard } from "./inquiry-traffic";
+import {
+  bikeCard,
+  bikeHeading,
+  trafficCard,
+  trafficHeading,
+} from "./inquiry-traffic";
+import { designCard, designHeading } from "./inquiry-design";
 import {
   isMeasuredRoof,
   MEASURED_ROOF,
   MEASURED_SHAPE,
   NO_FACT,
-  type ObjectFacts,
 } from "./object-facts";
-import { parseLod2Stand, type SiteProvenance } from "./provenance";
+import type { ObjectFacts } from "./object-facts";
+import { parseLod2Stand } from "./provenance";
+import type { SiteProvenance } from "./provenance";
 import type { WindowSpec } from "./windows";
+import {
+  factBuildings,
+  factsFor,
+  landmarkCardFacts,
+  wikidataSource,
+} from "./landmark-facts";
+import type { LandmarkFactsIndex } from "./landmark-facts";
 
 export type { CardFact, InquiryCard } from "./card-lines";
 export { germanDates, metres, squareMetres } from "./card-lines";
@@ -86,6 +116,9 @@ export function objectLook(table: CityObjectTable, i: number): ObjectLook {
 
 /** One object of the asked building, as the scene read it. */
 export interface InquiryObject {
+  /** its lowest point (m, the data frame's height; absent where the scene
+   *  did not say) */
+  baseZ?: number;
   /** the Building itself (true) or one of its parts */
   building: boolean;
   /** eave height above the base (m) */
@@ -115,6 +148,9 @@ export interface BuildingInquiry {
    *  trees, in every tile it stands in), the picked one too */
   tree: InquiryObject[];
   tile: string;
+  /** the site's landmark facts file (Wikidata), set where the building is
+   *  a landmark: the card lists what the nameplate says under its name */
+  landmarkFactsUrl?: string;
 }
 
 /** Whatever someone asked about (ADR 0042, plan 052 phase 4). */
@@ -285,6 +321,12 @@ function once(buildings: readonly InquiryObject[]): InquiryObject[] {
   });
 }
 
+/** The height a building's card states (its leads', else its tallest
+ *  object's), NO_FACT where none is known: the nameplate quotes it. */
+export function cardHeight(inquiry: BuildingInquiry): number {
+  return mergedFacts(inquiry).height;
+}
+
 function mergedFacts(inquiry: BuildingInquiry) {
   const all = inquiry.tree.length > 0 ? inquiry.tree : [inquiry.picked];
   const facts = all.map((o) => o.facts);
@@ -298,7 +340,10 @@ function mergedFacts(inquiry: BuildingInquiry) {
   const mine = all.find(
     (o) => o.building && o.facts.buildingId === pick.buildingId
   )?.facts;
-  const building = leads.length > 0 ? leads : mine ? [mine] : [];
+  let building = leads;
+  if (leads.length === 0) {
+    building = mine ? [mine] : [];
+  }
   const names = distinct([pick.name, ...facts.map((f) => f.name)]);
   const heights = known(facts.map((f) => f.height));
   const areas = known(facts.map((f) => f.area));
@@ -310,7 +355,6 @@ function mergedFacts(inquiry: BuildingInquiry) {
     (s, a) => s + a,
     0
   );
-  const flags = all.reduce((sum, o) => sum | o.flags, 0);
   return {
     address: addressLine(distinct([pick.addr, ...facts.map((f) => f.addr)])),
     created: pick.created || distinct(facts.map((f) => f.created))[0] || "",
@@ -322,11 +366,14 @@ function mergedFacts(inquiry: BuildingInquiry) {
     name: names[0] ?? "",
     parts: all.filter((o) => !o.building).length,
     buildings: once(all.filter((o) => o.building)).length,
-    heritage: hasObjectFlag(flags, OBJECT_FLAG_HERITAGE),
+    heritage: all.some((o) => hasObjectFlag(o.flags, OBJECT_FLAG_HERITAGE)),
     rebuilt: facts.some((f) => isMeasuredRoof(f.roofType)),
-    shop: hasObjectFlag(flags, OBJECT_FLAG_SHOP),
+    shop: all.some((o) => hasObjectFlag(o.flags, OBJECT_FLAG_SHOP)),
   };
 }
+
+/** Whether a merged fact is known. */
+const isKnown = (v: number) => v !== NO_FACT && v > 0;
 
 /**
  * The fact lines in reading order; a line whose value is unknown is left
@@ -339,10 +386,9 @@ function cardFacts(
   scan: boolean,
   use: string
 ): CardFact[] {
-  const known = (v: number) => v !== NO_FACT && v > 0;
   return factLines([
     ["Nutzung", scan || use ? "" : "nicht angegeben"],
-    ["Höhe", known(t.height) ? metres(t.height) : ""],
+    ["Höhe", isKnown(t.height) ? metres(t.height) : ""],
     ["Traufe", !scan && pick.eaveH > 0 ? metres(pick.eaveH) : ""],
     [
       "Dach",
@@ -351,7 +397,7 @@ function cardFacts(
       isMeasuredRoof(pick.facts.roofType) ? "detected" : undefined,
     ],
     ["Grundfläche", t.area > 0 ? squareMetres(t.area) : ""],
-    ["Geschosse", known(t.levels) ? whole.format(t.levels) : ""],
+    ["Geschosse", isKnown(t.levels) ? whole.format(t.levels) : ""],
     [
       "Gebäude",
       t.buildings > 1 ? `${whole.format(t.buildings)} im Stadtmodell` : "",
@@ -364,6 +410,179 @@ function cardFacts(
   ]);
 }
 
+/** The icon a kind of thing is drawn with in the strip of candidates, by
+ *  its Lucide name (the strip maps it to the component). */
+export type KindIcon =
+  | "anchor"
+  | "armchair"
+  | "bike"
+  | "bridge"
+  | "building"
+  | "car"
+  | "ferris-wheel"
+  | "lamp-floor"
+  | "landmark"
+  | "pencil-ruler"
+  | "shrub"
+  | "tram-front"
+  | "tree-deciduous"
+  | "tree-pine";
+
+/** What the strip of candidates shows of one: its icon and its card's
+ *  heading, without the card. */
+export interface KindLabel extends CardHeading {
+  icon: KindIcon;
+}
+
+/** What a card is made from beside the inquiry: `provenance` null until
+ *  the manifest arrived (the site's own `credits` stand in for its credit
+ *  lines), `treeFacts` until a tree's tile's facts file has
+ *  (lib/city/inquiry-features.ts), `landmarks` until a landmark's. */
+interface CardInput {
+  credits: CardCredits;
+  landmarks: LandmarkFactsIndex | null;
+  provenance: SiteProvenance | null;
+  treeFacts: TreeFacts | null;
+}
+
+type InquiryKind = Inquiry["kind"];
+type InquiryOf<K extends InquiryKind> = Extract<Inquiry, { kind: K }>;
+type FeatureKind = FeatureInquiry["kind"];
+
+/** One kind of thing: how it is told, headed and picked. */
+interface KindRow<I extends Inquiry> {
+  card: (i: I, input: CardInput) => InquiryCard;
+  /** its icon and heading (no provenance, no tree facts yet: the heading
+   *  the card shows before they arrive) */
+  label: (i: I, credits: CardCredits) => KindLabel;
+  /** its stand-in is wider than what it stands for (a crown, a hedge) or
+   *  lies flat on the ground (a playground): chosen only when nothing
+   *  solid stands behind it */
+  porous: (i: I) => boolean;
+}
+
+/** A thing's key for the probe's vote: one per tree, monument, deck,
+ *  counted section, counter. A building has none here: its key is its
+ *  ensemble in its layer (city-layer.ts `buildingKey`). */
+type KeyRow<I extends Inquiry> = I extends BuildingInquiry
+  ? { key?: never }
+  : { key: (i: I) => string };
+
+/** Every kind's row; the mapped type keeps each row's functions narrowed
+ *  to its own kind, and a new kind is a type error until it has one. */
+type KindTable = {
+  [K in InquiryKind]: KindRow<InquiryOf<K>> & KeyRow<InquiryOf<K>>;
+};
+
+const solid = () => false;
+const atTile = (t: {
+  kind: string;
+  position: [number, number];
+  tile: string;
+}) => `${t.kind}:${t.tile}:${t.position.join(",")}`;
+const atIndex = (t: { index: number; kind: string; tile: string }) =>
+  `${t.kind}:${t.tile}:${t.index}`;
+
+const KINDS: KindTable = {
+  building: {
+    card: (i, x) =>
+      withLandmarkFacts(
+        buildingCard(i, x.provenance, x.credits),
+        i,
+        x.landmarks
+      ),
+    label: (i) => ({
+      icon: "building",
+      ...buildingHeading(i, mergedFacts(i)),
+    }),
+    porous: solid,
+  },
+  tree: {
+    card: (i, x) => treeCard(i, x.treeFacts, x.provenance, x.credits),
+    label: (i, credits) => ({
+      icon: i.conifer ? "tree-pine" : "tree-deciduous",
+      ...treeHeading(i, null, credits),
+    }),
+    porous: () => true,
+    key: atIndex,
+  },
+  monument: {
+    card: (i, x) => monumentCard(i, x.provenance, x.credits),
+    label: (i) => ({ icon: "landmark", ...monumentHeading(i) }),
+    porous: solid,
+    key: atTile,
+  },
+  bridge: {
+    card: (i, x) => bridgeCard(i, x.provenance, x.credits),
+    label: (i) => ({ icon: "bridge", ...bridgeHeading(i) }),
+    porous: solid,
+    key: atTile,
+  },
+  traffic: {
+    card: (i) => trafficCard(i),
+    label: (i) => ({ icon: "car", ...trafficHeading(i) }),
+    porous: solid,
+    key: atIndex,
+  },
+  bikes: {
+    card: (i) => bikeCard(i),
+    label: (i) => ({ icon: "bike", ...bikeHeading(i) }),
+    porous: solid,
+    key: (i) => `bikes:${i.id}:${i.position.join(",")}`,
+  },
+  design: {
+    card: (i) => designCard(i),
+    label: (i) => ({ icon: "pencil-ruler", ...designHeading(i) }),
+    porous: solid,
+    key: (i) => `design:${i.file}:${i.partIndex}`,
+  },
+  canopy: {
+    card: (i, x) => canopyCard(i, x.provenance, x.credits),
+    label: (i) => ({ icon: "tree-deciduous", ...canopyHeading(i) }),
+    porous: () => true,
+    key: atTile,
+  },
+  hedge: {
+    card: (i, x) => hedgeCard(i, x.provenance, x.credits),
+    label: () => ({ icon: "shrub", ...HEDGE_HEADING }),
+    porous: () => true,
+    key: atTile,
+  },
+  lamp: {
+    card: (i, x) => lampCard(i, x.provenance, x.credits),
+    label: (i) => ({ icon: "lamp-floor", ...lampHeading(i) }),
+    porous: solid,
+    key: atTile,
+  },
+  furniture: {
+    card: (i, x) => furnitureCard(i, x.provenance),
+    label: (i) => ({
+      icon: isPlay(i) ? "ferris-wheel" : "armchair",
+      ...furnitureHeading(i),
+    }),
+    porous: (i) => i.properties.k === "playground",
+    key: atTile,
+  },
+  stop: {
+    card: (i, x) => stopCard(i, x.provenance),
+    label: (i) => ({ icon: "tram-front", ...stopHeading(i) }),
+    porous: solid,
+    key: atTile,
+  },
+  landing: {
+    card: (i, x) => landingCard(i, x.provenance),
+    label: (i) => ({ icon: "anchor", ...landingHeading(i) }),
+    porous: solid,
+    key: atTile,
+  },
+};
+
+/** The row of an inquiry's own kind (TypeScript issue 47109's pattern:
+ *  generic in the kind, so the row's functions take this inquiry). */
+function rowOf<K extends InquiryKind>(i: InquiryOf<K>): KindRow<InquiryOf<K>> {
+  return KINDS[i.kind];
+}
+
 /**
  * The card for one inquiry; `provenance` null until the manifest arrived
  * (the site's own `credits` stand in for its credit lines), `treeFacts`
@@ -373,29 +592,70 @@ export function inquiryCard(
   inquiry: Inquiry,
   provenance: SiteProvenance | null,
   credits: CardCredits,
-  treeFacts: TreeFacts | null = null
+  treeFacts: TreeFacts | null = null,
+  landmarks: LandmarkFactsIndex | null = null
 ): InquiryCard {
-  switch (inquiry.kind) {
-    case "building":
-      return buildingCard(inquiry, provenance, credits);
-    case "tree":
-      return treeCard(inquiry, treeFacts, provenance, credits);
-    case "monument":
-      return monumentCard(inquiry, provenance, credits);
-    case "bridge":
-      return bridgeCard(inquiry, provenance, credits);
-    case "traffic":
-      return trafficCard(inquiry);
-    case "bikes":
-      return bikeCard(inquiry);
-    case "canopy":
-    case "furniture":
-    case "hedge":
-    case "lamp":
-    case "landing":
-    case "stop":
-      return moreCard(inquiry, provenance, credits);
+  return rowOf(inquiry).card(inquiry, {
+    credits,
+    landmarks,
+    provenance,
+    treeFacts,
+  });
+}
+
+/** A candidate's icon and heading (no provenance, no tree facts yet: the
+ *  heading the card shows before they arrive). */
+export function kindLabel(inquiry: Inquiry, credits: CardCredits): KindLabel {
+  return rowOf(inquiry).label(inquiry, credits);
+}
+
+/** Whether a thing is chosen only when nothing solid stands behind it
+ *  (KindRow `porous`). */
+export function isPorous(inquiry: Inquiry): boolean {
+  return rowOf(inquiry).porous(inquiry);
+}
+
+/** The feature kinds' keys, as the table holds them. */
+type KeyTable = { [K in FeatureKind]: { key: (i: InquiryOf<K>) => string } };
+
+function keyOf<K extends FeatureKind>(kind: K, t: InquiryOf<K>): string {
+  const keys: KeyTable = KINDS;
+  return keys[kind].key(t);
+}
+
+/** A thing's key for the probe's vote (KeyRow). */
+export function thingKey(t: FeatureInquiry): string {
+  return keyOf(t.kind, t);
+}
+
+/** A landmark's card with its Wikidata facts (the nameplate's lines) as
+ *  rows and Wikidata as their source; the card as it was without any. */
+function withLandmarkFacts(
+  card: InquiryCard,
+  inquiry: BuildingInquiry,
+  landmarks: LandmarkFactsIndex | null
+): InquiryCard {
+  const entry = landmarks
+    ? factsFor(landmarks, factBuildings(inquiry.tree), card.title)
+    : null;
+  const rows = entry ? landmarkCardFacts(entry) : [];
+  if (!entry || rows.length === 0) {
+    return card;
   }
+  return {
+    ...card,
+    facts: [...card.facts, ...rows],
+    sources: [
+      ...card.sources,
+      ...stated(
+        "taken",
+        wikidataSource(
+          rows.map((r) => r.label),
+          entry.id
+        )
+      ),
+    ],
+  };
 }
 
 /** Where a building's card says it came from first: the city model, the
@@ -429,6 +689,19 @@ function buildingSources(
   );
 }
 
+/** A building's heading from its merged facts: its name under its use,
+ *  else its use, else what it is (a building, or a small structure the
+ *  laser scan found). */
+function buildingHeading(
+  inquiry: BuildingInquiry,
+  t: Pick<ReturnType<typeof mergedFacts>, "functionCode" | "name">
+): CardHeading {
+  const use = functionLabel(t.functionCode);
+  const kind =
+    inquiry.picked.source === OBJECT_SOURCE_SCAN ? "Kleinbau" : "Gebäude";
+  return { kicker: t.name && use ? use : kind, title: t.name || use || kind };
+}
+
 /** A building's card (LoD2, or a scan structure LoD2 lacks). */
 function buildingCard(
   inquiry: BuildingInquiry,
@@ -443,9 +716,6 @@ function buildingCard(
   const osmHeight = gap && decodeDrawn(pick.facts.drawn).height === "osm";
   const t = mergedFacts(inquiry);
   const use = functionLabel(t.functionCode);
-  const kind = scan ? "Kleinbau" : "Gebäude";
-  const title = t.name || use || kind;
-  const kicker = t.name && use ? use : kind;
 
   const facts = cardFacts(t, pick, scan || gap, use);
   const fromOsm = [
@@ -453,7 +723,7 @@ function buildingCard(
     osmHeight ? "Höhe" : "",
     t.name ? "Name" : "",
     t.address ? "Adresse" : "",
-    t.levels !== NO_FACT ? "Geschosse" : "",
+    t.levels === NO_FACT ? "" : "Geschosse",
     t.heritage ? "Denkmal" : "",
   ].filter(Boolean);
   const sources: Stated[] = buildingSources(inquiry, provenance, credits, {
@@ -491,8 +761,7 @@ function buildingCard(
     );
   }
   return {
-    kicker,
-    title,
+    ...buildingHeading(inquiry, t),
     address: t.address,
     facts,
     id: pick.facts.buildingId,

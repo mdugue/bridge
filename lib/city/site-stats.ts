@@ -258,7 +258,7 @@ export function footprintArea(
       // relative to the first vertex: UTM coordinates squared lose digits
       const [ox, oy] = ring[0];
       let a = 0;
-      for (let i = 0; i < ring.length; i++) {
+      for (let i = 0; i < ring.length; i += 1) {
         const [x0, y0] = ring[i];
         const [x1, y1] = ring[(i + 1) % ring.length];
         a += (x0 - ox) * (y1 - oy) - (x1 - ox) * (y0 - oy);

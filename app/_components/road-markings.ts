@@ -27,18 +27,15 @@ import {
   markingKindId,
 } from "@/lib/city/markings";
 import type { F, I, Tex, V2, V3 } from "./shader-chunks";
+import { GROUND_DETAIL, parkingBandOf } from "./ground-detail";
 import {
   gdBand,
   gdNoise,
-  GROUND_DETAIL,
-  type GroundColour,
-  type GroundFields,
-  type GroundInputs,
   loadTexel,
-  parkingBandOf,
   texelAt,
   texelSize,
-} from "./ground-detail";
+} from "./shader-chunks";
+import type { GroundColour, GroundFields, GroundInputs } from "./ground-detail";
 import { spLine } from "./sport-ground";
 
 /**
@@ -244,9 +241,9 @@ export function roadMarkings(
     const w = max(g.w, 0.004).toVar();
     const paint = float(0).toVar();
     // crossings and stop lines: every distinct row among the four texels
-    for (let k = 0; k < 4; k++) {
+    for (let k = 0; k < 4; k += 1) {
       let cond = t[k].x.greaterThan(0.5);
-      for (let j = 0; j < k; j++) {
+      for (let j = 0; j < k; j += 1) {
         cond = and(cond, t[k].x.notEqual(t[j].x));
       }
       If(cond, () => {

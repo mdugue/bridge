@@ -11,12 +11,10 @@ import {
   CylinderGeometry,
   Float32BufferAttribute,
   Group,
-  type Material,
   Matrix4,
   Mesh,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
-  type Object3D,
   Quaternion,
   Shape,
   ShapeUtils,
@@ -26,6 +24,7 @@ import {
   Vector2,
   Vector3,
 } from "three/webgpu";
+import type { Material, Object3D } from "three/webgpu";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
@@ -37,26 +36,32 @@ import {
   positionLocal,
   select,
   sin,
-  uniform,
   vec2,
   vec3,
 } from "three/tsl";
 import type { FurnitureFeature } from "@/lib/city/features";
 import {
-  type FurnitureArea,
+  FLAG_HEIGHT,
   FURNITURE_MODELS,
-  type FurnitureModel,
-  type FurniturePiece,
   furnitureAreas,
   furniturePieces,
   inRing,
 } from "@/lib/city/furniture";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import type {
+  FurnitureArea,
+  FurnitureModel,
+  FurniturePiece,
+} from "@/lib/city/furniture";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { subdividePolyline } from "@/lib/city/polyline";
-import { finished, type Steps } from "@/lib/city/build-steps";
+import { finished } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
+import { flagCloths, tileCloths } from "./flag-cloth";
+import type { TileCloths } from "./flag-cloth";
 import { Instances, instancePosition } from "./instancing";
-import type { Live } from "./shader-chunks";
-import { sceneMaterial } from "./three-utils";
+import { clockMinutes, sceneNight } from "./scene-environment";
+import { markThinCaster, sceneMaterial } from "./three-utils";
 
 /**
  * Street furniture (`pipeline/bake/furniture.py`: OSM benches, picnic
@@ -84,13 +89,16 @@ import { sceneMaterial } from "./three-utils";
  * pillar; an underground one only its small sign plate on a post, drawn
  * 30 % under size so 450 of them do not read as a forest of signs), the
  * clock (a double face on a post, or a disc on its facade) whose hands
- * show the scene's time, the drinking fountain and the bus stop's "H".
+ * show the scene's time, the drinking fountain and the bus stop's "H";
+ * later the flagpole, its cloth flying in the wind (flag-cloth.ts), seen
+ * from further than a bench (`FLAG_IN_M`).
  *
  * Built per fine terrain tile by the dressing plugin (tile-stream.ts), in
- * the Y-up frame, stood on that tile's ground. The four materials (matte,
- * glowing, the flush slab's, the hands') carry nothing of a tile — the
- * clock and the dusk are module uniforms — so every tile wears the same
- * ones (`sceneMaterial`). Non-fatal: missing or empty input yields an
+ * the Y-up frame, stood on that tile's ground. The five materials (matte,
+ * glowing, the flush slab's, the hands', the cloth's) carry nothing of a
+ * tile — the clock, the wind and the dusk are module uniforms — so every
+ * tile wears the same ones (`sceneMaterial`); the cloths are one geometry
+ * per tile and design, freed with the tile (`tileCloths`). Non-fatal: missing or empty input yields an
  * empty group.
  */
 
@@ -165,7 +173,7 @@ function tinted(source: BufferGeometry, hex: number): BufferGeometry {
   const c = new Color(hex);
   const n = geo.getAttribute("position").count;
   const rgb = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < n; i += 1) {
     rgb.set([c.r, c.g, c.b], i * 3);
   }
   geo.setAttribute("color", new Float32BufferAttribute(rgb, 3));
@@ -382,13 +390,13 @@ function seesaw(): BufferGeometry[] {
 
 /** A flat disc with a rounded rim. */
 function roundabout(): BufferGeometry[] {
-  const disc = new CylinderGeometry(1, 1, 0.12, 24);
-  disc.translate(0, 0.28, 0);
+  const slab = new CylinderGeometry(1, 1, 0.12, 24);
+  slab.translate(0, 0.28, 0);
   const rim = new TorusGeometry(1, 0.06, 6, 24);
   rim.rotateX(Math.PI / 2);
   rim.translate(0, 0.34, 0);
   return [
-    tinted(disc, DUSK_BLUE),
+    tinted(slab, DUSK_BLUE),
     tinted(rim, DUSK_BLUE),
     pillar(0.12, 0.28, [0, 0], DUSK_BLUE),
   ];
@@ -587,6 +595,12 @@ function wallClock(): BufferGeometry[] {
   ];
 }
 
+/** A flagpole: a slim mast, stretched to its height (the ball on top and
+ *  the cloth are flag-cloth.ts's, which do not stretch). */
+function flagpole(): BufferGeometry[] {
+  return [pillar(0.05, FLAG_HEIGHT, [0, 0], SLATE)];
+}
+
 /** A drinking fountain: a slim bronze column with a small basin in front. */
 function drinkingWater(): BufferGeometry[] {
   const basin = new SphereGeometry(
@@ -601,7 +615,7 @@ function drinkingWater(): BufferGeometry[] {
   basin.translate(0, 0.82, 0.16);
   return [
     block([0.34, 0.08, 0.34], [0, 0.04, 0], STONE, 0.02),
-    pillar(0.09, 1.0, [0, 0], BRONZE),
+    pillar(0.09, 1, [0, 0], BRONZE),
     tinted(basin, BRONZE),
   ];
 }
@@ -653,36 +667,17 @@ const MODEL_PARTS: Record<FurnitureModel, () => BufferGeometry[]> = {
   hydrantSign,
   clock: poleClock,
   wallClock,
+  flag: flagpole,
   water: drinkingWater,
   stop: stopSign,
 };
 
 /*
- * The shared clock and dusk: uniform nodes every tile's furniture reads
- * (set from create-app's setSun), like the fountains'.
+ * The clocks' hands show the scene's time and the lit advertising columns
+ * glow with the lamps: both read the scene environment's shared nodes
+ * (`clockMinutes`, on the minute only — the hands cast no shadow, so the
+ * shadow map is untouched — and `sceneNight`).
  */
-const furnitureNight: Live = uniform(0);
-/** minutes past 12 o'clock, 0–720 */
-const clockMinutes: Live = uniform(0);
-
-/** 0 by day → 1 at night: the lit advertising columns glow with the lamps. */
-export function setFurnitureNight(t: number): void {
-  furnitureNight.value = Math.min(Math.max(t, 0), 1);
-}
-
-/**
- * The clocks' hands show the scene's time — on the minute only (a uniform,
- * no re-upload; the hands cast no shadow, so the shadow map is untouched).
- * Returns whether the hands moved.
- */
-export function setClockTime(date: Date): boolean {
-  const minutes = (date.getHours() % 12) * 60 + date.getMinutes();
-  if (clockMinutes.value === minutes) {
-    return false;
-  }
-  clockMinutes.value = minutes;
-  return true;
-}
 
 /** Hands per face: (pivot z, side ±1) — a pole clock has two faces. */
 const CLOCK_FACES: Record<"clock" | "wallClock", [number, number][]> = {
@@ -770,7 +765,7 @@ function clockHands(model: "clock" | "wallClock", stood: Stood[]): Instances {
   const q = new Quaternion();
   const one = new Vector3(1, 1, 1);
   const up = new Vector3(0, 1, 0);
-  for (let i = 0; i < stood.length; i++) {
+  for (let i = 0; i < stood.length; i += 1) {
     q.setFromAxisAngle(up, stood[i].piece.yaw);
     mesh.setMatrixAt(i, m.compose(stood[i].at, q, one));
   }
@@ -780,6 +775,33 @@ function clockHands(model: "clock" | "wallClock", stood: Stood[]): Instances {
   mesh.receiveShadow = false;
   mesh.name = `furniture-${model}-hands`;
   return mesh;
+}
+
+/** One cell's flag cloths, one set per design, each showing and hiding
+ *  with the cell's masts (the cell's box, not its design's). */
+function flagsOf(cell: Stood[], cloths: TileCloths): Instances[] {
+  const byDesign = new Map<NonNullable<FurniturePiece["design"]>, Stood[]>();
+  for (const s of cell) {
+    const design = s.piece.design ?? "plain";
+    const list = byDesign.get(design) ?? [];
+    list.push(s);
+    byDesign.set(design, list);
+  }
+  return [...byDesign].map(([design, masts]) =>
+    asCell(
+      flagCloths(
+        design,
+        masts.map(({ at, piece }) => ({
+          at,
+          yaw: piece.yaw,
+          height: FLAG_HEIGHT * piece.scaleY,
+        })),
+        cloths
+      ),
+      cell,
+      "flag"
+    )
+  );
 }
 
 function modelGeometry(model: FurnitureModel): BufferGeometry | null {
@@ -809,7 +831,7 @@ function instanced(
   const q = new Quaternion();
   const s = new Vector3();
   const up = new Vector3(0, 1, 0);
-  for (let i = 0; i < stood.length; i++) {
+  for (let i = 0; i < stood.length; i += 1) {
     const { at, piece } = stood[i];
     q.setFromAxisAngle(up, piece.yaw);
     s.set(piece.scaleX, piece.scaleY, 1);
@@ -819,10 +841,25 @@ function instanced(
   // Spread-out cloud: recompute the sphere or it culls when the origin is off-screen.
   mesh.computeBoundingSphere();
   mesh.castShadow = true;
+  markThinCaster(mesh, TALL_FURNITURE.has(model) ? "slender" : "tiny");
   mesh.receiveShadow = true;
   mesh.name = `furniture-${model}`;
   return mesh;
 }
+
+/** What stands tall or wide enough for its shadow to read past the finest
+ *  shadow ring (lib/city/shadow-rings.ts). */
+const TALL_FURNITURE: ReadonlySet<FurnitureModel> = new Set<FurnitureModel>([
+  "climb",
+  "clock",
+  "column",
+  "columnLit",
+  "flag",
+  "pedSignal",
+  "playhouse",
+  "post",
+  "shelter",
+]);
 
 /** Non-indexed triangles with per-vertex normal and colour. */
 interface Tris {
@@ -869,10 +906,12 @@ function addSlab(
       pushVertex(t, p, up, color);
     }
   }
-  const centre = top
-    .reduce((sum, p) => sum.add(p), new Vector3())
-    .divideScalar(top.length);
-  for (let i = 0; i < top.length; i++) {
+  const sum = new Vector3();
+  for (const p of top) {
+    sum.add(p);
+  }
+  const centre = sum.divideScalar(top.length);
+  for (let i = 0; i < top.length; i += 1) {
     const p = top[i];
     const q = top[(i + 1) % top.length];
     const n = new Vector3(q.z - p.z, 0, p.x - q.x).normalize();
@@ -883,9 +922,9 @@ function addSlab(
     const pd = p.clone().setY(p.y - PATCH_SKIRT);
     const qd = q.clone().setY(q.y - PATCH_SKIRT);
     // (p, pd, q) faces n when (pd − p) × (q − p) points along it.
-    const face = pd.clone().sub(p).cross(q.clone().sub(p));
+    const winding = pd.clone().sub(p).cross(q.clone().sub(p));
     const quad =
-      face.dot(n) > 0 ? [p, pd, q, q, pd, qd] : [p, q, pd, q, qd, pd];
+      winding.dot(n) > 0 ? [p, pd, q, q, pd, qd] : [p, q, pd, q, qd, pd];
     for (const v of quad) {
       pushVertex(t, v, n, color);
     }
@@ -955,7 +994,7 @@ function matteMaterial(): MeshStandardNodeMaterial {
 function glowMaterial(): MeshStandardNodeMaterial {
   const material = matteMaterial();
   material.emissiveNode = materialEmissive.add(
-    diffuseColor.rgb.mul(furnitureNight).mul(0.55)
+    diffuseColor.rgb.mul(sceneNight).mul(0.55)
   );
   return material;
 }
@@ -997,6 +1036,20 @@ export const FURNITURE_CELL_M = 500;
  */
 export const FURNITURE_IN_M = 350;
 export const FURNITURE_OUT_M = 400;
+/**
+ * The same band for flagpoles: a 3–30 m mast and its 2 m cloth against
+ * the sky still read where a bench is gone, so they come and go further
+ * out (348 masts in four of the seven cities: their draw is nothing).
+ */
+export const FLAG_IN_M = 800;
+export const FLAG_OUT_M = 900;
+/** What a cell's band is: [in, out] (m). */
+type Reach = readonly [number, number];
+const FURNITURE_REACH: Reach = [FURNITURE_IN_M, FURNITURE_OUT_M];
+/** The models that show from further than FURNITURE_IN_M, and their band. */
+const FURTHER_REACH: Partial<Record<FurnitureModel, Reach>> = {
+  flag: [FLAG_IN_M, FLAG_OUT_M],
+};
 
 /** The pieces of each cell (by their site coordinates). */
 function byCell(stood: Stood[]): Stood[][] {
@@ -1011,13 +1064,23 @@ function byCell(stood: Stood[]): Stood[][] {
 }
 
 /** Marks a set as a cell's, with the box its pieces stand in (scene frame,
- *  a few metres for the pieces' own size). */
-function asCell(mesh: Instances, stood: Stood[]): Instances {
+ *  a few metres for the pieces' own size) and the band it shows in (a
+ *  flag's, `FLAG_IN_M`, else `FURNITURE_IN_M`). */
+function asCell(
+  mesh: Instances,
+  stood: Stood[],
+  model?: FurnitureModel
+): Instances {
   const box = new Box3();
   for (const s of stood) {
     box.expandByPoint(s.at);
   }
   mesh.userData.furnitureCell = box.expandByScalar(3);
+  // the model whose cell it is (its cloths and hands go with it)
+  const reach = model && FURTHER_REACH[model];
+  if (reach) {
+    mesh.userData.furnitureReach = reach;
+  }
   return mesh;
 }
 
@@ -1027,13 +1090,16 @@ const cellBox = new Box3();
  * stops' signs) whose pieces are near `eye` (the scene frame), hides the
  * far ones; none hidden without an eye (Modell: its views and exports
  * draw the whole picture at one scale). True when any changed (the shadow
- * map must then be redrawn).
+ * map must then be redrawn); `changed`, when given, hears the world box of
+ * every cell that did (borrowed: read it at once) — only the rings that
+ * can hold it need a redraw, each cell's own.
  */
 export function showFurnitureNear(
   root: Object3D,
-  eye: Vector3 | null
+  eye: Vector3 | null,
+  changed?: (box: Readonly<Box3>) => void
 ): boolean {
-  let changed = false;
+  let any = false;
   root.traverse((child) => {
     const box = child.userData.furnitureCell as Box3 | undefined;
     if (!box) {
@@ -1042,15 +1108,23 @@ export function showFurnitureNear(
     let near = true;
     if (eye) {
       cellBox.copy(box).applyMatrix4(child.matrixWorld);
-      const reach = child.visible ? FURNITURE_OUT_M : FURNITURE_IN_M;
+      const [into, out] =
+        (child.userData.furnitureReach as Reach | undefined) ?? FURNITURE_REACH;
+      const reach = child.visible ? out : into;
       near = cellBox.distanceToPoint(eye) <= reach;
     }
     if (near !== child.visible) {
       child.visible = near;
-      changed = true;
+      any = true;
+      if (changed) {
+        // without an eye the box was not placed yet
+        changed(
+          eye ? cellBox : cellBox.copy(box).applyMatrix4(child.matrixWorld)
+        );
+      }
     }
   });
-  return changed;
+  return any;
 }
 
 /** One tile's street furniture as instanced models on its ground. */
@@ -1076,7 +1150,8 @@ export function* furnitureSteps(
   const byModel = new Map<FurnitureModel, Stood[]>();
   let n = 0;
   for (const piece of furniturePieces(features)) {
-    if (++n % PIECE_RUN === 0) {
+    n += 1;
+    if (n % PIECE_RUN === 0) {
       yield;
     }
     // on a bridge, its deck's top: the ground there is the river or the road
@@ -1094,19 +1169,27 @@ export function* furnitureSteps(
   if (byModel.size === 0 && areas.length === 0) {
     return group;
   }
+  const cloths = tileCloths();
   for (const model of FURNITURE_MODELS) {
     const stood = byModel.get(model);
     const geo = stood ? modelGeometry(model) : null;
-    for (const cell of stood && geo ? byCell(stood) : []) {
-      const mesh = instanced(
-        model,
-        geo as BufferGeometry,
-        cell,
-        model === "columnLit" ? materials.glow() : materials.matte()
-      );
-      group.add(asCell(mesh, cell));
-      if (model === "clock" || model === "wallClock") {
-        group.add(asCell(clockHands(model, cell), cell));
+    if (stood && geo) {
+      for (const cell of byCell(stood)) {
+        const mesh = instanced(
+          model,
+          geo,
+          cell,
+          model === "columnLit" ? materials.glow() : materials.matte()
+        );
+        group.add(asCell(mesh, cell, model));
+        if (model === "clock" || model === "wallClock") {
+          group.add(asCell(clockHands(model, cell), cell, model));
+        }
+        if (model === "flag") {
+          for (const flags of flagsOf(cell, cloths)) {
+            group.add(flags);
+          }
+        }
       }
     }
     yield;

@@ -1,5 +1,7 @@
-import { DoubleSide, type Mesh } from "three/webgpu";
-import { type GroundLight, groundLitMaterial } from "./sky-light";
+import { DoubleSide } from "three/webgpu";
+import type { Mesh } from "three/webgpu";
+import { groundLitMaterial } from "./sky-light";
+import type { GroundLight } from "./sky-light";
 
 /**
  * Flights of steps from OSM (`pipeline/bake/stairs.py`), baked with the

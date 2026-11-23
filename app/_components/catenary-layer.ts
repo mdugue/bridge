@@ -4,22 +4,22 @@ import {
   crossSections,
   MAST_HEAD_M,
   MAST_OFFSET_M,
-  type MastPlan,
   messengerDrop,
   OVERPASS_CLEAR_M,
-  type SectionMember,
   sectionPlan,
   staggerAt,
   staggerSides,
-  type Support,
   supportStations,
   SYSTEM_HEIGHT_M,
   underBridge,
   wireStations,
 } from "@/lib/city/catenary";
+import type { MastPlan, SectionMember, Support } from "@/lib/city/catenary";
 import type { GroundContext } from "@/lib/city/ground-clamp";
-import { type Mesh3, type P3, type Pt, quad } from "./mesh-kit";
-import { addWire, wireMesh, wires, type Wires } from "./wire-ribbons";
+import { quad } from "./mesh-kit";
+import type { Mesh3, P3, Pt } from "./mesh-kit";
+import { addWire, wireMesh, wires } from "./wire-ribbons";
+import type { Wires } from "./wire-ribbons";
 
 /**
  * The main lines' overhead contact line (lib/city/catenary.ts), over the
@@ -82,7 +82,7 @@ function pointAt(run: CatenaryRun, s: number) {
   const { d, pts } = run;
   let i = 1;
   while (i < d.length - 1 && d[i] < s) {
-    i++;
+    i += 1;
   }
   const a = pts[i - 1];
   const b = pts[i];
@@ -223,17 +223,20 @@ function addPortal(
   const feet = masts.map((m, k) =>
     footAt(ctx, group[k === 0 ? 0 : group.length - 1].deck, m.x, m.z)
   );
-  if (feet[0] === null || feet[1] === null) {
+  const [foot0, foot1] = feet;
+  if (typeof foot0 !== "number" || typeof foot1 !== "number") {
     return;
   }
-  masts.forEach((m, k) =>
+  for (let k = 0; k < masts.length; k += 1) {
+    const m = masts[k];
+    const foot = k === 0 ? foot0 : foot1;
     addBeam(
       out.steel,
-      [m.x, (feet[k] as number) - MAST_SINK, m.z],
+      [m.x, foot - MAST_SINK, m.z],
       [m.x, beam + BEAM_HALF, m.z],
       MAST_HALF
-    )
-  );
+    );
+  }
   addBeam(
     out.steel,
     [masts[0].x, beam, masts[0].z],
@@ -289,7 +292,7 @@ function addRunWires(
     contact.push({ x: p.x - p.tz * o, y: h.contact, z: p.z + p.tx * o });
     messenger.push({ x: p.x, y: h.messenger, z: p.z });
   }
-  for (let i = 1; i < ss.length; i++) {
+  for (let i = 1; i < ss.length; i += 1) {
     const a = contact[i - 1];
     const b = contact[i];
     if (!owned(ctx, (a.x + b.x) / 2, (a.z + b.z) / 2)) {
@@ -330,7 +333,8 @@ export function addCatenary(
     const found = supportStations(run.pts, run.d, mapped).filter(
       (sp) => sp.key === null || !nearOverpass(run, sp.d)
     );
-    found.forEach((sp, support) => {
+    for (let support = 0; support < found.length; support += 1) {
+      const sp = found[support];
       const p = pointAt(run, sp.d);
       const member = {
         deck: p.deck,
@@ -360,7 +364,7 @@ export function addCatenary(
           },
           member
         );
-        return;
+        continue;
       }
       const line = byLine.get(sp.key);
       if (line) {
@@ -368,7 +372,7 @@ export function addCatenary(
       } else {
         byLine.set(sp.key, [member]);
       }
-    });
+    }
     return found;
   });
   for (const [key, members] of byLine) {
@@ -389,7 +393,10 @@ export function addCatenary(
       }
     }
   }
-  runs.forEach((run, k) => addRunWires(out, ctx, run, supports[k]));
+  for (let k = 0; k < runs.length; k += 1) {
+    const run = runs[k];
+    addRunWires(out, ctx, run, supports[k]);
+  }
 }
 
 /** The catenary's meshes: the wires (null when none) and the steel in

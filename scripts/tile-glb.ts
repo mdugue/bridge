@@ -1,7 +1,9 @@
 /**
  * Writes the glTF binaries the viewer streams (lib/city/tileset.ts): one
  * terrain mesh per tile and level, one building mesh per tile. Standard glTF
- * 2.0 with EXT_meshopt_compression, so any glTF tool can open them, and the
+ * 2.0 with KHR_meshopt_compression (khr-meshopt.ts: gltf-transform writes
+ * EXT, the last step renames it and packs the attributes in meshopt's v1
+ * codec), so any glTF tool that reads KHR can open them, and the
  * buildings carry their per-object style table the standard way —
  * EXT_mesh_features (a feature id per vertex) pointing into an
  * EXT_structural_metadata property table.
@@ -13,29 +15,28 @@
  * so shaders derive data-frame coordinates from world space, never from
  * `position`. Build-time only; no DOM.
  */
-import {
-  Document,
-  getBounds,
-  Logger,
-  NodeIO,
-  type Primitive,
-} from "@gltf-transform/core";
+import { Document, getBounds, Logger, NodeIO } from "@gltf-transform/core";
+import type { Primitive } from "@gltf-transform/core";
 import {
   EXTMeshoptCompression,
   KHRMeshQuantization,
 } from "@gltf-transform/extensions";
 import {
+  compactPrimitive,
   dequantize,
   quantize,
   reorder,
   simplify,
-  weld,
 } from "@gltf-transform/functions";
 import {
   MeshoptDecoder,
   MeshoptEncoder,
   MeshoptSimplifier,
 } from "meshoptimizer";
+import { packed, welded } from "../lib/city/weld";
+import { ownBuffer, pad, readGlb, writeGlb } from "./glb-container";
+import { weldExact } from "./glb-weld";
+import { toExtMeshopt, toKhrMeshopt } from "./khr-meshopt";
 
 /**
  * A property table column: one value (SCALAR), tuple (VEC3), string
@@ -85,6 +86,10 @@ export interface MeshInput {
   name: string;
   /** vertex normals; bake them, the runtime never recomputes */
   normals: Float32Array;
+  /** the writer may turn `positions` and `normals` to glTF's frame where
+   *  they lie: the caller reads neither again (a dense tile's buildings,
+   *  a quarter gigabyte the copies would hold beside them) */
+  owned?: boolean;
   positions: Float32Array;
   /** per-feature table; requires a `_FEATURE_ID_0` attribute */
   table?: PropertyTable;
@@ -116,8 +121,10 @@ const PUT_BACK = new Set(["EXT_mesh_features", "EXT_structural_metadata"]);
  *  warning that it drops the extensions `simplifyGlb` puts back. */
 class BakeLogger extends Logger {
   override warn(text: string): void {
-    const missing = /^Missing optional extension, "(.+)"\.$/u.exec(text);
-    if (!missing || !PUT_BACK.has(missing[1])) {
+    const missing = /^Missing optional extension, "(?<extension>.+)"\.$/u.exec(
+      text
+    );
+    if (!missing || !PUT_BACK.has(missing.groups?.extension ?? "")) {
       super.warn(text);
     }
   }
@@ -136,12 +143,15 @@ async function io(): Promise<NodeIO> {
 }
 
 /** Data frame (Z-up) → glTF (Y-up): (x, y, z) → (x, z, −y). */
-function toYUp(xyz: Float32Array): Float32Array<ArrayBuffer> {
-  const out = new Float32Array(xyz.length);
+function toYUp(xyz: Float32Array, inPlace = false): Float32Array<ArrayBuffer> {
+  const out = inPlace
+    ? (xyz as Float32Array<ArrayBuffer>)
+    : new Float32Array(xyz.length);
   for (let i = 0; i < xyz.length; i += 3) {
+    const y = xyz[i + 1];
     out[i] = xyz[i];
     out[i + 1] = xyz[i + 2];
-    out[i + 2] = -xyz[i + 1];
+    out[i + 2] = -y;
   }
   return out;
 }
@@ -151,17 +161,23 @@ function addPrimitive(
   input: Omit<MeshInput, "children" | "extras">
 ): Primitive {
   const buffer = doc.getRoot().listBuffers()[0] ?? doc.createBuffer();
-  type Array =
+  type Values =
     | Float32Array<ArrayBuffer>
     | Uint8Array<ArrayBuffer>
     | Uint16Array<ArrayBuffer>
     | Uint32Array<ArrayBuffer>;
-  const accessor = (array: Array, type: "SCALAR" | "VEC2" | "VEC3") =>
+  const accessor = (array: Values, type: "SCALAR" | "VEC2" | "VEC3") =>
     doc.createAccessor().setArray(array).setType(type).setBuffer(buffer);
   const prim = doc
     .createPrimitive()
-    .setAttribute("POSITION", accessor(toYUp(input.positions), "VEC3"))
-    .setAttribute("NORMAL", accessor(toYUp(input.normals), "VEC3"));
+    .setAttribute(
+      "POSITION",
+      accessor(toYUp(input.positions, input.owned), "VEC3")
+    )
+    .setAttribute(
+      "NORMAL",
+      accessor(toYUp(input.normals, input.owned), "VEC3")
+    );
   if (input.colors) {
     prim.setAttribute("COLOR_0", accessor(input.colors, "VEC3"));
   }
@@ -188,11 +204,49 @@ function addPrimitive(
   return prim;
 }
 
+type ChildInput = NonNullable<MeshInput["children"]>[number];
+
+/**
+ * A child given as a triangle soup, indexed: vertices whose position,
+ * normal, colour and texture coordinate are bit for bit the same become
+ * one. A quad's two triangles share two corners and a ribbon's quads their
+ * ends, so a tile's kerbs, stairs and walls draw the same picture from
+ * about a third of the vertices. Not for a child with custom attributes.
+ */
+export function indexed(child: ChildInput): ChildInput {
+  // (a column this does not compare would merge vertices that differ in
+  // it and stay at the soup's length beside the welded ones)
+  if (child.attributes || child.vectors) {
+    throw new Error(
+      `indexed: the child "${child.name}" carries custom attributes; give it indices`
+    );
+  }
+  const columns: [Float32Array, number][] = [
+    [child.positions, 3],
+    [child.normals, 3],
+  ];
+  if (child.colors) {
+    columns.push([child.colors, 3]);
+  }
+  if (child.uvs) {
+    columns.push([child.uvs, 2]);
+  }
+  const w = welded(columns, child.positions.length / 3);
+  return {
+    ...child,
+    positions: packed(child.positions, 3, w),
+    normals: packed(child.normals, 3, w),
+    ...(child.colors && { colors: packed(child.colors, 3, w) }),
+    ...(child.uvs && { uvs: packed(child.uvs, 2, w) }),
+    indices: w.indices,
+  };
+}
+
 /** Only positions, normals, colours and texture coordinates are quantised:
  *  the custom attributes are ids and flags that must stay exact (quantize
  *  would squeeze them to 12 bits), the vectors are quantised already. */
 const QUANTIZE = {
-  pattern: /^(POSITION|NORMAL|COLOR_0|TEXCOORD_0)$/,
+  pattern: /^(?:POSITION|NORMAL|COLOR_0|TEXCOORD_0)$/u,
   quantizePosition: 16,
   quantizeNormal: 8,
   quantizeColor: 8,
@@ -218,7 +272,7 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
   for (const child of input.children ?? []) {
     const childMesh = doc
       .createMesh(child.name)
-      .addPrimitive(addPrimitive(doc, child));
+      .addPrimitive(addPrimitive(doc, child.indices ? child : indexed(child)));
     scene.addChild(doc.createNode(child.name).setMesh(childMesh));
   }
   scene.setExtras(input.extras);
@@ -231,11 +285,12 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
     transforms.unshift(reorder({ encoder: MeshoptEncoder }));
   }
   if (input.weld) {
-    transforms.unshift(weld());
+    transforms.unshift(weldExact());
   }
   await doc.transform(...transforms);
-  const glb = await (await io()).writeBinary(doc);
-  return input.table ? addPropertyTable(glb, input.table) : glb;
+  const writer = await io();
+  const glb = await writer.writeBinary(doc);
+  return toKhrMeshopt(input.table ? addPropertyTable(glb, input.table) : glb);
 }
 
 /**
@@ -244,23 +299,35 @@ export async function writeMeshGlb(input: MeshInput): Promise<Uint8Array> {
  * surface more than `error` (m, of a mesh `extent` m across at most); the
  * vertices left keep their attributes as they were, and `table` goes back
  * on as it was (gltf-transform reads no EXT_structural_metadata). It reads
- * the written glb, so the result is that file simplified and nothing else.
+ * the written glb, so the result is that file simplified and nothing else
+ * — but for the objects whose `source` column `drop` names: their
+ * triangles go first (their rows stay, the ids are the near level's).
  */
 export async function simplifyGlb(
   glb: Uint8Array,
   error: number,
-  table?: PropertyTable
+  table?: PropertyTable,
+  drop?: ReadonlySet<number>
 ): Promise<Uint8Array> {
   const nodeIO = await io();
   await MeshoptSimplifier.ready;
-  const doc = (await nodeIO.readBinary(glb)).setLogger(logger);
+  const read = await nodeIO.readBinary(toExtMeshopt(glb));
+  const doc = read.setLogger(logger);
   doc
     .createExtension(EXTMeshoptCompression)
     .setRequired(true)
     .setEncoderOptions({
       method: EXTMeshoptCompression.EncoderMethod.QUANTIZE,
     });
-  await doc.transform(dequantize({ pattern: QUANTIZE.pattern }), weld());
+  await doc.transform(dequantize({ pattern: QUANTIZE.pattern }), weldExact());
+  const source = table?.properties.source;
+  if (drop?.size && source?.type === "SCALAR") {
+    for (const mesh of doc.getRoot().listMeshes()) {
+      for (const prim of mesh.listPrimitives()) {
+        dropObjects(prim, (id) => drop.has(source.values[id]));
+      }
+    }
+  }
   // meshopt's error is a share of the mesh's own extent: the scene's
   // bounds in metres, the node's scale included
   const { min, max } = getBounds(doc.getRoot().listScenes()[0]);
@@ -275,23 +342,44 @@ export async function simplifyGlb(
     quantize(QUANTIZE)
   );
   const out = await nodeIO.writeBinary(doc);
-  return table ? addPropertyTable(out, table) : out;
+  return toKhrMeshopt(table ? addPropertyTable(out, table) : out);
+}
+
+/** `prim` without the triangles of the objects `gone` names (by their
+ *  `_FEATURE_ID_0`), its vertices compacted to those left. */
+function dropObjects(prim: Primitive, gone: (id: number) => boolean): void {
+  const ids = prim.getAttribute("_FEATURE_ID_0");
+  const index = prim.getIndices();
+  const order = index?.getArray();
+  if (!(ids && index && order)) {
+    return;
+  }
+  const kept: number[] = [];
+  for (let t = 0; t + 2 < order.length; t += 3) {
+    if (!gone(ids.getScalar(order[t]))) {
+      kept.push(order[t], order[t + 1], order[t + 2]);
+    }
+  }
+  if (kept.length === order.length) {
+    return;
+  }
+  index.setArray(Uint32Array.from(kept));
+  compactPrimitive(prim);
 }
 
 // --- EXT_structural_metadata (gltf-transform has no writer for it) ----------
 
-const JSON_CHUNK = 0x4e_4f_53_4a;
-const BIN_CHUNK = 0x00_4e_49_42;
-
 interface GltfJson {
   bufferViews?: { buffer: number; byteLength: number; byteOffset?: number }[];
-  buffers?: { byteLength: number; extensions?: object; uri?: string }[];
+  buffers?: {
+    byteLength: number;
+    extensions?: Record<string, unknown>;
+    uri?: string;
+  }[];
   extensions?: Record<string, unknown>;
   extensionsUsed?: string[];
   meshes?: { primitives: { extensions?: Record<string, unknown> }[] }[];
 }
-
-const pad = (n: number, to: number) => Math.ceil(n / to) * to;
 
 /** The enum name that stands for "no code" (the property's `noData`). */
 export const ENUM_NONE = "NONE";
@@ -347,11 +435,15 @@ export function stringColumn(values: readonly string[]): {
   const encoder = new TextEncoder();
   const encoded = values.map((v) => encoder.encode(v));
   const offsets = new Uint32Array(values.length + 1);
-  encoded.forEach((e, i) => {
+  for (let i = 0; i < encoded.length; i += 1) {
+    const e = encoded[i];
     offsets[i + 1] = offsets[i] + e.length;
-  });
+  }
   const bytes = new Uint8Array(offsets[values.length]);
-  encoded.forEach((e, i) => bytes.set(e, offsets[i]));
+  for (let i = 0; i < encoded.length; i += 1) {
+    const e = encoded[i];
+    bytes.set(e, offsets[i]);
+  }
   return { bytes, offsets };
 }
 
@@ -365,30 +457,14 @@ export function addPropertyTable(
   glb: Uint8Array,
   table: PropertyTable
 ): Uint8Array {
-  const view = new DataView(glb.buffer, glb.byteOffset, glb.byteLength);
-  const jsonLength = view.getUint32(12, true);
-  if (view.getUint32(16, true) !== JSON_CHUNK) {
-    throw new Error("glb: first chunk is not JSON");
-  }
-  const json = JSON.parse(
-    new TextDecoder().decode(glb.subarray(20, 20 + jsonLength))
-  ) as GltfJson;
-  const binAt = 20 + jsonLength;
-  const binLength = view.getUint32(binAt, true);
-  if (view.getUint32(binAt + 4, true) !== BIN_CHUNK) {
-    throw new Error("glb: second chunk is not BIN");
-  }
-  const bin = glb.subarray(binAt + 8, binAt + 8 + binLength);
-  // The glb's own buffer: the one without a uri that is not a meshopt fallback.
-  const bufferIndex = (json.buffers ?? []).findIndex(
-    (b) => b.uri === undefined && b.extensions === undefined
-  );
+  const { json, bin } = readGlb<GltfJson>(glb);
+  const bufferIndex = ownBuffer(json);
   if (bufferIndex === -1) {
     throw new Error("glb: no embedded buffer");
   }
 
   const chunks: Uint8Array[] = [bin];
-  let length = bin.length;
+  let { length } = bin;
   const bufferViews = json.bufferViews ?? [];
   const properties: Record<string, TableProperty> = {};
   const schema: Record<string, SchemaProperty> = {};
@@ -429,7 +505,7 @@ export function addPropertyTable(
       schema[name] = { type: "STRING" };
       continue;
     }
-    const values = column.values;
+    const { values } = column;
     properties[name] = {
       values: append(
         new Uint8Array(values.buffer, values.byteOffset, values.byteLength)
@@ -480,24 +556,5 @@ export function addPropertyTable(
     ]),
   ];
 
-  const jsonBytes = new TextEncoder().encode(JSON.stringify(json));
-  const jsonPadded = pad(jsonBytes.length, 4);
-  const out = new Uint8Array(12 + 8 + jsonPadded + 8 + total);
-  const o = new DataView(out.buffer);
-  o.setUint32(0, 0x46_54_6c_67, true); // "glTF"
-  o.setUint32(4, 2, true);
-  o.setUint32(8, out.length, true);
-  o.setUint32(12, jsonPadded, true);
-  o.setUint32(16, JSON_CHUNK, true);
-  out.set(jsonBytes, 20);
-  out.fill(0x20, 20 + jsonBytes.length, 20 + jsonPadded);
-  const binStart = 20 + jsonPadded;
-  o.setUint32(binStart, total, true);
-  o.setUint32(binStart + 4, BIN_CHUNK, true);
-  let at = binStart + 8;
-  for (const chunk of chunks) {
-    out.set(chunk, at);
-    at += chunk.length;
-  }
-  return out;
+  return writeGlb(json, chunks);
 }

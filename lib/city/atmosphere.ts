@@ -46,7 +46,7 @@ function channel(hex: string, i: number): number {
 export function lerpHexColor(a: string, b: string, t: number): string {
   const k = Math.min(Math.max(t, 0), 1);
   let out = "#";
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 3; i += 1) {
     const v = Math.round(channel(a, i) + (channel(b, i) - channel(a, i)) * k);
     out += v.toString(16).padStart(2, "0");
   }
@@ -63,7 +63,7 @@ export function atmosphereAt(altitudeDeg: number): AtmospherePalette {
       hemiGround: first.hemiGround,
     };
   }
-  for (let i = 1; i < STOPS.length; i++) {
+  for (let i = 1; i < STOPS.length; i += 1) {
     const hi = STOPS[i];
     if (altitudeDeg <= hi.alt) {
       const lo = STOPS[i - 1];
@@ -75,7 +75,10 @@ export function atmosphereAt(altitudeDeg: number): AtmospherePalette {
       };
     }
   }
-  const last = STOPS.at(-1) as Stop;
+  const last = STOPS.at(-1);
+  if (!last) {
+    throw new Error("no atmosphere stops");
+  }
   return { fog: last.fog, hemiSky: last.hemiSky, hemiGround: last.hemiGround };
 }
 

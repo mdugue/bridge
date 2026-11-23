@@ -12,6 +12,9 @@
  * of the day before that run past midnight are still on their way.
  */
 import type { Point2 } from "./polyline";
+import type { TramPattern, TramTimetableFile } from "./tram-timetable-file";
+
+export type { TramPattern } from "./tram-timetable-file";
 
 /** The committed timetable (pipeline/bake/transit.py), and the name
  *  scripts/prepare-data.ts publishes it under (before hashing). */
@@ -107,24 +110,25 @@ export const TRAM_LIVERIES: Record<TramOperator, TramLivery> = {
  *  the transport association for some (Dresden's trams come as the
  *  Verkehrsverbund Oberelbe's: within the VVO only the DVB runs city
  *  trams; Munich's as Stadtwerke München's, the MVG's parent). */
-export function operatorOf(agency: string | undefined): TramOperator {
-  const a = agency ?? "";
+export function operatorOf(agency = ""): TramOperator {
   if (
-    /Dresdner Verkehrsbetriebe|\bDVB\b|Verkehrsverbund Oberelbe|\bVVO\b/i.test(
-      a
+    /Dresdner Verkehrsbetriebe|\bDVB\b|Verkehrsverbund Oberelbe|\bVVO\b/iu.test(
+      agency
     )
   ) {
     return "dvb";
   }
-  if (/Leipziger Verkehrsbetriebe|\bLVB\b/i.test(a)) {
+  if (/Leipziger Verkehrsbetriebe|\bLVB\b/iu.test(agency)) {
     return "lvb";
   }
   if (
-    /Stadtwerke München|Münchner Verkehrsgesellschaft|\bMVG\b|\bSWM\b/i.test(a)
+    /Stadtwerke München|Münchner Verkehrsgesellschaft|\bMVG\b|\bSWM\b/iu.test(
+      agency
+    )
   ) {
     return "mvg";
   }
-  if (/Berliner Verkehrsbetriebe|\bBVG\b/i.test(a)) {
+  if (/Berliner Verkehrsbetriebe|\bBVG\b/iu.test(agency)) {
     return "bvg";
   }
   return "neutral";
@@ -150,37 +154,14 @@ export function carLength(livery: TramLivery, seed: number): number {
     }
     at -= w;
   }
-  return livery.lengths[livery.lengths.length - 1]?.[0] ?? 30;
+  return livery.lengths.at(-1)?.[0] ?? 30;
 }
 
 export type TramDayKind = "saturday" | "sunday" | "weekday";
 
-export interface TramPattern {
-  /** the distance along `coords` of each stop (m) */
-  at: number[];
-  /** [from, to] vertex ranges on a bridge deck */
-  bridge: [number, number][];
-  /** the path (projected coordinates) */
-  coords: Point2[];
-  /** index into `routes` */
-  route: number;
-}
-
-export interface TramTimetable {
-  /** the operators' names as the feed gives them (GTFS `agency_name`) */
-  agencies?: string[];
-  attribution?: string;
-  days: Partial<
-    Record<TramDayKind, { date: string; trips: [number, number][] }>
-  >;
-  patterns: TramPattern[];
-  /** the running times of a pattern: arrival, departure per stop, seconds
-   *  after the trip's start */
-  profiles: { pattern: number; t: number[] }[];
-  /** per line, the index into `agencies` of who runs it */
-  routeAgency?: number[];
-  routes: string[];
-}
+/** The timetable as the bake writes it (its schema:
+ *  lib/city/tram-timetable-file.ts, ADR 0059). */
+export type TramTimetable = TramTimetableFile;
 
 export const DAY_SECONDS = 86_400;
 
@@ -212,14 +193,14 @@ export interface MeasuredPattern extends TramPattern {
 
 export function measurePattern(p: TramPattern): MeasuredPattern {
   const dist = [0];
-  for (let i = 1; i < p.coords.length; i++) {
+  for (let i = 1; i < p.coords.length; i += 1) {
     const [ax, ay] = p.coords[i - 1];
     const [bx, by] = p.coords[i];
     dist.push(dist[i - 1] + Math.hypot(bx - ax, by - ay));
   }
   const onBridge = p.coords.map(() => false);
   for (const [from, to] of p.bridge) {
-    for (let i = from; i < to && i < onBridge.length; i++) {
+    for (let i = from; i < to && i < onBridge.length; i += 1) {
       onBridge[i] = true;
     }
   }
@@ -283,7 +264,7 @@ export function headAlong(
   if (elapsed < t[0] || elapsed > t[2 * stops - 1]) {
     return null;
   }
-  for (let i = 0; i < stops; i++) {
+  for (let i = 0; i < stops; i += 1) {
     const arr = t[2 * i];
     const dep = t[2 * i + 1];
     if (elapsed <= dep) {

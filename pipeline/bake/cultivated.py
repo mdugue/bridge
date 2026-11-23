@@ -70,6 +70,7 @@ from scipy import ndimage as ndi
 from skimage.feature import peak_local_max
 
 from .canopy import built_mask
+from .classes import RAILWAY, ROAD, WATER
 from .common import (
     OSM_ATTRIBUTION,
     Tile,
@@ -159,7 +160,7 @@ ORCHARD_CLEAR_M = ORCHARD_SPACING_M / 2
 MEASURED_TREES = ("canopy", "canopyx", "trees")
 PARCEL_MIN_SHARE = 0.5  # a garden is a colony's parcel when half of it lies inside
 PATH_HALF_WIDTH = {"footway": 1.0, "path": 1.0, "service": 2.5, "track": 1.5, "steps": 1.0}
-NO_BEDS = (5, 7, 8)  # rail, road, water
+NO_BEDS = (RAILWAY, ROAD, WATER)
 EDGE_SCALE = 20.0
 PARCEL_SEAM_M = 0.25  # half the seam carved along a mapped parcel's border
 AXIS_REACH_M = 8.0  # the axis spreads this far past the garden land's edge

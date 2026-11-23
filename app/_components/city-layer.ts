@@ -1,41 +1,58 @@
 import {
   Box3,
   BufferAttribute,
-  type Camera,
   DataTexture,
   FloatType,
-  type Intersection,
-  type Matrix4,
-  type Mesh,
   NearestFilter,
-  type Ray,
   RGBAFormat,
   Raycaster,
   Vector2,
 } from "three/webgpu";
+import type {
+  Camera,
+  Intersection,
+  Matrix4,
+  Mesh,
+  Object3D,
+  Ray,
+} from "three/webgpu";
 import { buildBvhOffThread, bvhBuilding, bvhLost } from "./bvh-client";
 import { rayEntry } from "./collision";
+import { replayDemolitions } from "./demolitions";
 import { streamTimings } from "./stream-timing";
 import { setPickRay } from "./view-ray";
 import {
-  type CityObjectTable,
   countBuildings as countLiveBuildings,
   shaderFlags,
   doomedObjects,
   liveTriangles,
   OBJECT_TEXEL_BANDS,
   OBJECT_TEXTURE_WIDTH,
+  OBJECT_SOURCE_DORMER,
   objectBandRows,
   packObjectTexels,
 } from "@/lib/city/city-mesh";
-import { type ObjectFacts, readFacts } from "@/lib/city/object-facts";
+import type { CityObjectTable } from "@/lib/city/city-mesh";
+import {
+  appendTriangles,
+  takeTriangles,
+  wholeTrees,
+} from "@/lib/city/hidden-triangles";
+import { readFacts } from "@/lib/city/object-facts";
+import type { ObjectFacts } from "@/lib/city/object-facts";
 import type { StructuralMetadata } from "@/lib/city/property-table";
 import {
   applyFacadeReadings,
-  type FacadeReadings,
+  isFacadeReadings,
 } from "@/lib/city/facade-reading";
-import { textureBytes, trackTexture } from "./three-utils";
-import { createClayMaterial, type StyleResources } from "./visual-style";
+import {
+  paddedPositionBytes,
+  textureBytes,
+  trackedBytesOf,
+  trackTexture,
+} from "./three-utils";
+import { createClayMaterial } from "./visual-style";
+import type { StyleResources } from "./visual-style";
 
 /**
  * One tile's buildings: the streamed glTF mesh (scripts/bake-city-mesh.ts), its
@@ -48,10 +65,18 @@ export interface CityLayer {
   alive: Uint8Array;
   /** drops the object's building tree; true when anything changed */
   demolish: (objectIndex: number) => boolean;
+  /**
+   * The objects a loaded design stands in for (design-layer.ts, ADR
+   * 0054): their triangles leave the index as a demolish's do, and come
+   * back when they leave the set — kept aside meanwhile, not reparsed.
+   * True when anything changed.
+   */
+  setHidden: (objects: ReadonlySet<number>) => boolean;
   dispose: () => void;
   /** what street photos say about the tile's facades, once they land
-   *  (lib/city/facade-reading.ts) */
-  facadeReadings: (readings: FacadeReadings) => void;
+   *  (lib/city/facade-reading.ts): a fetched file, guarded here; one that
+   *  is not what the build checked leaves them as they are drawn */
+  facadeReadings: (readings: unknown) => void;
   /** what the twin knows about one object (read from the table on demand) */
   facts: (objectIndex: number) => ObjectFacts;
   /** whether the tile's BVH is built (`ensureCityBvh`) — not while the
@@ -64,17 +89,42 @@ export interface CityLayer {
   /** builds the tile's BVH in the BVH worker (bvh-client.ts): what the
    *  tiles near the camera get ahead of a ray; settles once it is built */
   prepareBvh: () => Promise<void>;
+  /** the index a demolish or a design's hiding set is on the GPU now (a
+   *  compile of the mesh, create-app.ts): until then the worker may not
+   *  take it — handed over before its upload, its buffer is gone when the
+   *  renderer first copies it. `index`: the one the compile drew (a
+   *  newer one set meanwhile stays fresh) */
+  indexUploaded: (index: BufferAttribute | null) => void;
   /** a demolish the worker's build holds back, settling once it has
    *  reached the index (null: none waits) — the shadows are drawn again then */
-  held: () => Promise<void> | null;
+  readonly held: Promise<void> | null;
   /** marks the objects someone asks about (the clay's pencil hatch); an
    *  empty set clears the mark */
   mark: (objects: ReadonlySet<number>) => void;
+  /** the objects whose windows are real niches now: the clay cuts their
+   *  openings (window-niche-layer.ts); an empty set cuts none */
+  setNiched: (objects: ReadonlySet<number>) => void;
+  /**
+   * Hangs something drawn beside the mesh on a building (a mural,
+   * mural-layer.ts): it is shown while all of the building is — gone with
+   * a demolish of any of its parts, and while a design stands in for one.
+   * `buildingId` is the building's LoD2 id (`buildingId` in the table,
+   * every part's alike); one the tile does not hold is shown always.
+   */
+  hang: (object: Object3D, buildingId: string) => void;
+  /** whether an object is drawn: not demolished, no design standing in
+   *  for it (what stands on its walls goes with it, window-niche-layer.ts) */
+  stands: (objectIndex: number) => boolean;
   mesh: Mesh;
   table: CityObjectTable;
   /** what the table's columns and the texture packed from them keep on the
    *  page's process (bytes): the mark writes into the texture's data */
   tableBytes: number;
+  /** what the tile holds beyond its glTF as the tile cache estimates that
+   *  (tile-stream.ts `calculateBytesUsed`): the table and its texture's
+   *  data on the page, the texture on the GPU, and the two bytes a vertex
+   *  the quantised positions are padded with there (`paddedPositionBytes`) */
+  heldBytes: number;
   tile: string;
 }
 
@@ -169,19 +219,21 @@ function readObjectFacts(
 }
 
 /**
- * Writes the asked flag into the packed table's flags texel (band 2, w):
- * set on `marked`, cleared everywhere else. True when a texel changed.
+ * Writes the runtime flags into the packed table's flags texel (band 2,
+ * w): asked on `marked`, niched on `niched`, cleared everywhere else.
+ * True when a texel changed.
  */
 function markObjects(
   texture: DataTexture,
   table: CityObjectTable,
-  marked: ReadonlySet<number>
+  marked: ReadonlySet<number>,
+  niched: ReadonlySet<number>
 ): boolean {
   const data = texture.image.data as Float32Array;
   const band = OBJECT_TEXTURE_WIDTH * objectBandRows(table.count) * 4;
   let changed = false;
-  for (let i = 0; i < table.count; i++) {
-    const want = shaderFlags(table, i, marked.has(i));
+  for (let i = 0; i < table.count; i += 1) {
+    const want = shaderFlags(table, i, marked.has(i), niched.has(i));
     const at = 2 * band + i * 4 + 3;
     if (data[at] !== want) {
       data[at] = want;
@@ -236,12 +288,25 @@ export function ensureCityBvh(mesh: Mesh): void {
 }
 
 /**
+ * Whether what hangs on a building (CityLayer.hang) shows: while every
+ * object of it stands — none demolished (`alive`), none a design stands in
+ * for (`hidden`). One whose building the tile does not hold (no objects)
+ * always shows.
+ */
+export function hangsShown(
+  objects: readonly number[],
+  alive: Uint8Array,
+  hidden: ReadonlySet<number>
+): boolean {
+  return objects.every((i) => alive[i] === 1 && !hidden.has(i));
+}
+
+/**
  * Dresses a streamed city mesh: the glTF feature id and place on the wall
  * (the windows', a roof vertex flagged in it) under the names the clay
  * shader reads, the tile's clay material; its BVH comes when a ray needs
- * it (`ensureCityBvh`). `demolished` replays this session's demolitions of
- * the tile, `demolishedGroups` those of ensembles across a tile edge (a
- * part demolished while this tile was not loaded).
+ * it (`ensureCityBvh`). `demolished` and `demolishedGroups` are this
+ * session's demolitions it takes back (demolitions.ts).
  */
 export function dressCity(
   mesh: Mesh,
@@ -250,7 +315,7 @@ export function dressCity(
   demolished: ReadonlySet<number>,
   demolishedGroups: ReadonlySet<number> = new Set()
 ): CityLayer {
-  const geometry = mesh.geometry;
+  const { geometry } = mesh;
   const metadata = mesh.userData.structuralMetadata as StructuralMetadata;
   const count = metadata.tableAccessors[0]?.count ?? 0;
   for (const [from, to] of [
@@ -274,6 +339,8 @@ export function dressCity(
   mesh.receiveShadow = true;
 
   const alive = new Uint8Array(count).fill(1);
+  /** an index set here that the GPU may not have yet (`indexUploaded`) */
+  let fresh = false;
   const featureIds = geometry.getAttribute("featureId");
   /** `again`: a BVH there was is built again now (else when a ray or the
    *  worker gets to it) */
@@ -289,6 +356,7 @@ export function dressCity(
         1
       )
     );
+    fresh = true;
     // A BVH is built over its index: a new index needs a new one — now
     // where there was one (a demolish picks through it), else when a ray
     // needs it.
@@ -297,36 +365,91 @@ export function dressCity(
       geometry.computeBoundsTree();
     }
   };
-  let dead = demolished.size;
-  for (const i of demolished) {
-    alive[i] = 0;
-  }
-  if (demolishedGroups.size > 0) {
-    for (let i = 0; i < count; i++) {
-      if (alive[i] === 1 && demolishedGroups.has(table.group[i])) {
-        alive[i] = 0;
-        dead++;
+  /** what a design hides (wanted), what is out of the index now, and
+   *  the triangles kept aside */
+  let hidden: ReadonlySet<number> = new Set();
+  const applied = new Set<number>();
+  const stashed = new Map<number, Uint32Array>();
+  /** brings the index to `hidden`: triangles aside and back; `again` as
+   *  `rebuild`'s */
+  const applyHidden = (again = true) => {
+    const index = geometry.getIndex();
+    const hide = new Set([...hidden].filter((i) => !applied.has(i)));
+    const show = [...applied].filter((i) => !hidden.has(i));
+    if (!index || (hide.size === 0 && show.length === 0)) {
+      return;
+    }
+    const had = again && Boolean(geometry.boundsTree);
+    const { kept, taken } = takeTriangles(index.array, featureIds.array, (i) =>
+      hide.has(i)
+    );
+    for (const [object, list] of taken) {
+      stashed.set(object, list);
+    }
+    for (const object of hide) {
+      applied.add(object);
+    }
+    const back: Uint32Array[] = [];
+    for (const object of show) {
+      applied.delete(object);
+      const list = stashed.get(object);
+      stashed.delete(object);
+      // (an object demolished while hidden stays gone)
+      if (list && alive[object] === 1) {
+        back.push(list);
       }
     }
-  }
-  if (dead > 0) {
+    geometry.setIndex(new BufferAttribute(appendTriangles(kept, back), 1));
+    fresh = true;
+    geometry.disposeBoundsTree();
+    if (had) {
+      geometry.computeBoundsTree();
+    }
+  };
+  if (replayDemolitions(alive, table.group, demolished, demolishedGroups) > 0) {
     rebuild();
   }
 
   /** the worker's build of the BVH, while it runs */
   let prepared: Promise<void> | null = null;
-  /** a demolish waiting for that build to give the index back */
+  /** a demolish or a design's hiding waiting for that build to give the
+   *  index back */
   let held: Promise<void> | null = null;
+  let demolishWaits = false;
   let disposed = false;
+  /** what waited on the worker, once it is done */
+  const settle = () => {
+    if (disposed) {
+      return;
+    }
+    if (demolishWaits) {
+      demolishWaits = false;
+      rebuild(false);
+    }
+    applyHidden(false);
+  };
   // the asked objects, kept for the facade readings' repack
   let marked: ReadonlySet<number> = new Set();
+  // the objects whose windows are niches now (window-niche-layer.ts)
+  let niched: ReadonlySet<number> = new Set();
+  /** what hangs on a building (`hang`): shown while its objects are */
+  const hangers: { at: number[]; object: Object3D }[] = [];
+  const showHangers = () => {
+    for (const { at, object } of hangers) {
+      object.visible = hangsShown(at, alive, hidden);
+    }
+  };
+  const tableBytes =
+    typedBytes(table) + (objects.texture.image.data as Float32Array).byteLength;
   const layer: CityLayer = {
     tile,
     mesh,
     table,
-    tableBytes:
-      typedBytes(table) +
-      (objects.texture.image.data as Float32Array).byteLength,
+    tableBytes,
+    heldBytes:
+      tableBytes +
+      trackedBytesOf(objects.texture) +
+      paddedPositionBytes(geometry),
     alive,
     demolish: (objectIndex) => {
       const doomed = doomedObjects(table.ensemble, objectIndex);
@@ -337,20 +460,41 @@ export function dressCity(
       for (const i of doomed) {
         alive[i] = 0;
       }
+      showHangers();
       // the index is the worker's while it builds the BVH: rebuilt after
       // (unless the tile has left by then), its BVH left to the worker
       // again rather than built here in the frame
       if (prepared) {
-        const after = () => {
-          if (!disposed) {
-            rebuild(false);
-          }
-        };
-        held ??= prepared.then(after, after).finally(() => {
+        demolishWaits = true;
+        held ??= prepared.then(settle, settle).finally(() => {
           held = null;
         });
       } else {
         rebuild();
+      }
+      return true;
+    },
+    setHidden: (asked) => {
+      // a covered house goes with what hangs on it (its plinth, cornices,
+      // doors, parts): they have no footprint of their own
+      const next = wholeTrees(table.root, asked);
+      const same =
+        next.size === hidden.size && [...next].every((i) => hidden.has(i));
+      if (same || bvhLost(geometry)) {
+        return false;
+      }
+      hidden = new Set(next);
+      showHangers();
+      // the index is the worker's while it builds the BVH: as a demolish
+      if (prepared) {
+        held ??= prepared.then(settle, settle).finally(() => {
+          held = null;
+        });
+      } else {
+        // the BVH built again in the worker once the new index is on the
+        // GPU (`indexUploaded`), not here in the frame: a design moved by
+        // hand re-hides on every settle (ADR 0024)
+        applyHidden(false);
       }
       return true;
     },
@@ -363,13 +507,15 @@ export function dressCity(
       const ids = metadata.tableAccessors[0];
       if (
         ids &&
+        isFacadeReadings(readings) &&
         "buildingId" in ids.properties &&
         applyFacadeReadings(
           table.flags,
           (i) => String(ids.getPropertyValue("buildingId", i)),
-          readings
+          readings,
+          (i) => table.source[i] === OBJECT_SOURCE_DORMER
         ) &&
-        markObjects(objects.texture, table, marked)
+        markObjects(objects.texture, table, marked, niched)
       ) {
         objects.texture.needsUpdate = true;
       }
@@ -377,22 +523,52 @@ export function dressCity(
     facts: (objectIndex) => readObjectFacts(metadata, objectIndex),
     hasBvh: () => Boolean(geometry.boundsTree),
     ensureBvh: () => ensureCityBvh(mesh),
-    held: () => held,
-    prepareBvh: () => {
+    get held() {
+      return held;
+    },
+    indexUploaded: (uploaded) => {
+      if (uploaded !== null && uploaded === geometry.getIndex()) {
+        fresh = false;
+      }
+    },
+    prepareBvh: async () => {
+      if (fresh) {
+        return;
+      }
       prepared ??= streamTimings
         .timed(
           "tile:bvh-worker",
-          () => buildBvhOffThread(geometry, () => !disposed),
+          async () => await buildBvhOffThread(geometry, () => !disposed),
           tile
         )
         .finally(() => {
           prepared = null;
         });
-      return prepared;
+      await prepared;
     },
+    hang: (object, buildingId) => {
+      const ids = metadata.tableAccessors[0];
+      const at: number[] = [];
+      if (ids && "buildingId" in ids.properties) {
+        for (let i = 0; i < count; i += 1) {
+          if (String(ids.getPropertyValue("buildingId", i)) === buildingId) {
+            at.push(i);
+          }
+        }
+      }
+      hangers.push({ at, object });
+      showHangers();
+    },
+    stands: (i) => alive[i] === 1 && !hidden.has(i),
     mark: (next) => {
       marked = next;
-      if (markObjects(objects.texture, table, marked)) {
+      if (markObjects(objects.texture, table, marked, niched)) {
+        objects.texture.needsUpdate = true;
+      }
+    },
+    setNiched: (next) => {
+      niched = next;
+      if (markObjects(objects.texture, table, marked, niched)) {
         objects.texture.needsUpdate = true;
       }
     },
@@ -406,7 +582,7 @@ const boxes = new WeakMap<Mesh, { box: Box3; matrix: Matrix4 }>();
 function worldBox(mesh: Mesh): Box3 {
   let kept = boxes.get(mesh);
   if (!kept?.matrix.equals(mesh.matrixWorld)) {
-    const geometry = mesh.geometry;
+    const { geometry } = mesh;
     if (!geometry.boundingBox) {
       geometry.computeBoundingBox();
     }
@@ -634,7 +810,7 @@ export function groupObjects(layer: CityLayer, group: number): Set<number> {
   if (group === 0) {
     return out;
   }
-  for (let i = 0; i < layer.table.count; i++) {
+  for (let i = 0; i < layer.table.count; i += 1) {
     if (layer.table.group[i] === group && layer.alive[i] === 1) {
       out.add(i);
     }

@@ -25,7 +25,12 @@ export type SourceKey =
   | "wikidata";
 
 /** The OSM products the cards quote, each read from its own extract. */
-export type OsmProduct = "bridges" | "buildings" | "fountains" | "trees";
+export type OsmProduct =
+  | "bridges"
+  | "buildings"
+  | "fountains"
+  | "furniture"
+  | "trees";
 
 export interface SourceInfo {
   /** the data's credit line, as its licence asks for it */
@@ -61,6 +66,8 @@ export interface ProvenanceRecord {
   geosn?: Record<string, { tiles?: Record<string, { stand?: string }> }>;
   openstreetmap?: {
     bbbike?: { products?: Record<string, { dataAsOf?: string }> };
+    /** Unna's stand-in extract (openstreetmap.fr's Arnsberg region) */
+    openstreetmapFr?: { products?: Record<string, { dataAsOf?: string }> };
   };
   wikidata?: { dataAsOf?: string };
 }
@@ -71,6 +78,7 @@ const OSM_PRODUCTS: [OsmProduct, string][] = [
   ["bridges", "bridges"],
   ["fountains", "fountains"],
   ["trees", "trees"],
+  ["furniture", "furniture"],
 ];
 
 /** What the manifest needs to know of the site: whose data it is. */
@@ -90,7 +98,7 @@ const GEOSN_PRODUCTS: [SourceKey, string][] = [
 
 /** The leading ISO date of a free-text field ("2026-09-26 (first …)"). */
 export function leadingDate(text: string | undefined): string | undefined {
-  return /^\d{4}-\d{2}-\d{2}/.exec(text ?? "")?.[0];
+  return /^\d{4}-\d{2}-\d{2}/u.exec(text ?? "")?.[0];
 }
 
 /** Each OSM product's edition the record states. */
@@ -104,6 +112,9 @@ function osmStands(
       stands[product] = stand;
     }
   }
+  // the street furniture came with the trees' extract, unless it was
+  // baked again on its own (the flagpoles: a later one)
+  stands.furniture ??= stands.trees;
   return stands;
 }
 
@@ -113,7 +124,7 @@ function treesSource(
   site: ProvenanceSite,
   record: ProvenanceRecord
 ): SourceInfo {
-  const register = site.treeCadastre?.credit.replace(/^[^:]*:\s*/, "");
+  const register = site.treeCadastre?.credit.replace(/^[^:]*:\s*/u, "");
   if (!register) {
     return {
       label: "OpenStreetMap",
@@ -161,8 +172,10 @@ export function siteProvenance(
   site: ProvenanceSite
 ): SiteProvenance {
   const official = site.provider.credit;
-  const licence = site.provider.licence;
-  const products = record.openstreetmap?.bbbike?.products;
+  const { licence } = site.provider;
+  const products =
+    record.openstreetmap?.bbbike?.products ??
+    record.openstreetmap?.openstreetmapFr?.products;
   const osmStand = leadingDate(products?.osmBuildings?.dataAsOf);
   const stands = osmStands(products);
   const wikidataStand = leadingDate(record.wikidata?.dataAsOf);
@@ -211,15 +224,17 @@ export function siteProvenance(
  * (the laser scan the roofs were measured in, the footprints' Basis-DLM).
  */
 export function parseLod2Stand(stand: string): Lod2Stand {
-  const match = /^\s*([^()]+?)\s*(?:\((.*)\))?\s*$/.exec(stand);
+  const match = /^\s*(?<model>[^()]+?)\s*(?:\((?<inputs>.*)\))?\s*$/u.exec(
+    stand
+  );
   const inputs: Record<string, string> = {};
-  for (const part of (match?.[2] ?? "").split(",")) {
+  for (const part of (match?.groups?.inputs ?? "").split(",")) {
     const [key, value] = part.split(":").map((s) => s.trim());
     if (key && value) {
       inputs[key] = value;
     }
   }
-  return { model: match?.[1] ?? stand, inputs };
+  return { model: match?.groups?.model ?? stand, inputs };
 }
 
 /** Whether a fetched manifest is one this viewer reads. */

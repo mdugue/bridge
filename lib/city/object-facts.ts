@@ -11,6 +11,7 @@
  * — ADR 0042.
  * No THREE, no DOM.
  */
+import { passedToParts } from "./city-mesh";
 import type { OsmBuildingFacts } from "./city-mesh";
 
 /** "Unknown" in a numeric fact column (the schema's `noData`). */
@@ -89,7 +90,7 @@ const round = (v: number, to: number): number =>
 
 /** An ISO timestamp's date ("2025-07-04T00:00:00Z" → "2025-07-04"). */
 export function isoDate(v: unknown): string {
-  const match = /^\d{4}-\d{2}-\d{2}/.exec(text(v));
+  const match = /^\d{4}-\d{2}-\d{2}/u.exec(text(v));
   return match ? match[0] : "";
 }
 
@@ -98,7 +99,7 @@ export function ringsArea(rings: readonly (readonly [number, number][])[]) {
   let total = 0;
   for (const ring of rings) {
     let twice = 0;
-    for (let i = 0; i < ring.length; i++) {
+    for (let i = 0; i < ring.length; i += 1) {
       const [x0, y0] = ring[i];
       const [x1, y1] = ring[(i + 1) % ring.length];
       twice += x0 * y1 - x1 * y0;
@@ -134,7 +135,7 @@ export function unionArea(
     spans.length = 0;
     for (const ring of rings) {
       xs.length = 0;
-      for (let i = 0; i < ring.length; i++) {
+      for (let i = 0; i < ring.length; i += 1) {
         const [ax, ay] = ring[i];
         const [bx, by] = ring[(i + 1) % ring.length];
         if (ay > y !== by > y) {
@@ -223,14 +224,16 @@ export function lod2Facts(input: {
   const { own, resolved, osm } = input;
   const measured = input.rebuilt ? NO_FACT : number(own.measuredHeight);
   const area = input.footprints.length > 0 ? ringsArea(input.footprints) : 0;
+  let roofType: string;
+  if (input.rebuilt) {
+    roofType = input.shaped ? MEASURED_SHAPE : MEASURED_ROOF;
+  } else {
+    roofType = text(own.roofType);
+  }
   return {
     buildingId: input.buildingId,
     function: text(resolved.function),
-    roofType: input.rebuilt
-      ? input.shaped
-        ? MEASURED_SHAPE
-        : MEASURED_ROOF
-      : text(own.roofType),
+    roofType,
     created: isoDate(own.creationDate ?? resolved.creationDate),
     name: text(osm?.name),
     addr: text(osm?.addr),
@@ -295,7 +298,7 @@ export function inheritedOsm(
   if (!(own || root)) {
     return undefined;
   }
-  return { ...root, ...own };
+  return { ...passedToParts(root), ...own };
 }
 
 type Columns<K extends string, V> = Record<K, V>;
@@ -314,9 +317,12 @@ export function factColumns(facts: readonly (ObjectFacts | undefined)[]): {
     Object.fromEntries(
       names.map((name) => [
         name,
-        facts.map((f, i) =>
-          f ? String(f[name]) : name === "buildingId" ? `#${i}` : ""
-        ),
+        facts.map((f, i) => {
+          if (f) {
+            return String(f[name]);
+          }
+          return name === "buildingId" ? `#${i}` : "";
+        }),
       ])
     ) as Columns<K, string[]>;
   const numbers = Object.fromEntries(

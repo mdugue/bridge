@@ -11,7 +11,10 @@
  * THREE-free, pure.
  */
 
-type XZ = { x: number; z: number };
+interface XZ {
+  x: number;
+  z: number;
+}
 
 /** One sample of a drawn track: where it is (world x, z), the level it
  *  runs on (y, under the rail head) and whether that is a deck or a span
@@ -36,12 +39,16 @@ const PLATFORM_SINK_M = 0.1;
 /** The spatial index's cell (m). */
 const CELL_M = 8;
 
+/** The grid cell's key of a point. */
+const cellKey = (x: number, z: number): string =>
+  `${Math.floor(x / CELL_M)}:${Math.floor(z / CELL_M)}`;
+
 /** The drawn tracks' samples by grid cell. */
 export class TrackIndex {
-  private cells = new Map<string, TrackSample[]>();
+  private readonly cells = new Map<string, TrackSample[]>();
   constructor(samples: Iterable<TrackSample>) {
     for (const s of samples) {
-      const k = this.key(s.x, s.z);
+      const k = cellKey(s.x, s.z);
       const cell = this.cells.get(k);
       if (cell) {
         cell.push(s);
@@ -50,9 +57,6 @@ export class TrackIndex {
       }
     }
   }
-  private key(x: number, z: number): string {
-    return `${Math.floor(x / CELL_M)}:${Math.floor(z / CELL_M)}`;
-  }
   /** The sample nearest (x, z) within `reach` (≤ 2 cells), or null. */
   nearest(x: number, z: number, reach = PLATFORM_REACH_M): TrackSample | null {
     const r = Math.ceil(reach / CELL_M);
@@ -60,8 +64,8 @@ export class TrackIndex {
     const cz = Math.floor(z / CELL_M);
     let best: TrackSample | null = null;
     let bd = reach * reach;
-    for (let dx = -r; dx <= r; dx++) {
-      for (let dz = -r; dz <= r; dz++) {
+    for (let dx = -r; dx <= r; dx += 1) {
+      for (let dz = -r; dz <= r; dz += 1) {
         for (const s of this.cells.get(`${cx + dx}:${cz + dz}`) ?? []) {
           const d = (s.x - x) ** 2 + (s.z - z) ** 2;
           if (d <= bd) {

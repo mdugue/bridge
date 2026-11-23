@@ -1,6 +1,5 @@
 import {
   BoxGeometry,
-  type BufferGeometry,
   DoubleSide,
   Group,
   Matrix4,
@@ -11,10 +10,12 @@ import {
   TorusGeometry,
   Vector3,
 } from "three/webgpu";
+import type { BufferGeometry } from "three/webgpu";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import type { SportFixture } from "@/lib/city/sport";
-import { sceneMaterial } from "./three-utils";
+import { markThinCaster, sceneMaterial } from "./three-utils";
 
 /**
  * What stands on the sports grounds (lib/city/sport.ts `sportFixtures`):
@@ -183,6 +184,7 @@ export function buildSportFixtures(
   if (frames.length > 0) {
     const mesh = new Mesh(mergeGeometries(frames.map(plain)), frameMaterial());
     mesh.castShadow = true;
+    markThinCaster(mesh, "slender");
     mesh.receiveShadow = true;
     meshes.push(mesh);
   }
@@ -191,7 +193,8 @@ export function buildSportFixtures(
     mesh.receiveShadow = true;
     meshes.push(mesh);
   }
-  for (const [i, mesh] of meshes.entries()) {
+  for (let i = 0; i < meshes.length; i += 1) {
+    const mesh = meshes[i];
     mesh.name = i === 0 && frames.length > 0 ? "sport-frames" : "sport-nets";
     group.add(mesh);
   }

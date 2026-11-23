@@ -1,11 +1,23 @@
+import { SHADOW_RINGS } from "../lib/city/shadow-rings";
 import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import path from "node:path";
-import { expect, type Page, test } from "@playwright/test";
+import { Document, WebIO } from "@gltf-transform/core";
+import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { fromArrayBuffer } from "geotiff";
 import proj4 from "proj4";
 import type { LookValues } from "../lib/city/look-controls";
+import { utmToLatLng } from "../lib/city/crs";
+import { readFootprints, unpackedFootprints } from "../lib/city/footprint-pack";
 import { EYE_HEIGHT } from "../lib/city/pose";
+import {
+  parseSnapshot,
+  snapshotFromSearch,
+  snapshotHref,
+} from "../lib/city/snapshot";
 import { tfwToBounds } from "../lib/city/tfw";
+import { SWIFTSHADER_WEBGPU } from "./swiftshader-webgpu";
 
 /**
  * Inner waits scale with the machine. Without a GPU every frame is rendered in
@@ -18,7 +30,7 @@ const slow = (ms: number) => (process.env.CI ? ms * 3 : ms);
 
 /**
  * The viewer specs run the `lite` scene profile (see scene-profile.ts): the
- * primary tile alone and a 512² shadow map. Under SwiftShader the full 2x2
+ * primary tile alone and a 256² shadow rings. Under SwiftShader the full 2x2
  * block costs ~14 s to boot and ~4 s per clay frame; lite trades away the
  * scenic context — which nothing here asserts on — for a suite that finishes
  * in a couple of minutes instead of twenty.
@@ -43,22 +55,311 @@ const DESKTOP_VIEWPORT = { width: 800, height: 600 };
  */
 const SITE_VIEWPORT = { width: 400, height: 300 };
 
-// Software-rendered WebGL so the smoke test also runs on headless CI boxes
-// without a GPU (ANGLE -> SwiftShader).
-test.use({
-  launchOptions: {
-    args: [
-      "--use-gl=angle",
-      "--use-angle=swiftshader",
-      "--enable-unsafe-swiftshader",
-    ],
-  },
-});
+// Software-rendered WebGPU so the smoke test also runs on headless CI boxes
+// without a GPU (swiftshader-webgpu.ts).
+test.use({ launchOptions: SWIFTSHADER_WEBGPU });
 
 /** Page/console errors seen since the last `expectNoErrors`. */
 interface ErrorLog {
   console: string[];
   page: string[];
+}
+
+/**
+ * A design as a planner's export: a 40 × 30 m block, 20 m high (x east,
+ * y up, z south), under a node at `at` — the Land's coordinates, NHN.
+ */
+async function designBlockGlb(at: [number, number, number]) {
+  const doc = new Document();
+  const buffer = doc.createBuffer();
+  const [x0, x1, y0, y1, z0, z1] = [-20, 20, 0, 20, -15, 15];
+  const c = [
+    [x0, y0, z0],
+    [x1, y0, z0],
+    [x1, y0, z1],
+    [x0, y0, z1],
+    [x0, y1, z0],
+    [x1, y1, z0],
+    [x1, y1, z1],
+    [x0, y1, z1],
+  ];
+  const faces = [
+    [4, 7, 6, 5],
+    [0, 1, 2, 3],
+    [3, 2, 6, 7],
+    [1, 0, 4, 5],
+    [2, 1, 5, 6],
+    [0, 3, 7, 4],
+  ];
+  const positions = faces.flatMap(([a, b, d, e]) =>
+    [a, b, d, a, d, e].flatMap((i) => c[i])
+  );
+  const accessor = doc
+    .createAccessor()
+    .setType("VEC3")
+    .setArray(new Float32Array(positions))
+    .setBuffer(buffer);
+  const mesh = doc
+    .createMesh("block")
+    .addPrimitive(doc.createPrimitive().setAttribute("POSITION", accessor));
+  doc
+    .createScene()
+    .addChild(doc.createNode("block").setTranslation(at).setMesh(mesh));
+  return await new WebIO().writeBinary(doc);
+}
+
+/**
+ * The same block as an IFC4 export in millimetres: drawn about its own
+ * origin, put at `east`/`north`/`height` (metres, its map unit) by its
+ * IfcMapConversion.
+ */
+function designBlockIfc(east: number, north: number, height: number) {
+  const lines = [
+    "IFCCARTESIANPOINT((0.,0.,0.))",
+    "IFCDIRECTION((0.,0.,1.))",
+    "IFCDIRECTION((1.,0.,0.))",
+    "IFCAXIS2PLACEMENT3D(#1,#2,#3)",
+    "IFCDIRECTION((0.,1.))",
+    "IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-05,#4,#5)",
+    "IFCGEOMETRICREPRESENTATIONSUBCONTEXT('Body','Model',*,*,*,*,#6,$,.MODEL_VIEW.,$)",
+    "IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.)",
+    "IFCUNITASSIGNMENT((#8))",
+    "IFCPROJECT('0YvctVUKr0kugbFTf53O9L',$,'Test',$,$,$,$,(#6),#9)",
+    "IFCPROJECTEDCRS('EPSG:25833',$,$,$,$,$,#25)",
+    `IFCMAPCONVERSION(#6,#11,${east}.,${north}.,${height}.,1.,0.,1.)`,
+    "IFCLOCALPLACEMENT($,#4)",
+    "IFCSITE('1YvctVUKr0kugbFTf53O9L',$,'Site',$,$,#13,$,$,.ELEMENT.,$,$,$,$,$)",
+    "IFCRELAGGREGATES('2YvctVUKr0kugbFTf53O9L',$,$,$,#10,(#14))",
+    "IFCCARTESIANPOINT((0.,0.))",
+    "IFCAXIS2PLACEMENT2D(#16,$)",
+    "IFCRECTANGLEPROFILEDEF(.AREA.,$,#17,40000.,30000.)",
+    "IFCEXTRUDEDAREASOLID(#18,#4,#2,20000.)",
+    "IFCSHAPEREPRESENTATION(#7,'Body','SweptSolid',(#19))",
+    "IFCPRODUCTDEFINITIONSHAPE($,$,(#20))",
+    "IFCLOCALPLACEMENT(#13,#4)",
+    "IFCBUILDINGELEMENTPROXY('3YvctVUKr0kugbFTf53O9L',$,'Block',$,$,#22,#21,$,$)",
+    "IFCRELCONTAINEDINSPATIALSTRUCTURE('5YvctVUKr0kugbFTf53O9L',$,$,$,(#23),#14)",
+    // the map's unit: without it the eastings would be the project's mm
+    "IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.)",
+  ];
+  return [
+    "ISO-10303-21;",
+    "HEADER;",
+    "FILE_DESCRIPTION((''),'2;1');",
+    "FILE_NAME('block.ifc','2026-10-29T00:00:00',(''),(''),'','','');",
+    "FILE_SCHEMA(('IFC4'));",
+    "ENDSEC;",
+    "DATA;",
+    ...lines.map((line, i) => `#${i + 1}=${line};`),
+    "ENDSEC;",
+    "END-ISO-10303-21;",
+    "",
+  ].join("\n");
+}
+
+/** The block as OBJ: metres, Y up, about its own origin, no place. */
+function designBlockObj() {
+  const v = [
+    [-20, 0, -15],
+    [20, 0, -15],
+    [20, 0, 15],
+    [-20, 0, 15],
+    [-20, 20, -15],
+    [20, 20, -15],
+    [20, 20, 15],
+    [-20, 20, 15],
+  ];
+  const faces = [
+    [5, 8, 7, 6],
+    [1, 2, 3, 4],
+    [4, 3, 7, 8],
+    [2, 1, 5, 6],
+    [3, 2, 6, 7],
+    [1, 4, 8, 5],
+  ];
+  return [
+    ...v.map((p) => `v ${p.join(" ")}`),
+    ...faces.map((f) => `f ${f.join(" ")}`),
+    "",
+  ].join("\n");
+}
+
+/** The block as OBJ in a textured material of its MTL (`block.mtl`,
+ *  `map_Kd block.png`). */
+function designBlockObjTextured() {
+  const faces = designBlockObj()
+    .split("\n")
+    .filter((line) => line.startsWith("f "))
+    .map((line) => {
+      const [a, b, c, d] = line.slice(2).split(" ");
+      return `f ${a}/1 ${b}/2 ${c}/3 ${d}/4`;
+    });
+  const obj = [
+    "mtllib block.mtl",
+    ...designBlockObj()
+      .split("\n")
+      .filter((line) => line.startsWith("v ")),
+    "vt 0 0",
+    "vt 1 0",
+    "vt 1 1",
+    "vt 0 1",
+    "usemtl putz",
+    ...faces,
+    "",
+  ].join("\n");
+  const mtl = ["newmtl putz", "Kd 1 1 1", "map_Kd block.png", ""].join("\n");
+  return { obj, mtl };
+}
+
+/**
+ * The block as a Rhino .3dm in millimetres, Z up, its earth anchor at
+ * (`east`, `north`) in EPSG:25833 and `height` m; with `dot`, a TextDot
+ * beside it, which three's loader would draw through a `<canvas>`.
+ */
+async function designBlock3dm(
+  east: number,
+  north: number,
+  height: number,
+  dot = false
+) {
+  const { default: rhino3dm } = await import("rhino3dm");
+  const rhino = await rhino3dm();
+  const doc = new rhino.File3dm();
+  doc.settings().modelUnitSystem = rhino.UnitSystem.Millimeters;
+  const anchor = doc.settings().earthAnchorPoint;
+  const ll = utmToLatLng(25_833, east, north);
+  anchor.earthBasepointLatitude = ll?.lat ?? 0;
+  anchor.earthBasepointLongitude = ll?.lng ?? 0;
+  anchor.earthBasepointElevation = height;
+  anchor.modelBasePoint = [0, 0, 0];
+  anchor.modelNorth = [0, 1, 0];
+  anchor.modelEast = [1, 0, 0];
+  doc.settings().earthAnchorPoint = anchor;
+  const c = [
+    [-20_000, -15_000, 0],
+    [20_000, -15_000, 0],
+    [20_000, 15_000, 0],
+    [-20_000, 15_000, 0],
+    [-20_000, -15_000, 20_000],
+    [20_000, -15_000, 20_000],
+    [20_000, 15_000, 20_000],
+    [-20_000, 15_000, 20_000],
+  ];
+  const quads = [
+    [0, 3, 2, 1],
+    [4, 5, 6, 7],
+    [0, 1, 5, 4],
+    [1, 2, 6, 5],
+    [2, 3, 7, 6],
+    [3, 0, 4, 7],
+  ];
+  // (createFromThreejsJSON takes three's Y-up and turns it to Rhino's Z-up)
+  const array = quads.flatMap((q) =>
+    [q[0], q[1], q[2], q[0], q[2], q[3]].flatMap((i) => {
+      const [x, y, z] = c[i];
+      return [x, z, -y];
+    })
+  );
+  const mesh = rhino.Mesh.createFromThreejsJSON({
+    data: { attributes: { position: { itemSize: 3, array } } },
+  });
+  doc.objects().add(mesh, new rhino.ObjectAttributes());
+  if (dot) {
+    doc.objects().addTextDot("A", [0, 0, 0], new rhino.ObjectAttributes());
+  }
+  return [...doc.toByteArray()];
+}
+
+/** A filled rectangle as a DXF hatch on `layer` (group-code pairs). */
+const hatch = (layer: string, x0: number, y0: number, w: number, h: number) => [
+  [0, "HATCH"],
+  [8, layer],
+  [91, 1],
+  [92, 2],
+  [72, 0],
+  [73, 1],
+  [93, 4],
+  [10, x0],
+  [20, y0],
+  [10, x0 + w],
+  [20, y0],
+  [10, x0 + w],
+  [20, y0 + h],
+  [10, x0],
+  [20, y0 + h],
+  [97, 0],
+];
+
+/**
+ * A landscape plan as DXF in the Land's coordinates (metres): a lawn
+ * hatch of 60 × 40 m south-west of `at` with a paved square in it, and
+ * two trees on a tree layer.
+ */
+function designPlanDxf([e, n]: [number, number]) {
+  const groups: (string | number)[][] = [
+    [0, "SECTION"],
+    [2, "HEADER"],
+    [9, "$INSUNITS"],
+    [70, 6],
+    [0, "ENDSEC"],
+    [0, "SECTION"],
+    [2, "ENTITIES"],
+    ...hatch("L-RASEN", e - 60, n - 40, 60, 40),
+    ...hatch("L-PFLASTER", e - 40, n - 30, 15, 15),
+  ];
+  for (const [x, y] of [
+    [e - 50, n - 10],
+    [e - 10, n - 30],
+  ]) {
+    groups.push([0, "CIRCLE"], [8, "BAUM NEU"], [10, x], [20, y], [40, 3]);
+  }
+  groups.push([0, "ENDSEC"], [0, "EOF"]);
+  return `${groups.flatMap(([c, v]) => [String(c), String(v)]).join("\n")}\n`;
+}
+
+/** The same lawn as a GeoPackage (one polygon layer, EPSG:25833). */
+async function designPlanGpkg([e, n]: [number, number]) {
+  const { default: initSqlJs } = await import("sql.js");
+  const SQL = await initSqlJs();
+  const db = new SQL.Database();
+  db.run(`CREATE TABLE gpkg_spatial_ref_sys (srs_name TEXT, srs_id INTEGER PRIMARY KEY,
+    organization TEXT, organization_coordsys_id INTEGER, definition TEXT);
+    INSERT INTO gpkg_spatial_ref_sys VALUES ('ETRS89 / UTM 33N', 25833, 'EPSG', 25833, '');
+    CREATE TABLE gpkg_contents (table_name TEXT PRIMARY KEY, data_type TEXT, srs_id INTEGER);
+    INSERT INTO gpkg_contents VALUES ('flaechen', 'features', 25833);
+    CREATE TABLE gpkg_geometry_columns (table_name TEXT, column_name TEXT,
+      geometry_type_name TEXT, srs_id INTEGER, z INTEGER, m INTEGER);
+    INSERT INTO gpkg_geometry_columns VALUES ('flaechen', 'geom', 'POLYGON', 25833, 0, 0);
+    CREATE TABLE flaechen (fid INTEGER PRIMARY KEY, geom BLOB, nutzung TEXT);`);
+  const ring = [
+    [e - 60, n - 40],
+    [e, n - 40],
+    [e, n],
+    [e - 60, n],
+    [e - 60, n - 40],
+  ];
+  const wkb = new DataView(
+    new ArrayBuffer(8 + 1 + 4 + 4 + 4 + ring.length * 16)
+  );
+  for (const [i, b] of [0x47, 0x50, 0, 1].entries()) {
+    wkb.setUint8(i, b);
+  }
+  wkb.setInt32(4, 25_833, true);
+  wkb.setUint8(8, 1);
+  wkb.setUint32(9, 3, true);
+  wkb.setUint32(13, 1, true);
+  wkb.setUint32(17, ring.length, true);
+  for (const [i, [x, y]] of ring.entries()) {
+    wkb.setFloat64(21 + i * 16, x, true);
+    wkb.setFloat64(29 + i * 16, y, true);
+  }
+  db.run("INSERT INTO flaechen (geom, nutzung) VALUES (?, ?)", [
+    new Uint8Array(wkb.buffer),
+    "Rasen",
+  ]);
+  const bytes = db.export();
+  db.close();
+  return [...bytes];
 }
 
 /** Starts collecting page + console errors for the whole life of the page. */
@@ -106,8 +407,8 @@ async function withFramesHeld(
   target: Page,
   steps: () => Promise<void>
 ): Promise<void> {
-  const hold = (on: boolean) =>
-    target.evaluate((value) => {
+  const hold = async (on: boolean) =>
+    await target.evaluate((value) => {
       if (window.__poc) {
         window.__poc.hold = value;
       }
@@ -126,31 +427,30 @@ async function withFramesHeld(
  * lib/city/tile.ts).
  */
 async function dataUrl(page: Page, file: string): Promise<string> {
-  const manifest = (await (
-    await page.request.get(`/data${SITE}/manifest.json`)
-  ).json()) as { files: Record<string, string> };
+  const res = await page.request.get(`/data${SITE}/manifest.json`);
+  const manifest = (await res.json()) as { files: Record<string, string> };
   return `/data${SITE}/${manifest.files[file] ?? file}`;
 }
 
-/** True when the browser has WebGL at all (render assertions need it). */
-function hasWebGl(page: Page): Promise<boolean> {
-  return page.evaluate(() => {
-    const probe = document.createElement("canvas");
-    return Boolean(probe.getContext("webgl2") ?? probe.getContext("webgl"));
-  });
+/** True when the browser gives a WebGPU adapter (render assertions need
+ *  it). */
+async function hasWebGpu(page: Page): Promise<boolean> {
+  return await page.evaluate(
+    async () => (await navigator.gpu?.requestAdapter()) != null
+  );
 }
 
 /** Turns one pointer type's drag across the canvas into synthetic events. */
-function dragAcrossCanvas(
+async function dragAcrossCanvas(
   page: Page,
   pointerType: "mouse" | "touch",
   y: number
 ): Promise<void> {
-  return page.evaluate(
+  await page.evaluate(
     ({ kind, clientY }) => {
       const canvas = document.querySelector("canvas[data-engine]");
       if (!canvas) {
-        throw new Error("no WebGL canvas");
+        throw new Error("no scene canvas");
       }
       const fire = (type: string, x: number) =>
         canvas.dispatchEvent(
@@ -165,7 +465,7 @@ function dragAcrossCanvas(
           })
         );
       fire("pointerdown", 200);
-      for (let i = 1; i <= 5; i++) {
+      for (let i = 1; i <= 5; i += 1) {
         fire("pointermove", 200 + i * 20);
       }
       fire("pointerup", 300);
@@ -218,7 +518,7 @@ test("city page serves the viewer shell", async ({ page }) => {
   await expect(
     page
       .getByText(
-        /Bis zum ersten Bild|Gebäude werden geladen|Gelände wird geladen|Licht und Schatten werden berechnet/
+        /Bis zum ersten Bild|Gebäude werden geladen|Gelände wird geladen|Licht und Schatten werden berechnet/u
       )
       .or(page.locator("canvas[data-engine]"))
       .first()
@@ -229,6 +529,19 @@ test("city page serves the viewer shell", async ({ page }) => {
   await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
   expect(errors.page).toEqual([]);
 });
+
+/** Even-odd point-in-ring test. */
+const inside = ([x, y]: number[], ring: [number, number][]) => {
+  let hit = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+      hit = !hit;
+    }
+  }
+  return hit;
+};
 
 /**
  * Hovers the camera over a mid-sized single-polygon building of the spawn
@@ -241,22 +554,12 @@ async function aimAtBuilding(page: Page): Promise<void> {
   // published next to its glTF): aim at a mid-sized single-polygon
   // building whose bounding-box centre lies inside it — a perimeter block's
   // centre is its courtyard, and the ray would hit the ground.
-  const footprints = (await (
-    await page.request.get(
-      await dataUrl(page, "footprints_33412_5656_2_sn.json")
-    )
-  ).json()) as [number, number][][][];
-  const inside = ([x, y]: number[], ring: [number, number][]) => {
-    let hit = false;
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-      const [xi, yi] = ring[i];
-      const [xj, yj] = ring[j];
-      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
-        hit = !hit;
-      }
-    }
-    return hit;
-  };
+  const footprintsRes = await page.request.get(
+    await dataUrl(page, "footprints_33412_5656_2_sn.fpr.gz")
+  );
+  const pack = readFootprints(gunzipSync(await footprintsRes.body()));
+  expect(pack).not.toBeNull();
+  const footprints = pack ? unpackedFootprints(pack) : [];
   const target = footprints
     .filter((polys) => polys.length === 1)
     .map(([ring]) => {
@@ -278,13 +581,15 @@ async function aimAtBuilding(page: Page): Promise<void> {
   expect(target).toBeDefined();
   const [centreX, centreY] = target?.centre ?? [0, 0];
   await page.evaluate(
-    ([easting, northing]) => {
+    async ([easting, northing]) => {
       const api = window.__poc?.handle;
       if (!api) {
         throw new Error("scene handle not published");
       }
-      // Stand on the ground there to learn its height, then hover above.
+      // Stand on the ground there to learn its height, then hover above
+      // (the scene answers in its own turn: sync reads the pose after it).
       api.teleportTo(easting, northing);
+      await api.sync();
       const ground = api.getCameraState().pos.y - 1.7;
       // EPSG:25833 -> world: x = X - cx, z = -(Y - cy), y = elevation.
       const x = easting - api.offset.cx;
@@ -313,15 +618,15 @@ async function aimAtBuilding(page: Page): Promise<void> {
  * state. `serial` makes that ordering a guarantee and stops a broken boot from
  * being reported five times over.
  *
- * Two groups, two boots: CI runs each on a runner of its own (ci.yml, the e2e
- * matrix, by the `@desktop-hud` and `@desktop-render` tags). SwiftShader
- * leaves no room for a second page on the same cores, so a second runner is
- * the only way to run them side by side, and one more boot (~20 s on a
- * runner) is cheaper than the minute and a half the second group takes.
+ * Three groups, three boots: CI runs each on a runner of its own (ci.yml, the
+ * e2e matrix, by the `@desktop-hud`, `@desktop-render` and `@desktop-look`
+ * tags). SwiftShader leaves no room for a second page on the same cores, so
+ * another runner is the only way to run them side by side, and one more boot
+ * (~20 s on a runner) is cheaper than the minutes each group takes.
  */
 let page: Page;
 let errors: ErrorLog;
-let webgl = false;
+let gpu = false;
 
 /** Boots the shared desktop page for the enclosing describe. */
 function bootDesktopViewer(): void {
@@ -332,13 +637,13 @@ function bootDesktopViewer(): void {
     page = await context.newPage();
     errors = watchErrors(page);
     await page.goto(LITE);
-    webgl = await hasWebGl(page);
-    // On CI the SwiftShader flags above must yield WebGL; a silent skip
+    gpu = await hasWebGpu(page);
+    // On CI the SwiftShader flags above must yield WebGPU; a silent skip
     // would let a Chromium/Playwright bump turn the whole suite green.
     if (process.env.CI) {
-      expect(webgl).toBe(true);
+      expect(gpu).toBe(true);
     }
-    if (!webgl) {
+    if (!gpu) {
       return;
     }
     // Debug hook (dev/test builds only) is set after the first successful load.
@@ -350,13 +655,13 @@ function bootDesktopViewer(): void {
   });
 
   test.beforeEach(() => {
-    // Conditional runtime skip — render assertions are meaningless without WebGL.
-    test.skip(!webgl, "WebGL is genuinely unavailable in this environment");
+    // Conditional runtime skip — render assertions are meaningless without WebGPU.
+    test.skip(!gpu, "WebGPU is genuinely unavailable in this environment");
   });
 
   test.afterAll(async () => {
     // Errors logged after the last test's own check must not go unnoticed.
-    if (webgl) {
+    if (gpu) {
       expectNoErrors(errors);
     }
     await page?.context().close();
@@ -368,7 +673,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
   bootDesktopViewer();
 
   test("the renderer draws, with shadows, and every scene layer is built on the primary tile", async () => {
-    // Renderer booted -> exactly one sized WebGL canvas (the minimap adds
+    // Renderer booted -> exactly one sized scene canvas (the minimap adds
     // 2D canvases of its own; three.js tags its canvas with data-engine).
     const canvas = page.locator("canvas[data-engine]");
     await expect(canvas).toBeVisible({ timeout: slow(60_000) });
@@ -455,8 +760,10 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     });
     // The click glides there: where it lands is the glide's target (the
     // glide itself takes dozens of software-rendered frames).
-    const pose = await page.evaluate(() => {
+    const pose = await page.evaluate(async () => {
       const handle = window.__poc?.handle;
+      // the click reached the scene: its glide is in the mirror
+      await handle?.sync();
       return handle?.getGlideTarget() ?? handle?.getPose();
     });
     // 50 m on a 2 km tile — loose enough for the rounding a click position
@@ -472,27 +779,27 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     // no building, stair or deck lifts the camera here (ADR 0032), so its
     // height is the measured ground plus the eye.
     const at = { x: 412_060, y: 5_656_745 };
-    const state = await page.evaluate(({ x, y }) => {
+    const state = await page.evaluate(async ({ x, y }) => {
       const api = window.__poc?.handle;
       // On foot (the spawn view is aerial): the teleport then stands there.
       api?.setMovementMode("walk");
       api?.teleportTo(x, y);
+      await api?.sync();
       return api?.getCameraState();
     }, at);
     expect(state?.mode).toBe("walk");
     const base = path.join(
-      __dirname,
-      "../data/dresden/dgm/dgm1_33412_5656_2_sn_tiff/dgm1_33412_5656_2_sn"
+      process.cwd(),
+      "data/dresden/dgm/dgm1_33412_5656_2_sn_tiff/dgm1_33412_5656_2_sn"
     );
     const tif = readFileSync(`${base}.tif`);
-    const image = await (
-      await fromArrayBuffer(
-        tif.buffer.slice(tif.byteOffset, tif.byteOffset + tif.byteLength)
-      )
-    ).getImage();
+    const tiff = await fromArrayBuffer(
+      tif.buffer.slice(tif.byteOffset, tif.byteOffset + tif.byteLength)
+    );
+    const image = await tiff.getImage();
     const [w, h] = [image.getWidth(), image.getHeight()];
     const [minX, minY, maxX, maxY] = tfwToBounds(
-      readFileSync(`${base}.tfw`, "utf8"),
+      readFileSync(`${base}.tfw`, "utf-8"),
       w,
       h
     );
@@ -587,9 +894,11 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       undefined,
       { timeout: slow(45_000) }
     );
-    const state = await page.evaluate(() =>
-      window.__poc?.handle?.getCameraState()
-    );
+    const state = await page.evaluate(async () => {
+      // the HUD said it once it asked: the scene's pose follows in its turn
+      await window.__poc?.handle?.sync();
+      return window.__poc?.handle?.getCameraState();
+    });
     expect(state?.mode).toBe("walk");
     expect(Math.abs((state?.epsg.x ?? 0) - target.x)).toBeLessThan(1);
     expect(Math.abs((state?.epsg.y ?? 0) - target.y)).toBeLessThan(1);
@@ -693,7 +1002,7 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       // demand, with a search over every name (the folded landmarks too).
       const rows = places.locator("[data-place]");
       await expect(rows).toHaveCount(6);
-      const more = places.getByRole("button", { name: /^Alle \d+ Orte/ });
+      const more = places.getByRole("button", { name: /^Alle \d+ Orte/u });
       await more.click();
       await places
         .getByRole("searchbox", { name: "Orte durchsuchen" })
@@ -706,9 +1015,16 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       await page.getByRole("tab", { name: "Szene" }).click();
       await expect(page.getByText("Sonne & Zeit")).toBeVisible();
       // The look is fixed: under the picture style only the fog's slider
-      // and the crowns' switch are left, in plain view.
+      // is left, in plain view.
       await expect(page.locator("#atmosphere")).toBeVisible();
-      await expect(page.locator("#tree-multituft")).toBeVisible();
+      // A style that draws in its own light rests the date and time, and
+      // says why; leaving it brings them back.
+      await page.evaluate(() => window.__poc?.look?.set({ style: "figure" }));
+      await expect(page.getByTestId("own-light")).toBeVisible();
+      await expect(page.locator("#sun-date")).toBeDisabled();
+      await page.evaluate(() => window.__poc?.look?.set({ style: "pastel" }));
+      await expect(page.getByTestId("own-light")).toHaveCount(0);
+      await expect(page.locator("#sun-date")).toBeEnabled();
 
       await page.getByRole("tab", { name: "Erweitert" }).click();
       await expect(page.getByText("Statistik")).toBeVisible();
@@ -731,9 +1047,11 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
       () => window.__poc?.handle?.getPose().heading ?? 0
     );
     await dragAcrossCanvas(page, "mouse", 300);
-    const headingAfter = await page.evaluate(
-      () => window.__poc?.handle?.getPose().heading ?? 0
-    );
+    const headingAfter = await page.evaluate(async () => {
+      // the drag's turns reached the scene
+      await window.__poc?.handle?.sync();
+      return window.__poc?.handle?.getPose().heading ?? 0;
+    });
     expect(Math.abs(headingAfter - headingBefore)).toBeGreaterThan(0.2);
     expectNoErrors(errors);
   });
@@ -760,36 +1078,177 @@ test.describe("desktop viewer", { tag: "@desktop-hud" }, () => {
     expectNoErrors(errors);
   });
 
+  test("a walk tells its stops, with their sources, and gives the style and the time back", async () => {
+    // The walks are Claude's narration (ADR 0055): the card says so on
+    // every stop and folds out the sources. Where the camera stood is put
+    // back afterwards, so the tests after this one start where they did.
+    const before = await page.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    await withFramesHeld(page, async () => {
+      await openSidebar(page);
+      await page.getByRole("tab", { name: "Erkunden" }).click();
+      const walks = page.getByRole("region", { name: "Spaziergänge" });
+      await expect(walks).toBeVisible({ timeout: slow(15_000) });
+      await walks.locator('[data-walk="augusts-buehne"]').click();
+      const card = page.getByTestId("walk-card");
+      await expect(card).toBeVisible();
+      await expect(card).toContainText("Station 1 von 9");
+      await expect(card).toContainText("Erzählt von Claude (KI)");
+      // the detail the model lacks is on the stop's photo, with its credit
+      const photo = card.getByTestId("walk-photo");
+      await expect(photo.locator("img")).toBeVisible();
+      await expect(photo).toContainText("Wikimedia Commons");
+      // a click shows it whole, Escape closes it
+      await photo.getByRole("button", { name: "Foto groß zeigen" }).click();
+      const view = page.getByTestId("walk-photo-view");
+      await expect(view.locator("img")).toBeVisible();
+      await page.keyboard.press("Escape");
+      // Escape closes it at once; it leaves the DOM after its exit
+      // animation, a frame or three, and a slow runner's SwiftShader
+      // frames take seconds each (the default 5 s ran out mid-animation)
+      await expect(view).toHaveCount(0, { timeout: slow(10_000) });
+      const first = await card.getByRole("heading").textContent();
+      await card.getByTestId("walk-next").click();
+      await expect(card).toContainText("Station 2 von 9");
+      await expect(card.getByRole("heading")).not.toHaveText(first ?? "");
+      await card.getByText(/^Belege \(\d+\)$/u).click();
+      await expect(card.locator('a[href^="https://"]').first()).toBeVisible();
+      await card.getByRole("button", { name: "Spaziergang beenden" }).click();
+      await expect(card).toHaveCount(0);
+    });
+    await page.evaluate((camera) => {
+      if (camera) {
+        window.__poc?.handle?.applyCameraState(camera);
+      }
+    }, before);
+    expectNoErrors(errors);
+  });
+
+  test("Frag die Stadt checks a key and marks its answer as generated", async () => {
+    // ADR 0056: the key check and the answer are the server's and the
+    // provider's; the spec answers for both, so CI needs no key and no
+    // provider. A key the provider refuses says so; a checked one opens
+    // the conversation. A refusal of the chat route reaches the card by its
+    // code (ADR 0056: the card looks the words up), and the answer is
+    // labelled KI.
+    let checks = 0;
+    await page.route("**/api/schluessel", async (route) => {
+      checks += 1;
+      await route.fulfill(
+        checks === 1
+          ? {
+              status: 401,
+              json: {
+                ok: false,
+                message: "Anthropic nimmt diesen Schlüssel nicht an.",
+              },
+            }
+          : { json: { ok: true, token: "", expires: Date.now() + 60_000 } }
+      );
+    });
+    const events = [
+      { type: "RUN_STARTED", runId: "r1", threadId: "t" },
+      { type: "TEXT_MESSAGE_START", messageId: "m1", role: "assistant" },
+      {
+        type: "TEXT_MESSAGE_CONTENT",
+        messageId: "m1",
+        delta: "Die Frauenkirche baute George Bähr (Quelle: Wikidata).",
+      },
+      { type: "TEXT_MESSAGE_END", messageId: "m1" },
+      { type: "RUN_FINISHED", runId: "r1", threadId: "t" },
+    ];
+    let asked = 0;
+    await page.route("**/api/frag", async (route) => {
+      asked += 1;
+      await route.fulfill(
+        asked === 1
+          ? {
+              status: 401,
+              json: { code: "bad-token", message: "Token abgelaufen." },
+            }
+          : {
+              contentType: "text/event-stream",
+              body: events
+                .map((e) => `data: ${JSON.stringify(e)}\n\n`)
+                .join(""),
+            }
+      );
+    });
+    await withFramesHeld(page, async () => {
+      await openSidebar(page);
+      await page.getByRole("tab", { name: "Erkunden" }).click();
+      await page.getByTestId("ask-open").click();
+      const card = page.getByTestId("ask-card");
+      await expect(card).toBeVisible();
+      await card
+        .getByTestId("ask-key")
+        .fill("sk-ant-api03-0123456789abcdefghij");
+      await card.getByRole("button", { name: "Prüfen und loslegen" }).click();
+      await expect(card.getByRole("alert")).toContainText("nicht an");
+      // the refused check is the browser's logged 401, asked for above
+      errors.console.length = 0;
+      await card.getByRole("button", { name: "Prüfen und loslegen" }).click();
+      await card.getByTestId("ask-input").fill("Wer baute die Frauenkirche?");
+      await card.getByTestId("ask-input").press("Enter");
+      // the route refuses the token: the card words it by its code
+      await expect(card.getByRole("alert")).toContainText(
+        "Der Schlüssel muss neu geprüft werden."
+      );
+      await expect(
+        card.getByRole("button", { name: "Schlüssel prüfen" })
+      ).toBeVisible();
+      // the refused answer is the browser's logged 401, asked for above
+      errors.console.length = 0;
+      await card.getByTestId("ask-input").fill("Wer baute die Frauenkirche?");
+      await card.getByTestId("ask-input").press("Enter");
+      await expect(card).toContainText("George Bähr");
+      // (the refused answer keeps its empty, labelled row, as an
+      // uncoded refusal did before: the answer's label is the last)
+      await expect(card.getByText("KI", { exact: true }).last()).toBeVisible();
+      await card
+        .getByRole("button", { name: "Frag die Stadt schließen" })
+        .click();
+      await expect(card).toHaveCount(0);
+    });
+    await page.unroute("**/api/schluessel");
+    await page.unroute("**/api/frag");
+    await page.evaluate(() => sessionStorage.clear());
+    expectNoErrors(errors);
+  });
+
   test("the data layers switch on and off from the sidebar", async () => {
     // The live bicycle counts come from the city's WFS; the spec answers
     // for it (two counters on the spawn tile), so CI never waits on the
     // city's server and the counts are known.
-    await page.route("**/kommisdd.dresden.de/**", (route) =>
-      route.fulfill({
-        contentType: "application/geo+json",
-        body: JSON.stringify({
-          type: "FeatureCollection",
-          features: [
-            ["F01092", "Albertbrücke", 412_610, 5_657_020, 309, 482],
-            ["F01093", "Glacisstraße", 412_900, 5_657_300, 0, 123],
-          ].map(([id, name, x, y, w1, w2]) => ({
-            type: "Feature",
-            geometry: { type: "Point", coordinates: [x, y] },
-            properties: {
-              fremd_id: id,
-              bezeichnung: name,
-              lage: "",
-              r1: "Richtung Nord",
-              w1,
-              r2: "Richtung Süd",
-              w2,
-              messzeit: "01.10.2026 07:00:00",
-              winkel: 0,
-              inaktiv: "0",
-            },
-          })),
-        }),
-      })
+    await page.route(
+      "**/kommisdd.dresden.de/**",
+      async (route) =>
+        await route.fulfill({
+          contentType: "application/geo+json",
+          body: JSON.stringify({
+            type: "FeatureCollection",
+            features: [
+              ["F01092", "Albertbrücke", 412_610, 5_657_020, 309, 482],
+              ["F01093", "Glacisstraße", 412_900, 5_657_300, 0, 123],
+            ].map(([id, name, x, y, w1, w2]) => ({
+              type: "Feature",
+              geometry: { type: "Point", coordinates: [x, y] },
+              properties: {
+                fremd_id: id,
+                bezeichnung: name,
+                lage: "",
+                r1: "Richtung Nord",
+                w1,
+                r2: "Richtung Süd",
+                w2,
+                messzeit: "01.10.2026 07:00:00",
+                winkel: 0,
+                inaktiv: "0",
+              },
+            })),
+          }),
+        })
     );
     const traffic = page.getByRole("switch", { name: "Kfz-Verkehr" });
     const bikes = page.getByRole("switch", { name: "Radverkehr (live)" });
@@ -920,15 +1379,15 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       const card = page.getByTestId("inquiry-card");
       await expect(card).toBeVisible();
       // The LoD2 Building's gml:id — the key every other dataset joins on.
-      await expect(card).toContainText(/DESNAT\w+/);
-      const centreId =
-        (await card.textContent())?.match(/DESNAT\w+/)?.[0] ?? "";
+      await expect(card).toContainText(/DESNAT\w+/u);
+      const cardText = await card.textContent();
+      const centreId = cardText?.match(/DESNAT\w+/u)?.[0] ?? "";
       // the sources are folded under "Daten"; unfolded, the card's own
       // lines and what the building as drawn is made of (a lazy chunk)
       await card.getByTestId("inquiry-data-toggle").click();
       await expect(card).toContainText("Quelle: GeoSN, dl-de/by-2-0");
       // the provenance manifest arrives with the first card: the edition
-      await expect(card).toContainText(/Modell \d{4}/);
+      await expect(card).toContainText(/Modell \d{4}/u);
       await expect(card.getByTestId("inquiry-data")).toContainText("Im Viewer");
       // and how it is drawn, value by value, each with its source
       await expect(card.getByTestId("inquiry-drawn").first()).toContainText(
@@ -939,12 +1398,12 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       // I asks under the pointer, not at the centre: find a spot off the
       // middle (clear of the panel on the right) where another building
       // stands, rest the pointer there and press I.
-      const off = await page.evaluate(() => {
+      const off = await page.evaluate(async () => {
         const h = window.__poc?.handle;
         if (!h) {
           throw new Error("scene handle not published");
         }
-        const centre = h.inquireAt();
+        const centre = await h.inquireAt();
         const same =
           centre?.kind === "building"
             ? new Set(centre.tree.map((o) => `${centre.tile}:${o.objectIndex}`))
@@ -959,7 +1418,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
           [0.25, 0.35],
         ];
         for (const [x, y] of spots) {
-          const asked = h.inquireAt({ x, y });
+          const asked = await h.inquireAt({ x, y });
           if (
             asked?.kind === "building" &&
             !same.has(`${asked.tile}:${asked.picked.objectIndex}`)
@@ -970,6 +1429,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
         return null;
       });
       expect(off).not.toBeNull();
+      // (the search asked, so its card is up: only a mounted card hears
+      // the key)
+      await expect(card).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
       await page.mouse.move(
@@ -982,6 +1444,38 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
     });
+    // the nameplate: a building with a name or an address is named in
+    // the scene while the question stands (present, never judged)
+    const named = await page.evaluate(async () => {
+      const asked = await window.__poc?.handle?.inquireAt();
+      return (
+        asked?.kind === "building" &&
+        asked.tree.some((o) => o.facts.addr !== "" || o.facts.name !== "")
+      );
+    });
+    if (named) {
+      await expect
+        .poll(
+          async () =>
+            await page.evaluate(
+              () => window.__poc?.handle?.nameplateShown()?.title ?? null
+            ),
+          { timeout: slow(60_000) }
+        )
+        .not.toBeNull();
+    }
+    await withFramesHeld(page, async () => {
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("inquiry-card")).toBeHidden();
+    });
+    // the mirror after the Escape's call has reached the scene
+    expect(
+      await page.evaluate(async () => {
+        const handle = window.__poc?.handle;
+        await handle?.sync();
+        return handle?.nameplateShown() ?? null;
+      })
+    ).toBeNull();
     expectNoErrors(errors);
   });
 
@@ -990,11 +1484,10 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // and a little aside, answers with its species, where it stands and
     // the register as its source — the facts file fetched with the
     // question.
-    const trees = (await (
-      await page.request.get(
-        await dataUrl(page, "trees_33412_5656_2_sn.geojson")
-      )
-    ).json()) as {
+    const treesRes = await page.request.get(
+      await dataUrl(page, "trees_33412_5656_2_sn.geojson")
+    );
+    const trees = (await treesRes.json()) as {
       features: {
         geometry: { coordinates: [number, number] };
         properties: { h: number; s?: string };
@@ -1006,12 +1499,13 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(tree).toBeDefined();
     const [east, north] = tree?.geometry.coordinates ?? [0, 0];
     await page.evaluate(
-      ([e, n]) => {
+      async ([e, n]) => {
         const api = window.__poc?.handle;
         if (!api) {
           throw new Error("scene handle not published");
         }
         api.teleportTo(e, n);
+        await api.sync();
         const ground = api.getCameraState().pos.y - 1.7;
         const x = e - api.offset.cx;
         const z = -(n - api.offset.cy);
@@ -1021,7 +1515,9 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       [east, north]
     );
     await waitForFrames(page, 1);
-    const asked = await page.evaluate(() => window.__poc?.handle?.inquireAt());
+    const asked = await page.evaluate(
+      async () => await window.__poc?.handle?.inquireAt()
+    );
     expect(asked?.kind).toBe("tree");
     await withFramesHeld(page, async () => {
       const card = page.getByTestId("inquiry-card");
@@ -1030,7 +1526,7 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       await expect(card).toContainText("Lage");
       // the facts file arrived: the source line names what it gave
       await card.getByTestId("inquiry-data-toggle").click();
-      await expect(card).toContainText(/Art.*: Stadtbaumkataster/);
+      await expect(card).toContainText(/Art.*: Stadtbaumkataster/u);
       await page.keyboard.press("Escape");
       await expect(card).toBeHidden();
     });
@@ -1098,6 +1594,215 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expectNoErrors(errors);
   });
 
+  test("a design file takes its place and sets the buildings it covers aside", async () => {
+    // A 40 × 30 m block in the Land's coordinates by the Albertplatz, on
+    // the primary tile: read on the page, placed by its own coordinates,
+    // the LoD2 buildings under it out of the index — and back once it goes.
+    const glb = await designBlockGlb([412_300, 112, -5_657_420]);
+    const before = await page.evaluate(
+      () => window.__poc?.stats?.layerStats.city.triangles ?? 0
+    );
+    const status = await page.evaluate(
+      async (bytes) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([new Uint8Array(bytes)], "block.glb")]);
+        return (await design?.status()) ?? null;
+      },
+      [...glb]
+    );
+    expect(status?.source).toBe("file");
+    expect(status?.placement.east).toBeCloseTo(412_300, 3);
+    expect(status?.placement.north).toBeCloseTo(5_657_420, 3);
+    expect(status?.placement.base).toBe(112);
+    expect(status?.hidden ?? 0).toBeGreaterThan(0);
+    await page.waitForFunction(
+      (n) => (window.__poc?.stats?.layerStats.city.triangles ?? 0) < n,
+      before,
+      { timeout: slow(30_000) }
+    );
+    await waitForFrames(page, 1);
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
+    await page.waitForFunction(
+      (n) => (window.__poc?.stats?.layerStats.city.triangles ?? 0) === n,
+      before,
+      { timeout: slow(30_000) }
+    );
+    expectNoErrors(errors);
+  });
+
+  test("an IFC model takes the place its map conversion gives it", async () => {
+    // The block again, as IFC in millimetres about its own origin: web-ifc
+    // (its .wasm from the site's own /wasm/) reads it, IfcMapConversion
+    // puts it by the Albertplatz, and the buildings under it step aside.
+    const ifc = designBlockIfc(412_300, 5_657_420, 112);
+    const status = await page.evaluate(async (text) => {
+      const design = window.__poc?.handle?.design;
+      await design?.load([new File([text], "block.ifc")]);
+      return (await design?.status()) ?? null;
+    }, ifc);
+    expect(status?.source).toBe("file");
+    expect(status?.note).toContain("IfcMapConversion");
+    expect(status?.placement.east).toBeCloseTo(412_300, 3);
+    expect(status?.placement.north).toBeCloseTo(5_657_420, 3);
+    expect(status?.placement.base).toBeCloseTo(112, 3);
+    expect(status?.triangles).toBe(12);
+    expect(status?.hidden ?? 0).toBeGreaterThan(0);
+    // asked like a building: its element's card, with its GlobalId
+    await page.evaluate(() => {
+      const api = window.__poc?.handle;
+      if (!api) {
+        throw new Error("scene handle not published");
+      }
+      api.teleportTo(412_300, 5_657_420 - 90);
+      const x = 412_300 - api.offset.cx;
+      const z = -(5_657_420 - api.offset.cy);
+      api.flyTo({ x, y: 140, z: z + 90 }, { x, y: 122, z });
+    });
+    await waitForFrames(page, 1);
+    const asked = await page.evaluate(
+      async () => await window.__poc?.handle?.inquireAt()
+    );
+    expect(asked?.kind).toBe("design");
+    await withFramesHeld(page, async () => {
+      const card = page.getByTestId("inquiry-card");
+      await expect(card).toBeVisible();
+      await expect(card).toContainText("Entwurf");
+      await expect(card).toContainText("Bauteil (IfcBuildingElementProxy)");
+      await expect(card).toContainText("3YvctVUKr0kugbFTf53O9L");
+      await page.keyboard.press("Escape");
+      await expect(card).toBeHidden();
+    });
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
+    expectNoErrors(errors);
+  });
+
+  test("an OBJ without a place lands in front, a Rhino file at its earth anchor", async () => {
+    const obj = await page.evaluate(async (text) => {
+      const design = window.__poc?.handle?.design;
+      await design?.load([new File([text], "block.obj")]);
+      return (await design?.status()) ?? null;
+    }, designBlockObj());
+    expect(obj?.source).toBe("here");
+    expect(obj?.triangles).toBe(12);
+    expect(obj?.size).toEqual([40, 30, 20]);
+    // read in centimetres it shrinks about its foot, which stays
+    const cm = await page.evaluate(async () => {
+      const design = window.__poc?.handle?.design;
+      await design?.setScale({ unit: "cm", factor: 1 });
+      return (await design?.status()) ?? null;
+    });
+    expect(cm?.scale).toEqual({ unit: "cm", factor: 1 });
+    expect(cm?.size[2]).toBeCloseTo(0.2, 6);
+    expect(cm?.placement.base).toBe(obj?.placement.base);
+    expect(cm?.scaleHint).toContain("Zentimetern");
+    // three's Rhino3dmLoader with rhino3dm from the site's own /wasm/
+    const rhino = await page.evaluate(
+      async (bytes) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([new Uint8Array(bytes)], "block.3dm")]);
+        return (await design?.status()) ?? null;
+      },
+      await designBlock3dm(412_300, 5_657_420, 112)
+    );
+    expect(rhino?.note).toContain("Geo-Ankerpunkt");
+    expect(rhino?.placement.east).toBeCloseTo(412_300, 1);
+    expect(rhino?.placement.north).toBeCloseTo(5_657_420, 1);
+    expect(rhino?.placement.base).toBeCloseTo(112, 3);
+    expect(rhino?.hidden ?? 0).toBeGreaterThan(0);
+    expect(rhino?.note).not.toContain("Textpunkte");
+    // a TextDot is taken out in the Rhino worker (the prelude), the rest loads
+    const dotted = await page.evaluate(
+      async (bytes) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([new Uint8Array(bytes)], "dot.3dm")]);
+        return (await design?.status()) ?? null;
+      },
+      await designBlock3dm(412_300, 5_657_420, 112, true)
+    );
+    expect(dotted?.note).toContain("Geo-Ankerpunkt");
+    expect(dotted?.note).toContain("Textpunkte");
+    expect(dotted?.triangles).toBe(rhino?.triangles);
+    expect(dotted?.size).toEqual(rhino?.size);
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
+    expectNoErrors(errors);
+  });
+
+  test("an OBJ's textures decode in the scene's worker", async () => {
+    // three's TextureLoader makes an <img>, which the worker has not
+    const plain = await page.evaluate(async (text) => {
+      const design = window.__poc?.handle?.design;
+      await design?.load([new File([text], "block.obj")]);
+      return (await design?.status()) ?? null;
+    }, designBlockObj());
+    const textured = await page.evaluate(async ({ obj, mtl }) => {
+      const canvas = new OffscreenCanvas(64, 64);
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = "#c86450";
+        ctx.fillRect(0, 0, 64, 64);
+      }
+      const png = await canvas.convertToBlob({ type: "image/png" });
+      const design = window.__poc?.handle?.design;
+      await design?.load([
+        new File([obj], "block.obj"),
+        new File([mtl], "block.mtl"),
+        new File([png], "block.png"),
+      ]);
+      return (await design?.status()) ?? null;
+    }, designBlockObjTextured());
+    expect(textured?.triangles).toBe(12);
+    expect(textured?.note).toBeNull();
+    expect(textured?.hasLooks).toBe(true);
+    expect(textured?.texturesDropped).toBe(false);
+    // the decoded texture is weighed with it
+    expect(textured?.bytes ?? 0).toBeGreaterThan(plain?.bytes ?? 0);
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
+    expectNoErrors(errors);
+  });
+
+  test("a landscape plan lies on the ground in its colours and takes no house away", async () => {
+    // DXF in the Land's coordinates by the Albertplatz: hatches as lawn
+    // and paving, circles on a tree layer as trees
+    const dxf = await page.evaluate(
+      async (text) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([text], "plan.dxf")]);
+        return (await design?.status()) ?? null;
+      },
+      designPlanDxf([412_300, 5_657_420])
+    );
+    expect(dxf?.note).toContain("Landschaftsplan");
+    expect(dxf?.note).toContain("Rasen");
+    expect(dxf?.note).toContain("2 Bäume");
+    expect(dxf?.source).toBe("file");
+    expect(dxf?.placement.east).toBeCloseTo(412_270, 0);
+    expect(dxf?.fileColours).toBe(true);
+    expect(dxf?.hidden).toBe(0);
+    // a GeoPackage, read with sql.js from the site's own /wasm/
+    const gpkg = await page.evaluate(
+      async (bytes) => {
+        const design = window.__poc?.handle?.design;
+        await design?.load([new File([new Uint8Array(bytes)], "plan.gpkg")]);
+        return (await design?.status()) ?? null;
+      },
+      await designPlanGpkg([412_300, 5_657_420])
+    );
+    expect(gpkg?.note).toContain("Rasen");
+    expect(gpkg?.placement.north).toBeCloseTo(5_657_400, 0);
+    await page.evaluate(async () => {
+      await window.__poc?.handle?.design.remove();
+    });
+    expectNoErrors(errors);
+  });
+
   test("demolishes the building under the crosshair", async () => {
     // Demolish end to end: hover the camera over a real building, aim at it
     // and trigger the crosshair demolition — the building count must drop.
@@ -1125,6 +1830,16 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     expect(trianglesAfter).toBeLessThan(trianglesBefore);
     expectNoErrors(errors);
   });
+});
+
+/**
+ * The look controls and the motion-keyed quality, on a page of their own:
+ * CI runs them, with the view link below, on a runner of their own (the
+ * `@desktop-look` shard), since the rendering group above had grown to
+ * twice the other shards. Each sets the pose and the time it needs itself.
+ */
+test.describe("desktop viewer, look", { tag: "@desktop-look" }, () => {
+  bootDesktopViewer();
 
   /**
    * The style/post controls, each bound to real rendered frames: a shader that
@@ -1138,14 +1853,12 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // Driven through the look store the sliders write to — one set() per
     // step is one batch of uniform writes; each step's style is read back,
     // so a dropped write cannot pass as a frame that drew without errors.
-    const steps: Array<{ set: Partial<LookValues>; style: string }> = [
+    const steps: { set: Partial<LookValues>; style: string }[] = [
       // What is left of the look: the fog (a uniform, it compiles nothing)
-      // at full strength and back down, and the crowns' switch (off swaps
-      // the near multi-tuft crowns for the cheap ones, on brings them
-      // back). The look's other strengths are constants, compiled with the
-      // boot.
-      { set: { fogAmount: 1, multiTuft: false }, style: "pastel" },
-      { set: { fogAmount: 0.35, multiTuft: true }, style: "pastel" },
+      // at full strength and back down. The look's other strengths are
+      // constants, compiled with the boot.
+      { set: { fogAmount: 1 }, style: "pastel" },
+      { set: { fogAmount: 0.35 }, style: "pastel" },
       // The picture styles: the first non-default style compiles the
       // stylize pass (one program for all of them), the next only moves its
       // uniforms and the grain's film switch; pastel switches the pass off
@@ -1169,16 +1882,57 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
         }
         look.set(values);
         const now = look.get();
-        return { style: now.style, fog: now.fogAmount, tufts: now.multiTuft };
+        return { style: now.style, fog: now.fogAmount };
       }, step.set);
       expect(applied.style).toBe(step.style);
       if ("fogAmount" in step.set) {
         expect(applied.fog).toBe(step.set.fogAmount);
-        expect(applied.tufts).toBe(step.set.multiTuft);
       }
       await waitForFrames(page, 2);
       expectNoErrors(errors);
     }
+    // Night (scene-environment.ts): the lamps' halos and pools are drawn
+    // by their shared materials after dark only, and compiled ahead by day
+    // all the same — a first night builds nothing inside a frame. On
+    // SwiftShader a tile shows after its compile wait while its compile
+    // still waits for its turn: the night is asked once they have all run.
+    await expect
+      .poll(
+        async () =>
+          await page.evaluate(async () => {
+            const info = await window.__poc?.handle?.getRenderInfo();
+            return info?.compilesQueued ?? -1;
+          }),
+        { timeout: slow(120_000) }
+      )
+      .toBe(0);
+    const builtBefore = await page.evaluate(async () => {
+      const handle = window.__poc?.handle;
+      if (!handle) {
+        throw new Error("handle not published");
+      }
+      const info = await handle.getRenderInfo();
+      const before = info.framedBuilds.other;
+      handle.setSun(new Date("2026-07-15T23:00:00.000Z"));
+      return before;
+    });
+    let builtAfter: number;
+    try {
+      await waitForFrames(page, 2);
+      builtAfter = await page.evaluate(async () => {
+        const info = await window.__poc?.handle?.getRenderInfo();
+        return info?.framedBuilds.other ?? -1;
+      });
+    } finally {
+      // back to day for the tests after, whether or not the night held;
+      // its shadow redraw lands here, not in theirs
+      await page.evaluate(() => {
+        window.__poc?.handle?.setSun(new Date("2026-07-15T10:00:00.000Z"));
+      });
+      await waitForFrames(page, 3);
+    }
+    expect(builtAfter).toBe(builtBefore);
+    expectNoErrors(errors);
   });
 
   test("quality regresses while moving and recovers when still", async () => {
@@ -1187,13 +1941,26 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // every step). Asserted through __poc.regressed rather than pixels — the
     // pass's visual delta is exactly what SwiftShader renders least like a
     // GPU.
+    // On foot: a camera left flying, 50 m over these frames, rightly
+    // redraws the finest ring. What the test before asked of the rings is
+    // drawn first, one a frame (it ends with a `setSun`, which asks all
+    // four).
+    await page.evaluate(() => {
+      const handle = window.__poc?.handle;
+      const state = handle?.getCameraState();
+      if (handle && state) {
+        handle.applyCameraState({ ...state, mode: "walk", pitchDeg: 0 });
+      }
+    });
+    await waitForFrames(page, 2);
+    await page.waitForFunction(() => !window.__poc?.handle?.shadowBusy());
     const before = await page.evaluate(() => ({
       frames: window.__poc?.frames ?? 0,
       shadows: window.__poc?.shadowRenders ?? 0,
     }));
     await page.keyboard.down("KeyW");
-    // 8 walking frames move at most 8 × 0.45 m = 3.6 m — inside the 30 m
-    // follow dead zone, so the shadow map must not be redrawn on the way.
+    // 8 walking frames move at most 8 × 0.45 m = 3.6 m — inside the finest
+    // ring's 16 m dead zone, so walking itself redraws no ring.
     await waitForFrames(page, 8);
     expect(await page.evaluate(() => window.__poc?.regressed)).toBe(true);
     const after = await page.evaluate(() => ({
@@ -1204,7 +1971,8 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     const shadowRenders = after.shadows - before.shadows;
     expect(frames).toBeGreaterThanOrEqual(8);
     // Before the dead zone this equalled `frames` (one depth pass per frame).
-    expect(shadowRenders).toBeLessThan(frames / 2);
+    // A crown tier's flip on the way asks every ring once, one a frame.
+    expect(shadowRenders).toBeLessThanOrEqual(SHADOW_RINGS);
 
     await page.keyboard.up("KeyW");
     // Recovery is frame-driven (RECOVER_MS of accumulated dt with the camera
@@ -1213,6 +1981,117 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
       timeout: slow(60_000),
     });
     expectNoErrors(errors);
+  });
+});
+
+/**
+ * A view link (`?snap=`, plan 048): the page boots at the snapshot's view,
+ * and *Link kopieren* writes a link to where the camera is. Its own page:
+ * the link is read at the boot. A committed QA view on the spawn tile
+ * (the lite profile streams that one) is the link.
+ */
+test.describe("a view link", { tag: "@desktop-look" }, () => {
+  test("opens the page at the linked view, Link kopieren writes one, and leaving ends the scene", async ({
+    browser,
+  }) => {
+    const parsed = parseSnapshot(
+      readFileSync(
+        path.join(process.cwd(), "qa", "views", "fountain-july-day.json"),
+        "utf-8"
+      )
+    );
+    if (!parsed.ok) {
+      throw new Error(parsed.reason);
+    }
+    const linked = parsed.snapshot;
+    const context = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const linkPage = await context.newPage();
+    const linkErrors = watchErrors(linkPage);
+    await linkPage.goto(snapshotHref(LITE, linked));
+    const gl = await hasWebGpu(linkPage);
+    if (process.env.CI) {
+      expect(gl).toBe(true);
+    }
+    test.skip(!gl, "WebGPU is genuinely unavailable in this environment");
+    await linkPage.waitForFunction(
+      () => window.__poc?.ready === true,
+      undefined,
+      { timeout: slow(120_000) }
+    );
+    const camera = await linkPage.evaluate(() =>
+      window.__poc?.handle?.getCameraState()
+    );
+    expect(camera?.mode).toBe(linked.camera.mode);
+    expect(camera?.epsg.x).toBeCloseTo(linked.camera.epsg.x, 0);
+    expect(camera?.epsg.y).toBeCloseTo(linked.camera.epsg.y, 0);
+    // the same direction (getCameraState gives it in (−180°, 180°])
+    const turned =
+      (camera?.headingDeg ?? Number.NaN) - linked.camera.headingDeg;
+    expect((((turned % 360) + 540) % 360) - 180).toBeCloseTo(0, 0);
+
+    await withFramesHeld(linkPage, async () => {
+      await openSidebar(linkPage);
+      await linkPage.getByRole("tab", { name: "Erweitert" }).click();
+      await linkPage.getByRole("button", { name: "Link kopieren" }).click();
+      await expect(
+        linkPage.getByText("Link in die Zwischenablage kopiert")
+      ).toBeVisible();
+    });
+    const copied = await linkPage.evaluate(
+      async () => await navigator.clipboard.readText()
+    );
+    const url = new URL(copied);
+    // the site's page with the view in its query and without this page's
+    // QA knobs (`?scene=lite`)
+    expect(url.pathname).toBe(SITE);
+    expect([...url.searchParams.keys()]).toEqual(["snap"]);
+    expect(url.hash).toBe("");
+    const back = snapshotFromSearch(url.search);
+    expect(back?.ok).toBe(true);
+    if (back?.ok) {
+      expect(back.snapshot.camera.epsg.x).toBeCloseTo(linked.camera.epsg.x, 0);
+      expect(back.snapshot.date).toBe(linked.date);
+    }
+    expectNoErrors(linkErrors);
+
+    // Leaving for the start page ends the scene: its teardown answers well
+    // inside the page's cut-off (scene-client.ts WORKER_TEARDOWN_MS, 3 s),
+    // not after three waited for the GPU's whole queue, and the start page
+    // takes a click.
+    await linkPage.evaluate(() => {
+      const handle = window.__poc?.handle;
+      if (!handle) {
+        return;
+      }
+      const dispose = handle.dispose.bind(handle);
+      handle.dispose = async () => {
+        const started = performance.now();
+        await dispose();
+        (window as { leftMs?: number }).leftMs = performance.now() - started;
+      };
+    });
+    await linkPage.getByRole("link", { name: "Andere Stadt wählen" }).click();
+    await linkPage.waitForURL((at) => at.pathname === "/");
+    const left = await linkPage.waitForFunction(
+      () => (window as { leftMs?: number }).leftMs,
+      undefined,
+      { timeout: slow(10_000) }
+    );
+    const leftMs = await left.jsonValue();
+    expect(leftMs).toBeLessThan(2000);
+    // nothing failed on the way out but the timestamps' read-back three
+    // logs once the device it waited on is gone (docs/rendering.md,
+    // "Workarounds for upstream bugs")
+    expect(linkErrors.page).toEqual([]);
+    expect(
+      linkErrors.console.filter(
+        (line) => !line.includes("THREE.Error resolving queries")
+      )
+    ).toEqual([]);
+    await linkPage.locator(`a[href="${SITE}"]`).first().click();
+    await linkPage.waitForURL((at) => at.pathname === SITE);
+    await context.close();
   });
 });
 
@@ -1228,49 +2107,53 @@ test.describe("mobile", { tag: "@phone" }, () => {
   });
 
   test("touch UI: joystick, drawer, drag-look, double-tap travel, long-press ask", async ({
-    page,
+    page: phonePage,
   }) => {
-    const errors = watchErrors(page);
+    const phoneErrors = watchErrors(phonePage);
 
-    await page.goto(LITE);
-    const webgl = await hasWebGl(page);
+    await phonePage.goto(LITE);
+    const phoneGl = await hasWebGpu(phonePage);
     if (process.env.CI) {
-      expect(webgl).toBe(true);
+      expect(phoneGl).toBe(true);
     }
-    // Conditional runtime skip — render assertions are meaningless without WebGL.
-    test.skip(!webgl, "WebGL is genuinely unavailable in this environment");
-    await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
-      timeout: slow(120_000),
-    });
+    // Conditional runtime skip — render assertions are meaningless without WebGPU.
+    test.skip(!phoneGl, "WebGPU is genuinely unavailable in this environment");
+    await phonePage.waitForFunction(
+      () => window.__poc?.ready === true,
+      undefined,
+      {
+        timeout: slow(120_000),
+      }
+    );
 
     // Everything up to the drag is the HUD alone: no scene frames needed.
-    await withFramesHeld(page, async () => {
+    await withFramesHeld(phonePage, async () => {
       // Touch chrome instead of keyboard hints.
-      await expect(page.getByTestId("joystick")).toBeVisible();
+      await expect(phonePage.getByTestId("joystick")).toBeVisible();
       await expect(
-        page.getByRole("button", { name: "Szeneneinstellungen" })
+        phonePage.getByRole("button", { name: "Szeneneinstellungen" })
       ).toBeVisible();
-      await expect(page.getByText("WASD")).toHaveCount(0);
+      await expect(phonePage.getByText("WASD")).toHaveCount(0);
 
       // Demolish/insert live in the sidebar's Werkzeuge section; they used to
       // float over the scene as well, on the screens with the least room.
-      await expect(page.getByRole("button", { name: "Abreißen" })).toHaveCount(
-        0
-      );
-      await expect(page.getByRole("button", { name: "Einsetzen" })).toHaveCount(
-        0
-      );
+      await expect(
+        phonePage.getByRole("button", { name: "Abreißen" })
+      ).toHaveCount(0);
+      await expect(
+        phonePage.getByRole("button", { name: "Einsetzen" })
+      ).toHaveCount(0);
 
       // The hint bar fits the viewport (it wraps rather than being cut off) and
       // can be waved away — everything it says is in the sidebar too.
-      const hintBar = page.getByText("umsehen").first();
+      const hintBar = phonePage.getByText("umsehen").first();
       const hintBox = await hintBar.boundingBox();
-      const viewport = page.viewportSize();
+      const viewport = phonePage.viewportSize();
       expect(hintBox && viewport).toBeTruthy();
       if (hintBox && viewport) {
         expect(hintBox.x + hintBox.width).toBeLessThanOrEqual(viewport.width);
       }
-      const dismiss = page.getByRole("button", { name: "Verstanden" });
+      const dismiss = phonePage.getByRole("button", { name: "Verstanden" });
       await expect(dismiss).toBeVisible();
       await dismiss.tap();
       await expect(dismiss).toHaveCount(0);
@@ -1278,51 +2161,61 @@ test.describe("mobile", { tag: "@phone" }, () => {
       // The start view is aerial, so the altitude stick stands opposite the
       // joystick; the plane button — the F key's stand-in — lands you on foot
       // and takes the stick away with fly mode.
-      await expect(page.getByTestId("altitude-stick")).toBeVisible();
-      const flyButton = page.getByRole("button", { name: "Fliegen" });
+      await expect(phonePage.getByTestId("altitude-stick")).toBeVisible();
+      const flyButton = phonePage.getByRole("button", { name: "Fliegen" });
       await expect(flyButton).toHaveAttribute("aria-pressed", "true");
-      const toolbar = page.getByRole("toolbar", { name: "Werkzeuge" });
+      const toolbar = phonePage.getByRole("toolbar", { name: "Werkzeuge" });
       const flyingBox = await toolbar.boundingBox();
       // a hidden toolbar has no box, and two missing boxes compare equal
       expect(flyingBox).not.toBeNull();
       await flyButton.tap();
-      await expect(page.getByTestId("altitude-stick")).toHaveCount(0);
+      // the mode is the scene's: it answers once its turn comes, which a
+      // software-rendered compile in the worker can hold for seconds
+      await expect(phonePage.getByTestId("altitude-stick")).toHaveCount(0, {
+        timeout: slow(30_000),
+      });
       // The stick sits above the toolbar, so the toolbar doesn't jump.
       const walkingBox = await toolbar.boundingBox();
       expect(walkingBox?.y).toBe(flyingBox?.y);
       await expect(flyButton).toHaveAttribute("aria-pressed", "false");
       expect(
-        await page.evaluate(() => window.__poc?.handle?.getCameraState().mode)
+        await phonePage.evaluate(
+          () => window.__poc?.handle?.getCameraState().mode
+        )
       ).toBe("walk");
 
       // The toolbar folds away into one button and back.
-      await page.getByRole("button", { name: "Werkzeuge einklappen" }).tap();
+      await phonePage
+        .getByRole("button", { name: "Werkzeuge einklappen" })
+        .tap();
       await expect(flyButton).toHaveCount(0);
-      await page.getByRole("button", { name: "Werkzeuge zeigen" }).tap();
+      await phonePage.getByRole("button", { name: "Werkzeuge zeigen" }).tap();
       await expect(flyButton).toBeVisible();
     });
 
     // One-finger drag turns the view (synthetic touch pointer events; the
     // canvas handler ignores mouse pointers).
-    const headingBefore = await page.evaluate(
+    const headingBefore = await phonePage.evaluate(
       () => window.__poc?.handle?.getPose().heading ?? 0
     );
-    await dragAcrossCanvas(page, "touch", 400);
-    const headingAfter = await page.evaluate(
-      () => window.__poc?.handle?.getPose().heading ?? 0
-    );
+    await dragAcrossCanvas(phonePage, "touch", 400);
+    const headingAfter = await phonePage.evaluate(async () => {
+      // the drag's turns reached the scene
+      await window.__poc?.handle?.sync();
+      return window.__poc?.handle?.getPose().heading ?? 0;
+    });
     expect(Math.abs(headingAfter - headingBefore)).toBeGreaterThan(0.2);
 
     // Double-tap on the ground ahead travels there. Synthetic events with
     // back-to-back timestamps: under software rendering the main thread is
     // busy for >320 ms between two real taps, which a real device never is.
-    const poseBefore = await page.evaluate(() =>
+    const poseBefore = await phonePage.evaluate(() =>
       window.__poc?.handle?.getPose()
     );
-    await page.evaluate(() => {
+    await phonePage.evaluate(() => {
       const canvas = document.querySelector("canvas[data-engine]");
       if (!canvas) {
-        throw new Error("no WebGL canvas");
+        throw new Error("no scene canvas");
       }
       const fire = (type: string, pointerId: number) =>
         canvas.dispatchEvent(
@@ -1340,7 +2233,7 @@ test.describe("mobile", { tag: "@phone" }, () => {
       fire("pointerdown", 51);
       fire("pointerup", 51);
     });
-    await page.waitForFunction(
+    await phonePage.waitForFunction(
       (before) => {
         const pose = window.__poc?.handle?.getPose();
         if (!(pose && before)) {
@@ -1360,12 +2253,12 @@ test.describe("mobile", { tag: "@phone" }, () => {
     // the answer comes — under software rendering the press timer fires
     // late, so the release waits for it — and the answer is a bottom sheet
     // that folds the joystick away.
-    await aimAtBuilding(page);
-    const hold = (type: "pointerdown" | "pointerup") =>
-      page.evaluate((event) => {
+    await aimAtBuilding(phonePage);
+    const hold = async (type: "pointerdown" | "pointerup") =>
+      await phonePage.evaluate((event) => {
         const canvas = document.querySelector("canvas[data-engine]");
         if (!canvas) {
-          throw new Error("no WebGL canvas");
+          throw new Error("no scene canvas");
         }
         const rect = canvas.getBoundingClientRect();
         canvas.dispatchEvent(
@@ -1380,41 +2273,47 @@ test.describe("mobile", { tag: "@phone" }, () => {
         );
       }, type);
     await hold("pointerdown");
-    const sheet = page.getByTestId("inquiry-card");
+    const sheet = phonePage.getByTestId("inquiry-card");
     await expect(sheet).toHaveAttribute("data-variant", "sheet", {
       timeout: slow(30_000),
     });
     await hold("pointerup");
-    await withFramesHeld(page, async () => {
-      await expect(page.getByTestId("joystick")).toHaveCount(0);
+    await withFramesHeld(phonePage, async () => {
+      await expect(phonePage.getByTestId("joystick")).toHaveCount(0);
       // Folded: what it is; "Angaben und Quellen" unfolds the rest (the
       // drawer's snap point, as a swipe up would).
-      const unfold = page.getByRole("button", { name: "Angaben und Quellen" });
+      const unfold = phonePage.getByRole("button", {
+        name: "Angaben und Quellen",
+      });
       await expect(unfold).toHaveAttribute("aria-expanded", "false");
       await unfold.tap();
       await expect(
-        page.getByRole("button", { name: "Angaben einklappen" })
+        phonePage.getByRole("button", { name: "Angaben einklappen" })
       ).toHaveAttribute("aria-expanded", "true");
       await expect(sheet).toContainText("Kennung");
       await sheet.getByTestId("inquiry-data-toggle").tap();
       await expect(sheet).toContainText("Quelle: GeoSN");
       // The drawer's own close: it slides away, then the card is gone.
-      await page.getByRole("button", { name: "Karte schließen" }).tap();
+      await phonePage.getByRole("button", { name: "Karte schließen" }).tap();
       await expect(sheet).toHaveCount(0, { timeout: slow(10_000) });
-      await expect(page.getByTestId("joystick")).toBeVisible();
+      await expect(phonePage.getByTestId("joystick")).toBeVisible();
     });
 
     // Drawer opens with the scene settings.
-    await withFramesHeld(page, async () => {
-      await page.getByRole("button", { name: "Szeneneinstellungen" }).tap();
+    await withFramesHeld(phonePage, async () => {
+      await phonePage
+        .getByRole("button", { name: "Szeneneinstellungen" })
+        .tap();
       // The Erkunden tab is what a drawer opens on; the tabbed structure
       // itself is asserted on the desktop page, which is already booted.
-      await expect(page.getByRole("region", { name: "Orte" })).toBeVisible({
-        timeout: slow(30_000),
-      });
+      await expect(phonePage.getByRole("region", { name: "Orte" })).toBeVisible(
+        {
+          timeout: slow(30_000),
+        }
+      );
     });
 
-    expectNoErrors(errors);
+    expectNoErrors(phoneErrors);
   });
 });
 
@@ -1423,8 +2322,8 @@ test.describe("mobile", { tag: "@phone" }, () => {
  * every tile in the tileset (scene-profile.ts). The specs above stream the
  * spawn tile alone, so this is the one that walks the multi-tile path — tile
  * events arriving while the spawn tile boots, dressings queued for several
- * tiles, the site-wide minimap footprints. A load event that throws there
- * leaves `ready` false forever, which is exactly what this waits on.
+ * tiles. A load event that throws there leaves `ready` false forever,
+ * which is exactly what this waits on.
  */
 test.describe("whole site streamed", () => {
   // A retry would start the same long boot again and run the job past
@@ -1448,44 +2347,36 @@ test.describe("whole site streamed", () => {
     // job for a slow machine teaches nothing, while a real hang still fails.
     test.setTimeout(slow(270_000));
     const context = await browser.newContext({ viewport: SITE_VIEWPORT });
-    const page = await context.newPage();
-    const errors = watchErrors(page);
+    const tilesPage = await context.newPage();
+    const tilesErrors = watchErrors(tilesPage);
     try {
-      await page.goto(`${LITE}&block=1`);
-      const webgl = await hasWebGl(page);
+      await tilesPage.goto(`${LITE}&block=1`);
+      const tilesGl = await hasWebGpu(tilesPage);
       if (process.env.CI) {
-        expect(webgl).toBe(true);
+        expect(tilesGl).toBe(true);
       }
-      test.skip(!webgl, "WebGL is genuinely unavailable in this environment");
+      test.skip(
+        !tilesGl,
+        "WebGPU is genuinely unavailable in this environment"
+      );
 
-      await page.waitForFunction(
+      await tilesPage.waitForFunction(
         () => window.__poc?.ready === true,
         undefined,
         {
           timeout: slow(240_000),
         }
       );
-      const stats = await page.evaluate(() => window.__poc?.stats?.layerStats);
+      const stats = await tilesPage.evaluate(
+        () => window.__poc?.stats?.layerStats
+      );
       // More than the spawn tile is in view from the spawn pose: terrain and
       // buildings of at least one neighbour came through the stream.
       expect(stats?.terrain.meshes ?? 0).toBeGreaterThan(1);
       expect(stats?.city.meshes ?? 0).toBeGreaterThan(1);
       expect(stats?.vegetation.instances ?? 0).toBeGreaterThan(1000);
 
-      // The minimap names every site tile's footprints up front, streamed
-      // or not: some lie west of the spawn tile (412 000 E).
-      const westmost = await page.evaluate(() => {
-        const polys = window.__poc?.handle?.getFootprints() ?? [];
-        let minX = Number.POSITIVE_INFINITY;
-        for (const poly of polys) {
-          for (const [x] of poly.pts) {
-            minX = Math.min(minX, x);
-          }
-        }
-        return minX;
-      });
-      expect(westmost).toBeLessThan(412_000);
-      expectNoErrors(errors);
+      expectNoErrors(tilesErrors);
     } finally {
       await context.close();
     }

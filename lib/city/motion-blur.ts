@@ -41,7 +41,7 @@ const prev = new Float64Array(4);
 const clip = new Float64Array(4);
 
 function into(m: Mat4, v: Float64Array, out: Float64Array): void {
-  for (let r = 0; r < 4; r++) {
+  for (let r = 0; r < 4; r += 1) {
     out[r] = m[r] * v[0] + m[4 + r] * v[1] + m[8 + r] * v[2] + m[12 + r] * v[3];
   }
 }
@@ -77,7 +77,8 @@ export function motionPixels(
         }
         const dx = ((clip[0] / clip[3] - x) * width) / 2;
         const dy = ((clip[1] / clip[3] - y) * height) / 2;
-        moved[n++] = Math.hypot(dx, dy);
+        moved[n] = Math.hypot(dx, dy);
+        n += 1;
       }
     }
   }
@@ -87,6 +88,73 @@ export function motionPixels(
     median: (moved[n / 2 - 1] + moved[n / 2]) / 2,
     most: moved[n - 1],
   };
+}
+
+/** The frame interval a smear is drawn for (ms): each frame's way is
+ *  scaled to it (`framePace`), so an uneven frame rate smears evenly — a
+ *  slow frame among fast ones was drawn smeared twice as far, and one
+ *  near the threshold blurred while its neighbours stayed sharp. */
+export const NOMINAL_FRAME_MS = 1000 / 60;
+
+/** What a frame's way is multiplied by: the nominal interval over its
+ *  own, within ×0.25…2 (a stall's frame is no measure of speed). */
+export function framePace(frameMs: number): number {
+  if (!(frameMs > 0)) {
+    return 1;
+  }
+  return Math.min(Math.max(NOMINAL_FRAME_MS / frameMs, 0.25), 2);
+}
+
+/** Frames the blur stays on once the motion fell under half its
+ *  threshold: a walk slowing to a stop, a hand's uneven turn, do not
+ *  switch it on and off frame by frame — each switch took the windows'
+ *  fine detail away and gave it back, a flicker. */
+export const BLUR_HOLD_FRAMES = 12;
+
+/** The blur's state across frames (`stepBlurGate`). */
+export interface BlurGate {
+  on: boolean;
+  /** frames in a row under half the threshold */
+  below: number;
+}
+
+export function createBlurGate(): BlurGate {
+  return { on: false, below: 0 };
+}
+
+/**
+ * Whether this frame is drawn blurred, with hysteresis: on once `blurs`
+ * says so, off only after `BLUR_HOLD_FRAMES` frames in a row under half
+ * its threshold. A jump draws one frame sharp and leaves the state.
+ * `everywhere` (the blur in the antialiasing's place) holds nothing: a
+ * frame is blurred only while every sample smears a pixel.
+ */
+export function stepBlurGate(
+  gate: BlurGate,
+  motion: Motion,
+  everywhere: boolean
+): boolean {
+  if (motion.most >= BLUR_JUMP_PX) {
+    return false;
+  }
+  if (blurs(motion, everywhere)) {
+    gate.on = true;
+    gate.below = 0;
+    return true;
+  }
+  // where the blur stands in for the antialiasing (a phone), a frame
+  // that smears under a pixel would keep neither: no hold
+  if (!gate.on || everywhere) {
+    gate.on = false;
+    gate.below = 0;
+    return false;
+  }
+  gate.below = motion.median < BLUR_MIN_PX / SHUTTER / 2 ? gate.below + 1 : 0;
+  if (gate.below >= BLUR_HOLD_FRAMES) {
+    gate.on = false;
+    gate.below = 0;
+  }
+  return gate.on;
 }
 
 /**

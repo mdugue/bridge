@@ -48,7 +48,7 @@ flowchart TB
   DRESS --> TRAF["traffic flows (data layer, off by default)<br/>one glass body per counted direction, running light"]
   TER --> TRAFC["L1 only: coarse traffic flows<br/>(where the fine level has not loaded)"]
   SCENE --> DATA["site-wide data layers (off by default)<br/>bicycle glass columns (live),<br/>timetable tram cars + light trails"]
-  SCENE --> LIGHTS["lamp light pool<br/>3 real point lights (a phone 1), fed by visible tiles"]
+  SCENE --> LIGHTS["lamp light pool<br/>3 real spot lights (a phone 1), fed by visible tiles"]
   SCENE --> SUN["sun rig<br/>directional light + shadow camera, sky dome, hemisphere fill"]
 ```
 
@@ -100,19 +100,20 @@ is the codebook.
 | Visual variable | Driven by | Source | Where |
 |---|---|---|---|
 | Ground height + mesh density | fine level: an error-bounded TIN of the native 1 m DGM1 — vertices where the ground bends, within ±0.15 m everywhere; heights read from its triangles through a bucket index. Coarse level: the DGM resampled to 512², heights read back from the grid | DGM1 | `scripts/bake-tiles.ts`, `scripts/bake-terrain-tin.ts`, `lib/city/terrain-tin.ts` (`TinIndex`), `terrain-layer.ts`, `lib/city/terrain-geometry.ts` |
-| Ground where no tile has streamed yet | the ground plate: the fine ground's height at a 62.5 m grid over the whole site (33² per tile, the edges shared), its inner vertices 1.5 m under it, each vertex the commonest land-cover class around it (read across tile edges) in the palette, matte; shown per tile only while that tile has no terrain level on screen | DGM1 + Basis-DLM | `lib/city/ground-plate.ts`, `ground-plate-layer.ts`, `scripts/prepare/plate.ts` `bakePlate` |
+| Ground where no tile has streamed yet | the ground plate: the fine ground's height at a 62.5 m grid over the whole site (33² per tile, the edges shared), its inner vertices 1.5 m under it, each vertex the commonest land-cover class around it (read across tile edges) in the palette, matte; shown per tile only while that tile has no terrain level on screen; its heights (bilinear) are also the camera's ground where no terrain has landed yet, so a flight to a hill's vantage ends over the hill | DGM1 + Basis-DLM | `lib/city/ground-plate.ts`, `lib/city/plate-height.ts`, `ground-plate-layer.ts`, `scripts/prepare/plate.ts` `bakePlate` |
 | Wall ribbon placement | earth-retaining walls — and the quays the bake measures where the water meets a steep bank (`kind: "quay"`) — snap to the step the fine TIN measures (face at the ramp foot, a coping cap back to where the ground reaches its level, per column; medians only over the vertices that found the same step, one run per cap level — no slab across two terraces); other walls on the OSM line | DGM1 + OSM walls + the class raster's water | `lib/city/walls.ts`, `lib/city/wall-snap.ts` (at build) |
 | Ground shading | the grid's normals, pulled to straight up below ~12° of tilt (the DGM's micro-relief and the 8-bit normals lit as blotches); real slopes keep their shading | DGM1 | `terrain-layer.ts` (`terrainNormal()`) |
 | Ground step at walls (coarse level only) | wall line + `kind` ∈ retaining/city/embankment/cliff/quay, height ≥ 1.5 m, burned into the 512² grid at build time | OSM | `lib/city/terrain-conflate.ts` (probe 11 m each side, feather 11 m, clamp 18 m) |
 | Contour lines | data-frame elevation (`dataPosition`, `shader-chunks.ts`), 2 m minor / 10 m major; each set fades once its lines crowd closer than a few pixels, and on near-flat ground (< ~3 % grade) and under water, where the DGM's noise only drew squiggles | DGM1 | `terrain-layer.ts` (`contourInk()`) |
 | Ground colour | land-cover class → the one palette, painted on the GPU into an sRGB, mipmapped, anisotropy-16 splat (a desktop's fine level at half its 4096² class raster's size: each texel the mean of the 2×2 classes under it — the full-size splat's first mip; `splatScaleFor`); the class PNG is decoded byte-exact by `lib/city/png-raster.ts`, never by the browser (WebKit colour-managed and dithered the ids into speckles) | Basis-DLM | `lib/city/landcover.ts`, `landcover-splat.ts`, `terrain-layer.ts` |
-| Meadow lush ↔ dry | NDVI on class 1 only (`meadowNdvi`), read from a coarse mip (~10 m) so it drifts rather than flecks | DOP | `terrain-layer.ts` |
+| Meadow lush ↔ dry | NDVI on class 1 only (`meadowNdvi`), its 8 m mip read through a cubic B-spline (`bsplineSample`) so it drifts rather than flecks or squares | DOP | `terrain-layer.ts` |
 | Meadow relief | low-frequency colour + normal mottle on class 1 | — (synth) | `terrain-layer.ts`: `grassMottle()` (colour), `terrainNormal(true)` (normal) |
-| Arable | class 9's loam turned toward a crop's green where the NDVI says something grows (read from a coarse mip, bias 2.5); faint furrows every 0.75 m along the field's long axis (the paving raster's frame), half as strong under a crop | Basis-DLM / OSM (the class), DOP (NDVI) | `terrain-layer.ts` `arableGround` |
+| Arable | class 9's loam turned toward a crop's green where the NDVI says something grows (the meadow's smoothed coarse read); faint furrows every 0.75 m along the field's long axis (the paving raster's frame), half as strong under a crop | Basis-DLM / OSM (the class), DOP (NDVI) | `terrain-layer.ts` `arableGround` |
 | Kerb stone | a 12 × 24 cm stone band on the kerb lines (the smoothed road edge; none over a road tunnel, whose road is not painted; none along a road OSM marks as out of town — a motorway, a `DE:rural` zone, 70 km/h and up), its face toward the road, its top falling to the pavement's level at the back (no second step on the pavement side), in the fine terrain glTF, casting; 12 cm over the road, 3 cm or flush along its lowered stretches (`low`: crossings, `kerb=*` nodes, driveways), ramped over 0.5 m | Basis-DLM (+ OSM islands, crossings, `kerb=*`, service ways) | `lib/city/kerbs.ts` (`kerbHeightAt`), `pipeline/bake/kerb_drops.py`, `kerb-layer.ts` |
 | Kerb shadow | the road strip out to 0.12 m · cot(sun elevation) across the kerb, when the sun stands behind it: −28 %; where the kerb band is drawn | Basis-DLM + sun | `ground-detail.ts` (`sunDirection`) |
 | Kerb band | signed distance (m) to the road edge, baked and smoothed (`edges_<t>.png`; else the class texels box-smoothed): a pale band 0.25 m on the pavement side, a gutter 0.35 m on the road side; only round a baked kerb line (the road-markings raster's kerb bit, `LANE_BITS.kerb`: none out of town, beside water or rails, over a tunnel, or along a lowered stretch — the bake leaves its texels out; the coarse level: where the far side is ground, classes 0–4, 6); fades out past ~0.5 m/px (*Bodendetail*) | Basis-DLM + OSM (out-of-town roads) | `ground-detail.ts` (`kerbLines`), `pipeline/bake/markings.py` |
 | Lawn edge | the same distance for the meadow (urban green included): a darker lip 0.25 m and a normal kink | Basis-DLM (+ DOP) | `ground-detail.ts` |
+| Path edge | a path (class 6) beside other ground, near the camera (to 1.2 m/px): the 4×4 class texels' path coverage under a cubic B-spline, the edge cut on its iso line 0.45, wandering ±0.12 m by a world-space noise, frayed over 0.25 m, the palette colours of path and neighbour across it; sand, slabs and urban green follow that weight; the paving raster's walk kinds as B-spline shares cut at one half (to 1 m/px) | Basis-DLM, OSM | `ground-detail.ts` (`smoothPaths`, `walkShares`) |
 | Paving pattern | OSM `surface` on the road (class 7) and on the pavement (the rest), the way direction orienting slabs and sett rows; unknown → asphalt on the road, slabs on class 4, sand on class 6; joints fade out past ~5 cm/px, the material's tint stays | OSM (+ Basis-DLM class) | `ground-detail.ts`, `surface_<t>.png` |
 | Parking bays | the paving raster's parking bits: on the carriageway a lane 2 m (parallel, bays every 5.5 m) or 5 m (perpendicular, every 2.5 m) from the kerb, its lines only where OSM marks the bays (A's bit 7), else a faint tint; half on the kerb straddles it by 1 m, on the kerb lies on the pavement (A's bits 5–6); in a car park bay lines every 2.5 m across the aisle direction, aisles left clear; pale paint, faded out past ~15 cm/px | OSM | `ground-detail.ts` |
 | Sports ground surface | OSM `leisure=pitch` / `track`: its `surface`, else the one the orthophoto shows (grass where it grows, turf, tartan, clay or cinder, hard), else the sport's usual one, in pastels (`lib/city/sport.ts`) over an exact analytic outline (rotated rectangle, a track's capsule band, else the mapped outline) chosen from up to eight candidate rows of the index raster; mown stripes (~5.5 m) on grass, fine grain on the rest (*Bodendetail*) | OSM, DOP | `sport-ground.ts`, `sport_<t>.png` + `.json` |
@@ -125,13 +126,14 @@ is the codebook.
 | Water tint | the body's DOP hue at the sheet's lightness, pooled over its tiles; the palette where the read is grey, dark or close to it; a 64² grid of which body is where, a texture per tile | DOP | `water-layer.ts` (`tintTexture`), `lib/city/water-bodies.ts` (`waterTint`, `siteWaterTints`) |
 | Weir foam | ≤ 16 lines per fine tile (`[x0, y0, x1, y1, drop, dx, dy]` in the data frame): downstream 2 m + 3 m per metre of drop (≤ 12 m), upstream the crest's 0.8 m, churned by a drifting noise, near-white at ≤ 0.97 × the water's coverage; a line without a direction foams both ways | OSM weirs, DGM1 | `water-layer.ts` (`foamAt`) |
 | Water waves, sun reflection | time, place, sun direction; matte water (the body's tint and depth tone, no sky mirrored; its specular, roughness 0.6, a soft shadowed path toward the sun) lit through the wind's wave field (two drifting layers of gradient noise stretched along the crest under drifting gusts, faded by the pixel's footprint) on a level normal, not the terrain grid's — the same on every tile, so no seam; the sun's glints emissive, and dashes on the crests' lee side | — (synth) | `water-layer.ts`, `water-waves.ts` |
-| River mist | water mask blurred over ~20 m (coarse mip, five taps) so it thins out over the banks; two drifting fbm layers, no threshold; none within 120 m of the eye, full from 1.2 km, at most 24 % opaque and only a little whiter than the sky (30 % towards white by day, 3 % after dark with the lamps' night — `MIST_WHITE_NIGHT`: unlit, it drew the far river as a pale band across the night city), so it gathers far off and never lies as a veil over the near river; always on (no slider) | Basis-DLM (mask) | `createWaterMist` |
+| Lamps mirrored in the water | after dark, every lamp whose light reaches water within 300 m past the buildings (the bake's `w`, `lamp_water.py`: rays over the DGM1 and LoD2 to the class raster's water — the quay's, the bridges', the Brühlsche Terrasse's, not a lane's behind the first row of houses) mirrored by its own quad on the water — no budget, no choice, so every such lamp shows whichever way one looks; within 1.6 km, faded from 1.2 km (a phone 700 m, from 500 m: each column is a quad of overdraw). The quad 0.25 m over the bake's water level (`w`), after the water (additive, depth-tested with no polygon offset: a quay wall, a bridge, a house between the eye and the water hides the column; the water sheet's own pull is a constant one, since a pull by the slope grows metres deep at a grazing look and the column would have to match it). It reaches no farther from the lamp than its water does toward the eye (the bake's `wr`, eight compass sectors, between their centres): past a pond's far bank the ground may lie below its level. In the vertex stage it is laid from the lamp's foot toward the eye's, from where its light first reaches the eye on facets tilted ≤ 0.55 (tan) to where it last does (bisections), as wide as it may stray across (folded with its halo under a planner's design); per fragment the lamp's specular lobe off the sheet's own waves (same field, same clock): the half-vector between lamp and eye against the normal, a Beckmann-like spread for the ripples finer than a pixel (0.035 near → 0.08 at 2 m a pixel), a faint halo three times as wide, Schlick's Fresnel (F0 0.02), eased to nil at the quad's rim — so a broken column from the bank toward the eye, long and bright at a grazing look across the river, faint from the air; no scene mirrored; × `nightFactor`. The quads share the halos' matrices (the mirrored heads first, the level and the sectors' reaches, packed 6 bits each into two floats, in each matrix's bottom row), so they take no memory of their own | OSM and Mapillary lamps, DGM1, LoD2, the class raster (water) | `lamp-reflections.ts` (`buildLampMirrors`), `lamp-layer.ts`, `pipeline/bake/lamp_water.py` |
+| River mist | gone as the eye looks down on it (seen along the water only); water mask blurred over ~20 m (coarse mip, five taps) so it thins out over the banks; two drifting fbm layers, no threshold; none within 120 m of the eye, full from 1.2 km, at most 24 % opaque and only a little whiter than the sky (30 % towards white by day, 3 % after dark with the lamps' night — `MIST_WHITE_NIGHT`: unlit, it drew the far river as a pale band across the night city), so it gathers far off and never lies as a veil over the near river; always on (no slider) | Basis-DLM (mask) | `createWaterMist` |
 | Building silhouette | solid geometry; a flat top less than 1.5 m over a track that runs on it for 20 m lowered to the track's bed (the formation under it, at build time) | LoD2 · the track beds | `city-layer.ts`, `lib/city/track-formation.ts` |
 | Rounded walls and roofs | a curve LoD2 draws as a ring of flat facets (an apse, a curved front, a drum, a dome: faces a few metres wide, each turned 5–20° from the next) shades round: each triangle corner takes the angle-weighted mean of the faces at its point within 30° of its own, per object and walls apart from roofs, both no wider than 8 m in plan and leaning to sides at most 60° apart; a corner turned further (a house's 90°, an octagon's 45°, the eave), a plain wall's slight kink and a low roof's ridge or hip stay sharp. Flat-shaded, the Kathedrale's apses read as light and dark stripes. Only the lit shading takes the rounded normal: the clay's wall frame (windows, relief, glow cells) is the facet's own flat plane from the view position's derivatives (`normalFlat`), and a facet turned from the sun takes no sun (its shadow-map depth is its own) | LoD2 | `lib/city/crease-normals.ts`, `bake-city-mesh.ts` `vertexNormals`, `visual-style.ts` |
-| Roofs rebuilt from the scan | where a LoD2 roof misses DOM1 (> 40 % of its cells > 2 m off: free-form roofs of complex buildings, 3 m placeholders of new ones; > 20 % where the scan is level under most of the misses and does not confirm the LoD2's pitch: a low hip modelled over a store's flat roof), the object's triangles are replaced at bake time by what DOM1 measures inside its footprint — flat levels, and the measured surface where it slopes or curves (a pitched roof, a vault, a dome; an error-bounded TIN), no part narrower than 7 m unless a storey off its neighbours or merging it would miss the scan (a hall's monitor roofs), outlines smoothed off the 1 m grid — each part standing from the object's LoD2 base, same object id, so every row below applies unchanged; 1 081 objects on the site; a LoD2 roof whose form the scan confirms (the Frauenkirche's dome) is kept; faces shade with normals smoothed over them, creases > 30° kept (ADR 0036) | DOM1, LoD2 (+ DOP NDVI) | `scripts/measured-roofs.ts`, `bake-city-mesh.ts` `withMeasuredRoofs`; `pipeline/bake/roofs.py` |
-| Small structures LoD2 lacks | a closed box per structure the laser scan measured (garden houses, sheds, container buildings): its rectangle, from the lowest ground under the rectangle (sunk 0.2 m) to the fitted top, flat or pent, no storey band; appended to the tile's building mesh as objects of their own (column `source` = 1), so the clay look, demolish, picking, collision and the minimap treat them as buildings; wall tint hashed from its first corner, its DOP roof colour where in sun (`roofcolor` `scan`, matched by index and `z`), else the flat-roof slate palette, no glow; the canopy and scan points in or within 0.5 m of one are dropped at build time (its roof, read as a tree) | LSC (+ OSM exclusions, DOP NDVI), DOP (roof colour) | `lib/city/small-buildings.ts`, `bake-city-mesh.ts` `appendScanStructures`, `appendedRoofColour`; `pipeline/bake/small_buildings.py` |
-| Structures beyond LoD2 | what DOM1 stands above `max(DGM1, LoD2 roof)` where OSM names it (column `source` = 2): a chimney, tower, mast, water tower, communications tower or lighthouse as a 16-sided column lathed from its kind's ring profile (a chimney's head band, a TV tower's cabin, a water tower's tank), foot to the measured top, radius from the outline / `diameter` / the gap blob (a chimney at least h/24); a building LoD2 lacks as its OSM outline or building part extruded to the 60th percentile of the measured height, or to OSM's where DOM1 predates it (`src: "osm"`), from its floor (`base`) where OSM raises it, flat roof — or, measured and on the ground, the roof's shape DOM1 shows (`parts`: flat levels and measured faces, drawn as a measured roof, `shapedGap`) —, its DOP roof colour where in sun (`roofcolor` `gaps`), else the slate palette, no windows; a tower, lighthouse or water tower under a LoD2 roof is not drawn again (LoD2's own). Its own object and root (demolish, picking, collision, minimap); a column is not a `Building` (the HUD's count), and chimneys, towers and lighthouses take the brick palette with the roof tint = the wall's (no terracotta cap) | DOM1, DGM1, LoD2, OSM, DOP (roof colour) | `lib/city/structures.ts`, `bake-city-mesh.ts` `appendGapStructures`, `shapedGap`; `pipeline/bake/structures.py` |
-| Roofs on posts | an OSM roof, carport or shelter LoD2 lacks: a slab `roofDepth` (0.04 × √area, 0.2–0.7 m) under the measured top on 0.3 m posts (`roofPosts`: a roof under 5 m wide on both long edges, a wider one on rows under its middle); a LoD2 Überdachung or carport (`51009_1610`/`1611`) opened the same way — walls cut to a fascia, floor dropped, underside and posts added — where ≥ 1.8 m stays clear; flat-roof palette, `building` false, no windows (`WINDOWLESS`) | DOM1, OSM, LoD2 | `lib/city/open-roofs.ts`, `structures.ts` `roofMesh`, `bake-city-mesh.ts` `withOpenRoofs` |
+| Roofs rebuilt from the scan | where a LoD2 roof misses DOM1 (> 40 % of its cells > 2 m off: free-form roofs of complex buildings, 3 m placeholders of new ones; > 20 % where the scan is level under most of the misses and does not confirm the LoD2's pitch: a low hip modelled over a store's flat roof), the object's triangles are replaced at bake time by what DOM1 measures inside its footprint — flat levels, and where it slopes the faces in a form roofs are built in — planes meeting at ridges and valleys, or one extruded profile (a barrel); the measured surface itself only on a landmark (the Hauptbahnhof's vaults); planes as their own polygons (a ridge, a hip, a valley one straight edge), any other face an error-bounded TIN, no part narrower than 7 m unless a storey off its neighbours or merging it would miss the scan (a hall's monitor roofs), outlines smoothed off the 1 m grid — each part standing from the object's LoD2 base, same object id, so every row below applies unchanged; 1 080 objects on the site; a LoD2 roof whose form the scan confirms (the Frauenkirche's dome) is kept; faces shade with normals smoothed over them, creases > 30° kept (ADR 0036) | DOM1, LoD2 (+ DOP NDVI) | `scripts/measured-roofs.ts`, `city-roofs.ts` `withMeasuredRoofs`; `pipeline/bake/roofs.py` |
+| Small structures LoD2 lacks | a closed box per structure the laser scan measured (garden houses, sheds, container buildings): its rectangle, from the lowest ground under the rectangle (sunk 0.2 m) to the fitted top, flat or pent, no storey band; appended to the tile's building mesh as objects of their own (column `source` = 1), so the clay look, demolish, picking, collision and the minimap treat them as buildings; wall tint hashed from its first corner, its DOP roof colour where in sun (`roofcolor` `scan`, matched by index and `z`), else the flat-roof slate palette, no glow; the canopy and scan points in or within 0.5 m of one are dropped at build time (its roof, read as a tree) | LSC (+ OSM exclusions, DOP NDVI), DOP (roof colour) | `lib/city/small-buildings.ts`, `city-structures.ts` `appendScanStructures`, `appendedRoofColour`; `pipeline/bake/small_buildings.py` |
+| Structures beyond LoD2 | what DOM1 stands above `max(DGM1, LoD2 roof)` where OSM names it (column `source` = 2): a chimney, tower, mast, water tower, communications tower or lighthouse as a 16-sided column lathed from its kind's ring profile (a chimney's head band, a TV tower's cabin, a water tower's tank), foot to the measured top, radius from the outline / `diameter` / the gap blob (a chimney at least h/24); a building LoD2 lacks as its OSM outline or building part extruded to the 60th percentile of the measured height, or to OSM's where DOM1 predates it (`src: "osm"`), from its floor (`base`) where OSM raises it, flat roof — or, measured and on the ground, the roof's shape DOM1 shows (`parts`: flat levels and measured faces, drawn as a measured roof, `shapedGap`) —, its DOP roof colour where in sun (`roofcolor` `gaps`), else the slate palette, no windows; a tower, lighthouse or water tower under a LoD2 roof is not drawn again (LoD2's own). Its own object and root (demolish, picking, collision, minimap); a column is not a `Building` (the HUD's count), and chimneys, towers and lighthouses take the brick palette with the roof tint = the wall's (no terracotta cap) | DOM1, DGM1, LoD2, OSM, DOP (roof colour) | `lib/city/structures.ts`, `city-structures.ts` `appendGapStructures`, `shapedGap`; `pipeline/bake/structures.py` |
+| Roofs on posts | an OSM roof, carport or shelter LoD2 lacks: a slab `roofDepth` (0.04 × √area, 0.2–0.7 m) under the measured top on 0.3 m posts (`roofPosts`: a roof under 5 m wide on both long edges, a wider one on rows under its middle); a LoD2 Überdachung or carport (`51009_1610`/`1611`) opened the same way — walls cut to a fascia, floor dropped, underside and posts added — where ≥ 1.8 m stays clear; flat-roof palette, `building` false, no windows (`WINDOWLESS`) | DOM1, OSM, LoD2 | `lib/city/open-roofs.ts`, `structures.ts` `roofMesh`, `city-roofs.ts` `withOpenRoofs` |
 | Landmark roof relief | on a landmark only, where DOM1 rises ≥ 3 m above its highest LoD2 roof on ≥ 60 m² (and ≥ 2 % of its footprint): the excess as its measured height field (1 m grid, lightly smoothed: half the cell, half a σ = 1 cell Gaussian over the patch) built as one surface, each corner the mean of the patch cells around it, walls along the patch's edge down to the cell's `floor` — the lowest LoD2 roof in the 3 × 3 around it, sunk 0.3 m (a tower LoD2 folded into a pitched nave stands on the slope, not at the ridge; surface-model voids below the LoD2 roof filled from the nearest measured cell in the bake) —, no bottom face — a truncated spire rises to a point, the Elbphilharmonie's crests roll over its flat 96 m block; a relief is a row that copies its host object (`of`) — tint, roof, flags, root — so it looks like the building and demolish takes it along; no footprint of its own (`source` = 2) | DOM1, LoD2, Wikidata | `lib/city/structures.ts` `reliefMesh`, `appendGapStructures`; `structures.py` `relief` |
 | Per-building attributes (the rows below) | `_FEATURE_ID_0` per vertex → `EXT_structural_metadata` property table → RGBA32F texture, three texels per object, read per vertex with `textureLoad` | LoD2 (+ DOP, OSM) | `city-layer.ts`, `lib/city/city-mesh.ts` `packObjectTexels`, `visual-style.ts` |
 | Wall tint | OSM `building:colour` when mapped, brought into the clay's register (hue kept, saturation ≤ 0.45, lightness held in [0.45, 0.9] plus the palette's jitter: a red wall is a dusty terracotta, not a signal red); else the palette family of OSM's `building:material` (brick → brick, stone/glass/metal → cool, concrete → neutral, wood/plaster → warm; for a landmark Wikidata's material where OSM has none); else `hash(objectid)` + `function` family (a part's own value, else its root Building's) + `measuredHeight` nudge, palette by the building's facade context (in a brick context every building, civic ones too; structures that are no building keep cool stone) — brick or plaster as the mapped walls within 300 m vote (distance-weighted; the tile's vote where fewer than 6 are mapped; glass and metal do not vote; `osm_buildings.py` `context`) (column `tint`). A part's own tags win over its building's | LoD2, OSM, Wikidata (+ synth) | `lib/city/building-tint.ts` `buildingTint`, `osmColourTint` at bake time (*Farbvariation*) |
@@ -139,39 +141,43 @@ is the codebook.
 | Roof chroma | hue-preserving vibrance lift, strongest on drab roofs; a grey roof mixed with the clay as a grey at its lightness, warmed only where its own colour is warm (*Dachwärme*) | — | `visual-style.ts` (*Dachsättigung*) |
 | Storey bands | OSM `building:levels` → eave height ÷ storeys where that gives 2.4–5.5 m (`mappedStoreyHeight`); else the eave split into whole storeys of about its mapped neighbours' (`osmbuild` `storey`: the median over ≥ 3 mapped objects within 200 m of its roof form and about its eave, else the tile's; `neighbourStorey`, 2.5–4.5 m); else `storeyHeight(measuredHeight)`, whole ~3.2 m storeys (column `storeyH`; LoD2's storeys attribute is ~4 % populated); none on a facade of its own (flag 512, `OBJECT_FLAG_OWN_FACADE`: a church, a palace, a hall, a listed public building OSM counts no storeys of — `ownFacade`, `partFacade`), whose storeys are not the height's 3.2 m | LoD2, OSM | `visual-style.ts` (*Höhenlinien*), `lib/city/building-tint.ts` `mappedStoreyHeight`; `pipeline/bake/osm_buildings.py` |
 | Plinth, cornices, shop zone (*Gliederung*) | painted in the clay's fragment pass from the table's heights, walls only, never on a door (flag 64) or on a facade that is its own (flag 16: a landmark, a monumental ALKIS use, OSM storeys over 5.5 m, a listed public building without OSM storeys — `ownFacade`, `partFacade`) or under a flat roof (flag 256, `markFlatRoofs`: three quarters of its LoD2 roof area within 10° of level — post-war and modern buildings, which LoD2 often types as a mixed roof; the `flags` column is UINT16): a stone plinth (the lowest 0.6 m darker and cooler, crisp top edge; from 3 m of wall — under the modelled plinth where the street side has one; a lit face and a soft shadow under it, fwidth-crisp, not sun-dependent; the ledges under the first storey line and the eave are modelled, see *Plinths*) and on an OSM shop (flag 1) the ground floor under the first storey line a shade darker and cooler, the recessed shop front; no panes. The ground floor's three only on a part standing on the ground (flag 128, `markGrounded`: within 3 m of its building tree's lowest base) | LoD2, OSM | `visual-style.ts` `articulation`, `lib/city/city-mesh.ts` `markGrounded` |
-| Plinths | LoD2 footprint edges open to the street (no party wall), on the DGM1 in front of them: level pieces whose top stands 0.9 m over the ground, stepped down a slope; a stone band 7 cm proud of the host's LoD2 wall (found by rays and followed end to end, not the footprint line) whose front rolls over a 12 cm quarter-round shoulder into its top, shaded smooth, its ends square, the pieces round a corner mitred and given one top — a soft edge that takes the sun and throws a shadow line; one object per host (column `source` = 5, flag 64) a touch darker and cooler than its tint; a stretch another object's run already covers is left to it. Along the same stretches the Gurtgesims, level at the first storey line over the host's base (where the wall holds two storeys and the line stands 1 m over the plinth): a rounded nose 6 cm proud and 14 cm tall over a flat underside, washed 3 cm back on top, shaded smooth, pieces in line joined into one run and mitred round corners; a second object in a plaster shade barely off the wall's — the painted ledge there is gone. Along the same stretches the Traufgesims under the eave, where the host's roof runs level along the wall (its plane read just inside the wall at five points, four within 0.3 m — not along a gable; from 5 m of wall, 1.5 m over the band below): a quarter-round 16 cm proud rolling out of the wall from a 24 cm rise into a short lip, 32 cm tall, top flush with the eave — the painted ledge under the eave is gone too. Each band runs on from house to house along a row: a gap of up to 1.2 m between one stretch's end and the next's start, in line (within 20°, 0.4 m aside), is closed at its middle, and neighbours' levels within 0.6 m (Gurtgesims), 0.25 m (Traufgesims) or 0.2 m (plinth top) are made one, the nearest first, so a row on a slope still steps where its houses do; the Gurtgesims and Traufgesims only on a town house (storeys from 3.3 m, listed, or a flat-roofed town house: `carriesCornices`), the plinth on every house; not on a landmark, glass, metal or flat-roofed host (a flat-roofed town house excepted), nor a part on a roof, nor a structure that is no building | LoD2, DGM1, OSM `heritage` | `lib/city/plinths.ts`, `bake-city-mesh.ts` `appendPlinths`; `pipeline/bake/plinths.py` |
+| Plinths | LoD2 footprint edges open to the street (no party wall), on the DGM1 in front of them: level pieces whose top stands 0.9 m over the ground, stepped down a slope; a stone band 7 cm proud of the host's LoD2 wall (found by rays and followed end to end, not the footprint line) whose front rolls over a 12 cm quarter-round shoulder into its top (one facet whose normal bends from out to up, `bend`; the Gurtgesims's nose two, the Traufgesims's round one), its ends square, the pieces round a corner mitred and given one top — a soft edge that takes the sun and throws a shadow line; one object per host (column `source` = 5, flag 64) a touch darker and cooler than its tint; a stretch another object's run already covers is left to it; the band breaks where a shop window is cut into the wall (within 0.6 m of it, `withoutSegments`). Along the same stretches the Gurtgesims, level at the first storey line over the host's base (where the wall holds two storeys and the line stands 1 m over the plinth): a rounded nose 6 cm proud and 14 cm tall over a flat underside, washed 3 cm back on top, shaded smooth, pieces in line joined into one run and mitred round corners; a second object in a plaster shade barely off the wall's — the painted ledge there is gone. Along the same stretches the Traufgesims under the eave, where the host's roof runs level along the wall (its plane read just inside the wall at five points, four within 0.3 m — not along a gable; from 5 m of wall, 1.5 m over the band below): a quarter-round 16 cm proud rolling out of the wall from a 24 cm rise into a short lip, 32 cm tall, top flush with the eave — the painted ledge under the eave is gone too. Each band runs on from house to house along a row: a gap of up to 1.2 m between one stretch's end and the next's start, in line (within 20°, 0.4 m aside), is closed at its middle, and neighbours' levels within 0.6 m (Gurtgesims), 0.25 m (Traufgesims) or 0.2 m (plinth top) are made one, the nearest first, so a row on a slope still steps where its houses do; the Gurtgesims and Traufgesims only on a town house (storeys from 3.3 m, listed, or a flat-roofed town house: `carriesCornices`), the plinth on every house; not on a landmark, glass, metal or flat-roofed host (a flat-roofed town house excepted), nor a part on a roof, nor a structure that is no building | LoD2, DGM1, OSM `heritage` | `lib/city/plinths.ts`, `city-fittings.ts` `appendPlinths`; `pipeline/bake/plinths.py` |
 | Facade relief, tone, storey ledges (*Fassadenbild*) | what street photos say about a building (`facades_<t>.json`, read at runtime into the `flags` column from bit 1024 (`FACADE_UNIT`, above the baked flags; at 512 it once overwrote the own-facade flag): busy + 4 × dark + 16 × shop, busy and dark 0 unseen or 1–3; a shop sign joins OSM's shops in the shop zone and its dusk light, at this term's strength): on a mid or busy facade a fine plaster relief lit from above (the slope of a flat-lying value noise up the wall, two octaves of 0.3 and 0.13 m, ±10 % at busy, above the plinth and under the eave, each octave faded once it is a few pixels: no blotch darker than the wall); dark 3 an 8 % darker, slightly cooler tone, dark 2 2 % darker, dark 1 3 % lighter; on a busy front under a pitched roof a ledge at every storey line up to the eave (on *Gliederung* too). Walls only, never on a door (64), a landmark (16), glass (4) or metal (8); unseen facades unchanged | Mapillary | `visual-style.ts` `facadeReading`, `lib/city/facade-reading.ts` |
-| Doors | OSM `entrance=*` on the ground floor, snapped onto the nearest LoD2 footprint edge (≤ 3 m) and laid onto the host's own wall triangles at build time (`wallShift`: LoD2 walls stand up to ±0.15 m off the footprint line): a surround a little paler than its wall (two jambs and a lintel, 0.14 m wide, 6 cm proud) and a leaf a shade darker set 4 cm back — as calm as the painted plinth and cornices; size by kind (`main` 1.8 × 3.0 m, `garage` 2.6 × 2.2, `service` 1.1 × 2.3, else 1.2 × 2.5) or from `width`/`height`; two objects per door in the host's building tree (column `source` = 3, flag 64 *own colour*: the tint at full strength, not mixed by *Farbvariation*), no storey band, no eave stroke; no panes, no glass, no handle; none on a facade that is its own (flag 16, a landmark or a church: its portal is its own) | OSM, LoD2, DGM1 | `lib/city/doors.ts`, `bake-city-mesh.ts` `appendDoors`; `pipeline/bake/doors.py` |
-| Passages (*Durchgänge*) | OSM `tunnel=building_passage` ways on the ground floor through LoD2 (the axis run 0.6 m past either wall, its width from `width` or 3.5 m a drive, 4.5 m a track, 2.5 m a walk): the walls and floor of every building tree it runs through cut open at build time (a prism per segment, mitred at a bend, from 0.4 m under the ground to the clear height over it, falling with the ground), lined with two walls and a ceiling facing in, in the host's own clay (column `source` = 7, flag 64, no windows, no storey band, no eave stroke) — every LoD2 object whose footprint the passage's strip reaches is lined, a part beside the way too; one that ends inside its building (more than 0.6 m from the outline) is shut there by a wall across it; where two cross or run side by side, each one's lining is cut out of the other's opening; the clear height OSM's `maxheight`, else 3.8 m a drive, 5 m a track, 3 m a walk or the ground storey less 0.6 m, the taller, at least 1 m under the lowest eave, none under 2.2 m; rectangular, no arch; the ground floor's windows keep off a portal as off a door, no OSM door drawn in an opening; walkable (the collider takes the ceiling for a balcony) | OSM, LoD2, DGM1 | `lib/city/building-passages.ts`, `bake-city-mesh.ts` `withPassages`; `pipeline/bake/passages.py` |
-| Shopfronts (*Schaufenster*) | the ground floor's bays and store signs measured per LoD2 wall in Mapillary's street panoramas (`shopfronts_<t>.json`; a glazed row — the seen bins 75 % open — runs its glass from pier to pier; a wall no photo shows as a shopfront gets none), and the canopy over them where DOM1 shows a level roof 2.6–6.5 m up running 1.5–8 m out of the wall (under it the glass runs the canopy's length), laid onto the host's own wall triangles at build time (`wallShiftAt`), **soft and abstract** (*Weiche Nische*): per run of bays (bays with less than two piers and 0.4 m of wall between them share one) a **surround** 15 cm proud — its outer edge rolling over a 6 cm quarter round into its flat front, its foot in the ground, piers 0.25 m (at least 0.2 m between two bays), a head 18 cm over the glass — with a **niche** per bay: the front turns into it over a 7 cm quarter round (smooth per-vertex normals, no edge where reveal and front meet), and the **glass** at its back, 6 cm out of the wall, from 0.5 m above the ground (a glazed row: 0.3 m) to the measured ground-floor top (else 3 m; under the first storey line, under a measured sign, under a canopy's slab, into which the head reaches where less than 0.25 m of wall would be left between them). **No mullions**, no frame boards. A fascia band 10 cm proud at the measured sign band, rounded the same way (at most 1 m tall; reaching down into the head; none under a canopy); a bay is cut where an OSM door stands. Every face along the wall stands at least two of the building glTF's position quanta off it (16 bits over the tile's buildings ≈ 3.4 cm), and no two faces lie on one another — the earlier 2 cm pane, 6 cm mullions and coincident frame and canopy faces flickered while walking (`lib/city/shopfronts.test.ts` holds both). A **canopy** is a slab 0.3 m thick under its measured top from the wall out to its measured depth, with a fascia 0.2 m deep and at most 1 m tall at its edge (2.6 m headroom), its outer edges rounded (9 cm), its foot rounded too, in the host's own clay and tint (its shop flag off); it shades the glass, and its columns are not drawn (not measured). Per wall in the host's building tree (column `source` = 6): one glass object per run (flags 64 + 4: own colour, glass — a **muted tone a little darker and cooler than its wall**, the wall as shown at ×0.4 drawn 45 % towards a cool slate, not black; its `rough` column read as the pane's roughness, 0.2, so the sun glints calmly in it; its `eaveH` the glass's top, under which the head's **soft shadow** darkens its upper 0.6 m — `paneShade`, a gradient — and no eave stroke; in place of the rim and the glass sheen its own sky, `paneSky`: the pane a little brighter upwards, as if the sky were mirrored, and a Schlick Fresnel lift at grazing angles — at most about a seventh of the sky, dimmed at night; a glass facade, flag 4 without 64, keeps its sheen), the surrounds and fascias (flag 64, the wall as shown a shade darker and a touch cooler; their faces that look up are half as bright and take no Streiflicht rim, faded in over the rounds) and the canopy. None on a glass or metal facade, none on a part standing more than 2 m above the ground in front. The one exception to the glass veto: shop windows on a shop's ground floor only; none where an OSM passage (`tunnel=building_passage`, `covered=arcade`) crosses the bay | Mapillary, DOM1, LoD2, DGM1, OSM doors and passages | `lib/city/shopfronts.ts`, `bake-city-mesh.ts` `appendShopfronts`; `pipeline/bake/shopfronts.py` |
-| Windows (*Fenster*) | every house's window rhythm (per building, one band of the object table: axis spacing, width, height and a style word — `lib/city/windows.ts` `windowSpecs`), best first: its own walls' rhythm measured in street photos (`windows_<t>.json`, `model`: each feature only where two sequences agree at Spearman ρ ≥ 0.6), another part of its building, the nearest measured building within 30 m of its roof form and about its eave, its type (town house, walk-up, house, block, low; a flat-roofed house from 9 m of wall with 3.4 m storeys or listed as a town house, type `tall` — numbers calibrated to the photos' medians), a measured rhythm drawn towards its type's (`TOWARD_TYPE`); a window's height follows its storey (head a type's distance under the next floor), the storey snapped to a whole number of floors under the eave. Per wall vertex its place (`_FACADE`, snorm16 vec4: metres from the wall's middle, the wall's length — negative where the ground floor has no windows (over a shopfront, or with more than two doors), 0 on a party wall — and up to two OSM doors, each its place and width — the second slot, where it holds no door, the wall's own eave over its object's (`WALL_EAVE`, 0.1 m steps), so the top row sits under its own eave —; on a wall without ground-floor windows the first slot the ground's height in front over the base instead, under which no row of windows is drawn; a roof vertex −1 in the first door's slot, the clay's roof flag). Drawn in the clay's fragment pass, walls only, no geometry: a **recess** per window, the eye looking into its box (back, side reveal, head or sill reveal, each with its normal, 9–18 cm deep by type), the reveals the plaster ×0.93, the back the wall's colour ×(0.40, 0.43, 0.50) lit by a quarter of the sun, the sun reaching in only through the opening (`receivedShadowNode`); a sill 6 cm tall, 4.5 cm proud, with its drop shadow; a town house's Fasche (11 cm, 1.5 cm proud, 3.5 % lighter; a type's only on a rendered wall, never on brick) and raised ground floor (0.45 m); the storeys counted from the street (each LoD2 base moved up to the street its building's plinths stand on, from at most 1.5 m under it — `liftToStreet`); every ground floor's windows at least 0.2 m over the plinth's highest top and over the fine terrain in front of every wall (read 0.5 m out, every 2 m along it, also on a wall standing on a step of its building, `wallRises`; a lift in classes of 0.05 m up to 1.55 m; a wall whose ground rises past 2.2 m over the base, `GROUND_REACH_M`, or higher than leaves the windows 0.8 of their width tall, `overGround`, has no ground-floor windows, signed like a shopfront's; none past it, or where it leaves them lower than 0.8 of their width); a top floor's windows end 0.5 m under the eave; measured ornament's Verdachung (9 cm, 5 cm proud); the wall rolling in over a 3 cm quarter round (normals). Every edge anti-aliased by the pixel's footprint along the wall and up; under 6 px wide the windows hand over to the facade's mean tone, under 2.5 px only that tone. At night 25 % glow warm, at 0.6 of the dusk glow (`NIGHT_WINDOWS`; far off the facade's mean of them) × night. **No glass, no panes, no mullions.** None on a party wall (a house of at most 9 m of wall: none only up to its neighbour's top, where it rises 2 m over it, `PARTY_LOW_EAVE_M`), within 0.6 m of a door's opening (its place and width in the `_FACADE` slot), over a shopfront's ground floor, past the eave's clearance, on a church, a hall or another facade of its own (`ownFacade`, `partFacade`) — except a palace's: a Schloss, museum, theatre, parliament, court, school or hospital (ALKIS 31001_3010–3072 but the churches' 3038–3048 — no barracks, bunker or prison, no station, no sports hall; `palatialFacade`) gets windows of its own type `palace` (3.6 m axis, 1.45 m wide, a Fasche, deep reveals), storeys from OSM's count where it gives 2.4–7.5 m, else the eave split into ~5.5 m storeys (`palaceStorey`), and only its own measured rhythm, never a town house's nearby —, glass or metal (flags 4, 8), own colour (64), a garage, shed or plant, a structure that is no building (ALKIS function outside `31001`: a tank, a crane, a canopy — no doors, plinth or shop band either), a wall under 3.2 m, or a part the bake adds (ADR 0010) | Mapillary, LoD2, OSM levels and doors, ALKIS function, the plinths | `lib/city/windows.ts`, `bake-city-mesh.ts` `assignWindows`, `app/_components/clay-windows.ts` (*Fenster*); `pipeline/bake/facade_traits.py`, `pipeline/bake/windows.py` |
-| Dormers | DOM1 over the pitched LoD2 roofs (25–62°): the excess over the roof's own 9 m median, a blob of 3–30 m² standing 0.9–3.5 m over it, under the ridge and clear of every tree point → a front down the slope, two cheeks and a roof running back into the main roof: flat at the measured top, or a shed dormer's falling `tf` from where it meets the main roof to its front, ≥ 0.6 m over the roof; one object per host (column `source` = 4) in the host's tint and roof colour, roof vertices flagged in `_FACADE`; no storey band, eave stroke, plinth or shop zone; no window | DOM1, LoD2 | `lib/city/dormers.ts`, `bake-city-mesh.ts` `appendDormers`; `pipeline/bake/dormers.py` |
+| Doors | OSM `entrance=*` on the ground floor, snapped onto the nearest LoD2 footprint edge (≤ 3 m) and laid onto the host's own wall triangles at build time (`wallShift`: LoD2 walls stand up to ±0.15 m off the footprint line): a surround a little paler than its wall (two jambs and a lintel, 0.14 m wide, 6 cm proud) and a leaf a shade darker set 4 cm back — as calm as the painted plinth and cornices; size by kind (`main` 1.8 × 3.0 m, `garage` 2.6 × 2.2, `service` 1.1 × 2.3, else 1.2 × 2.5) or from `width`/`height`; two objects per door in the host's building tree (column `source` = 3, flag 64 *own colour*: the tint at full strength, not mixed by *Farbvariation*), no storey band, no eave stroke; no panes, no glass, no handle; none on a facade that is its own (flag 16, a landmark or a church: its portal is its own) | OSM, LoD2, DGM1 | `lib/city/doors.ts`, `city-fittings.ts` `appendDoors`; `pipeline/bake/doors.py` |
+| Passages (*Durchgänge*) | OSM `tunnel=building_passage` ways on the ground floor through LoD2 (the axis run 0.6 m past either wall, its width from `width` or 3.5 m a drive, 4.5 m a track, 2.5 m a walk): the walls and floor of every building tree it runs through cut open at build time (a prism per segment, mitred at a bend, from 0.4 m under the ground to the clear height over it, falling with the ground), lined with two walls and a ceiling facing in, in the host's own clay (column `source` = 7, flag 64, no windows, no storey band, no eave stroke) — every LoD2 object whose footprint the passage's strip reaches is lined, a part beside the way too; one that ends inside its building (more than 0.6 m from the outline) is shut there by a wall across it; where two cross or run side by side, each one's lining is cut out of the other's opening; the clear height OSM's `maxheight`, else 3.8 m a drive, 5 m a track, 3 m a walk or the ground storey less 0.6 m, the taller, at least 1 m under the lowest eave, none under 2.2 m; rectangular, no arch; the ground floor's windows keep off a portal as off a door, no OSM door drawn in an opening; walkable (the collider takes the ceiling for a balcony) | OSM, LoD2, DGM1 | `lib/city/building-passages.ts`, `city-passages.ts` `withPassages`; `pipeline/bake/passages.py` |
+| Murals (*Wandbilder*) | OSM `tourism=artwork` murals with a known size (OSM, a way's length, Wikidata) and a free Commons photo that shows them straight on (its aspect within 15 %; a way's frieze: a band of its whole length): the photo redrawn by the bake as a pen-and-wash drawing (pen lines in one ink over a light wash of its own colours, in the clay's register), glazed on a strip 3 cm in front of the LoD2 wall — it multiplies the wall's lit colour, so the wall's light, shadow and night carry over it, and the fog fades it to white; a storey up unless OSM says `min_height`; full LoD2 only; hidden with its building; Papier and Schwarzplan leave it out | OSM, Wikidata, Wikimedia Commons, LoD2, DGM1 | `pipeline/bake/murals.py`, `mural_drawing.py`, `lib/city/murals.ts`, `mural-layer.ts`, `height-fog.ts` |
+| Shopfronts (*Schaufenster*) | the ground floor's bays and store signs measured per LoD2 wall in Mapillary's street panoramas (`shopfronts_<t>.json`; a glazed row — the seen bins 75 % open — one window from pier to pier; a wall no photo shows as a shopfront gets none; a wall with a store sign and no bays gets only its fascia and keeps its ground-floor windows), and the canopy over them where DOM1 shows a level roof 2.6–6.5 m up running 1.5–8 m out of the wall. **A shop window is an opening cut into its wall**, the same logic as the clay's windows over it, real at every distance (`lib/city/shop-windows.ts`): per bay (a door cut out of it, at least a 0.2 m pier between two, 0.25 m from the wall's ends) a rectangle from its sill — the stall riser's top, 0.5 m over the ground (a glazed row: 0.3 m) — the plinth band breaks for the window, 5 cm either side, its own building's alone and only for a window the wall takes (`planShopfronts` asks the LoD2 wall before the plinths are laid, `shopWindowBreaks`, `withoutSegments`) — to the measured ground-floor top (else 3 m; under the first storey line, under a measured sign, under a canopy's slab by a 0.18 m head); none under 1.2 m tall (`MIN_OPENING_M`). The LoD2 triangles on the wall's plane (facing its way within 10°, within 0.12 m of it where the opening is: a LoD2 wall turns a little off the footprint line) lose the rectangle, each remainder triangulated on its own plane, its own corners kept exactly so it stays one wall with the rest for the windows' slots; an opening they cover less than 95 % of stays wall (and its sign stays where it was measured). Each opening's edge is one loop with the wall's remainder — its corners and every vertex the remainder has on it — and the reveals run strip by strip along it, so no T-junction cracks open in the glTF's quantised positions; a remainder is cut again only by its own building's later windows. In it a **box 0.2 m deep** (`SHOP_WINDOW_DEPTH_M`): sill, head and side reveals in the host's own clay and object, lit and shadowed as its wall is, and the **glass** at the back, one object per window (flags 64 + 4: own colour, glass — a **muted tone a little darker and cooler than its wall**, the wall as shown at ×0.4 drawn 45 % towards a cool slate; its `rough` column read as the pane's roughness, 0.2, so the sun glints calmly in it; its `eaveH` the glass's top, under which the head's **soft shadow** darkens its upper 0.6 m — `paneShade` — and no eave stroke; its own sky, `paneSky`: a little brighter upwards and a Schlick Fresnel lift at grazing angles, at most about a seventh of the sky, dimmed at night; a glass facade, flag 4 without 64, keeps its sheen). **No mullions, no surround** (until 2026-11-10 a rounded surround stood 15 cm proud with a soft niche per bay). A cut LoD2 triangle collapses onto its first vertex in place, so the LoD2 stream's per-vertex columns stay aligned; only a wall a window was cut into gives its ground floor up (`facadeOf`); a window is cut into its host's own wall alone, a sibling part's coplanar wall beside it keeps its ground floor. The **store sign is painted on**: where the photos saw one, its band (at most 0.6 m tall, at its foot; at least 0.1 m over the head of each window under it, by that window's own ground — on a wall no window was cut into, over its drawn ground-floor windows' heads; none under a canopy) is cut out of the wall as the windows are and laid back flush on the wall's own plane as its own object, the wall as shown ×0.8 drawn 20 % towards a cool grey — no board, no relief, no lettering (until 2026-11-10 a fascia band 10 cm proud, up to 1 m tall, with a rounded edge, that read as a slab). A **canopy** is a slab 0.3 m thick under its measured top from the wall out to its measured depth, with a fascia 0.2 m deep and at most 1 m tall at its edge (2.6 m headroom), its outer edges rounded (9 cm), in the host's own clay and tint (its shop flag off); its columns are not drawn (not measured). Every face along the wall stands at least two of the building glTF's position quanta off it (≈ 3.4 cm), and no two faces lie on one another (`lib/city/shopfronts.test.ts`). The fascias and canopy in the host's building tree (column `source` = 6). None on a glass or metal facade, none on a part standing more than 2 m above the ground in front; none where an OSM passage (`tunnel=building_passage`, `covered=arcade`) crosses the bay | Mapillary, DOM1, LoD2, DGM1, OSM doors and passages | `lib/city/shopfronts.ts`, `lib/city/shop-windows.ts`, `city-shopfronts.ts` `appendShopfronts`; `pipeline/bake/shopfronts.py` |
+| Windows (*Fenster*) | every house's window rhythm (per building, one band of the object table: axis spacing, width, height and a style word — `lib/city/windows.ts` `windowSpecs`), best first: its own walls' rhythm measured in street photos (`windows_<t>.json`, `model`: each feature only where two sequences agree at Spearman ρ ≥ 0.6), another part of its building, the nearest measured building within 30 m of its roof form and about its eave, its type (town house, walk-up, house, block, low; a flat-roofed house from 9 m of wall with 3.4 m storeys or listed as a town house, type `tall` — numbers calibrated to the photos' medians), a measured rhythm drawn towards its type's (`TOWARD_TYPE`); a window's height follows its storey (head a type's distance under the next floor), the storey snapped to a whole number of floors under the eave. Per wall vertex its place (`_FACADE`, snorm16 vec4: metres from the wall's middle — on a wall whose axes the photos placed (`model.phase`, `measuredColumns`), from the middle of the measured axes that fit on it —, the wall's length (there instead, from code 16 384 on, the count of those axes and the wall's own measured spacing, `MEASURED_AXES`) — negative where the ground floor has no windows (over a shopfront whose bays the photos saw — a wall where they read a store sign alone keeps its ground-floor windows —, or with more than two doors), 0 on a party wall — and up to two OSM doors, each its place and width — the second slot, where it holds no door, the wall's own eave over its object's (`WALL_EAVE`, 0.1 m steps), so the top row sits under its own eave —; on a wall without ground-floor windows the first slot the ground's height in front over the base instead, under which no row of windows is drawn; a roof vertex −1 in the first door's slot, the clay's roof flag). Drawn in the clay's fragment pass, walls only, no geometry (near the eye: real niches, next row): a **recess** per window, the eye looking into its box (back, side reveal, head or sill reveal, each with its normal, 9–18 cm deep by type), the reveals the plaster ×0.93 with 0.55 of the wall's sky light at the opening's edge (a reveal sees only the sky past the wall it turns from), the back the wall's colour ×(0.40, 0.43, 0.50) lit by half the sun, the sun reaching in only through the opening (`receivedShadowNode`); a sill 7 cm tall, 7 cm proud, with its drop shadow, drawn where the view meets its front (moved up the wall when the eye is under it, down when over it, along it when seen obliquely; at most 30 cm) and showing its top lit by the sky from above, its underside from below, covering the window's foot when seen from under it; the Verdachung likewise; a town house's Fasche (11 cm, 1.5 cm proud, 3.5 % lighter; a type's only on a rendered wall, never on brick) and raised ground floor (0.45 m); the storeys counted from the street (each LoD2 base moved up to the street its building's plinths stand on, from at most 1.5 m under it — `liftToStreet`); every ground floor's windows at least 0.2 m over the plinth's highest top and over the fine terrain in front of every wall (read 0.5 m out, every 2 m along it, also on a wall standing on a step of its building, `wallRises`; a lift in classes of 0.05 m up to 1.55 m; a wall whose ground rises past 2.2 m over the base, `GROUND_REACH_M`, or higher than leaves the windows 0.8 of their width tall, `overGround`, has no ground-floor windows, signed like a shopfront's; none past it, or where it leaves them lower than 0.8 of their width); a top floor's windows end 0.5 m under the eave; measured ornament's Verdachung (9 cm, 10 cm proud); the wall rolling in over a 6 cm quarter round (normals). Every edge anti-aliased by the pixel's footprint along the wall and up, each axis on its own: under 6 px wide a row hands over to its mean across the axes (the reveal by its share of the opening's width, a quarter of them lit at night), its heights still drawn, so a street seen along its length keeps its rows; under 6 px tall the windows hand over to the storey's mean tone, under 2.5 px only that tone. At night 25 % glow warm, at 0.6 of the dusk glow (`NIGHT_WINDOWS`; far off the facade's mean of them) × night. Their back mirrors the sky as a shop window's pane does (`WINDOW_SKY`: 6 % brighter towards the head, a Schlick Fresnel lift to half the sky at a grazing view, × the recess's shade, dimmed at night), and the street's houses below its skyline (the Skyline-Spiegel, next rows). **No panes, no mullions.** None on a party wall (a house of at most 9 m of wall: none only up to its neighbour's top, where it rises 2 m over it, `PARTY_LOW_EAVE_M`), within 0.6 m of a door's opening (its place and width in the `_FACADE` slot), over a shopfront's ground floor (one with measured bays), past the eave's clearance, on a church, a hall or another facade of its own (`ownFacade`, `partFacade`) — except a palace's: a Schloss, museum, theatre, parliament, court, school or hospital (ALKIS 31001_3010–3072 but the churches' 3038–3048 — no barracks, bunker or prison, no station, no sports hall; `palatialFacade`) gets windows of its own type `palace` (3.6 m axis, 1.45 m wide, a Fasche, deep reveals), storeys from OSM's count where it gives 2.4–7.5 m, else the eave split into ~5.5 m storeys (`palaceStorey`), and only its own measured rhythm, never a town house's nearby —, glass or metal (flags 4, 8), own colour (64), a garage, shed or plant, a structure that is no building (ALKIS function outside `31001`: a tank, a crane, a canopy — no doors, plinth or shop band either), a wall under 3.2 m, or a part the bake adds (ADR 0010) | Mapillary, LoD2, OSM levels and doors, ALKIS function, the plinths | `lib/city/windows.ts`, `city-windows.ts` `assignWindows`, `app/_components/clay-windows.ts` (*Fenster*); `pipeline/bake/facade_traits.py`, `pipeline/bake/windows.py` |
+| Window niches (*Fensternischen*) | every window of a house within 250 m of the eye (its nearest window, the eye's height over it counted; it stays one to 270 m) — on a desktop up to safety level 1, on a phone at level 0 — is a real box behind the wall, 4 cm wider each way than its opening (the cut's edge is anti-aliased): the clay cuts its opening (`maskNode`: a front face, the opening's middle and more, on an object the set holds — a runtime bit in the object texture, OBJECT_FLAG_NICHED —, so a house turns from drawn to real windows as a whole and no wall is cut in part, and no opening is cut without its niche; on such a house the clay draws every window whole at any footprint (`sharp`: no hand-over to its row's or storey's mean, which at a grazing view left the openings uncut and the row flat — down to 2 px wide and tall, `NICHE_PREFILTER_PX`, under which it takes its row's mean as any house does and nothing is cut, `cut`); the shadow pass draws the back faces and keeps the walls whole), and behind it (a dormer's at most 0.1 m deep, over the roof behind its front) four reveals in the wall's colour ×0.93 (the tint mixed into the clay base as the clay mixes it) seeing the sky as the drawn recess's do (from the reveal's own share at the wall to 0.6 deep in; the back 0.6, less in its corners and under its head, its mirrored sky too), and a back in the clay's window-back colour, smooth (roughness 0.25), mirroring the sky as the drawn back does and lit after dark by the clay's own hash (its column, storey and seed in the instance's matrix), so a window keeps its light as it turns from drawn to real; the sun reaches into it only past the reveals' edges (worked out in the niche's frame, no shadow map) and onto its back at half strength; after dark the street lamps light its reveals as they light the wall (`streetLight`). Only a tile within 60 m of the set's radius cuts (it stops past 160 m): a clay that cuts is a second build of the clay without its early depth test (`setClayNicheCut`). Where each one stands is the clay's grid worked out on the CPU from the tile's mesh (`lib/city/window-niches.ts`, the shader's columns and rows from the same quantised codes; a niche where any of the opening's middle and corners lies on its wall — a superset: one behind a door stays unseen; none on a ground floor the clay draws no windows on — a shopfront's, its windows real holes — nor beside a door or a passage's portal (the clay's `doorClear`), nor on a face the clay draws as no wall; walls of one object with the same codes are one wall where they face the same way within 2°, stand within 6 cm of their mean plane (1 cm more a metre along it, the quantised normals' tilt) and their facade coordinate runs on within 0.25 m (two wings either side of a risalit stay two), the glTF's quantising aside, their normal and plane the mean of their triangles', the niches anchored on that plane): when a full-LoD2 tile lands its window-carrying walls are copied (indexed, each corner once) and worked out in a worker; walls of one object facing the same way are told apart by their plane and their run, kept per 32 m cell and packed in 16 bytes a window (`packNiches`, ≈ 2.3 MB the densest Dresden tile, weighed in its tile — a phone's exception to ADR 0047, granted 2026-11-07); only tiles the stream shows (a full tile its coarser parent still stands in for gets none: its walls are not the ones drawn); one set of instances for the site (32 768 on a desktop, 16 384 on a phone: whole houses, the nearest first, so in the densest blocks a phone's radius ends nearer) holds those near the eye, refilled every 6 m (nothing written while the houses it holds are the same) and at once when a tile lands or leaves, a house is demolished or a design stands in for one (`invalidate`), never while the eye stands still; a house reaching past the cells searched brings all its windows (each house's extent, `houseBoxes`). Past the full-LoD2 tiles the drawn windows stay. Not in Modell; they cast no shadow | LoD2, the window rows | `window-niche-layer.ts`, `window-niche-client.ts`, `lib/city/window-niches.ts`, `visual-style.ts` `nicheMask` |
+| Dormers and chimneys | DOM1 over the LoD2 roofs: the excess over the roof's own 9 m median, any blob ≥ 0.7 m over it clear of every tree point and the roof's seams; on a pitched roof (25–62°, a mansard to 80°) standing 0.9–3.5 m over it and under the ridge → a dormer: a front down the slope, two cheeks and a roof running back into the main roof: flat at the measured top, or a shed dormer's falling `tf` from where it meets the main roof to its front, ≥ 0.6 m over the roof; one object per host (column `source` = 4) in the host's tint and roof colour, roof vertices flagged in `_FACADE`; no storey band, eave stroke, plinth or shop zone; where the host has windows, one row in each dormer's front (`dormerWindows`; the cheeks blind, the street photos' shop reading not on its row). A small one at the ridge, a stack over it or one on a flat roof → a chimney: a box from under the roof to its measured top (`chimneyMesh`), all wall, in the host's tint | DOM1, LoD2 | `lib/city/dormers.ts`, `city-fittings.ts` `appendDormers`; `pipeline/bake/dormers.py` |
 | Eave line | min RoofSurface Z per building (column `eaveH`) | LoD2 geometry | (*Traufkante*) |
 | Ground darkening on walls | height above the building's own base (column `baseZ`: the street its plinths stand on, from at most 1.5 m over the lowest ground round its footprint — `liftToStreet` —, else that lowest ground) | LoD2 geometry, the plinths | (*Boden-Verlauf*) |
-| Rim light | view/normal/sun geometry | — | (*Streiflicht*) |
-| Night light on facades | `function` ∈ commerce/public (`31001_2xxx`/`3xxx`; structures that are no building stay dark) (column `glow`; a BuildingPart takes its Building's `function` through `root`) → *Lichtkegel*: soft cones of light from the wall's foot, every 6 m, about half on, gone by a storey and a half (`GROUND_LIGHT`); the landmarks (flag 16) the city floodlights, three in five and whole buildings at once (the named outline's OSM id, else the ensemble, hashed; runtime flag 32768 beside the column, `isFloodlit`, `FLOODLIT_SHARE`), whatever their use, → *Anstrahlung* in place of the cones: cones every 7 m up to the eave over a faint wash, seven in ten on, each a little off its slot and of its own strength (`FLOODLIGHT`, `FLOOD_ON`); × `nightFactor`, walls only. The walls never glow themselves; *Streiflicht* drops to a tenth at night (`NIGHT_RIM`) | LoD2, Wikidata, ALKIS, sun | `visual-style.ts` `nightLight` (*Abendlicht*) |
+| Rim light | view/normal/sun geometry: a Fresnel rim, a quarter of it on a face turned from the sun by day (`SHADE_RIM`; at full strength, seen from above, where every wall grazes, a wall in its own shade read as bright as a sunlit one beside the dark shadow it casts, and shadows looked cut loose from their casters, 2026-11-03), none at night (× (1 − `nightFactor`); the tenth it kept lit every wall seen along a street and every roof from the air pale, a third of the far houses' brightness, 2026-11-06) | — | `visual-style.ts` `clayGlow` (*Streiflicht*) |
+| Night light on facades | `function` ∈ commerce/public (`31001_2xxx`/`3xxx`; structures that are no building stay dark) (column `glow`; a BuildingPart takes its Building's `function` through `root`) → *Lichtkegel*: soft cones of light from the wall's foot, every 6 m, about half on, gone by a storey and a half (`GROUND_LIGHT`); the landmarks (flag 16) the city floodlights, three in five and whole buildings at once (the named outline's OSM id, else the ensemble, hashed; runtime flag 32768 beside the column, `isFloodlit`, `FLOODLIT_SHARE`), whatever their use, → *Anstrahlung* in place of the cones: cones every 7 m up to the eave over a faint wash, seven in ten on, each a little off its slot and of its own strength (`FLOODLIGHT`, `FLOOD_ON`); × `nightFactor`, walls only. The walls never glow themselves; *Streiflicht* is off at night | LoD2, Wikidata, ALKIS, sun | `visual-style.ts` `nightLight` (*Abendlicht*) |
 | Shop fronts | OSM shop / café on the ground floor (column `flags`, bit 1) → a low warm band under the first storey line, soft top edge, walls only, in 3.5 m cells about two in three lit, each at its own strength (`shopCell`, `SHOP_LIGHT` × dusk glow); none on a landmark (flag 16: a palace's or a terrace's café lit its low walls all round); a shopfront's pane its own light (`PANE_LIGHT`); × `nightFactor`; no window structure | OSM, LoD2, sun | `visual-style.ts` `nightLight` (*Abendlicht*) |
 | Listed facades | OSM `heritage=*` (column `flags`, bit 2) → a barely-there warm lift of the wall tint and a finer second cornice 0.45 m under the eave | OSM, LoD2 | `visual-style.ts` `osmColour` (*Farbvariation*, *Traufkante*) |
-| Glass facades | OSM `building:material=glass` (or Wikidata's, on a landmark; column `flags`, bit 4) → walls a little cooler (×(0.93, 0.99, 1.07)) and smoother (roughness 0.42), and the sky mirrored in them (*Spiegelung*: 10 % face on → all of it at a grazing view, the clay's colour giving way by 60 % of that; metal a third as much; at full strength, so the old stand-in — a pale sky sheen at *Streiflicht*'s strength, below full Spiegelung only — is not drawn). No panes, no mullions (the window grid stays 🗃️) | OSM, Wikidata | `visual-style.ts` `osmColour` / `clayGlow` / `facadeMirror`, `sky-reflection.ts` (*Streiflicht*, *Spiegelung*) |
+| Glass facades | OSM `building:material=glass` (or Wikidata's, on a landmark; else the street photos' where CLIP reads half its walls' length read, and a quarter of its outer walls (or 15 m and a twentieth), as glass, `lib/city/photo-glass.ts`, ADR 0060; column `flags`, bit 4) → walls a little cooler (×(0.93, 0.99, 1.07)) and smoother (roughness 0.42), their own colour darkened to a pane's (by 62 %, `GLASS_MIRROR.body`), and the street mirrored in them (*Spiegelung*: 28 % face on → all of it at a grazing view, the clay's colour giving way by 60 % of that more; the Skyline-Spiegel below, its sky at roughness 0.05; metal a third as much at 10 % face on, its sky blurred at 0.22). A frame of mullions every 1.5 m along the facet (from the world's origin) and a transom at every storey, 3.5 cm wide and 55 % opaque (`GLASS_FRAME`), drawn as the wall's clay where the mirror and the dark give way, box-filtered over the pixel (a thinner line is a pixel at its share); closer than a few pixels, their share of the wall. No panes in the clay's windows (the window grid stays 🗃️) | OSM, Wikidata, Mapillary | `visual-style.ts` `osmColour` / `clayGlow` / `facadeMirror` / `facadeBody`, `city-mirror.ts`, `sky-reflection.ts` (*Spiegelung*) |
+| Skyline-Spiegel (what windows and glass mirror) | the tile's baked horizon (the far shadows' raster, `skyview.py`: 16 azimuths, near band 8–80 m, far band to 10 km) read 4 m out of the wall in the mirrored direction: below its skyline the mirror shows a house, above it the sky cube. Seen from a storey up the near skyline stands lower, as one 22 m off would (`NEAR_M`). The house is a stand-in, not the one across the street: the sky's colour at the horizon toned as clay facing the mirror (0.85 lit when the sun stands behind the mirror, 0.42 in shade), rows (3.3 m) and axes (2.8 m) of soft-edged windows at 0.8 of that, handed over to their mean where they would alias, the far band's houses hazed into the sky; after dark the night sky's dark with a quarter of its windows lit warm. A window's back takes it as a tone of its pane's sky (`PANE_SKY_RGB` × the tone), a glass or metal wall as its mirror. Four reads of a raster the terrain already holds (the city tile shares its terrain's, named in the terrain's extras: no byte more on any device); until it lands the sky alone | DGM1, LoD2 (the horizon bake) | `city-mirror.ts`, `visual-style.ts`, `tile-stream.ts` `shareHorizon` |
 | Metal cladding | `building:material` metal / steel / aluminium / copper / zinc (column `flags`, bit 8) → a cooler wall at 60 % of the glass tint, roughness 0.5, no sheen | OSM, Wikidata | `visual-style.ts` `osmColour` / `clayGlow` |
-| Landmark | a Wikidata landmark's objects (column `flags`, bit 16): no look of its own — the roof relief is measured on these objects only, and the HUD's *Wahrzeichen* list glides to the landmark | Wikidata, OSM `wikidata=` | `scripts/prepare/city.ts` `withLandmarks`, `lib/city/landmarks.ts` |
+| Landmark | a Wikidata landmark's objects (column `flags`, bit 16): no look of its own — the roof relief is measured on these objects only, and the HUD's *Wahrzeichen* list glides to the landmark | Wikidata, OSM `wikidata=` | `lib/city/landmark-lut.ts` `withLandmarks`, `lib/city/landmarks.ts` |
 | Roughness jitter | `hash(objectid)` (column `rough`) → [0.55, 1.0] | — | (*Materialstreuung*) |
 | The asked building | the probe's pick on a click, a long press or `I` — the first solid thing on the ray, a tree's crown only with nothing solid behind it; the rest of the ray's things a strip of candidates (`inquiry-strip.tsx`) — (the whole building tree, or its ensemble's trees — `lib/city/ensembles.ts`) → flag 32 in the packed texture at runtime: lifted 40 % towards paper white with a faint paper light of its own; a pencil hatch every 0.9 m on the building near (up the facade at 45°, across the roof), 45° strokes every 7 px in screen space where those would crowd; and the outline (below); no slider, the hatch not in *Papier* | the viewer's question | `inquiry-probe.ts`, `city-layer.ts` `mark`, `visual-style.ts` `askedColour` |
-| The asked tree, monument, bridge, hedge, lamp, street furniture, tram stop or landing stage | the probe's pick among the tile's askable things (ray vs. data solids; bridges vs. their drawn meshes) → the outline (next row) alone | the viewer's question | `inquiry-probe.ts`, `lib/city/ask-items.ts`, `lib/city/ask-more.ts`, `bridge-ask.ts` |
+| The asked tree, monument, bridge, hedge, lamp, street furniture, tram stop, landing stage or a loaded design's part | the probe's pick among the tile's askable things (ray vs. data solids; bridges vs. their drawn meshes; a design vs. its mesh, by part — `design-layer.ts` `asks`; an instance a design folded away is not found) → the outline (next row) alone | the viewer's question | `inquiry-probe.ts`, `lib/city/ask-items.ts`, `bridge-ask.ts` |
 | The asked traffic flow or bicycle counter | while its layer shows: a ray on the flow's drawn bodies (the vertex names its section) or on the counter's columns as tall as they stand → the outline alone, a flow's with the layer's own grown and widened positions, tested only against what stands in front of the glass | the viewer's question | `traffic-ask.ts`, `bike-ask.ts`, `lib/city/inquiry-traffic.ts` |
 | The outline of the asked element | its triangles (a building's or bridge's own; a tree's crown and trunk, a monument's cylinder, a basin's prism as stand-ins) → a two-byte mask, red the whole element, green where the scene's depth shows it (MAX blending), blurred at half resolution by its own two-byte blur (GaussianBlurNode's kernel, `outlineKernel`) → the band 0.07–0.66 of red's blur: one rounded line round the element's whole silhouette, never along what stands in front, 4.5 CSS px of the HUD's accent pink (`SELECTION_ACCENT`, the hatch's too) on a hair of its pale, flashing wider and in the accent for 650 ms on a new question (`OUTLINE_PULSE`), fwidth-smoothed, at 42 % of its ink where green says the element is hidden (`OUTLINE_HIDDEN`, the hidden edge); over the finished frame and everything in it, in every picture style; mask and blur drawn only while something is asked | the viewer's question | `selection-outline.ts`, `selection-shape.ts`, `lib/city/outline.ts`, `post-stack.ts` |
 | The inquiry card (HUD, not the scene; a bottom sheet on touch) | the fact columns (`buildingId`, ALKIS use, roof form and pitch, height, area, OSM name, address, storeys, and `drawn`: where each drawn value came from — its *Daten* section lists them with the object's style row, `lib/city/drawn-lines.ts`), a tree's register facts (`treefacts_<tile>.json`), a monument's or bridge's feature, and the provenance manifest (each source's edition and licence), on demand only | LoD2, OSM, `data/<site>/provenance.json` | `lib/city/object-facts.ts`, `lib/city/inquiry.ts`, `lib/city/provenance.ts`, `inquiry-card.tsx` (ADR 0042) |
 | Tree position and height | canopy point + `h` (3–45 m): as tall as measured, crown 0.58 × h wide (the cadastre's measured median; a scan crown 2r within 0.4–0.75 × h, r its watershed share of the scan's crown mass); rows: DOM1's crown peaks along `veg04_l`, as tall as measured, every 9 m only without DOM1; crown base clamp(0.15 + 0.012 · h, 0.22, 0.6) · h, at least 3 m over a carriageway (`c: 1`) | DOM1−DGM1, LSC, Basis-DLM | `vegetation-layer.ts`, `lib/city/tree-placement.ts` |
 | Tree gate | none on a path or water (classes 6, 8), a carriageway or a track bed, near a bridge or on a building's roof; on road/rail land no bare plane (a heap, a shed roof: 3 × 3 plane residual ≤ 0.25 m, index < 0.1) | Basis-DLM, OSM ways and building outlines | `pipeline/bake/canopy.py`, `pipeline/bake/ways.py` |
 | Crown colour | NDVI 5×5 footprint max, recentred on the median; where the DOP has no near-IR (Munich) the GLI from its RGB, mapped onto the NDVI's scale | DOP | `crownColor` (+ hash sage fallback) |
-| Crown motion | wind sway (vertex), full within 120 m of the eye and gone by 260 m (a fraction of a pixel far off is no motion, only a shimmer), times the picture style's `sway` share; the crown brightens leaning into the gust and dims rocking back (× (1 ± 0.09 · gust), fixed) | — | `crownSway`, `crownSwayShare`, `crownLight` |
-| Crown silhouette | every tree its own crown: the shared geometry pushed in and out by three broad waves over the direction from the crown's centre, their phases from where the tree stands, and its top leaned a little — in the vertex stage, the cast shadow too; no draw call or build added | where the tree stands | `vegetation-layer.ts` `crownShape` |
-| Crown detail | three tiers per 250 m chunk, decided over the whole site on the 10 Hz pose tick (and in the frame the tiles in view or the crown switch change, or the eye jumps more than 25 m): rich multi-tuft crown near (in 220 m / out 300 m) while the site's rich trees fit a budget of 2 500 (nearest chunks first), mid crown + trunk, far crown (80 tris, no trunk, dense chunks thinned to every other tree drawn 1.35× wider) past 650 m / back at 550 m | — | `lib/city/vegetation-lod.ts`, `createVegetationLod` (*Multi-Tuft-Kronen (nah)*) |
+| Crown motion | wind sway (vertex), full within 120 m of the eye and gone by 260 m (a fraction of a pixel far off is no motion, only a shimmer), times the picture style's `sway` share; the crown brightens leaning into the gust and dims rocking back (× (1 ± 0.09 · gust), fixed); no glow of its own, against the light either (the backlit shimmer and translucency went 2026-11-06: they flattened the crown) | — | `crownSway`, `crownSwayShare`, `gustLit` |
+| Crown silhouette | every tree its own crown: the shared geometry pushed in and out by three broad waves over the direction from the crown's centre, their phases from where the tree stands, and its top leaned a little; every tree leans up to 0.7 m and its trunk crooks, the crown carried along (`treeGrowth`), and the trunk forks into three limbs inside the crown (`trunkLimbs`; the register's own trunks stay unforked, a set of their own in a cell that has both) — in the vertex stage, the cast shadow too; no build added; darker and cooler underneath and in the troughs between lobes (`crownOcclusion`, a colour factor per vertex, not while printed) | where the tree stands | `vegetation-layer.ts` `crownShape`, `crownOcclusion` |
+| Crown detail | three tiers per 250 m chunk, decided over the whole site on the 10 Hz pose tick (and in the frame the tiles in view change, or the eye jumps more than 25 m), the cadastre's own silhouettes (flame, cone, pine, dome) in the same plan, their cheap crown standing for mid and far: rich multi-tuft crown near (in 220 m / out 300 m) while the site's rich trees fit a budget of 2 500 (nearest chunks first), mid crown + trunk, far crown (80 tris, no trunk, dense chunks thinned to every other tree drawn 1.35× wider) past 650 m / back at 550 m | — | `lib/city/vegetation-lod.ts`, `createVegetationLod` (no switch: the rich crown is always allowed, since 2026-11-06) |
 | Conifer crown | a canopy evergreen (`l: "e"`) or a register conifer → a three-tier lathe cone in the lobed crown's box; a canopy evergreen read as a pine (`pine: 1`) or a register pine → the pine's high, flat-topped crown (the lobed crown reshaped, starting at 0.55 h; a chunk set of its own, the same node build); a yew → the lobed crown down to the ground (on the same trunk; the coarse level a six-sided cone of one skirt), its own chunk set sharing the broad crowns' node build, an evergreen in the blue-green (`evergreenColor`), no season (a register larch keeps its leaf type's year); asked, outlined as its cone | Basis-DLM forest kind (`VEG`) / OSM `leaf_type`, DOP (leaf-off), cadastre | `conifer-crown.ts`, `vegetation-layer.ts`, `tree-inventory-layer.ts`, `coarse-crowns-layer.ts` |
 | Coarse-level trees | a fixed third of the fine level's trees (a hash of where each stands), as tall, crowns √3 wider, in their colours and season, no trunks; conifers (a register cone or a canopy evergreen) as a six-sided cone, cones and pines as their own sets (`coarseForm`), each crown from its own base — wherever the tile renderer shows the coarse terrain: far off, from the air, in Modell past 2.5 m/px or wherever a coarsened stream or a load leaves the fine level out, at any scale; the fine level draws every tree | where each tree stands (`drawnCoarse`) | `coarse-crowns-layer.ts`, `lib/city/coarse-crowns.ts`, `scripts/coarse-crowns.ts`, `crowns_<t>.crw.gz` |
 | Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / pine / weeping dome; a yew a bush down to the ground); Hamburg's heights from genus and trunk (its register has none); leaf type + `Blut-`/gold cultivars → crown colour; trunk diameter `t` → trunk girth (fitted to the drawn trunk's radius at 1.3 m, flared foot included, × 1.3; else from the height); drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes; OSM `natural=tree` (`s: "osm"`) fills in where the register has no tree within max(3 m, its crown's radius); a city without a register shows all its OSM trees, as tall as DOM1 measures | Stadtbaumkataster Dresden, OSM | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
 | Tree family | genus `gn` → family (`lib/city/tree-family.ts`): a lean of the summer green (HSL offsets on the NDVI colour, not on cultivars or evergreens), bark colour as the trunk's per-instance tint (`TreeInstance.bark`); eight genera flower (`Phenology.bloom`: cherries pink in April, pears/apples/hawthorn white, …), the crown mixed toward the blossom and kept full while in flower | Stadtbaumkataster (genus) | `tree-family.ts`, `tree-inventory-layer.ts` `inventoryColor`/`barkTint`, `crown-season.ts` `bloomTargets` |
 | Tree age | planting year `y` → age (`lib/city/tree-age.ts`): under 15 years (unmeasured) a thinner trunk, under 5 years three stakes and two rails (`tree-stakes.ts`), past 80 years (unmeasured) a thicker trunk; the crown lighter when young, deeper when old (fine level); height and crown size as measured | Stadtbaumkataster (age / planting year) | `tree-age.ts`, `tree-inventory-layer.ts`, `tree-stakes.ts` |
+| Tree foot | every trunk's foot bulges out in three or four roots and its bark turns to damp earth up to 0.45 m over the ground (`buildTrunkMaterial`, `trunkRoots`), the earth the ground's own at the foot on a fine tile (mulch, leaf mould, grass roots or the class colour damp; `trunkEarthGraph`, `tileTrunkMaterial`); bark furrows as a normal tilt within 35 m and moss low on the weather side (`barkSkin`); the trunk darkens where the ray to the sun passes through its crown and under the crown's hidden sky (`crownShade`); on the fine level in paving off the baked lawn a pit of mulched earth (0.85–1.4 m, its rim wobbling, lit as the ground and alpha-blended) in a ring of setts, rings drawn before earth so overlapping pits merge, kept 0.32 m off the road edge; under the crown (off forest) a multiplied shade glaze with moss and an unmown ring round the trunk on a lawn, a tuft of real grass blades round the trunk there (`tuftGraph`, opaque, lit as the ground), and sun flecks where the shadow map shades the crown's thrown shadow (round sun images through the leaves, drawn out by a low sun, swaying in clusters and blinking in place, never flowing) and, in autumn, fallen leaves (`leafLitterAt`) gathered at the kerb; bare worn earth and a short trodden path under every other big park tree; in a street pit roots breaking the mulch, setts heaved over them and cracks running on into the paving, a cast-iron grate on a pit 5 m or more off any road, an anthracite guard hoop on the road side of most pits 0.9–3 m off the kerb; faded out 70–150 m, a chunk's sets hidden past 160 m; on the trunks' own instance attributes | the class raster, the edge raster's lawn and road sides | `tree-foot.ts`, `vegetation-layer.ts` |
 | Plan trees | a register tree's crown width → a circle (line 8 % of the radius) with a stem dot, 0.4 m over its foot; shown only in the Schwarzplan's frames (`userData.planOnly`), drawn in the figure's black | Stadtbaumkataster | `tree-plan.ts`, `paper-scene.ts` |
 | Crown season | scene date (calendar day) + genus `gn` (± 6 days per tree) → `{ leaf, autumn }` (`lib/city/tree-season.ts`); `autumn` mixes the per-instance colour toward the genus hue, `aBare` = 1 − leaf discards the crown down to a 25 % grey-brown twig stipple (a hashed alpha test in crown space, ~1.25 px cells at every distance; a crown under ~20 px across, or any in Comic, drawn whole in the stipple's mean — its leaf and twig colours over its cover, the gaps a pale veil (`VEIL_COLOR`) — where the cells would sparkle) and thins the shadow through the stipple's own discard (`maskShadowNode`: never drawn whole, so a crown drawn whole still casts its thin shadow); evergreens constant (the register's, and the canopy's crowns in a needle forest or green on a leaf-off mixed forest's photo, `l: "e"` in `canopy_<t>.geojson`), the other canopy/row trees a generic curve; the day warped by the city's climate (`climateDay`, DWD phenology) before the curves read it; written on a day change, never per frame | Stadtbaumkataster (genus), OSM | `crown-season.ts`, `vegetation-layer.ts` `buildCrownMaterial(…, bare)` |
 | Hedge | box instances every 1.1 m along `veg04_l` where `BWS=1100`, minus where OSM maps one within 2 m | Basis-DLM (+ OSM) | `vegetation-layer.ts` |
@@ -182,29 +188,32 @@ is the codebook.
 | Scan hedge | the laser scan's own hedges (`src: "lsc"`): ≥ 6 m, ≥ 4× as long as wide, clear of crowns, green; drawn like the OSM ones | LSC, NDVI | `low-vegetation-layer.ts`, `pipeline/bake/hedges.py` |
 | Extra tree | LSC crown peak + `h` + `r` outside the canopy mask and away from any cadastre tree, appended to the canopy points | LSC | `tile-stream.ts` → `vegetation-layer.ts` |
 | Lamp post | point, its post's height its street's median in DOM1 (else its kind of street's on the tile, else 5 m; `h`, `hs`), one set per height, its light pool in proportion; none on classes 5 and 8; on a bridge on its deck's top (`deck`), its pool on the deck; a lamp hung across the street (`wire`): its head 7 m up on a wire to the facades or to slim masts at the kerb (`masts`), no post; a lamp OSM puts on a wall (`wall`): its head 3.5 m up, 0.5 m out of the facade on a short bracket, no post; a lamp on a mapped wall (`on: "wall"`): as on a facade, at ≤ 3.5 m, on the wall's low face; a tall post (≥ 7 m, or `bent`): a pole, an arm of 0.2 · h (1.2–2.5 m) to its bearing (`arm`) rising 0.35 m to the head, a flat cap; the head, light and pool at its end; a post mapped in the lanes stands at the kerb (on a deck at its nearer side, 0.4 m in); OSM's, plus Mapillary's detected street lights where OSM has none within 8 m (Dresden, Grimma, Meißen, Unna: seen from within 25 m and by day, not over a road tunnel) | OSM, Mapillary, DOM1, DGM1 | `lamp-layer.ts`, `lib/city/lamps.ts`, `pipeline/bake/lamps.py`, `pipeline/bake/lamp_heights.py`, `pipeline/bake/mapillary.py` |
-| Lamp light | nearest three heads of the visible tiles get a real point light (a phone: the nearest one, faded through zero over a 6 m band where the next head comes as near, so it never jumps lamps at full strength); the rest emissive + sprites, all × `nightFactor` | OSM, sun | `LAMP_LIGHTS` (`lamp-layer.ts`) |
+| Lamp light | nearest three heads of the visible tiles get a real light (a phone: the nearest one, faded through zero over a 6 m band where the next head comes as near, so it never jumps lamps at full strength): a spot light aimed straight down, 14 cd, 40 m reach, full within 42° of the plumb line and gone by 85° (`LAMP_CONE`) — a street lamp's shade lights the street and a house front's foot, not the front to its eaves, as the bare point lights did (2026-11-06, "Gebäude nachts viel zu hell"); the rest emissive + sprites, all × `nightFactor` | OSM, sun | `LAMP_LIGHTS` (`lamp-layer.ts`) |
+| Street light on facades | after dark every wall, roof and building part takes the light of the 48 lamps nearest the eye (a phone 12) within 260 m, faded from 150 m and toward the first left out (`STREET`, of every loaded tile, chosen by the eye's place alone, eased 0.2 s as the rails' are): drawn as the real lamps are (14 cd over the distance squared, three's range window at 40 m, the same cone, Lambert on the facet's flat normal, × the clay's colour), each lamp less the share a real light already gives it (`heldShare`), so the hand-over to the real lights near the eye is not seen; no shadow, as the real lights have none. A loop over a uniform array: by day its count is 0 | OSM lamps | `lamp-reflections.ts` (`streetLight`), `visual-style.ts` |
 | Lantern (*Laterne*) | the walker's own warm point light (1.6 cd, 14 m reach), held below the eye, 0.35 m right and 0.3 m ahead; on from −2° sun altitude, full from −6° (`lanternNight`), gone from 6 → 25 m over the ground (`lanternStrength`) and in Modell; a desktop casts shadows from it (512² cube, redrawn only when the hand moved 15 cm or a tile changed), a phone does not. The sun's own shadow terms that three hands every casting light (the ground's far horizon, the clay's window reveals) give way after dark (`nightShadowFree`) | sun, camera | `lantern.ts` |
 | Street furniture | OSM point → one small abstracted model per kind (bench, backless bench, picnic table, bin, bicycle hoop, bollard — stone or metal, at its tagged height —, post box, stop shelter): softened blocks, capsules, tube strokes in the scene's pastels, vertex-coloured under one matte material; front turned to the bake's bearing `a` (OSM `direction`, else the nearest highway), a bench stretched to its mapped length `l`, a stand as `n` hoops 0.9 m apart; a bin in its colour `c` (five muted tones), else grey; a bench without a direction with water within 12 m beyond it faces the water; none on classes 5 and 8 or under a bridge deck, a piece on one on its top (`deck`; one mapped in its lanes at its nearer side); every model (and the tram stops' signs) one instanced set per 500 m cell of the site's grid, a cell drawn while the box of its pieces is within 350 m of the eye and hidden past 400 m (`showFurnitureNear`, on the tree tiers' tick; in Modell every cell: from 150 m up the whole tiles' furniture was 1.9 M triangles of a few pixels each) | OSM; the class raster (water) | `furniture-layer.ts`, `lib/city/furniture.ts`, `pipeline/bake/furniture.py` |
-| Signs and fixtures | OSM point → advertising column (paper drum Ø 1.2 m, 2.7 m, a darker ring and dome, three pastel poster fields; `lit` ones emissive × `nightFactor`), traffic signal (3.2 m pole, a three-lamp head a shade deeper than the metal, facing `a`, unlit; with `arm` a 5.95 m mast, a 5 m arm over the lanes with a second head), pedestrian signal (`pedsignal`: a 2.5 m post, a two-lamp head looking across `a`, a push button) at each kerb end of a signalled crossing, pillar hydrant (0.8 m, red ochre), underground-hydrant sign plate on a post (one soft rose field, at 70 %), clock on a 3.5 m post (double face) or on a facade (one face, bracket to the wall), drinking fountain (1 m bronze column + basin), bus-stop "H" sign (2.6 m pole, a soft green disc in a yellow one — no letter —, timetable box); clock hands (soft slate) turned by the scene's time (`clockMinutes`, on the minute), never casting; on a bridge deck a signal stands at its carriageway's kerb (or the deck's edge, if nearer), a hydrant sign at the deck's nearer edge | OSM | `furniture-layer.ts` (`column`, `signal`, `signalArm`, `pedSignal`, `hydrant`, `hydrantSign`, `poleClock`, `wallClock`, `drinkingWater`, `stopSign`, `clockHands`), `pipeline/bake/furniture.py` |
+| Signs and fixtures | OSM point → advertising column (paper drum Ø 1.2 m, 2.7 m, a darker ring and dome, three pastel poster fields; `lit` ones emissive × `nightFactor`), traffic signal (3.2 m pole, a three-lamp head a shade deeper than the metal, facing `a`, unlit; with `arm` a 5.95 m mast, a 5 m arm over the lanes with a second head), pedestrian signal (`pedsignal`: a 2.5 m post, a two-lamp head looking across `a`, a push button) at each kerb end of a signalled crossing, pillar hydrant (0.8 m, red ochre), underground-hydrant sign plate on a post (one soft rose field, at 70 %), clock on a 3.5 m post (double face) or on a facade (one face, bracket to the wall), drinking fountain (1 m bronze column + basin), bus-stop "H" sign (2.6 m pole, a soft green disc in a yellow one — no letter —, timetable box), flagpole (a 7 m mast, or its tagged `h`, with a ball on top, shown from 800 m where other furniture shows from 350 m; its cloth 1.2 × 2 m whatever the mast's height, one geometry per tile and design, hung from its top, flying downwind — one wind for the city, from the west-south-west, ±12° a mast — and rippling on the wind clock, a wave growing from the hoist, its folds shaded by the wave's slope; still past 120–260 m and in a style without sway; the cloth casts the sheet at rest, never its wave, and looks its own shadow up there; a pick finds the mast and the cloth; a flag the map names (`c`: Germany, the EU, Saxony, Bavaria, Hamburg) in its colours as pastel bands without emblem, every other one pale); clock hands (soft slate) turned by the scene's time (`clockMinutes`, on the minute), never casting; on a bridge deck a signal stands at its carriageway's kerb (or the deck's edge, if nearer), a hydrant sign at the deck's nearer edge | OSM | `furniture-layer.ts` (`column`, `signal`, `signalArm`, `pedSignal`, `hydrant`, `hydrantSign`, `poleClock`, `wallClock`, `drinkingWater`, `stopSign`, `clockHands`, `flagpole`), `flag-cloth.ts`, `pipeline/bake/furniture.py` |
 | Playground | OSM outline → a pale sand floor 4 cm over the ground, skirted 0.2 m; the mapped equipment stands on it (on one mapped empty, the surface model's blobs, `src: "dom"`, as a swing or a climbing frame), each piece one soft single-coloured sculpture in a pastel from the scene at the buildings' brightness (swing = an arch with a pill seat, dusk blue; slide = an extruded wave, peach; climbing frame = a faceted dome, sage; springy = an egg on a stem, butter; seesaw = a plank on a half-round, lilac; roundabout = a rimmed disc; playhouse = an extruded house silhouette; sandpit = sand in a rounded sage frame); a sandpit area a sand slab 6 cm above | OSM; DOM1 − DGM1 (empty ones) | `furniture-layer.ts` (`addSlab`), `lib/city/furniture.ts` |
 | Fountain basin | OSM outline → clay rim (+0.35 m over the highest ground; 0.2 m for `water=reflecting_pool`, none for `fountain=splash_pad`), water = the 0.35 m inset; a point → 2.2 m round basin, a drinking fountain or stone block (`r`) ~1 m | OSM, Basis-DLM | `monument-layer.ts`, `pipeline/bake/monuments.py` |
-| Fountain jets | a translucent water bell (lathe, alpha fading along the falling curtain; breathes ±7 % on a per-jet phase, streaks run down the curtain; unlit, so after dark its colour dims to a faint warm white, `NIGHT_JET`, × `nightFactor`), `0.3·√area` tall, clamped 1.2–4.5 m; one centred, or four round a measured sculpture (only those on the water); running mid-April to October, off from November to mid-April (`fountainSeason`, one shared uniform) | OSM | `jetHeight`, `jetPlaces` (`lib/city/monuments.ts`), `unitBell` |
+| Fountain jets | a translucent water bell (lathe, alpha fading along the falling curtain; breathes ±7 % on a per-jet phase, streaks run down the curtain; unlit, so after dark its colour dims to a faint warm white, `NIGHT_JET` 0.12, × `nightFactor`), `0.3·√area` tall, clamped 1.2–4.5 m; one centred, or four round a measured sculpture (only those on the water); running mid-April to October, off from November to mid-April (`fountainsOn`, one shared uniform) | OSM | `jetHeight`, `jetPlaces` (`lib/city/monuments.ts`), `unitBell` |
 | Monument / fountain sculpture | `relief` (nDOM patch, 1 m) → ×4 bilinear, one [1 2 1] pass, fringe below 0.08 m sunk; heights over the terrain per sample; the buildings' clay; a fountain's sculpture uplit softly warm (`NIGHT_UPLIGHT`) × `nightFactor`, fading over its lowest 2.5 m above the water | DOM1 − DGM1, Basis-DLM | `reliefSurface`, `reliefMesh`, `uplight` |
 | Monument marker (nothing measured) | its OSM form's parts in clay: statue = pillar on a 1.6 m pedestal, bust = small pillar on a 1.35 m plinth, sculpture = broad pillar, stele = upright slab, stone = low rounded block, obelisk = four-sided needle on a 0.7 m base, column = a round shaft on a pedestal under a capital; scaled whole to a tagged `height`, else the height measured in the open (`hm`) (×0.4–3; a column or obelisk up to 40 / 35 m in height alone, its girth ≤ ×3); facing `a` (its square's centre, else the nearest way); no form → the DLM kind's one pillar, slab or shaft; a fountain's figure under a winter housing (`cover`) → the free sculpture's marker | OSM `memorial`/`artwork_type`/`height`, Basis-DLM, DOM1 (`hm`) | `markerPieces`, `addMonument` |
 | Monument tone | a monument's named material as one muted tone per part, in the clay's palette: sandstone warm beige, granite grey, bronze dark green-brown patina, copper verdigris, gold soft gold, steel cool grey; the figure the most striking metal, the pedestal the stone named (else clay); a marker's two pieces apart, a fountain's measured sculpture ≥ 3 m tall split at 55 % of its height (0.4 m blend); unnamed, glass, plastic, ceramic → clay | OSM `material`, else Wikidata `P186` | `markerTones`, `figureShare`, `clayTint` |
 | Measured monument | its relief as composed clay solids, never a surface: a pedestal at the measured footprint and median height with the figure on it (a lying body with an upright pillar along the axis where the figure is long, else one pillar), else the OSM form at the measured height, else one block or pillar; turned to the cells' principal axis; a slim shaft named column or obelisk at its measured height with its pedestal (the laser scan's surface where on disk, `hs`) | DOM1 and DGM1 (`relief`), LSC, OSM form | `measuredMarker`, `addMonument` |
 | Monument finish | a pedestal as coursed ashlar (plinth, shaft, cap; joints and block shades as on the bridges); a stone figure tooled; bronze or copper a streaked patina with verdigris spots and a faint mirrored sky; gilding smooth, mirroring the sky gold-tinted (*Spiegelung*); unnamed figures plain clay | OSM `material`, Wikidata `P186` | `partFinish`, `pedestalCourses`, `finishGrain` |
-| Fountain water | the river's wave field at a basin's size (`BASIN_WAVES`) tilts the normal, the sky is mirrored off it and a shimmer brightens where it tilts most; after dark the shimmer down to a fifth and a faint cool glow from below (`NIGHT_SHIMMER`, `NIGHT_WATER`) × `nightFactor` — the water stays darker than the lamp-lit pavement | — | `monument-layer.ts` `waterMaterial`, `water-waves.ts` |
+| Fountain water | the river's wave field at a basin's size (`BASIN_WAVES`) tilts the normal, the sky is mirrored off it and a shimmer brightens where it tilts most; after dark the water's colour drops to 15 % (`NIGHT_WATER_TONE`: under a lamp a pale basin lit up as a disc), its daytime glow (`WATER_GLOW`) goes, the shimmer drops to a fifth and the cool glow from below to 0.008 (`NIGHT_SHIMMER`, `NIGHT_WATER`; at 0.025 with the day's glow they drew a basin a pale blue-grey disc in the night square, 2026-11-06), and the lamps near the eye glint on its ripples (`streetGlints`: the `STREET` lamps' lobes, spread 0.12, Fresnel from 0.02, no halo — from the many lamps round a square the halos summed to a silver sheen), all × `nightFactor` — the water stays darker than the lamp-lit pavement | — | `monument-layer.ts` `waterMaterial`, `water-waves.ts` |
 | Unmeasured statue / stone / column | abstract clay marker: rounded pillar 2.2 m · slab 1 m · shaft 4.5 m, a stable yaw from the position | Basis-DLM | `MARKER_SHAPE` |
 | Canopy on a monument | a canopy point on a relief cell is dropped (the DOM1 "tree" was the monument) | DOM1, Basis-DLM | `onRelief` |
 | Ballast surface | dissolved `ver03_f` polygons (and their holes) where a baked track's bed lies on them (none on a bridge or a paved track, gaps ≤ 4 m between beds closed) draped on the beds' profile within a bed's reach (to 2 cm, triangles down to 1 m; ADR 0041), elsewhere on the ground — split where it strays > 1 m from a triangle, down to 6 m — 0.03 m up, a 0.45 m fascia; none on a rail deck | Basis-DLM (OSM without one) + the tracks | `rail-layer.ts` |
-| Rails | OSM's every track above ground (each its own way, gauge `g`), the DLM's `ver03_l` lines × `tracks` (1–3 pairs at `TRACK_PITCH`) only where OSM maps none within 6 m, on the level the whole line runs on (`lv`, ADR 0041): the ground, a rail deck, or a span over a gap the DGM leaves beside a bridge (or over a line a storey below); at the height of its profile (`lz`, ADR 0041: grade ≤ 4 %, vertical curves ≥ 2 000 m); the head 0.17 m over the ground's ballast or the deck's top, 0.02 m on paved track (`paved`); none covered for > 30 m, none buried under the ground, none in a tunnel (a DLM stretch > 15 m within 2 m of a DLM tunnel) and none of the DLM's trams | OSM (Basis-DLM where OSM maps none) | `buildRails` |
+| Rails | OSM's every track above ground (each its own way, gauge `g`), the DLM's `ver03_l` lines × `tracks` (1–3 pairs at `TRACK_PITCH`) only where OSM maps none within 6 m, on the level the whole line runs on (`lv`, ADR 0041): the ground, a rail deck, or a span over a gap the DGM leaves beside a bridge (or over a line a storey below); at the height of its profile (`lz`, ADR 0041: grade ≤ 4 %, vertical curves ≥ 2 000 m; a funicular's `steep` ≤ 100 %, ≥ 100 m); the head 0.17 m over the ground's ballast or the deck's top, 0.02 m on paved track (`paved`); none covered for > 30 m, none buried under the ground, none in a tunnel (a DLM stretch > 15 m within 2 m of a DLM tunnel) and none of the DLM's trams | OSM (Basis-DLM where OSM maps none) | `buildRails` |
+| Monorail beam | OSM `railway=monorail` (`mono`, `tracks`): a closed girder on its baked underside (`bz`, the upper hull of the DGM + a car's clearance), every 8 m a portal round the hanging cars' way or a column under a beam ridden on top, painted steel, each foot `SINK.box` under the lowest ground at its corners (ADR 0030 joins) | OSM + DGM1 | `monorail-beam.ts`, `lib/city/monorail.ts` |
 | Sleepers | a ribbon per track on its level, a concrete sleeper every 0.6 m drawn by its fragment pass over the ballast's colour, faded to their tone once a few pixels wide; timber over dark gaps on a truss's open floor; across a rail deck too, none on paved track | the tracks | `track-bed.ts` |
 | Main-line catenary | over a track with a contact line (`electrified` 1; 2 is a third rail, none): the contact wire 5.5 m over the rail head, staggered ±0.3 m, the messenger 1.4 m above it sagging ≤ 0.9 m, droppers every 8 m; supports where the track crosses a site-wide 50 m grid line — a portal over three or more parallel tracks within 7 m, else a mast 3.2 m out with a cantilever — or a mapped mast (`m`) within 30 m in their place; none within 10 m of a bridge, the wires under its soffit (contact ≥ 4.95 m); masts within 15 m of a tram track left to the tram layer | OSM (`electrified`, `power=catenary_mast`), the DLM's `ELK` | `catenary-layer.ts`, `lib/city/catenary.ts` |
-| Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height (the roadway DOM1 measures, held near the DGM abutment ramp and within 8 % grade, 4 % on rail), width as DOM1 measures the deck (3–40 m), else mapped, else by `kind`; a deck carrying rails and a road split per network, the top in its land-cover class colour (road, path, railway; stone otherwise) on its measured `line` (the ring's edges divided to ≤ 4.8 m, every vertex of the top and the soffit at the line's height at its station, never a chord between the ring's corners), laid out by its frame on the axis (`aDeck`, per vertex of a top split to triangles of ≤ 6 m so it holds on a curve: a road deck's footways along both sides in the pavement's colour with slabs, kerb stone and gutter, the carriageway's grain and, on two lanes, the centre dashes; a path deck sand with kerbs; a rail deck the bed with walkways; stone paving otherwise — `bridge-surface.ts`), its fascia, the parapets, piers and masonry ashlar (courses, running-bond joints, a shade per block, a weathering mottle; the fine detail fading by the pixel's footprint), parapets along the sides only (none where a frame stands on the edge): an ashlar wall on an arch, humpback or stone bridge without a steel arch, else an open steel railing 1.1 m high (a kerb, posts every 2.5 m, a top rail; `addRailing`); closed from below; the deck line a straight ramp plus one upward camber fitted to the measurement, never sagging; slab `depth` by what carries it (`deckDepth`: a beam span/20 within 0.8–2.5 m, an arch's deck 1 m, a truss's or cables' floor 1.2 m), the baked fairway depth only a cap; from each end ≥ 0.5 m above the ground an approach at the kind's grade (road 8 %, path 10 %, rail 3 %) down to where it meets it, ≤ 40 m, in the deck's colour, as deep as the deck (none onto another deck); drawn by the tile that owns its centre, on both terrain levels. Without a DLM the ring is OSM's `man_made=bridge` outline, else one bridge's ways buffered by `width` (or `lanes`) and merged per `layer`, the same drawing | Basis-DLM (OSM without one) + DGM1/DOM1 + OSM seamarks | `drawBridge` |
-| Bridge superstructure | `ribs` (lateral `offset` + `rise` per 2 m): on an arch bridge the ribs that follow the tightest rib's parabola → steel arches carried below the deck to their springing, hangers/posts every 16 m (a rib that follows no arch: not drawn); cable-stayed → pylon + stays every 12 m fanned to the deck; else an open frame on each deck edge, its outer face flush with the deck's side, in a simple form (`ribProfile`: straight chords from the deck to the towers, a sag between them no lower than 2.6 m, a level girder without towers) — one 1.6 m chord, a post every 10 m, no diagonals — and a tower on a river pier + portal where it peaks ≥ 10 m (4 m prominent); two ribs snap to the two deck edges (`placeRibs`); pale matte steel `0xd9dde0` | DOM1 (+ Wikidata/OSM class) | `addSuperstructure`, `lib/city/bridge.ts` |
-| Bridge underside | `structure` an arch or humpback and no steel arch → bays from DOM1's piers (no bay over 70 m or the main span × 1.2), else Wikidata's spans with the main span on the fairway, else ~26 m; piers a seventh of their span thick (1.5–7 m); segmental arches rising a fifth of their span to 0.2 m under the soffit, springing ≥ 0.5 m over the ground; the deck's own side edges carried down to them as spandrel walls (both faces), a vault across the deck under each arch; else box piers on the axis ≤ 26 m apart (none on a deck up to 40 m), the fairway kept clear (main span wide, else 40 m); a railway beam deck over 100 m a viaduct on paired columns under its edges ≤ 13 m apart with a crossbeam, over the water a pier on the axis at every other station; a frame's tower stands on its river pier | OSM / Wikidata / DOM1 | `addMasonry`, `masonryArches`, `beamSupports`, `addColumnPair`, `deckDepth` |
-| Span deck | under a rail or tram span (a gap with no deck outline): a slab as wide as the tracks + 0.9 m (tram: 1.6 m either side), top in the deck colour, stone fascia and soffit 1.1 m deep, a pier every 26 m where it clears the ground by 2.5 m; drawn by the tile owning its middle | the line levels on DGM1 | `addSpanDeck` |
+| Bridge deck | `ver06_f`/`ver06_l` ring with per-vertex `deck` height (the roadway DOM1 measures, held near the DGM abutment ramp and within 8 % grade, 4 % on rail), width as DOM1 measures the deck (3–40 m), else mapped, else by `kind`; a deck carrying rails and a road split per network, the top in its land-cover class colour (road, path, railway; stone otherwise) on its measured `line` (the ring's edges divided to ≤ 4.8 m, every vertex of the top and the soffit at the line's height at its station, never a chord between the ring's corners), laid out by its frame on the axis (`aDeck`, per vertex of a top split to triangles of ≤ 6 m so it holds on a curve: a road deck's footways along both sides in the pavement's colour with slabs, kerb stone and gutter, the carriageway's grain and, on two lanes, the centre dashes; a path deck sand with kerbs; a rail deck the bed with walkways; stone paving otherwise — `bridge-surface.ts`), its fascia, the parapets, piers and masonry ashlar (courses, running-bond joints, a shade per block, a weathering mottle; the fine detail fading by the pixel's footprint), parapets along the sides only (none where a frame stands on the edge): an ashlar wall on an arch, humpback or stone bridge without a steel arch, else an open steel railing 1.1 m high (a kerb, posts every 2.5 m, a top rail; `addRailing`); closed from below; the deck line a straight ramp plus one upward camber fitted to the measurement, never sagging; slab `depth` by what carries it (`deckDepth`: a beam span/20 within 0.8–2.5 m, an arch's deck 1 m, a truss's or cables' floor 1.2 m), the baked fairway depth only a cap; from each end ≥ 0.5 m above the ground an approach at the kind's grade (road 8 %, path 10 %, rail 3 %) down to where it meets it, ≤ 40 m, in the deck's colour, as deep as the deck (none onto another deck); drawn by the tile that owns its centre, on both terrain levels. Without a DLM the ring is OSM's `man_made=bridge` outline, else one bridge's ways buffered by `width` (or `lanes`) and merged per `layer`, the same drawing | Basis-DLM (OSM without one) + DGM1/DOM1 + OSM seamarks | `bridge-layer.ts` `drawBridge` |
+| Bridge superstructure | `ribs` (lateral `offset` + `rise` per 2 m): on an arch bridge the ribs that follow the tightest rib's parabola → steel arches carried below the deck to their springing, hangers/posts every 16 m (a rib that follows no arch: not drawn); cable-stayed → pylon + stays every 12 m fanned to the deck; else an open frame on each deck edge, its outer face flush with the deck's side, in a simple form (`ribProfile`: straight chords from the deck to the towers, a sag between them no lower than 2.6 m, a level girder without towers) — one 1.6 m chord, a post every 10 m, no diagonals — and a tower on a river pier + portal where it peaks ≥ 10 m (4 m prominent); two ribs snap to the two deck edges (`placeRibs`); pale matte steel `0xd9dde0` | DOM1 (+ Wikidata/OSM class) | `bridge-layer.ts` `addSuperstructure`, `lib/city/bridge.ts` |
+| Bridge underside | `structure` an arch or humpback and no steel arch → bays from DOM1's piers (no bay over 70 m or the main span × 1.2), else Wikidata's spans with the main span on the fairway, else ~26 m; piers a seventh of their span thick (1.5–7 m); segmental arches rising a fifth of their span to 0.2 m under the soffit, springing ≥ 0.5 m over the ground; the deck's own side edges carried down to them as spandrel walls (both faces), a vault across the deck under each arch; else box piers on the axis ≤ 26 m apart (none on a deck up to 40 m), the fairway kept clear (main span wide, else 40 m); a railway beam deck over 100 m a viaduct on paired columns under its edges ≤ 13 m apart with a crossbeam, over the water a pier on the axis at every other station; a frame's tower stands on its river pier | OSM / Wikidata / DOM1 | `bridge-layer.ts` `addMasonry`, `masonryArches`, `beamSupports`, `addColumnPair`, `deckDepth` |
+| Span deck | under a rail or tram span (a gap with no deck outline): a slab as wide as the tracks + 0.9 m (tram: 1.6 m either side), top in the deck colour, stone fascia and soffit 1.1 m deep, a pier every 26 m where it clears the ground by 2.5 m; drawn by the tile owning its middle | the line levels on DGM1 | `bridge-layer.ts` `addSpanDeck` |
+| Rails under the lamps | after dark, the rail heads of every railway and tram track catch the lamps within 15 m of a drawn track (`LAMP_TRACK_REACH_M`; no monorail beam, none below ground) — of every loaded tile (shown or not, so a turn of the eye changes none), the 64 nearest the eye (a phone 16, `TRACKS`) within 400 m, chosen by the eye's place alone; each fades to nothing toward the first lamp left out (over the last 35 % of its distance) and with the reach, so a lamp joins and leaves the set at nil and walking moves every glint continuously, no lamp switched; a tile's lamps streaming in or out ease in 0.2 s (`glintEaser`) — each a glint on the emissive: the half-vector between lamp and eye against the rail's normal, a steel spread of 0.18 (worn, crowned heads), Schlick's Fresnel from 0.5, so a shine on the rails between the eye and each lamp, stretched along the track at a grazing look; × `nightFactor` | OSM lamps and tracks | `lamp-reflections.ts` (`railGlints`), `mesh-kit.ts` (`glint`), `tile-stream.ts` (`lampsBy`), `lib/city/near-lines.ts` |
 | Track bed in the terrain | under every baked line on the ground: the ground laid at its profile less 0.1 m (ballast, grass) or 3 cm (a street track) across the bed (ballast's width per track, a tram's 1.2–1.4 m half), graded at 1 : 1.5 for ≤ 4 m beside it, the nearest bed winning; under a deck, a span or a cut the ground ≤ 0.5 m over it (a trench) only lowered; the fine TIN to 3 cm there; at build time | the line profiles on DGM1 | `lib/city/track-beds.ts`, `shapeDgm` |
 | Passage under a deck | where a line's level cuts through the fill under a drawn deck: the terrain along the line lowered to its level (2 m per track + 1.5 m either side), at build time | the line levels, the decks | `lib/city/passages.ts`, `shapeDgm` |
 | Platform | `railway=platform` polygons, cut back to their edge distance from every drawn track (1.65 m rail, 1.35 m tram, `lib/city/platform-clearance.ts`), flat slabs at the edge height over the rail head of the nearest drawn track's level: OSM's `height` (`h`), else by the trains it serves (`k`: 0.76 m main line, 0.96 m S-Bahn, 1.0 m U-Bahn, 0.55 m narrow gauge, 0.25 m tram), never under the ground inside it; none below ground | OSM | `rail-layer.ts`, `lib/city/platform-level.ts` |
@@ -229,7 +238,7 @@ is the codebook.
 | Steps | `n` treads at z0 + (k+1)·rise across `w`, cheeks down to z0 − 0.6 m; a side whose bank (3.2 m out) stands ≥ 0.4 m over the tread and that an OSM wall or building runs along (`walled`) a *Wange* instead: 3 m wide, topped at the bank (≤ 4 m over the tread), its outer edge on the ground there, a 0.5 m stone coping, the rest `0xe4dbcb`; cheeks down to the ground beside them, a face from the top landing to lower ground beyond; handrails (`rail`) as fence rails on the nosing line; base tone by `mat` (`STAIR_TONES`: stone `0xc4b090`, concrete `0xbdbab2`, brick `0xb08874`, metal `0x888a8d`, wood `0xa38a6c`), risers × 0.62, cheeks × 0.8 — baked into the fine terrain glTF (vertex colours) | OSM + DGM1 | `lib/city/stairs.ts` `stairGeometry`/`stairColors` at build, `stair-layer.ts` (material) |
 | Sun direction | date + time + the site's lat/lng (suncalc 2, north-based azimuth) | — | `lib/city/sun.ts`, `sun-rig.ts` |
 | Sun by night | the directional light stays in the scene below the horizon, at intensity 0, and its shadow map is not redrawn until sunrise: three keys every material's build by the lights it draws with, so a sun hidden at dusk rebuilt every material in view (some twenty pipelines inside the frame, at every dusk and dawn) | — | `sun-rig.ts` (`redrawShadow`) |
-| Sun while the time is dragged | the shadow map (the heaviest pass) is redrawn at most ten times a second, the sky reflection four times; letting go redraws both at once | — | `sun-rig.ts` (`PREVIEW_SHADOW_MS`), `sky-reflection.ts` |
+| Sun while the time is dragged or a walk glides it | the shadow map (the heaviest pass) is redrawn at most ten times a second, the sky reflection four times; the light itself moves only with its map (a light moved between redraws reads the map from where it was drawn, and every shadow slides off its caster and snaps back: the picture wobbles); letting go redraws both at once | — | `sun-rig.ts` (`PREVIEW_SHADOW_MS`), `sky-reflection.ts` |
 | Sky, fog and fill colours | sun altitude through palette stops at −18°, −4°, −2° (blue hour), +1°, +6° (golden hour), +12°, +60° | — | `lib/city/atmosphere.ts` |
 | Valley fog | world height below a floor derived from the lowest terrain landed so far, fading out over a depth of 0.6 × the valley's depth (`extras.ground[2]`: per tile the lower side's rise from its low ground to the rim within 5 km in GLO-30, across its deepest axis; the site's deepest tile), else 0.6 × the site's ground relief (2nd–90th height percentile, `extras.ground`), 8–28 m: Dresden, Grimma, Meißen 28 m, Unna ≈ 12.4, Leipzig ≈ 12, Munich ≈ 10.9, Hamburg ≈ 9.6; setting in with distance from the camera, none within 40 m, all of it from 900 m (`VALLEY_NEAR_M`), so nearby surfaces keep their colour — one `scene.fogNode` for every material (additive light — lamp halos and pools — fades to black in it rather than toward the fog colour) | DGM1, GLO-30 | `height-fog.ts` (*Talnebel*), `lib/city/valley-fog.ts` |
 | Distance fog | the HUD's one slider left; far plane clamped to ~1.1 km until the site has first loaded | — | `create-app.ts` (*Nebel*) |
@@ -239,16 +248,18 @@ is the codebook.
 | Depth tint | screen depth → warm near / cool + desaturated far | — | `post-stack.ts` (*Tiefenfärbung*) |
 | Contact shadows | GTAO at half resolution (normals from depth, 2 m radius, 0.15 m thickness), its 5×5 noise averaged out by a depth-aware box in its own half-resolution, one-byte pass; never motion-gated | — | `post-stack.ts` (*Kontaktschatten*) |
 | Ambient (sky) light | the sky-view factor (1 − mean sin² of the horizon within 150 m, 16 azimuths, over the ground and LoD2 with its rebuilt roofs, the drawn crowns at half transmission, GLO-30 beyond the site; `svf_<t>.png`, ≈2 m) scales the indirect diffuse only: the terrain directly, a facade by the ground's value 2.5 m outside it, doubled, faded to 1 toward the eaves | DGM1 + LoD2, the crowns, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `visual-style.ts` (*Himmelslicht*) |
-| Far shadow | the horizon (the skyline's angle in 16 azimuths, `horizon_<t>.png`, ≈8 m, two bands: 80 m–10 km — past 1 500 m the terrain alone, over GLO-30 beyond the site — and 8–80 m out): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min`; inside the shadow frustum only the far band, beyond it (faded in over its last 20 %) the higher of the two | DGM1 + LoD2, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `sun-rig.ts` (`shadowReach`) (*Ferne Schatten*) |
-| Sky reflection | the sky dome alone, a second `SkyMesh` on the same sun and haze, rendered into a 64 px cube map whose mips are the blur (≈ 0.4 MB; not three's PMREM, which since r187 takes ≈ 10 MB) whenever the sun turns by 0.5° (while the time of day is dragged, at most four times a second, the last step after the wait) — never per frame, never `scene.environment` (that would light the matte clay with its irradiance too). Sampled only by glass and metal facades, gilding and patina and fountain water (the river is matte since 2026-10-25), weighted by a softened Schlick; mirrors the sky, never the city | the sky model | `sky-reflection.ts`, `sun-rig.ts` (*Spiegelung*) |
-| Depth of field | crosshair raycast distance; only what lies beyond the focus blurs (nearer is read as at the focus; blurring the foreground had laid a veil over the lower half — three's node still runs its near-field passes, over an empty field), focus range 1.6 × distance (≥ 45 m), bokeh scale 0.5 — a hint of lens, not a tilt-shift; off while moving; always on otherwise (no switch, no manual focus); desktop only — a phone does not build it (ADR 0047) | — | `post-stack.ts` |
+| Far shadow | the horizon (the skyline's angle in 16 azimuths, `horizon_<t>.png`, ≈8 m, two bands: 80 m–10 km — past 1 500 m the terrain alone, over GLO-30 beyond the site — and 8–80 m out): the sun's direct light on the ground fades across ±0.8° of it, joined to the shadow map by `min`; inside the shadow rings' reach only the far band, beyond it (faded in over its last 20 %) the higher of the two | DGM1 + LoD2, GLO-30 | `sky-light.ts`, `terrain-layer.ts`, `sun-rig.ts` (`shadowReach`) (*Ferne Schatten*) |
+| Sun shadows | four concentric squares of one resolution, each three times as wide as the one inside it, centred on the ground round the camera and pushed along the view in the air: fine near the camera, coarse far off, whatever the view's direction or the sun's; each redrawn when it has drifted a fifth of its size, one a frame, not per frame | sun, camera | `sun-rings.ts`, `sun-rig.ts`, `lib/city/shadow-rings.ts` |
+| Sky reflection | the sky dome alone, a second `SkyMesh` on the same sun and haze, rendered into a 64 px cube map whose mips are the blur (≈ 0.4 MB; not three's PMREM, which since r187 takes ≈ 10 MB) whenever the sun turns by 0.5° (while the time of day is dragged, at most four times a second, the last step after the wait) — never per frame, never `scene.environment` (that would light the matte clay with its irradiance too). Sampled only by glass and metal facades (there under the Skyline-Spiegel's houses), gilding and patina and fountain water (the river is matte since 2026-10-25), weighted by a softened Schlick; no second look at the scene | the sky model | `sky-reflection.ts`, `sun-rig.ts` (*Spiegelung*) |
+| Depth of field | crosshair raycast distance — to the nearest of the buildings, the ground and the things the probe can ask (trees, lamps, furniture, monuments, a loaded design; `nearestInSets`; not the data layers' counters nor a traffic flow, glass that writes no depth), so a tree in the middle of the view takes the focus (not one the camera stands in or one a design folded away, nor the box the probe tolerates round a landing stage, a playground or a fountain's basin; a bridge once a question has built its BVH (the focus builds none); a design even where the ground's ray meets the ground it was pressed into, as deep as 5 m under it); the ray rests while the camera moves and where the style draws no lens; nothing hit focuses on the sky (1 km), and the focus follows in dioptres with a 180 ms time constant on the loop's step (`pullFocus`; at once while the blur rests and for 50 ms after it returns, the ray cast at once then; not through an export). A thin lens's circle of confusion, c = f · D / (S1 − f) · |1 − S1/S2| on a full-frame sensor, f from the view's vertical angle (23 mm at 55°), D the opening of a 50 mm at f/1.8 (28 mm: the 23 mm's own 13 mm drew the street all but sharp), scaled to the frame's height in pixels and capped at 2.5 % of it across (36 px on 1440; `lib/city/lens.ts`) — focused 5 m ahead the horizon blurs by 8 px on a 1440 px frame, 20 m ahead by 2; focused down the street a tree 5 m ahead blurs by 8 px and a lamp post 2 m ahead by 19, and the street at your feet too, as through a lens (the maintainer's choice, 2026-11-07). Its own gather draws it (`lens-blur.ts`, 2026-11-09): each pixel blurred by its own circle in 48 taps at half resolution, a blurred foreground laid over what lies behind it by the share of the lens it hides (its own pixels too: at a near blur's silhouette what lies behind shows through by half), brought to full resolution from its four nearest texels, one nearer than the pixel held off, and one farther from a pixel that keeps its detail (a sharp silhouette and what lies behind it take none of each other's colour; a blurred edge takes the texels behind it and keeps no half-resolution steps), the frame's own detail kept where the circle is under a pixel and nothing in front covers it, and in part up to 4 px (the half-resolution path is itself about a 3 px blur) (three's `DepthOfFieldNode` mixed its blur in by the circle's share of the widest, so a moderate blur showed half sharp). Off while moving, then grown in over 700 ms whenever it comes back — after a move, into a style or out of Modell (`stepLens`, on the loop's step; an export waits for it, and the shots harness for `settled`); always on otherwise (no switch, no manual focus); desktop only — a phone does not build it (ADR 0047) | — | `post-stack.ts`, `lens-blur.ts`, `lib/city/lens.ts` |
 | Paper grain, vignette | screen-space; animated film grain and a heavier vignette under the monochrome picture styles | — | `post-stack.ts` (*Papierkorn*) |
 | Picture style | the HUD's *Bildstil*: pastel (no pass), comic, film noir, Sin City, Papier, Strich, Schwarzplan — one post pass over the finished frame (below); Papier and Strich also swap every surface for one white paper material for the frame (Papier's ground keeps its paint and water as greys, Strich's turns plan-coloured), Sin City swaps them for a white card (foliage and water black, red roofs red), the Schwarzplan draws the buildings unlit black and hides everything but them and the white ground; light and shade from the sun's shadow map, the fog taken out before any cut, dots and hatching anchored to the world (ADR 0034); remembered per browser | sun altitude (noir's dusk exposure), the shadow map, the fog factor | `lib/city/render-style.ts`, `stylize-effect.ts`, `paper-scene.ts`, `style-memory.ts` |
-| Modell's picture | a parallel camera (`model-camera.ts`, sheared for the Militärperspektive) at a scale (metres per CSS px ↔ 1 : n at 96 dpi); the post passes read it through the view lens; DoF, grading and vignette off, the distance fog open, the sky dome hidden, the background the style's paper; the shadow frustum fits the picture's footprint | the view (pivot, turn, tilt, scale) | `lib/city/model-view.ts`, `model-rig.ts`, `view-lens.ts`, ADR 0044 |
+| Modell's picture | a parallel camera (`model-camera.ts`, sheared for the Militärperspektive) at a scale (metres per CSS px ↔ 1 : n at 96 dpi); the post passes read it through the view lens; DoF, grading and vignette off, the distance fog open, the sky dome hidden, the background the style's paper; the shadow map's tiled square fits the picture's footprint | the view (pivot, turn, tilt, scale) | `lib/city/model-view.ts`, `model-rig.ts`, `view-lens.ts`, ADR 0044 |
 | Schnitt | the near plane through the pivot; the clay drawn two-sided with its back faces near-black (the poché, `clayPoche`), the ground's profile along the cut as a poché strip from the terrain heights | the terrain heights | `visual-style.ts` `setClaySection`, `model-cuts.ts`, `lib/city/section.ts` |
 | Ausschnitt | the city's group in a `ClippingGroup` with the rectangle's four planes, shown once its programs are compiled and held off the frames (`holdCut`); shadows not clipped; a plinth of four poché strips from the ground down to a common base | the terrain heights | `model-cuts.ts`, `lib/city/section.ts`, `post-stack.ts` |
 | Ink lines | the second difference of inverse view depth (`1/z` is affine across a plane): relative jump → silhouette, relative change of slope → crease; per style a pen: Papier and Film noir sway (±2 px over ~120 px) and tremble, swell and thin within a stroke, lift off now and then and sit a little off the fill, the other styles' pens hold still in a flight; detail falls away with distance (silhouette ramp widens, folds fade, the pen gets finer); no folds in open ground; a step under ~3 px tall well below the horizon (a rail, a kerb, a track's bed hiding the ground behind it) draws no line, measured as the height between the taps in pixels on every axis but the level one — such a step's raster flips in a move; faded towards a per-style floor (`farInk`) with the fog factor, so the far city keeps its outlines | depth buffer | `stylize-effect.ts` (*Tuschelinien*) |
-| Minimap | site tile bounds + 512² class raster in the palette + the bridge decks in the colour of the class they carry (hairline edge) + footprints of the visible tiles | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts` |
+| A loaded design | the visitor's glTF, IFC, OBJ or Rhino file, or a landscape plan (DXF, Shapefile, GeoPackage, LandXML: surfaces in the palette's colours on the ground, low-poly trees, blocks, a planned ground) (ADR 0054): one geometry, model-maker's white (`design-white`, one scene material, double-sided, matte) or the file's colours and textures; casts and takes the sun's shadows; the LoD2 objects whose footprints its plan covers for half or more drop out of their tile's index; its plan's hull drawn on the minimap as a building; in its site (the plan with its ground plate, one raster, `designSite`) the instanced sets fold their instances away (`instancePosition`) and the ground with its walls, kerbs, stairs and fences, the water and (within 4 m of the floor, `lineUnderDesign`) rails, ballast, platforms and tram tracks are pressed under its floor, the tiles under it cutting the ground above the floor (`maskNode`, there only: it costs the early depth test) | the visitor's file | `design-layer.ts`, `design-read.ts`, `design-ifc.ts`, `design-formats.ts`, `design-plan.ts`, `lib/city/plan-geometry.ts`, `design-site.ts`, `lib/city/design-cover.ts`, `lib/city/ifc-georef.ts` |
+| Minimap | one picture of the site the build draws (`minimap.webp`, 640 px wide: land cover in the palette, bridge decks in the colour of the class they carry, buildings as slate ink by their cover of each pixel), shown as an image; over it one canvas for what changed since (a demolished or design-covered building painted over in the built-up ground's colour along its exact outline, the only time a tile's footprints are fetched; a design's plan as ink) and one for the player and Modell's frame. A tileset of one tile (`?scene=lite`) shows its part of the picture | DGM1, Basis-DLM, LoD2 | `minimap.tsx`, `lib/city/minimap.ts`, `scripts/bake-minimap.ts`, `lib/city/footprint-figure.ts` |
 
 The German label in parentheses above names the term as the guide does.
 Its strength is fixed: a named constant beside the term in its owner,
@@ -277,39 +288,82 @@ change, not a re-bake
   band also covers the low sky, where the cloud plane's projection crowds
   the clouds into one sunlit sheet (SkyMesh's own cloud fade sits inside its
   colour node, out of reach).
-- **Shadow map:** `PCFShadowMap` with a raised `shadow.radius` (three's
-  `ShadowFilterNode` spreads a 5-tap Vogel disk by radius × texel), 3072² on
-  desktop, 2048² on phones, 512² in the lite profile (smaller at a raised
-  safety level, [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)).
-  It has **no colour target**: three's shadow map draws into a colour
-  texture beside the depth the filter reads, of the shadow's `mapType` —
-  RGBA, as large again as the depth — though only coloured shadows sample
-  it. `DepthOnlyShadowNode` (`sun-rig.ts`), installed as the light's
-  `shadow.shadowNode` (the hook three's own CSM and tiled shadows use: no
-  patch, ADR 0027), keeps three's depth texture in a render target of no
-  colour attachment (`count: 0`, both backends since three r187; up to
-  r186 the smallest it could draw into was one red byte): 16 MiB at
-  2048², 36 at 3072² (`shadowMapBytesFor`), where three's default holds
-  32 and 72. Keep `renderer.shadowMap.transmitted` off — coloured shadows
-  would read a colour target there is none of. Terrain **receives
-  only**. `normalBias = 0`, a small negative `bias`. The frustum follows the
-  camera, half-size 121 m at eye level growing in octaves of 110 m to 880 m
-  with altitude, centred on the ground and pushed ahead along the view
-  (`lib/city/shadow-fit.ts`). It re-renders only when the centre leaves a
-  dead zone (30 m on foot, 18 % of the half-size above eye level and in
-  Modell), the size re-fits, the sun moves or a
-  caster changes (`invalidateShadows()` — the crown LOD swap included, a
-  season change that thins or fills crowns, and every tile that lands, leaves or changes visibility through the stream's
-  change hook). Animated geometry (sway, clouds) deliberately does **not**
-  update it. On foot the frustum was 110 m with a 19.8 m dead zone until
-  2026-10-11: a redraw every ~20 m walked. Between two redraws the camera
-  is never nearer an edge than the half-size less the dead zone (across
-  the sun's azimuth; along it the footprint is longer by 1 / sin of the
-  sun's elevation): 121 − 30 = 91 m against 90.2 before, so the shadows end
-  no nearer in front of the walker, for texels 10 % coarser (0.079 m at
-  3072², 0.118 at 2048²) and 17 redraws over a straight 500 m instead of
-  26. The horizon's near band starts to fade in at 80 % of the half-size,
-  at worst 66.8 m ahead (68.2 before).
+- **Shadow map, four rings** (`sun-rings.ts`, `lib/city/shadow-rings.ts`,
+  ADR 0009): `PCFShadowMap` with a raised `shadow.radius` (three's
+  `ShadowFilterNode` spreads a 5-tap Vogel disk by radius × texel; 2.5
+  texels here, wider and five samples leave gaps a thin shadow shows as a
+  stipple). The rings are squares of half-size 80, 240, 720 and 2160 m, each
+  of 2048² on desktop, 900² on phones, 256² in the lite profile (smaller at
+  a raised safety level,
+  [ADR 0047](./adr/0047-phone-memory-budget-in-true-bytes.md)). Across the
+  light that is 0.08, 0.23, 0.7 and 2.1 m a texel at 2048²; along it wider
+  by 1 / sin of the sun's elevation. A ring's texels depend on neither the
+  view's direction nor the sun's azimuth.
+  - **One depth array, no colour target.** The rings are the layers of one
+    depth texture, one binding in every lit material, in a render target of
+    no colour attachment (`count: 0`, both backends since three r187):
+    64 MiB at four of 2048², 12.4 at four of 900² (`shadowMapBytesFor`). A
+    phone had one 2048² map, 16 MiB: the 3.6 saved pay for what the wide rings'
+    casters hold beyond it, measured in emulation at 2.5 MiB on foot and 0.8 in
+    flight. Keep
+    `renderer.shadowMap.transmitted` off: coloured shadows would read a
+    colour target there is none of. `RingShadowNode`, installed as the
+    light's `shadow.shadowNode` (the hook three's own CSM and tiled shadows
+    use: no patch, ADR 0027), draws a layer with
+    `setRenderTarget(map, layer)`, and relies on the render's own clear.
+  - **One camera.** All rings draw with the shadow's one camera, moved for
+    each: three keeps its state per drawable and camera, so a camera per
+    ring would cost a phone memory per object of every tile.
+  - **The lookup.** A fragment reads the finest ring it lies on, cross-faded
+    with the next across that ring's outer 7 % (`ringLookup`, `mix` and
+    `step` only; the second read is behind a branch and costs only there).
+    Past the widest ring it reads none and the horizon takes over; its near band
+    comes on past the widest ring with texels of 2 m at most (`shadowReach`,
+    the third ring). The picture styles and the nameplate read through the
+    same lookup (`sun-shadow-read.ts`). A ring's matrix changes only as it
+    is drawn, so a ring waiting for its redraw shows what it held, where it
+    held it, and no shadow slides off its caster.
+  - **Where they stand.** On the ground round the camera; from 8 m up pushed
+    along the view's heading (half a half-size at most, by the cos(pitch)
+    of the look direction, so looking straight down pushes nothing). A
+    centre lands on its ring's texel grid in light space, so a ring redrawn
+    further on puts its texels on the same ground and no edge crawls. Turning
+    on the spot on foot moves no ring; a tile a turn shows or hides still asks
+    the rings it can fall on.
+  - **When they draw.** A ring asks to redraw when its wanted centre has
+    drifted a fifth of its half-size, the sun moves or a caster changes
+    (`invalidateShadows()`: a crown tier's swap, a season change that thins or
+    fills crowns, a demolish). A furniture cell's flip (within 350–400 m of the eye,
+    a flagpole's within 800–900 m) asks only the finer rings its box can fall
+    on (`NEAR_CHANGE_RINGS`), and the lantern only within its light. A capture and the
+    boot's light stage wait for all four rings (`shadowBusy`). A tile's parts that land, leave or take over ask only the rings
+    the tile can fall on (`ringTouches`, seen along the light), and only if
+    what shows did change: the stream reports every tile that comes into or
+    leaves view, up to nine times a second while turning, and most of those
+    reports change nothing that casts. One ring a frame, the one waiting
+    longest, so a stream of requests starves none and the depth passes never
+    pile into a frame; the two wide rings at least 250 and 500 ms apart.
+    Animated geometry (sway, clouds) deliberately does **not** update them. By
+    night none is asked for.
+  - **What they draw.** The depth range reaches half-size / tan + 450 m /
+    sin of the sun's elevation toward the sun, so a tower standing beyond
+    the square's far edge under a low sun still casts into it. Casters
+    marked `markThinCaster` stop short of the coarse rings: kerbs, benches, bins
+    and tree stakes go into the finest ring only, their shadow fading across
+    its edge instead of dissolving into the filter's samples; lamps, tram
+    masts, goals, shelters and other tall furniture into the first three, so a low sun's
+    line of shadow stays on the ground as the camera climbs, ever softer. The depth bias is 1.1 of the ring's texels (0.09 m on the finest), 2.5 m at
+    most.
+    Terrain **receives only**, `normalBias = 0`.
+  - **As the camera climbs** a ring fades out between 1.5 and 2.5 half-sizes
+    up, where its texels are finer than the pixels it covers, and is drawn no
+    more; back in view it shows nothing until drawn anew. The widest never
+    goes.
+  - **Modell** has one scale across its picture, where the fine middle would
+    show as a patch: the four layers tile the picture's square 2 × 2, with a
+    fifth of overlap so that each cross-fade lies inside its neighbour (`modelQuadrants`), so its map is about 2800² in
+    all on a desktop and 1250² on a phone. The tiles are alike, so none is
+    held back in time. Everything casts there.
 - **The shadow camera streams on a desktop, at a resolution of its
   own.** The sun's shadow camera is registered with the tiles renderer
   as a second camera, so a tile that casts into the view stays loaded
@@ -341,7 +395,13 @@ change, not a re-bake
   (turning on the spot never blinks one); three's own frustum culling keeps
   the off-screen ones out of the main pass.
 - **Lamps at night:** a `nightFactor = smoothstep(2°, −6°)` of sun altitude
-  fans out to lamp heads, sprites and the building dusk glow. Real point
+  is one node, `sceneNight` (`scene-environment.ts`), which the lamp heads,
+  halos and pools, the building dusk glow, the fountains, the lit columns,
+  the river mist, the ferry wakes and the fences read — written once with
+  the light, never per tile. The halos and pools are hidden by their
+  scene-wide materials by day (`drawnAtNight`: a material's `visible` is in
+  no build key, so the switch rebuilds nothing; every compile path shows a
+  drawable's materials for its call, so they are compiled by day too). Real point
   lights are a fixed pool of three, allocated before the first frame and
   retargeted to the nearest heads of the visible tiles' dressings (re-fed on
   every stream change), because the light count is part of every lit node
@@ -362,7 +422,7 @@ change, not a re-bake
   band (occluders 80 m–10 km away; past 1.5 km the terrain alone) holds
   the long low-sun shadows and the hills on the far horizon the
   frustum above cuts off; its near band (8–80 m) the neighbours' shadows on
-  ground past the frustum, faded in over the frustum's last 20 % and whole
+  ground past the rings' reach, faded in over its last 20 % and whole
   beyond it (inside, the shadow map has them with their shapes)
   ([ADR 0009](./adr/0009-shadow-recipe.md)). Both
   rows at 0 are the picture without them; the defaults (0.5, 0.8) are
@@ -377,19 +437,72 @@ The full recipe with its rejected alternatives (VSM rings, large
 The scene renders **top-level into its own half-float target** with a
 depth texture (`post-stack.ts`), and three's node `RenderPipeline` reads
 colour and depth from it: `GTAO (half resolution, normals from depth) ^
-AO_EXPONENT → DepthOfFieldNode (desktop; skipped while moving; in motion
-the camera's motion blur instead, pastel only) → the
-picture style → SMAANode (FXAA on a phone) → depth grading + vignette +
-paper grain + the outline → sRGB`. Rendering the scene outside the
-pipeline lets the styles swap and dress the scene for exactly its render,
+AO_EXPONENT → the lens blur (lens-blur.ts; desktop; skipped while
+moving; in motion the camera's motion blur instead, pastel only) → the
+picture style → SMAA (`smaa.ts`; FXAA on a phone) → depth grading + vignette +
+the loading veil + paper grain + the outline → sRGB`. Rendering the
+scene outside the pipeline lets the styles swap and dress the scene for
+exactly its render,
 and a tile's `compileAsync` prepare the very build its frames use (a
 build is keyed by the target's attachments and the kind of camera; up to
 three r186 also by the call depth, which a scene pass nested in the
 pipeline never matched). The target has no MSAA (`antialias: false`); SMAA or FXAA
-carries the anti-aliasing. There is no tone mapping: the look was tuned
+carries the anti-aliasing. A niched house's windows under 2 px wide hand over to their mean tone,
+as every other house's do under 6 (`NICHE_PREFILTER_PX`), so a street
+seen along its length does not crawl as the eye moves (a temporal
+antialiasing was built in its place and removed on 2026-11-10: windows
+smeared in a sideways walk and the frame rate dropped on a desktop). There is no tone mapping: the look was tuned
 without it. The GTAO sample count is a construction-time setting (16;
 8 on a phone and in the lite profile). 3DTilesRendererJS's fade and overlay plugins patch
 GLSL and stay unused.
+
+**The loading veil** (`load-veil.ts`, `lib/city/load-frontier.ts`) shows
+how far from the camera the city is complete. The frontier is the
+horizontal distance to the nearest site tile with something still on its
+way: a content in view the renderer is fetching or parsing (its
+`loadingTiles`), or a dressing queued or building
+(`TileStream.pendingSiteTiles`). Inside it the picture is untouched;
+beyond it the last pass drains the colour, takes a little over a third of
+the light (linear) and draws contour lines every 2 m of height, faded
+where they would crowd a pixel and left out of the sky. The frontier
+itself is a ring on whatever the ground and walls are at that distance,
+in the brand magenta, with a halo of the same ink soaking into the clay
+beyond; by day the ink only darkens, at night it is a dim line of its own.
+The ring breathes (a 3.4 s cycle, slow in, quicker out, a few per cent of
+its radius) and eases to a new frontier rather than jumping a tile's
+width. With nothing pending it sweeps to the horizon in about a second and
+the veil fades. The boot starts veiled with the ring at the feet. Until
+the first load is through, the ring follows the last two stages' progress
+instead of the frontier, from 40 m to 2.6 km (`bootFrontier`): a site tile
+is 2 km wide, and the one under the camera stays pending until its own
+details are built, so by the frontier the view stayed clay for most of
+the load and then the ring leapt past the horizon. It walks in the
+distance's logarithm, so it moves about evenly on the screen (a ring
+linear in metres crossed the near view in the first tenth of the load).
+After the first load a pending spell shorter than 1.2 s never shows. The veil
+only takes away, so the unfinished picture is never brighter than the
+finished one, in every style. It costs no target or texture: a few
+uniforms and one depth read in a pass that runs anyway, skipped on one
+uniform once the veil is off; the frame pacer keeps the full rate while
+it shows. An export, Modell and the
+shots harness draw without it; a QA probe can set its own ring
+(`__poc.veil`). The ring, its halo and the contours stay off the sky.
+
+**The depth runs reversed** (three's `reversedDepthBuffer`,
+`create-app.ts`): 1 at the near plane, 0 at the far one, stored as floats
+(`depth32float`, the four bytes a pixel the 24-bit buffer takes). With a
+0.3 m near plane and a 6 km far one, the plain buffer spent almost all its
+precision on the first metres and let roofs, kerbs and decals fight
+kilometres off; the float's exponent gives the far range back. three turns
+the depth test, the clear, the polygon offsets, the shadow maps (their
+compare function and bias) and its depth helpers (`getViewPosition`,
+`perspectiveDepthToViewZ`, GTAO) round itself, and a camera it has drawn
+into the buffer carries `reversedDepth` and a projection to match. What
+reads raw depth on its own must ask: the styles' sky test and their
+shadow lookup (`stylize-effect.ts`, `StylizeInputs.reversedDepth`), the
+parallel view's pick ray (`view-ray.ts`), the scene target's depth type
+(`post-stack.ts`). `?depth=standard` draws with the
+plain buffer, to compare.
 
 **What the stack builds follows the device tier** (`postProfileFor` in
 `scene-profile.ts`,
@@ -397,6 +510,19 @@ GLSL and stay unused.
 screen-sized targets live in the GPU process for the whole session, and no
 step of the memory governor can shrink them.
 
+- **The desktop's SMAA is the project's own** (`smaa.ts`, 2026-11-11):
+  SMAA 1x as three's `SMAANode` ran it (colour edges, eight search
+  steps, no diagonals), in **two byte targets** — the edges RG8, the
+  weights RGBA8, 6 bytes a pixel — and the blend inside the pass that
+  finishes the frame, as the phone's FXAA runs. Three's node kept edges,
+  weights and the blended frame in half-float RGBA: 24 bytes a pixel,
+  107 MiB at 2880 × 1620 against 27 now, and one full-screen pass more.
+  The edges are found on **square-rooted** colours, as `fxaa.ts`'s luma
+  is: SMAA's threshold of 0.1 is tuned to a gamma frame, and on the
+  linear one it was most of the range in the shade and at night and
+  nothing in the sun. The area and search tables are worked out
+  (`lib/city/smaa-tables.ts`, a test holds them to three's two pictures
+  value for value) rather than decoded from PNGs in the scene's chunk.
 - **Desktop.** The pipelines before the antialiasing (with and without
   DoF, Modell's, the styles') are built once — swapping one pipeline's
   output node would re-translate the whole post graph every time a
@@ -417,17 +543,20 @@ step of the memory governor can shrink them.
   context by the target's attachments, the call depth and the kind of
   camera, not its size).
   Drawn into `BeforeAA`, both were copies of the whole frame: a standing
-  frame is one full-resolution pass lighter (18 passes, as before, but one
-  of them one pixel), a walking one 8 → 7, and `BeforeAA` (8 B a pixel:
-  36 MiB at 1920×1080 × 1.5, 63 MiB at 2560×1440 × 1.5) is held only in
-  Modell or a picture style. DoF reads its input from a target of its own
-  without a depth buffer (the one `dof()` makes has one, a third more
-  memory, and nothing reads it).
-- **Phone.** No DoF is built: its six targets and its copy of the input
-  held 23 MiB at an iPhone's 603×1311 drawing buffer from the first frame,
+  frame is one full-resolution pass lighter (18 passes then, one of them one
+  pixel; 16 since the lens blur's own gather), a walking one 8 → 7, and
+  `BeforeAA` (8 B a pixel: 36 MiB at 1920×1080 × 1.5, 63 MiB at 2560×1440 ×
+  1.5) is held only in Modell or a picture style. The lens blur's targets
+  carry no depth buffer: its copy of the frame and its composite at full
+  resolution, its prefilter and gather at half, two tile maps at an eighth —
+  ≈ 20 B a
+  pixel, against ≈ 26.5 for three's `DepthOfFieldNode` with its copy.
+- **Phone.** No DoF is built: its six targets, its copy of the frame
+  among them, would hold ≈ 15 MiB at an iPhone's 603×1311 drawing buffer
+  from the first frame (three's `DepthOfFieldNode` held 23 MiB),
   standing still or not, for a lens hint a six-inch screen barely shows.
-  FXAA replaces SMAA's three half-float targets and the frame copy before
-  them (24 MiB): `fxaa.ts` is three's FXAANode ported with a **perceptual
+  FXAA replaces SMAA's targets and the frame copy before them (24 MiB
+  when they were three's three half-float ones): `fxaa.ts` is three's FXAANode ported with a **perceptual
   luma** — the square root of the linear luma, since three's expects sRGB
   and this frame is linear half-float, above 1 in the sun's glow — and
   explicit level-0 samples (no derivatives inside its branches). It runs
@@ -542,10 +671,10 @@ sub-pixel steps on a held, fixed-step loop, diffed.
   shadows as hard black masses —, red roofs lit or oxblood; the haze past
   the cap white smoke; rain as streaks on a grid of world directions in
   depth layers hidden behind nearer geometry; black ink on the white.
-  From ~1° below the horizon, where the pass lets go of the sun, the card
-  is off (`Stylize.night`): the night
-  is cut from the scene's own frame, its lit windows, lamps and
-  floodlights white on black.
+  Its masses are the sun's, so it always draws at its own instant (the
+  style's `ownLight`: 15 September, 16:30 — a low afternoon sun from the
+  south-west); the HUD rests its date and time with a note while it is
+  on (`styleInstant`, `create-app.ts` `setSun`).
 
 - *Scene dressing* (`style-dressing.ts`) — geometry a style draws with for
   its frames only: Comic's crowns are cartoon clouds of three balls (the
@@ -568,14 +697,30 @@ sub-pixel steps on a held, fixed-step loop, diffed.
   whisper, a slow world-space drift keeps the sheets from being one white.
   Glows, sprites and every see-through sheet (the river's too) are hidden for
   the frame (the list, too, is gathered per stream change); the sky box's
-  inside is culled, so a paper background shows. The ground is the
+  inside is culled, so a paper background shows. three takes the override's
+  `side`, so what is opaque and double-sided (walls, fences, stairs) draws a
+  stand-in, the same card with that side and position, shared per side and
+  position and handed over through the renderer's object function: the
+  shadow pass sets its own, as a stand-in there would read the map it draws
+  into. A bare crown's `maskNode` is left out on purpose: the card draws the
+  crown whole, because masked the pen outlines every gap and it turns into
+  a dark grey clot (its shadow stays thin). The ground is the
   exception: the terrain material sets `userData.paperOwn`, opts out of the
   override for these frames (`allowOverride`) and, under one shared
   uniform, draws itself as paper — its road markings, parking bays and
   sports lines in a light pencil grey, the water's extent (the splat's
   alpha) a cool, deeper paper — with its own light, sky view and contours.
   The pass lays the light out as a duotone (shade blue-grey, light paper)
-  under a fine graphite pen.
+  under a fine graphite pen. At night (the sun rig's night factor,
+  `nightFactorAt`) the model stands on dark blue card: the swap's sky and
+  haze darken to it (`paper-scene.ts` `begin`, through
+  `PAPER_DUSK_SKY` to `PAPER_NIGHT_SKY`), the card's windows glow through it
+  (`windowGlow`: the clay's lit windows, `clayWindows`, read through the
+  mesh's own object table), and the pass opens the dim light up (×2) and
+  sorts it into the card's own deep blue, a slate where the night sky
+  reaches, and a warm glow where a lamp or a window lights it
+  (`nightLight`: bright and warm); the sky the card, paler towards the
+  horizon; the pen a white pencil.
 - *Strich* — Papier's swap (the same card material and builds) with the
   ground's plan palette under the shared uniform (`paperGroundOn` = 2:
   the paved and built ground a light neutral, green a plan green, water a
@@ -585,13 +730,40 @@ sub-pixel steps on a held, fixed-step loop, diffed.
   ±45° by the wall's side, a shallower angle on a roof or the ground, a
   cross layer only in deep shade, lighter on tops and thinning out from
   150 m to 1.2 km so an overview does not fill up; it draws with that pen — one CSS pixel, no wander, no
-  lifts, its creases held into the distance; after dusk an unshaded
-  white sheet (a plan has no night).
+  lifts, its creases held into the distance. At night an etcher's
+  nocturne: what no lamp or window lights is hatched — crossed where the
+  night sky's light does not reach either —, the sky ruled with level
+  lines of the view's elevation (`skyHatch`, denser towards the zenith,
+  on a cell ladder like the sky dots), and what a lamp or a lit window
+  lights left white under a warm yellow wash; the plan colours rest (the
+  night's blue would be all the hue left). Modell's parallel view has no
+  night: a plan stays an unshaded sheet with its lines (hatched whole, it
+  read as a grey wash).
 - *Schwarzplan* — the swap's third kind: an unlit black material for the
   clay (`userData.figure`, no fog), the ground white (`paperGroundOn` = 3,
   no contours), everything else hidden for its frames; one threshold in
   the pass cuts the remaining light away, and a white hairline parts two
-  blocks where one stands in front of the other.
+  blocks where one stands in front of the other. It knows no light, so
+  it draws at its own instant (21 June, 13:00): at night the lit ground
+  fell under the threshold and the plan went black.
+- *Data marks* — the data layers' traffic flows, bicycle columns and
+  pools, and tram trails take the style's reading of a mark (the row's
+  `dataMarks`, one shared uniform, `glass.ts` `dataMarkColour`): Pastell
+  the glass; Comic a marker ink on hues clear of the crowns' (0.55–0.9),
+  printed flat by the pass in blue, yellow or red by the mark's place on
+  its scale (the traffic's load), its light white, its edge black (a
+  blended mark — a pool, a trail — opaque or gone, `dataMarkAlpha`, here
+  and in every style whose pass cuts by a threshold: a half-blended ink
+  falls out of the print); Film noir a long exposure,
+  dark glass with white streaks; Sin City oxblood with bright red light;
+  Papier coloured tissue paper (the pass keeps more hue where the frame
+  is saturated, by day), at night lit card on the dark card; Strich a plan colour (blue to
+  violet) edged with the pen, at night a warm light the etching leaves
+  white; the Schwarzplan white, edged in black (a pool a ring, a tram's
+  trail one black line) — a fill would fall under its threshold. The
+  marks draw themselves through a swap (`paperOwn`; `hiddenInPaper`
+  keeps a see-through material that does), gathered again whenever a
+  layer adds its marks.
 
 The pass reads the depth buffer at **integer** texel radii around a texel
 centre, blending two radii for the stroke weight: the buffer is sampled
@@ -601,6 +773,94 @@ inked over. The input is clamped to [0, 1] before any HSL maths (the sun's
 halo is HDR). The only branch in the node is on the mode (a uniform);
 per pixel it selects, so every derivative and texture read stays in
 uniform control flow, as WGSL requires.
+
+### The nameplate: the thing asked, named beside it
+
+What the inquiry card's title says is also set in the scene while the
+question stands ([ADR 0042](./adr/0042-inquiry-cards-on-demand-facts-in-the-tileset.md);
+what it says and where it stands: transformations.md, *The nameplate*).
+It is drawn **after the frame, onto the canvas** (`PostStack.setOverlay`,
+`nameplate-layer.ts`): no screen-sized target of its own, and the post
+pipelines, the picture styles and the outline stay as they were. For its
+render the renderer's tone mapping is off and its output colour space
+linear — the plate's colours are sRGB already — and both are restored
+after; its programs are compiled in `warmView`/`warmStyles` after the
+outline's, each in its turn (`compileInTurn`).
+
+- **Lettering.** Signed distance fields of the glyphs the plate needs, no
+  more: rasterised from the self-hosted faces (`app/[site]/nameplate-fonts.ts`,
+  next/font, not preloaded: they load with the first question) at 64 px
+  for the title and 40 px for the lines (40 and 26 on a phone), an exact
+  Euclidean distance transform each (`lib/city/sdf.ts`, 8 px reach, 5 on a
+  phone), packed into one R8 atlas ≤ 512 × 1024 (≤ 0.5 MB on the GPU; the
+  CPU copies go after upload), freed when the question goes. A phone pays
+  for it in its tile cache, 1 MiB less per safety level
+  (`tileCacheBytesFor`, ADR 0047). Kerning from the
+  canvas's own measure of each prefix; tracking per style. Each glyph
+  also keeps its coverage at ~16 px per capital (a few kB) for the
+  shadow's mask.
+- **Two kinds of quad** (`uvk`: atlas uv and a kind) in the face's
+  material: a glyph (fill at 0.5, halo outward to a share of the reach,
+  antialiased by `fwidth`) and a solid (the comic box and its edge,
+  antialiased by their uv); the returns (below) have a material of their
+  own over the same geometry. No line ties the plate to its thing
+  (maintainer review 2026-11-02); the selection outline marks it, in the
+  style's own lettering ink (`NameplateType.outline`,
+  `SelectionOutline.setColours`), and the clay's lift and hatch on the
+  asked building follow (`setAskedColours`: towards the lighter, hatched
+  in the darker). A long title breaks between words into even lines
+  (`titleLines`, a joined `A / B` name at its slash). Colour and halo ride
+  per vertex (`ink`, `halo`): three vertex buffers past position, four
+  inter-stage variables (`uvk`, `ink`, `halo` and the view position the
+  depth test reads); a fade uniform carries the arrival and the
+  cross-fades.
+- **Depth.** The letters stand 0.14 of a capital deep (`EXTRUDE_CAPS`):
+  the plate's one geometry is drawn by ten meshes more behind the face
+  (six on a phone; a returns material of their own, the layer a
+  per-object uniform, `onObjectUpdate`, that pushes the quads back),
+  far to near: deepest first, or the face first where the camera sees
+  the plate's back (no depth test sorts them). A layer
+  draws the fill alone in the style's return colour, lit by the sun
+  through the letter's outward normal — two more atlas reads give the
+  field's gradient — and none of what the city hides.
+- **Cast shadow.** A box swept from the plate's rectangle away from the
+  sun down to the ground (stepped along the sun's ray from its highest
+  corner against `groundAt`, so the top line's ray reaches it too, ≤ 400
+  m: a terrace's letters throw theirs onto the river below; asked again
+  each second for ground that streamed in, and a box that never meets the
+  ground fades out inside itself), drawn on its back faces (each pixel
+  once, the camera inside it or not): each pixel takes the scene's surface
+  from the depth through the lens's inverse projection (`getViewPosition`:
+  perspective, parallel and Modell's shear alike), follows the sun's ray
+  from there to the plate's plane in the plate's own units and reads a
+  silhouette mask there (R8, 12 px per capital, ≤ 512 × 128, softened,
+  laid out on the CPU from the glyphs' coverage over the rectangle the
+  quads cover, a comic box's tilted corners too: `shadowMask`). So the
+  letters shade a facade, a roof or the ground alike — only where the sun
+  reaches it: the surface is tested against the scene's own shadow map
+  through the read the styles' `inSun` shares (`sun-shadow-read.ts`), so
+  the letters' shadow joins the city's instead of darkening a shade twice;
+  none with the sun down.
+- **Occlusion** per pixel: the fragment's view depth against the scene's
+  (the scene target's depth texture through `view-lens.ts`, whose
+three helpers follow the reversed buffer); behind the
+  city it keeps 0.45 of its outline only, so a plate the placing could
+  not keep clear reads as a ghost, never as text over a facade. Depth
+  test and write are off; it is no part of the shadow map.
+- **The plate** is one group placed by a matrix (right, up and normal
+  scaled by the capital height, the block's corner as origin); the
+  shadow's box is a small mesh rebuilt in world space per frame.
+- **Choosing** runs every 250 ms on the CPU (`lib/city/nameplate-place.ts`):
+  per candidate 9 points against the buildings' BVHs (`cityHides` in
+  `nameplate-ask.ts`, `nearestCityHit` with `build = false`) and the
+  HUD's panels marked `data-scene-cover`. A better place in the same
+  laying moves the plate only once it has stayed the best for 900 ms
+  (`SETTLE_MS`; a new laying moves at once, its thresholds hold their own
+  hysteresis), and the kept
+  place weighs 0.5 less: a passing view does not shift it. The comic's
+  opaque box keeps off its building twice as hard, stands over the
+  whole thing rather than on an eave, and is never an inscription on the
+  facade. While an image is exported the place is held.
 
 ## Modell: the parallel camera
 
@@ -629,7 +889,7 @@ set each frame with the lens. Nothing is built for Modell.
   read). GTAO takes the lens as its camera.
 - **Rays** (`view-ray.ts`) unproject the near and far plane, so the sheared
   camera picks right; a parallel ray starts at the scene's top.
-- **Scale, not distance.** The shadow frustum fits the footprint in
+- **Scale, not distance.** The shadow map's tiled square fits the footprint in
   half-octave steps (110–1600 m; 880 m on phones); vegetation tiers, lamp
   lights and the map overlay read an eye over the pivot at the equivalent
   distance.
@@ -688,21 +948,25 @@ the safety levels 1, 2 and 3:
 |---|---|---|---|
 | Tiles | the whole site streams (`tileset.json`), out to the fog's end × 1.1 (`streamFarFor`) | same, but to 2.2 km at most | spawn tile only (`tileset-spawn.json`; `&block=1` streams the site) |
 | Terrain | L0 TIN (±0.15 m) near, L1 512² grid beyond (the switch at ≈ 2.6 km from a tile for a viewport 1080 CSS px high; ≈ 2.1 km on an iPhone in portrait) | same | same |
-| Shadow map | 3072² (2048², 2048², 1024²) | 2048² (2048², 1024², 1024²) | 512² |
+| Shadow rings, four of | 2048² (1024², 1024², 512²) | 900² (900², 360², 360²) | 256² |
 | Shadow camera streams at | 128 px, by day; from level 2 never | never | as the tier |
 | Rasters decoding at once (`RASTER_TURNS`) | 5 | 1 | as the tier |
+| Rasters downloading at once (`RASTER_FETCHES`), the nearest tile's first | 6 | 6 | as the tier |
 | Pixel ratio | ≤ 1.5 (1.25, 1.0, 1.0; ≤ 2 until 2026-10-10: a retina laptop's 5.2 MP of post stack, 1.5 is 56 % of it), × 0.85 / 0.72 / 0.6 while the GPU misses 50 fps (`lib/city/resolution-scale.ts`) | ≤ 1.5 (1.25, 1.0, 0.85), × 0.85 / 0.72 while it misses 40 fps | 0.5, never scaled |
 | Post (`postProfileFor`) | DoF, SMAA, only the outline warmed | no DoF, FXAA, only the outline warmed | as the tier |
 | Land-cover rasters | L0 4096², its splat 2048² (85 → 21 MiB with mips, since 2026-10-10), L1 1024² | L0 2048², L1 1024²; no sports raster | as the tier |
+| Close-range rasters of a fine level (paving, edges, sports grounds, markings, colonies) | 2048² within 0.75 m a pixel of the view, their 1024² twins beyond 1.1 (`lib/city/ground-reach.ts`) | same | as the tier |
 | GTAO samples | 16 | 8 | 8 |
-| Frames behind the sidebar (`lib/city/frame-pace.ts`) | every frame (the panel floats beside the scene) | 12 fps while its sheet covers the scene, none while it scrolls and 250 ms after (the scene shared the GPU with the compositor drawing the scroll, and the scroll lagged the finger); the sheet's backdrop is not blurred | as the tier |
-| Frames while the scene stands still (`frame-pace.ts`, `createStillness`) | 30 fps once the camera has not moved for 1 s, everything is loaded and neither the traffic nor the trams run; any input on the page (a pointer moving over the canvas only), a look change, a resize (to a container with no area: ignored, the last size stays, or WebGPU gets a 0 × 0 swapchain) or a stream wakes it for the next frame. The resolution scale steps up there by the GPU's time alone, and the HUD's fps readout keeps the last moving rate | same | as the tier (a SwiftShader frame takes longer than the pace's interval, so it holds none) |
+| Frames behind the sidebar (`lib/city/frame-pace.ts`) | every frame (the panel floats beside the scene) | while its sheet covers the scene, only what the HUD asks for: a call draws 0.5 s at 12 fps and does not end the scene's standing still, a scene that moves (a glide, a stream landing) keeps 12 fps, a still one draws nothing else (the scene shares the GPU with the compositor drawing the sheet's scroll); the sheet's backdrop is not blurred | as the tier |
+| Frames while the scene stands still (`frame-pace.ts`, `createStillness`) | 30 fps once the camera has not moved for 1 s, everything is loaded and neither the traffic nor the trams run; any input on the canvas or a key, any call from the HUD (not while the sidebar's sheet covers the scene), a look change, a new hour, a glide to a viewpoint, a resize or a stream wakes it for the next frame (a resize to a container without area is skipped: the canvas keeps its last size, `canvas-size.ts`, since WebGPU fails a 0 × 0 swap chain). The resolution scale steps up there by the GPU's time alone, and the HUD's fps readout keeps the last moving rate | same | as the tier (a SwiftShader frame takes longer than the pace's interval, so it holds none) |
+| Frames in *Frag die Stadt*'s Hörmodus (`frame-pace.ts`, `setListening`, ADR 0057) | 2 fps while the scene stands still, 30 while a glide or the live mode moves it (no two kept frames further apart than the loop's 0.05 s time step, at 24–144 Hz); the city shows through a soft vignette | same | as the tier |
 | Rich crowns at most (`vegetation-lod.ts`) | 2 500 (≈ 3.6 M triangles) | 800 | as the tier |
 | Real lamp lights (`LAMP_LIGHTS`, every lit fragment shades each, by day too) | 3 | 1 | as the tier |
+| Lamps lighting the walls and fountains (`STREET` in lamp-reflections.ts, a loop over each lit wall pixel at night only) | 48 | 12 | as the tier |
 | The walker's lantern (`lantern.ts`, one more light) | with a 512² cube shadow | no shadow | as the tier |
-| Tile contents at once | 5 parses, 25 downloads per origin | 2 parses, 4 downloads per origin | as the tier |
-| Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 168–336 MiB (148–296, 136–272, 96–232) | as the tier |
-| Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 480 / 560 MB (a last one 10 s past 560); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
+| Tile contents at once | 5 parses, 6 downloads per origin (`STREAM_DOWNLOADS`; 3 until the boot's first frame, so the line is the spawn tile's) | 2 parses, 4 downloads per origin (3 until the first frame) | as the tier |
+| Tile cache (GPU bytes: glTF + a tile's rasters and dressing) | 1.2–1.6 GB (1.0–1.4, 0.8–1.2, 0.6–1.0) | 150–285 MiB (118–249, 96–228, 64–196) | as the tier |
+| Memory governor (`lib/city/memory-governor.ts`) | steps at 2 / 2.5 GB (a last one 10 s past 2.5); lines × 0.9 a level, starting at step 0 (0, 1, 2) | steps at 420 / 460 MB (a last one 10 s past 460; 480 / 560 until two walk crashes); lines × 0.9 a level, starting at step 0 (1, 2, 3) | as the tier |
 
 **The resolution follows the frame rate** (`lib/city/resolution-scale.ts`,
 wired in `create-app.ts`). The scene is fill-bound, so a page whose GPU
@@ -733,15 +997,16 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 
 | Content | Wire size per tile | Triangles |
 |---|---|---|
-| buildings `city_<tile>.glb.gz` | up to 2.0 MB (the laser scan's small structures add 1–12 %, +3.3 % over the site) | ≈143 k on the spawn tile (+2.4 k for its 204 scan structures, 12 each) |
+| buildings `city_<tile>.glb.gz` | up to 4.3 MB, Dresden's fifteen 37 MB (2026-11-11, the bands' rounds one facet each; 41 MB with three to four, 59 MB while the bands were cut every metre); the far level, without doors and bands, up to 2.8 MB, 25 MB (33 MB with them) | up to 0.63 M a tile, 5.3 M over Dresden (7.1 M with the rounds faceted, 22.4 M before that); the far level up to 0.23 M, 2.2 M (3.5 M with doors and bands) |
 | fine terrain `terrain_<tile>_l0.glb.gz` (TIN, ADR 0030) | 1.3–3.6 MB | 0.30–0.49 M (TIN + skirt; the 1024² grid it replaced: ≈2.1 M, 2.15–2.45 MB) |
 | coarse terrain `terrain_<tile>_l1.glb.gz` | 0.4–0.55 MB | ≈0.53 M (512² grid + skirt) |
-| footprints (minimap) | 0.23–0.33 MB | — |
+| footprints (minimap) | only on demand, 0.23–0.33 MB (the minimap's picture is one image of the site, 87 kB, not a tile's) | — |
 | class raster 4096² / 2048² | 0.22–0.25 / ≈0.08 MB | — |
 | NDVI raster | 0.3–0.45 MB | — |
 | paving raster (fine level) | 0.6–0.86 MB | — |
 | edge raster (fine level) | 0.34–0.46 MB | — |
-| kerb stones (in the fine terrain) | ≈ 0.2–0.4 MB | ≈ 130–200 k |
+| kerb stones (in the fine terrain) | ≈ 0.2–0.4 MB | up to 319 k, indexed (up to 468 k vertices; 956 k as a triangle soup until 2026-11-11), as the stairs and walls are |
+| rails, ballast, sleepers, tram tracks and bridges (built at runtime from the line files, `mesh-kit.ts`) | — | welded and indexed, normals as signed bytes (`lib/city/weld.ts`): the yard tile 33408_5656 0.75 M triangles on 0.74 M vertices, 21 MB on the GPU (2.24 M vertices and 56 MB as a triangle soup until 2026-11-11); the tram tile 33410_5656 7 MB of tracks (14) |
 | canopy points (fine level) | 0.6–9.5 MB raw (forest tiles top) | up to 81 k trees: ≈ 9 MB of instance data once built (trunks, mid and rich crowns share one matrix buffer) |
 | cadastre trees, scan trees, hedges (fine level) | 0.4–0.8 / 0.65 (spawn only) / ≤ 0.03 MB raw | — |
 | coarse crowns (coarse level) | 0.04–0.29 MB (0.07–0.56 MB raw) | 3 700–27 900 crowns, 20 tris each: ≈ 90 B of instance data a crown once built (matrix, tint, season) |
@@ -782,8 +1047,9 @@ stays their measure; the tile cache counts true bytes.
   2026-10-10: the coarse level is a 40 m-error mesh 2.1–2.6 km out, where
   2 m texels are about a pixel). A phone's tile showing its fine level
   holds its 2048² class raster and splat (25.3), the NDVI, sky view and
-  horizon shared by file with the coarse level (`shared-rasters.ts`; the
-  cache weighs a shared raster half by each level) and its own surface
+  horizon shared by file with the coarse level (a content root takes its
+  rasters by kind from `tile-rasters.ts`, shared by file and weighed a
+  share per level: half by each) and its own surface
   (16), edges (8), markings (4) and allotments (≤ 2) rasters: ~60 MiB.
   The sports raster (2048² RGBA, 16 MiB for a PNG of a few dozen kB) is
   read by a desktop's fine level only (`readsSportGrounds`): a phone draws
@@ -793,6 +1059,29 @@ stays their measure; the tile cache counts true bytes.
   kept only where a tile's numbers equal the site's: −6 MiB per coarse
   tile after the first, on the GPU and the CPU), and it carries only its
   coarse crowns, traffic and bridges.
+- **The close-range rasters follow the view** (`lib/city/ground-reach.ts`,
+  `ground-reach-follow.ts`, since 2026-11-12). The kerb lines, paving
+  patterns and lawn edges fade out by the metres a pixel spans (gone at
+  0.5 m, `ground-detail.ts`), yet a fine level held the rasters they are
+  drawn from at any distance: paving 16 MiB, edges 8, sports grounds 16,
+  markings 16 on a desktop. A fine level whose nearest point the view
+  draws at 0.75 m a pixel or coarser now starts on their 1024² twins
+  (4 + 2 + 4 + 4 MiB; the build's `surfaceFar`, `edgesFar`, `sportFar`,
+  and the phone twins of the markings and colonies), which still carry
+  what shows out there: the paving's kind, the urban green, a pitch's
+  lines, the lane lines until 1.5 m a pixel. Ten times a second the
+  frame measures every loaded fine level and has the nearest one on the
+  wrong set swap it, one at a time: the other set is loaded and put on
+  the GPU outside a frame (`RasterHold.acquire` with `now`), handed to
+  the material's slots — a variant's graph reads the same kinds, so no
+  shader is built — and the old one dropped (`GroundDetail.setFar`).
+  Back to the twins only above 1.1 m a pixel, so pacing a tile's edge
+  swaps nothing. The measure is taken at the size a picture is saved at
+  (the tier's pixel ratio whatever the frame rate took; Modell at its
+  export's scale): an export finds the rasters its pixels ask for.
+  While a swap loads, a level holds both sets: on a phone, whose
+  markings and colonies are their twins anyway, the paving's and edges'
+  6 MiB of twins beside their 24.
 - **The water sheets cover the water, not the tile**
   (`lib/city/water-mask.ts`, terrain-layer.ts `waterSheetsOf`). The water
   and mist sheets drape the terrain mesh and mask themselves to the water
@@ -881,16 +1170,26 @@ stays their measure; the tile cache counts true bytes.
   across the city and from the air.
 - **The tile cache** weighs a tile as the GPU holds it: the glTF (by
   count, so a buffer whose CPU copy is gone weighs what it did), the
-  terrain's rasters and the dressing's geometry, less the buffers the
-  site shares (`DressingPlugin.calculateBytesUsed`). A phone's bounds are
+  terrain's rasters, and what its late parts weigh from their build on
+  until their GPU free has run — one disposed mid-compile is freed, and
+  leaves the weight, once that compile ends (`late-parts.ts`): the dressing's geometry, the traffic bodies'
+  geometry and a city tile's murals (their drawings with mipmaps — the
+  pen lines one channel, the wash small — the texels dropped once
+  uploaded: 2.7 MB for Dresden's two on their tile, 2.0 MB on a phone,
+  which decodes the lines at 32 px a metre), less the buffers the site
+  shares
+  (`DressingPlugin.calculateBytesUsed`). A phone's bounds are
   derived (`tileCacheBytesFor`): `max` = the governor's soft line − the
   fixed costs (24 bytes per drawn pixel and the shadow map: 38 MiB at
   level 0 on a 402×874 iPhone) − 100 MiB (~40 for the scene-wide sets —
   sky, lamp pool, data layers, uniform buffers, shader text — and ~60 of
   headroom: tiles in flight weigh nothing, the cache can run a tile over
   `max` before it unloads, three counts a tree set's matrices once per
-  view) = **336 MiB** at level 0 (296, 272, 232 at levels 1–3), `min`
-  about half (168, 148, 136, 96), and `max − min` above the largest tile
+  view) = **285 MiB** at level 0 against the soft line of 420 (249, 228,
+  196 at levels 1–3; 335, 295, 271, 231 against the old 480 until two
+  iPhones lost their GPU in a walk's glide, Sentry CITY-WALK-4 and -6),
+  `min` about half or what leaves the gap (150, 118, 96, 64), and
+  `max − min` above the largest tile
   (`LARGEST_TILE_BYTES`, 128 MiB on a phone). The 320–600 MB before were
   wrong the other way: `max` sat above the governor's own hard line
   (560), so with the fixed costs and three's count on top — ~750 MB held —
@@ -914,7 +1213,7 @@ stays their measure; the tile cache counts true bytes.
   freed back (measured while it held; forgotten after two minutes) — a
   camera standing still used to give its fine tiles up and stream them
   back in every ten seconds. At a raised safety level both lines are
-  × 0.9 per level (a phone's soft line 480, 432, 389, 350 MiB) and the
+  × 0.9 per level (a phone's soft line 420, 378, 340, 306 MiB) and the
   governor starts at a **floor** it never leaves for a finer step: the
   level itself on a phone, one lower on a desktop — already for the
   stream's first update. A **memory emergency** (`memoryEmergency` in
@@ -939,9 +1238,11 @@ stays their measure; the tile cache counts true bytes.
   tile's own compile waits for that step at its end
   (`compile-lanes.ts`). The glTF loader's result (its parser, the binary
   chunk, the decoded buffers) goes at `load-model` (`dropLoaderResult`).
-  Rasters decode **in a site-wide turn** (`raster-upload.ts`,
-  `lib/city/task-gate.ts`, `setRasterTier`). A phone decodes **one at a
-  time** and puts each on the GPU at once (`renderer.initTexture`), its
+  Rasters decode **in a site-wide turn** (`tile-rasters.ts` hands a
+  content root its rasters by kind; `raster-upload.ts` `loadDataRaster`
+  decodes and uploads them in the turn, `lib/city/task-gate.ts`,
+  `setRasterTier`; the crowns' NDVI sampler decodes in it too). A phone
+  decodes **one at a time** and puts each on the GPU at once (`renderer.initTexture`), its
   bytes dropped at the upload — at most one decoded raster (16 MiB)
   waits, where a fine level held ~48 MiB of them until its compile, times
   five parses. A desktop keeps what it always did: five decodes at once,
@@ -954,7 +1255,7 @@ stays their measure; the tile cache counts true bytes.
   it — stops its raster loads where they are (`DressingPlugin`'s
   per-content abort): it decodes and uploads nothing more, and lets go
   of the shared rasters it waited for at once. And a phone parses two
-  tile contents and downloads four per origin at once (`PHONE_STREAM`,
+  tile contents and downloads four per origin at once (`PHONE_STREAM`, `STREAM_DOWNLOADS`,
   the renderer's own queues replaced before its first update), where the
   boot asked for eleven contents in one millisecond.
   Two rules follow: an attribute read on the CPU after the dressing (the
@@ -963,7 +1264,11 @@ stays their measure; the tile cache counts true bytes.
   lists — met after the drop, three uploads an empty buffer and the draw
   fails; and a buffer the site shares (`markSceneShared`) is never on a
   geometry when that geometry is disposed — three would destroy it for
-  every tile.
+  every tile. Such a buffer is an index only: three r187 frees a vertex
+  attribute taken off before the dispose all the same (each drawable's
+  `RenderObject.onGeometryDispose` frees what it drew that its geometry no
+  longer holds); vertex buffers are a tile's own (as the flags' cloths,
+  one per tile and design).
 - **The ground comes before the buildings.** Both tiers' queues run in
   our order, not the renderer's (`lib/city/stream-order.ts`,
   `orderStreaming`): its own sorts by screen-space error, and a tile's
@@ -988,16 +1293,27 @@ stays their measure; the tile cache counts true bytes.
   level lacks is small roof detail and per-vertex facade detail (the
   ground samples every 2 m along the walls the windows clear, the
   doors), so the switch shows next to no jump. Both are `kind: "city"` with the same object table: picking,
-  demolish (on both levels at once), the inquiry and the BVH work on
+  demolish (on both levels at once, `demolitions.ts`), the inquiry and the BVH work on
   whichever is shown. The phone's memory is what pays for it: only the
   tiles within reach carry the baked LoD2, the rest a third of its
   vertices.
 - **Trees before all trees.** The dressings build one at a time after
   the boot's gate, a coarse level's (its third of the trees, its bridges)
   ahead of any fine level's (`COARSE_DRESSING_RANK`; at most four of
-  them ahead of one fine level's, `MAX_DRESSING_OVERTAKES`, so a long
+  them ahead of one fine level's, `MAX_LATE_OVERTAKES`, so a long
   flight's stream of coarse levels cannot hold back the tile underfoot),
-  so every tile in view has trees before the nearest has all of them. A fine level that
+  so every tile in view has trees before the nearest has all of them.
+  The lane (`createLateLane`, late-parts.ts) holds a dressing's build
+  only; its compile wait and its hanging run after the lane, so the next
+  build overlaps the last one's compile but waits out the one before it:
+  at most one compile ahead, so built dressings and the compile queue
+  never pile up; a dressing counts against the cache's budget from its
+  build, not from its hanging (headless full profile, Dresden start:
+  first frame to *Alles geladen* 289 s → 243 s under SwiftShader). A
+  tile's traffic bodies take the same lane at their level's rank but
+  hold it through their compile wait: a body's compile is one large
+  upload (≈ 20 MiB for a fine tile), and a second one in flight beside
+  it would raise a phone's peak. A fine level that
   shows before its own trees hang — a phone shows it the moment it loads
   — borrows its coarse level's crowns until they do
   (`DressingPlugin.standInCrowns`, `coarseCrownsStandIn`): they are
@@ -1041,7 +1357,7 @@ cabled Web Inspector) print it as one line:
   the frame callback on the main thread (mean / slowest), the render call
   inside it (three encoding and submitting the passes), the GPU's time per
   frame from timestamp queries (`trackTimestamp`; only where the adapter
-  offers `timestamp-query` — Chromium's WebGPU, not Safari, not WebGL2),
+  offers `timestamp-query` — Chromium's WebGPU, not Safari),
   the fastest rate the loop ran (the 10th percentile of its frame
   intervals: 120 on a ProMotion display that it keeps up with) and the
   pixels drawn per frame (millions). A slow page with a short `cpu` and a
@@ -1077,7 +1393,11 @@ page reloads where the player stood, **a safety level lighter**
 decisions — what a lost device, a failed frame, an allocation failure, a
 hidden or shown page lead to — are one pure machine,
 `lib/city/page-lifecycle.ts`, tested by the incident sequences in its
-test; `create-app.ts` binds its signals and effects. The
+test; `create-app.ts` binds its signals and effects. The record and
+its protocol are one recovery session (`app/_components/gpu-recovery.ts`):
+the page peeks before the boot and commits once the scene is up or the
+boot failed, so a boot StrictMode aborts leaves the place for the next;
+the caps and the arrival rule are pure (`lib/city/gpu-recovery.ts`). The
 snapshot waits in session storage, the raised level in local storage
 (`gpu-safety`). One automatic reload per level (0 → 1 → 2 → 3); none from
 level 3, and none where the raise cannot be stored — the next page would
@@ -1085,11 +1405,11 @@ be no lighter; a tab-wide net of three in ten minutes covers a
 `?safety=N` page, whose level cannot rise. One incident raises the level
 once: the loss after the page's own memory emergency renews that raise
 (`raisedBy`), and a page killed after one raises nothing more on the next
-load. Before every reload `renderer.dispose()` runs (raced against
-300 ms): it unhooks the geometries' dispose listeners and destroys the
-device, which WebKit otherwise frees only once the old document is
-collected — after the new page has started allocating in the same
-process. A page hidden at that moment reloads once it is visible. The
+load. Before every reload the device is destroyed — WebKit otherwise
+frees its memory only once the old document is collected, after the new
+page has started allocating in the same process — and
+`renderer.dispose()` unhooks the geometries' dispose listeners (raced
+against 300 ms; `disposeAndDestroy`). A page hidden at that moment reloads once it is visible. The
 recovered page sets its pose before the stream's first update (its start
 tile is the one under the camera, `startTileOf`), **looking straight
 down** onto that tile — a pose that looks at the sky or out past the
@@ -1111,8 +1431,7 @@ render does not unwind (its call depth stays a level deep, or the shadow
 pass's override stays on), and no later frame draws right. It is a loss
 only with a sign of the GPU running out — an allocation error, a memory
 emergency before it, a GPU the probe finds gone (`frameLoss`); otherwise
-it is a bug (`failed`, and every throw on WebGL2, which has nothing to
-probe): the page reloads at the same level, at most twice in ten
+it is a bug (`failed`): the page reloads at the same level, at most twice in ten
 minutes. Before the first frame the message fails the boot instead.
 
 **A GPU taken in the background is not the page's failure** (the resume
@@ -1189,10 +1508,11 @@ issues the crashes by phase and device, its trace views the pages'
 numbers (op `page`, named by the path) per release and device.
 
 On a desktop, while the camera moves, DoF is dropped and restored after
-250 ms of stillness (`lib/city/regression.ts`). That saves its passes,
-not its memory — its targets are held either way, which was the cost on a
-phone, so a phone does not build it. The contact shadows stay on because
-gating them made them blink on every step.
+250 ms of stillness (`lib/city/regression.ts`), its blur growing from none
+to the lens's over the next 700 ms (`stepLens`, `lib/city/lens.ts`) rather than
+snapping on. That saves its passes, not its memory — its targets are held
+either way, which was the cost on a phone, so a phone does not build it. The
+contact shadows stay on because gating them made them blink on every step.
 
 **Motion blur** (`motion-blur.ts`, `lib/city/motion-blur.ts`, pastel
 only, perspective only). Each pixel's point is rebuilt from depth,
@@ -1207,7 +1527,16 @@ lens blur is off (`regressed`): on a desktop once half the samples move
 2 px (a smear of 1 px), on a phone once all of them do — there the blur
 replaces the FXAA, and a far city that barely moves would keep neither.
 So a walk straight ahead stays sharp and antialiased; a turn, a strafe
-or a flight blurs. Above 600 px (a jump), after a new size or
+or a flight blurs. Each frame's way is scaled to a 60 Hz frame's
+(`framePace`, ×0.25–2; by the step the camera moved, capped at 50 ms
+as it is), so an uneven frame rate smears evenly, and once
+on the blur holds until the motion has stayed under half its threshold
+for 12 frames (`stepBlurGate`; not on a phone, where the blur stands in
+for the antialiasing and a smear under a pixel would keep neither): near
+the threshold — a walk slowing to a stop, an uneven turn, a slow frame
+among fast ones — it switched on and off frame by frame before, and the
+windows' fine detail came and went with it. Above 600 px of the
+picture's own way, unpaced (a jump), after a new size or
 projection and when the page comes back to the front, a frame is drawn
 sharp. Where it draws, memory does not grow:
 
@@ -1227,13 +1556,14 @@ too.
 sequenceDiagram
   participant B as Browser
   participant S as static host
-  B->>S: /<site> (the prerendered route: which site)
+  B->>S: /<site> (the prerendered route: which site · it preloads the next two)
   B->>S: /data/<site>/manifest.json (no-cache, retried · else the cached copy)
   B->>S: tileset.json (hashed, extras: CRS, offset, tile list)
+  B->>S: the HUD's and the scene's chunks (after hydration)
+  B->>S: the start tile's far buildings + coarse terrain (boot-ahead.ts)
   Note over B,S: every fetch retried for a budget of the page's visible time
   Note over B: renderer, sun rig, lamp light pool, post stack, tile stream
-  B->>S: every tile's footprints (minimap)
-  B->>S: spawn tile: buildings glb, a terrain level + class raster, NDVI
+  B->>S: spawn tile: the fine levels, class raster, NDVI
   Note over B: dress: clay + object texture · splat painted + water · compileAsync
   Note over B: placed on the spawn ground (its buildings' BVH) · a frame draws the shadow map → light stage, 52 %
   Note over B: first frame → overlay drops (HUD phase "running", streaming pill)
@@ -1243,6 +1573,46 @@ sequenceDiagram
   Note over B: each task's changes, once: shadows invalidated · lamp heads · stats
   Note over B: spawn dressed, renderer idle, no dressing pending → onLoaded (__poc.ready)
 ```
+
+**Nothing waits that need not** (`boot-ahead.ts`): the route's HTML
+preloads the manifest and the tileset it names (`app/[site]/page.tsx`,
+named by the build's site index, `sites.json`), and as soon as the HUD knows the
+tileset's name it asks for the tileset and for the start tile's first
+two contents — beside the scene's chunk, the renderer's start and the
+scene's setup. The stream takes each from there once
+(`tile-content-fetch.ts`), the tileset too, which it used to fetch a
+second time. Before, the first tile was asked for in the first frame.
+The minimap's picture is an image the sidebar loads when it shows.
+
+**The scene boots in a worker** (ADR 0061, `scene-client.ts`): the page
+starts `scene-worker.ts`, which says it runs (`alive`) and then what it
+can draw with (a WebGPU adapter, `requestAnimationFrame`). The page waits
+up to 60 s for the script (a slow line's download) and 10 s more for the
+adapter; a script that never arrives is the network's ("network: …",
+`BootError`'s plain words) — so is a chunk the worker's bootstrap could
+not fetch before `alive` (the bundler's classic bootstrap pulls the
+scene's chunks with `importScripts`, and a failed one throws a
+NetworkError) — one that throws or stays silent "Die Ansicht startet
+nicht." An aborted boot (a StrictMode remount, a navigation) stops
+waiting at once and ends the worker, so the next boot does not wait on
+it.
+Where that matches the page, the page hands it the canvas as an
+`OffscreenCanvas` with the init (budget, size, site, look, the page's
+address and state); the worker asks for the tileset and the start tile
+(its own `boot-ahead`) while the scene's chunk loads, and serves the
+scene from there (`scene-server.ts`); a browser that cannot draw from a
+worker gets the no-GPU message (`?thread=main` runs the same server on
+the page, for debugging). Everything the HUD reads every frame — the camera,
+the pose, Modell's state, what streams — comes back in the mirror the
+scene sends when it changed; `__poc.handle` is that client, so its value
+calls are promises. A scene ends when it answers `dispose` — after its
+teardown, the renderer and its device released — or, a worker,
+3 s on (`WORKER_TEARDOWN_MS`; its device goes with it): `dispose()`
+settles then, and the next boot waits for it. The teardown does not
+wait for the GPU: the device is destroyed before three frees its objects
+(`disposeAndDestroy`; see "Workarounds for upstream bugs"). A boot
+aborted on the way releases the worker's head start, and the page ends
+a worker that has not ended it 3 s later.
 
 The **first frame** waits on the spawn tile's buildings and *any* of its
 terrain levels (`bootApp` in `create-app.ts`); the player is then placed
@@ -1275,13 +1645,30 @@ The data layers build nothing at boot: they start as one feature
 from then on hear the spine through its hooks (`feature-seam.ts`: the
 frame, the stream's changes, the look store, the scene's clock — read
 first, since they may start long after it was set); a tile's traffic
-slot waits for the same start before it builds its bodies, outside the
-dressings' turn. Their code ships in the scene's chunk: loaded by
+slot waits for the same start, outside the dressings' turn, before its
+bodies join the tile's late parts. Their code ships in the scene's chunk,
+so the seam only starts them, once (`startOnce`): loaded by
 `import()` as a chunk of its own, it made the first-load JS 22.7 KB gz
 larger while moving 10.1 KB out, three.js shared by both chunks losing
-its scope hoisting with the scene's code ([ADR 0040](./adr/0040-data-layers-and-live-city-data.md)) — and the
+its scope hoisting with the scene's code ([ADR 0040](./adr/0040-data-layers-and-live-city-data.md)).
+Measured again on 2026-11-11, with three in chunks of its own, the
+penalty is gone and so is the gain: the viewer's JS came out 0.5 kB
+larger (1 096.5 against 1 096.0 kB over the wire) and the chunk was
+fetched during the boot all the same. The
 picture styles and Modell, which import three as much, stay in the
-scene's chunk for the same reason.
+scene's chunk too.
+
+**The spine's owners.** `bootApp` is one long closure; what has a life of
+its own is taken out of it as an owner — a factory that takes a few
+objects and callbacks and returns what the spine calls: the picture
+export (`scene-capture.ts`), the frame's times and the resolution they
+allow (`frame-meter.ts`), the stream's detail and cache bound to the GPU
+memory held (`tile-memory.ts`), the crosshair's focus
+(`crosshair-focus.ts`), the loading ring (`load-veil-follow.ts`). **A
+frame is an ordered list of named steps** (`frame-steps.ts`: `clock`,
+`move`, `stream`, `follow`, `view`, `tick`, `overlay`, `render`,
+`after`): the list says why each stands where it does, its test holds
+the order, and `bootApp` binds each name to its work.
 Everything else is the tiles renderer's call: it loads and
 unloads by screen-space error from both cameras, and a `DressingPlugin`
 (`tile-stream.ts`) dresses each landing tile inside the renderer's own
@@ -1291,10 +1678,21 @@ target the scene renders into (`PostStack.compile`, one drawable per
 material and attribute layout, shown and unculled for the call), so a
 landing tile never builds inside a frame. The shadow pass's pipelines for
 new casters are the exception: they compile in the frame that first draws
-them. The heavy dressing — vegetation,
+them. What lands on a tile after the tile itself is a **late part**
+of its content root (`late-parts.ts`): a terrain level's dressing, a
+city tile's murals, a data layer's traffic bodies (owned by the
+dressing that carries their slot). One lifecycle builds each in its
+turn, weighs it from its build, compiles it before it hangs and frees
+it once its compile has ended; two hang policies differ only in when
+it hangs — a dressing once its compile wait is over (a level's
+hand-over waits on it, below; a compile that then runs out of memory
+takes it down again), the murals and the traffic bodies once their
+compile has ended (nothing waits on them). The heavy dressing — vegetation,
 lamps, monuments, rails — waits behind a gate the HUD opens after the handover
 (`startStreaming`, [ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)'s
-second phase) and is built one tile at a time. A tile with nothing on
+second phase) and is built one tile at a time in the site's lane, with
+the traffic bodies (a coarse level's first); the murals build beside it
+(a fetch and a decode a drawing, no long task). A tile with nothing on
 screen shows at once, bare, and is dressed after; a terrain level that
 takes over from its tile's other level on screen — the fine one replacing
 the coarse one as the view comes closer, or back — is loaded only once
@@ -1314,12 +1712,14 @@ fine level shows bare and its trees, lamps and rails arrive once its
 dressing is built — on a phone that blink of no trees is back, the price
 of a stream that keeps moving. A dressing's **ask sets** — what the
 inquiry probe can ask of its trees, monuments, decks, hedges, lamps and
-furniture — are built once it hangs, when the main thread is idle (at
-most 2 s on, `buildAsksWhenIdle`), not inside its build: they place
+furniture — are built once it hangs, when the scene's thread is idle (at
+most 2 s on, `buildAsksWhenIdle`; in the worker, which has no
+`requestIdleCallback`, a background `scheduler.postTask`, and in WebKit's
+a quarter-second timer — `whenIdle`), not inside its build: they place
 every canopy tree a second time for a card nobody may open (0.3 s of a
 dense tile's build in the local trace); a question that comes first
 builds them at once (`asksOf`) — on a saturated page the idle time can be
-minutes in coming (timers and idle callbacks wait behind three's compile
+minutes in coming (timers and idle tasks wait behind three's compile
 steps there; plan 069's Findings). **Ready** (`onLoaded`,
 `__poc.ready`) is the first moment after the gate at which the spawn tile
 is dressed, the renderer is idle and no dressing is pending; it also lifts
@@ -1361,6 +1761,22 @@ over a floor that is not there. Before a reload to a heavier page
 worker are terminated, and their heaps go with them rather than with the
 old document (create-app.ts `stopWorkers`); the reloads after a lost GPU
 keep them, since their stream still sends jobs.
+
+**The page's workers follow one rule** (`worker-client.ts`; the ground's,
+the window niches' and the BVH's clients are each a few lines on it).
+One worker a kind, one job at a time, the jobs in a line a lower rank
+goes first in (a coarse ground level before the fine ones) and an aborted
+job leaves at once. Nothing is handed over before the worker's script
+said it runs: one that fails to load would keep what it got (one silent
+for 15 s is ended and started once more at the next job; a second
+silence is the last). Where there
+is no worker — a browser that refuses it, a script that did not load, a
+message that cannot be sent — the work runs on the main thread, each job
+in a later task of its own. A worker that dies at work is started again
+once; the job it held runs here when its input was copied (the ground)
+and is lost when it was handed over (a tile's niches are then missing,
+a building tile is `bvhLost`: drawn, never raycast). A second death, or
+one before the handshake, and every later job runs here.
 Whatever moves the camera — walking, flying, a glide on its way, a double
 tap, a snapshot, a GPS fix, a tile landing — it ends up neither below the
 ground nor inside a building: `camera-pose.ts` sets a walker out beside a
@@ -1370,8 +1786,8 @@ what lies between ([ADR 0032](./adr/0032-camera-never-inside-a-building.md)).
 **The network fails, and is tried again**
 ([ADR 0048](./adr/0048-network-failures-are-retried.md)). Every tile and
 tileset request goes through one retrying fetch (`fetchBytes` in
-`fetch-optional.ts`; for tile content `ContentFetchPlugin`, which inflates
-the `.gz` once its body is read whole — one that does not inflate is a
+`fetch-optional.ts`; for tile content `ContentFetchPlugin` in
+`tile-content-fetch.ts`, which inflates the `.gz` once its body is read whole — one that does not inflate is a
 corrupt file, not a blip, and is not retried), and so do the terrain,
 sky-view and horizon rasters (`fetchRasterBytes`) and the trees' NDVI
 sampler: an abort is never retried, a 404 means absent, a network error
@@ -1418,7 +1834,8 @@ compile, as before): a raster is on the GPU, its bytes gone, before the
 next one decodes. The ground fills in a little
 later for it. A level whose tile leaves meanwhile takes no more turns.
 The *downloads* do not take turns: a terrain level asks for all of its
-rasters at once (`loadTerrainRasters` in `terrain-layer.ts` — a fine
+rasters at once from `tile-rasters.ts` (`loadTerrainRasters` in
+`terrain-layer.ts` — a fine
 level names up to ten, which used to be ten round trips one after
 another on the spawn tile's critical path); only their decodes and
 uploads queue. A tile's meshopt buffers decode in the decoder's two
@@ -1439,9 +1856,10 @@ two measure **what the cameras see**, not the whole site: *Umgebung* is
 the tile renderer's own load progress, *Details* the dressings built
 against those queued. Both only move forward. Once everything in view is
 in, the pill leaves; later loads (a flight) show a small, late *Umgebung
-lädt* hint instead (`onBusy`). The minimap loads every tile's footprints
-up front (named in the tileset's root extras), so it is complete from the
-start.
+lädt* hint instead (`onBusy`). The minimap shows the site's picture
+(named in the tileset's root extras), so it is complete from the
+start; a tile's footprints come only when a building of it is demolished
+or a design asks which buildings it covers (`load` waits for them).
 
 Everything the scene reports to the HUD — the stages, the busy flag, a
 failed tile, the stats and the frame rate, the site, the mode, Modell's
@@ -1459,19 +1877,42 @@ after the frame. create-app.ts's callbacks are unchanged:
 
 **The boot and the stream time themselves** (`stream-timing.ts`, plan
 069). Every span is counted by its category — `tile:city`, `tile:bvh`,
-`tile:rasters`, `tile:compile`, `tile:handover-wait`,
+`tile:rasters` (a ground level's whole dressing; within it
+`terrain:rasters`, its wait for all its rasters, and `terrain:ground`,
+the ground worker; per raster `raster:fetch-wait` in the downloads'
+line, `raster:fetch`, `raster:turn-wait` at the decode gate and
+`raster:decode`, the inflate with the upload),
+`tile:compile` (within it, per drawable, `compile:turn-wait` behind
+the compiles in flight and `compile:call`, its own `compileAsync`),
+`tile:handover-wait`,
 `dressing:queue-wait`, `dressing:build`, `dressing:compile`,
-`dressing:asks`, the boot's last steps before the light stage
+`dressing:asks`, the boot's way to the first frame (`boot:page-to-viewer`
+from the navigation to the viewer's code, `boot:renderer-init`,
+`boot:tileset`, `boot:setup` from the tileset to the wait for the first
+tiles, `boot:spawn-wait`), its last steps before the light stage
 (`boot:scene-compile`, `boot:place` — the spawn tile's BVH among it —
 and `boot:light-wait`), `boot:frame` (the first 60 frames at the start
 pose), `boot:first-shadow-frame`, `boot:light-to-veil`,
-`boot:veil-to-loaded`. With `?trace=1` each span also lands on the
-browser's own timeline (DevTools' and Web Inspector's *Timings* track)
-with its tile id, the long tasks are counted where the browser reports
-them (Chromium; Safari has none), and the page prints the table once
-loaded and 20 s later (`console.table`). The names are a contract for
+`boot:veil-to-loaded`. The timings are the scene's thread's: the page
+tells it when the veil dropped (`veilDropped`) and when it navigated (the
+init's `pageOrigin`), so every boot span is measured there. With
+`?trace=1` each span also lands on that thread's timeline (DevTools' and
+Web Inspector's *Timings* track) with its tile id, and the scene prints
+the table once loaded and 20 s later (`console.table`). The long tasks
+(`longtask`) and the crash trail's `heapMB` are the page's alone: a
+worker reports neither, so they are counted only with `?thread=main`
+(Chromium; Safari reports no long tasks). The names are a contract for
 later perf work: add one rather than rename one. None of it reaches the
 crash trail or the reports — a tile's id names where the player was.
+
+**The renderer itself: `?inspect=1`** (`inspector.ts`) puts three's own
+Inspector (`three/addons/inspector`) over the canvas: time per pass (GPU
+timestamps where the adapter has them — Chromium; on Safari only CPU
+time), memory by kind (geometries, textures, render targets), draw calls
+and the node graphs. The module loads only on that knob, so no other page
+carries it; it keeps its panel layout under `threejs-inspector` in local
+storage (the privacy page names it). Use it beside `?trace=1`, which times
+the stream, not the passes.
 
 ## Workarounds for upstream bugs
 
@@ -1480,6 +1921,20 @@ what to undo once a release fixes it. The comments at those sites say
 *upstream workaround* (`grep -rni "upstream workaround" app lib`). On a
 bump of the dependency, check each entry against its release notes, and
 drop the entry with its workaround.
+
+**three r187: `dispose()` waits for the GPU before it destroys the
+device.** `Renderer.dispose` ends in the backend's, which first awaits
+the timestamp-query pool's pending read-back (`mapAsync`), queued behind
+every frame and compile the GPU has not run yet, and destroys the device
+only then: 26 s on SwiftShader after a city's boot, with the device, its
+memory and the GPU process held while the page had already left (and the
+worker cut off after 3 s). *Worked around* in `disposeAndDestroy`
+(`create-app.ts`): the device is destroyed right after `dispose()` is
+called; three's frees then run on a destroyed device, the refused
+read-back is logged once (`THREE.Error resolving queries`), and three
+ignores a loss for `destroyed`. Teardown takes about 0.1 s. *Once fixed*
+(three destroys the device without waiting for the read-back): call
+`renderer.dispose()` alone again.
 
 **three r187: `compileAsync` is not re-entrant.** Since
 [#34506](https://github.com/mrdoob/three.js/pull/34506) the compile in
@@ -1498,6 +1953,20 @@ plans to rework this code
 ([#35086](https://github.com/mrdoob/three.js/issues/35086), the review of
 [#35092](https://github.com/mrdoob/three.js/pull/35092)); not reported
 yet.
+
+**three r187: a canvas pipeline is keyed by the output colour space when
+`compileAsync` builds it.** The work items run after its first await, and
+`getCurrentColorSpace` reads `renderer.outputColorSpace` then, not when the
+compile was called. The nameplate draws onto the canvas with its own
+output settings (linear, no tone mapping) and sets them back as its
+compile call returns — held across the await, every frame drawn meanwhile
+would take them (wrong colours, the final pass rebuilt). So its warm-up
+builds the plate's programs and shader modules, and on WebGPU the first
+plate still makes its pipeline object from them inside its frame.
+*Accepted*, no workaround (`nameplate-layer.ts`, *upstream workaround*
+names the place). *Once fixed* (the compile takes the output settings
+with its render context): nothing to undo; the first plate builds
+nothing.
 
 **three r187: a compile sets a stale render target.** Since
 [#35191](https://github.com/mrdoob/three.js/pull/35191) each work item of
@@ -1535,11 +2004,29 @@ geometry throws on it midway (`destroyAttribute`). *Worked around* in
 `three-utils.ts` (`untilThrough`): the dispose is tried again past it.
 *Once fixed:* one dispose. Not looked for upstream yet.
 
+**three r187: SkyMesh ignores a reversed depth buffer.** Its vertex
+node pins the dome to the far plane by `z = w`, which is depth 1, the
+near plane of a reversed buffer. The dome draws after the opaque clay
+without depth write, so it passed the depth test everywhere and painted
+walls, kerbs and river walls sky-blue. *Worked around* in `sun-rig.ts`
+(`createSkyDome`): under `reversedDepthBuffer` the dome's z is 0. *Once
+fixed:* the vertex node stays SkyMesh's own. Not reported yet.
+
 Changes in three r187 we adapted to and that are meant, not bugs: builds
 are keyed by the kind of camera
 ([#35123](https://github.com/mrdoob/three.js/pull/35123); Modell's
 warm-up, `PostStack.warmView`), and PMREMs are cube targets of at least
 256 px a face (the sky reflection's own 64 px cube, `sky-reflection.ts`).
+
+**three r187: `ClusteredLighting` assumes a centred perspective camera.**
+`ClusteredLightsNode` bounds each cluster in view space by
+`ndc · (−z) / projection[0][0]` and ignores the projection's off-centre
+terms, so Modell's parallel camera and the image export's frustum slide
+(`setViewOffset`) would shade lights in the wrong clusters or not at
+all. The lamps therefore keep their fixed pool (ADR 0009) rather than
+48 clustered lights on a desktop (tried 2026-10-31: the perspective view
+was right). *Once fixed:* revisit, with the pool's lights fading by rank.
+Not reported yet.
 
 **3d-tiles-renderer 0.5.3: `resetFailedTiles()` alone never asks for a
 cached tile again.** *Worked around* in `tile-retry.ts`: the heal removes

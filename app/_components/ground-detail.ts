@@ -10,7 +10,6 @@ import {
   float,
   floor,
   fract,
-  Fn,
   If,
   int,
   ivec2,
@@ -25,8 +24,6 @@ import {
   smoothstep,
   step,
   texture,
-  textureLoad,
-  textureSize,
   vec2,
   vec3,
   vec4,
@@ -34,6 +31,8 @@ import {
 import {
   ARABLE_CLASS,
   BUILTUP_CLASS,
+  LANDCOVER_CLASSES,
+  linearPalette,
   RAILWAY_CLASS,
   MEADOW_CLASS,
   PATH_CLASS,
@@ -44,12 +43,21 @@ import {
   parkingPlaceId,
   SURFACE_ALONG_BITS,
   SURFACE_ALONG_PERIOD,
-  type SurfaceKind,
   surfaceId,
 } from "@/lib/city/landcover";
+import type { SurfaceKind } from "@/lib/city/landcover";
 import { KERB_HEIGHT } from "@/lib/city/kerbs";
 import { LANE_BITS } from "@/lib/city/markings";
-import type { F, I, Tex, V2, V3, V4 } from "./shader-chunks";
+import {
+  byteOf,
+  floorMod,
+  gdBand,
+  gdHash,
+  gdNoise,
+  texelAt,
+  texelSize,
+} from "./shader-chunks";
+import type { F, I, I2, Tex, V2, V3, V4 } from "./shader-chunks";
 
 /**
  * Ground detail in the terrain's colour node, next to the meadow mottle
@@ -100,7 +108,6 @@ import type { F, I, Tex, V2, V3, V4 } from "./shader-chunks";
  * branch would otherwise be assigned there only.
  */
 
-type I2 = Node<"ivec2">;
 type B = Node<"bool">;
 
 /**
@@ -152,6 +159,19 @@ export interface GroundColour {
    * lines — for the Papier style's pencil grey (terrain-layer.ts).
    */
   paperInk: F;
+  /** how much of the ground is a path (`smoothPaths`: a smooth edge near
+   *  the camera, the class farther out) — what the sanded grain follows */
+  path: F;
+  /** the class beside the path (`smoothPaths`; the fragment's own class
+   *  where no path is near) — what a path's stray texels are paved as */
+  pathSide: I;
+  /** 1 where `smoothPaths` drew a path's edge (a path near, the camera
+   *  near), else 0 */
+  pathNear: F;
+  /** the way to the path (`smoothPaths`: its coverage's gradient, x
+   *  east, y north; unit at an edge, shorter where the coverage is flat,
+   *  0 where no path is near) */
+  pathToward: V2;
 }
 
 /** The fields every later chunk reads (vars, or JS where the GLSL knew). */
@@ -181,6 +201,16 @@ export interface GroundFields {
   onRoad: B;
   /** the paving kind (surfaceId) */
   kind: I;
+  /** the share of the paving raster's texels round the fragment that name
+   *  sealed ground (asphalt, concrete), a sanded path, and any walk
+   *  surface at all — B-spline-smoothed near the camera (`walkShares`), so a tint
+   *  the walk kind decides fades over a texel instead of stepping */
+  sealedW: F;
+  sandW: F;
+  walkW: F;
+  /** of the sealed share, how much is concrete (0 asphalt, 1 concrete):
+   *  the tone, as smooth as `sealedW` */
+  concreteW: F;
   /** AA half-width (m per pixel) and the three distance fades */
   w: F;
   near: F;
@@ -198,70 +228,6 @@ const id = (kind: SurfaceKind) => surfaceId(kind);
 // bays 2.5 and 5.5 m, slabs 0.5, sett 0.15, concrete plates 5.5, grass
 // pavers 0.55 — so the wrap of the baked coordinate never shows.
 const ALONG_PERIOD = SURFACE_ALONG_PERIOD;
-
-// --- shared helpers (the sport, marking and colony chunks use them too) -------
-
-/** GLSL's `mod`: floored, so negative values wrap like the bake's. */
-export const floorMod = (x: F, y: F | number): F =>
-  x.sub(floor(x.div(y)).mul(y));
-
-/** A raster's size in texels (level 0). */
-export const texelSize = (t: Tex, uv: V2): I2 =>
-  // reason: TextureSizeNode is typed as a bare Node; it is a uvec2.
-  ivec2(textureSize(texture(t, uv), int(0)) as unknown as Node<"uvec2">);
-
-// reason: TSL's clamp runs on integer vectors (WGSL clamp on vec2<i32>),
-// but its typings only cover float ones.
-const clampI2 = clamp as unknown as (x: I2, lo: I2, hi: I2) => I2;
-
-/** The texel at `p`, clamped into the raster (`size` from `texelSize`). */
-export const texelAt = (t: Tex, p: I2, size: I2): V4 =>
-  textureLoad(t, clampI2(p, ivec2(0, 0), size.sub(ivec2(1, 1))));
-
-/** The texel at `p` of a table texture (the row lookups: always inside). */
-export const loadTexel = (t: Tex, p: I2): V4 => textureLoad(t, p);
-
-/** A byte of a UNORM8 channel as a float 0..255 (rounded). */
-export const byteOf = (v: F): F => floor(v.mul(255).add(0.5));
-
-// The helpers every chunk calls many times are shader functions (a layout
-// each), not inlined node trees: inlined, the ~100 hash calls of the ground,
-// garden and pitch terms blew the fragment shader up several times over.
-
-/** Hash without sin (stable at large coordinates), Dave Hoskins' hash12. */
-export const gdHash = Fn(
-  ([p]: [V2]): F => {
-    const a = fract(vec3(p.x, p.y, p.x).mul(0.1031)).toVar();
-    a.addAssign(dot(a, a.yzx.add(33.33)));
-    return fract(a.x.add(a.y).mul(a.z));
-  },
-  { p: "vec2", return: "float" }
-);
-
-/** Value noise on the hash. */
-export const gdNoise = Fn(
-  ([p]: [V2]): F => {
-    const i = floor(p).toVar();
-    const f0 = fract(p).toVar();
-    const f = f0
-      .mul(f0)
-      .mul(vec2(3).sub(f0.mul(2)))
-      .toVar();
-    return mix(
-      mix(gdHash(i), gdHash(i.add(vec2(1, 0))), f.x),
-      mix(gdHash(i.add(vec2(0, 1))), gdHash(i.add(vec2(1, 1))), f.x),
-      f.y
-    );
-  },
-  { p: "vec2", return: "float" }
-);
-
-/** 1 inside [a, b] (m), anti-aliased over w on either edge. */
-export const gdBand = Fn(
-  ([d, a, b, w]: [F, F, F, F]): F =>
-    smoothstep(a.sub(w), a.add(w), d).sub(smoothstep(b.sub(w), b.add(w), d)),
-  { d: "float", a: "float", b: "float", w: "float", return: "float" }
-);
 
 // --- ground-detail private helpers ---------------------------------------------
 
@@ -303,6 +269,28 @@ function gdField(c: V4, f: V2, mpt: V2): V3 {
   return vec3(v, gu, gv.negate());
 }
 
+/** Corner `k` of the 4×4 block: the 3×3 mean of `m` round it. */
+const blockCorner = (m: F[], k: number): F => {
+  const cx = 1 + (k & 1);
+  const cy = 1 + (k >> 1);
+  let sum: F = float(0);
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      sum = sum.add(m[(cy + dy) * 4 + cx + dx]);
+    }
+  }
+  return sum.div(9);
+};
+
+/** The four corners of the 4×4 block as one vec4. */
+const blockCorners = (m: F[]): V4 =>
+  vec4(
+    blockCorner(m, 0),
+    blockCorner(m, 1),
+    blockCorner(m, 2),
+    blockCorner(m, 3)
+  );
+
 /**
  * The same field over a 4×4 texel block, each corner the 3×3 mean around
  * it before the bilinear step: a box-smoothed class edge, whose isoline
@@ -318,29 +306,16 @@ function gdSmooth(
 ): { lawn: V3; road: V3 } {
   const road: F[] = [];
   const lawn: F[] = [];
-  for (let y = 0; y < 4; y++) {
-    for (let x = 0; x < 4; x++) {
+  for (let y = 0; y < 4; y += 1) {
+    for (let x = 0; x < 4; x += 1) {
       const c = classAt(inp, i.add(ivec2(x - 1, y - 1)), size).toVar();
       road.push(isClass(c, ROAD_CLASS));
       lawn.push(isLawn(c));
     }
   }
-  const corner = (m: F[], k: number): F => {
-    const cx = 1 + (k & 1);
-    const cy = 1 + (k >> 1);
-    let sum: F = float(0);
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        sum = sum.add(m[(cy + dy) * 4 + cx + dx]);
-      }
-    }
-    return sum.div(9);
-  };
-  const corners = (m: F[]): V4 =>
-    vec4(corner(m, 0), corner(m, 1), corner(m, 2), corner(m, 3));
   return {
-    road: gdField(corners(road), f, mpt),
-    lawn: gdField(corners(lawn), f, mpt),
+    road: gdField(blockCorners(road), f, mpt),
+    lawn: gdField(blockCorners(lawn), f, mpt),
   };
 }
 
@@ -365,7 +340,7 @@ function gdJoint(q: V2, size: V2, jw: number, w: F): F {
 // --- the fields ----------------------------------------------------------------
 
 /** The baked, smoothed distance fields (edges.py): signed metres. */
-const edgeAt = (edges: Tex, uv: V2): V2 =>
+export const edgeAt = (edges: Tex, uv: V2): V2 =>
   texture(edges, uv).level(float(0)).rg.mul(255).sub(128).div(EDGE_SCALE);
 
 /** The baked distances: valid out to ±6 m, straight along a diagonal kerb,
@@ -445,6 +420,81 @@ function pavingFields(inp: GroundInputs, surface: Tex, g: GroundFields) {
   });
 }
 
+/** The walk kind of a paving-raster texel (`pavingFields`' bits 3–5). */
+const walkOf = (s: V4): I => int(byteOf(s.r)).shiftRight(3).bitAnd(7);
+
+const sealedShare = (k: I): F =>
+  select(or(k.equal(id("asphalt")), k.equal(id("concrete"))), 1, 0);
+const sandShare = (k: I): F => select(k.equal(id("unpaved")), 1, 0);
+const anyShare = (k: I): F => select(k.greaterThan(0), 1, 0);
+const concreteShare = (k: I): F => select(k.equal(id("concrete")), 1, 0);
+
+/**
+ * The walk kinds' shares round the fragment (`GroundFields.sealedW`,
+ * `sandW`, `walkW`): the 4×4 paving texels round it under a cubic
+ * B-spline, cut at one half, near the camera; the fragment's own texel
+ * beyond. The raster is a metre a texel
+ * and a path is often two of them at a slant, its texels' kinds mixed
+ * where two ways or a way and a path default meet — read NEAREST, the
+ * grey of sealed ground and the sand of a path came out as blocks, and
+ * read bilinear as teeth along a slanted edge.
+ */
+function walkShares(inp: GroundInputs, surface: Tex, g: GroundFields): void {
+  g.sealedW.assign(sealedShare(g.walkKind));
+  g.concreteW.assign(concreteShare(g.walkKind));
+  g.sandW.assign(sandShare(g.walkKind));
+  g.walkW.assign(anyShare(g.walkKind));
+  If(inp.fw.lessThan(WALK_SHARE_FW), () => {
+    const size = texelSize(surface, inp.uv).toVar();
+    const p = inp.uv.mul(vec2(size)).sub(0.5).toVar();
+    const i = ivec2(floor(p)).toVar();
+    const f = p.sub(floor(p)).toVar();
+    // the 4×4 texels round the fragment under a cubic B-spline: a smooth
+    // field (bilinear, a slanted edge's stairs came out as teeth) ...
+    const wx = bspline(f.x).toVar();
+    const wy = bspline(f.y).toVar();
+    const ax = [wx.x, wx.y, wx.z, wx.w];
+    const ay = [wy.x, wy.y, wy.z, wy.w];
+    const s = float(0).toVar();
+    const u = float(0).toVar();
+    const a = float(0).toVar();
+    const c = float(0).toVar();
+    for (let y = -1; y <= 2; y += 1) {
+      for (let x = -1; x <= 2; x += 1) {
+        const k = walkOf(texelAt(surface, i.add(ivec2(x, y)), size)).toVar();
+        const wgt = ax[x + 1].mul(ay[y + 1]);
+        s.addAssign(sealedShare(k).mul(wgt));
+        u.addAssign(sandShare(k).mul(wgt));
+        a.addAssign(anyShare(k).mul(wgt));
+        c.addAssign(concreteShare(k).mul(wgt));
+      }
+    }
+    // ... cut on its half-way line, soft over a pixel or a few centimetres
+    const slope = vec2(size).x.div(inp.size[0]).mul(BSPLINE_STEP_SLOPE);
+    const soft = max(inp.fw.mul(0.75), float(WALK_EDGE_M)).mul(slope).toVar();
+    // faded into the own texel's answer over the last third, no ring
+    const near = float(1)
+      .sub(smoothstep(WALK_SHARE_FW * 0.65, WALK_SHARE_FW, inp.fw))
+      .toVar();
+    const cut = (v: F, own: F): F =>
+      mix(own, smoothstep(float(0.5).sub(soft), soft.add(0.5), v), near);
+    g.sealedW.assign(cut(s, g.sealedW));
+    g.sandW.assign(cut(u, g.sandW));
+    g.walkW.assign(cut(a, g.walkW));
+    // the concrete's part of the sealed texels, unsharpened: a tone
+    g.concreteW.assign(
+      mix(g.concreteW, c.div(max(s, 1e-3)).min(1), near.mul(step(1e-3, s)))
+    );
+  });
+}
+
+/** How soft a walk surface's edge is (m), where the pixel is finer. */
+const WALK_EDGE_M = 0.12;
+
+/** The walk kinds' shares are read smoothed out to this many metres a
+ *  pixel: a texel is a metre, so past it the pixel spans them anyway. */
+const WALK_SHARE_FW = 1;
+
 /**
  * The kerb band only round a baked kerb line: the share of the four
  * road-markings texels round the fragment that carry the kerb bit
@@ -475,6 +525,246 @@ function kerbLines(inp: GroundInputs, g: GroundFields, raster: Tex): void {
     );
   });
 }
+
+/** The class's palette colour (linear), as the splat paints it (the
+ *  splat's own conversion, landcover-splat.ts). */
+const PALETTE_LINEAR = LANDCOVER_CLASSES.map((_, k) =>
+  linearPalette().slice(k * 3, k * 3 + 3)
+);
+export const paletteOf = (c: I): V3 => {
+  let out: V3 = vec3(...(PALETTE_LINEAR[0] as [number, number, number]));
+  for (let k = 1; k < PALETTE_LINEAR.length; k += 1) {
+    out = select(
+      c.equal(k),
+      vec3(...(PALETTE_LINEAR[k] as [number, number, number])),
+      out
+    );
+  }
+  return out;
+};
+
+/** The cubic B-spline weights' slopes at `t` (d/dt, taps −1, 0, 1, 2). */
+const bsplineSlope = (t: F): V4 => {
+  const t2 = t.mul(t);
+  const u = float(1).sub(t);
+  return vec4(
+    u.mul(u).negate(),
+    t2.mul(3).sub(t.mul(4)),
+    t2.mul(-3).add(t.mul(2)).add(1),
+    t2
+  ).div(2);
+};
+
+/** The cubic B-spline's four weights at `t` (taps −1, 0, 1, 2). */
+const bspline = (t: F): V4 => {
+  const t2 = t.mul(t);
+  const t3 = t2.mul(t);
+  const u = float(1).sub(t);
+  return vec4(
+    u.mul(u).mul(u),
+    t3.mul(3).sub(t2.mul(6)).add(4),
+    t3.mul(-3).add(t2.mul(3)).add(t.mul(3)).add(1),
+    t3
+  ).div(6);
+};
+
+/**
+ * A texture read through a cubic B-spline at mip `level` (four bilinear
+ * taps: Sigg and Hadwiger, GPU Gems 2 ch. 20): a smooth field where the
+ * bilinear read has a crease at every texel, which a raster coarser than
+ * the pixels it covers shows as squares. `size` is the texture's level-0
+ * size.
+ */
+export function bsplineSample(t: Tex, uv: V2, size: I2, level: number): V4 {
+  // a mip's size is floored (a 250 px raster's mip 2 is 62 px, not 62.5)
+  const texels = max(floor(vec2(size).div(2 ** level)), vec2(1)).toVar();
+  const p = uv.mul(texels).sub(0.5).toVar();
+  const i = floor(p).toVar();
+  const f = p.sub(i).toVar();
+  const wx = bspline(f.x).toVar();
+  const wy = bspline(f.y).toVar();
+  const g0 = vec2(wx.x.add(wx.y), wy.x.add(wy.y)).toVar();
+  const g1 = vec2(wx.z.add(wx.w), wy.z.add(wy.w)).toVar();
+  const h0 = i
+    .sub(0.5)
+    .add(vec2(wx.y.div(g0.x), wy.y.div(g0.y)))
+    .div(texels)
+    .toVar();
+  const h1 = i
+    .add(1.5)
+    .add(vec2(wx.w.div(g1.x), wy.w.div(g1.y)))
+    .div(texels)
+    .toVar();
+  const at = (x: V2): V4 => texture(t, x).level(float(level));
+  return at(vec2(h0.x, h0.y))
+    .mul(g0.x.mul(g0.y))
+    .add(at(vec2(h1.x, h0.y)).mul(g1.x.mul(g0.y)))
+    .add(at(vec2(h0.x, h1.y)).mul(g0.x.mul(g1.y)))
+    .add(at(vec2(h1.x, h1.y)).mul(g1.x.mul(g1.y)));
+}
+
+/** Paths are drawn smooth out to this many metres a pixel (faded over
+ *  the last third). */
+const PATH_NEAR_FW = 1.2;
+/** The path's iso line on its smoothed coverage (a hair under the half a
+ *  straight edge gives, so a narrow path keeps its width), how far the
+ *  worn edge wanders and how soft it frays (m). */
+const PATH_ISO = 0.45;
+const PATH_WANDER_M = 0.12;
+const PATH_FADE_M = 0.25;
+/** How far the lawn beside a path reaches past the baked lawn line, up
+ *  to the path's smooth edge (m). */
+const PATH_LAWN_REACH_M = 1.2;
+/** A B-spline-smoothed step's slope at the step: two thirds a texel. */
+const BSPLINE_STEP_SLOPE = 2 / 3;
+
+/**
+ * Paths with a smooth, worn edge near the camera. The splat paints a
+ * 1 m (a phone's 2 m) colour texel, the mean of the class texels under
+ * it, and the ground reads it bilinear: a narrow path running at a slant
+ * (a forest path; a park path two texels wide) came out as a mosaic of
+ * diamonds and teeth. Here, where the class texels round the fragment
+ * hold a path, their path coverage is weighted by a cubic B-spline, the
+ * edge cut on that smooth field's iso line — wandering a little by a
+ * world-space noise and fraying over a few decimetres, as a trodden path
+ * does into the ground beside it — and the palette colours of the path
+ * and of the ground beside it (the nearest class texel that is not path)
+ * painted across it. Farther out, where a texel is under a pixel's
+ * footprint, the splat takes over again. Returns the colour, the path's
+ * weight (the sand, the slabs and the urban green follow it) and the
+ * class beside it. The colour splat's alpha (water) is not touched.
+ */
+export function smoothPaths(
+  inp: GroundInputs,
+  splat: V3
+): { col: V3; path: F; side: I; near: F; toward: V2 } {
+  const col = splat.toVar();
+  const toward = vec2(0).toVar();
+  const path = select(inp.cls.equal(PATH_CLASS), float(1), float(0)).toVar();
+  const side = int(inp.cls).toVar();
+  const by = float(0).toVar();
+  const near = float(1)
+    .sub(smoothstep(PATH_NEAR_FW * 0.65, PATH_NEAR_FW, inp.fw))
+    .toVar();
+  If(near.greaterThan(0), () => {
+    const size = texelSize(inp.classTexture, inp.uv).toVar();
+    const p = inp.uv.mul(vec2(size)).sub(0.5).toVar();
+    const i = ivec2(floor(p)).toVar();
+    const f = p.sub(floor(p)).toVar();
+    // a path within a metre or so, and the ground beside it: the nearest
+    // of the four central texels that is not path, else any in the 4×4;
+    // and the path's coverage: its class texels in the 4×4 round the
+    // fragment, weighted by a cubic B-spline — a C2-smooth field at the
+    // class raster's own resolution, whatever the colour splat's
+    const wx = bspline(f.x).toVar();
+    const wy = bspline(f.y).toVar();
+    const ax = [wx.x, wx.y, wx.z, wx.w];
+    const ay = [wy.x, wy.y, wy.z, wy.w];
+    const dx = bsplineSlope(f.x).toVar();
+    const dy = bsplineSlope(f.y).toVar();
+    const bx = [dx.x, dx.y, dx.z, dx.w];
+    const by_ = [dy.x, dy.y, dy.z, dy.w];
+    const any = float(0).toVar();
+    const cover = float(0).toVar();
+    const grad = vec2(0).toVar();
+    const outer = int(PATH_CLASS).toVar();
+    const central: I[] = [];
+    for (let y = -1; y <= 2; y += 1) {
+      for (let x = -1; x <= 2; x += 1) {
+        const c = classAt(inp, i.add(ivec2(x, y)), size).toVar();
+        if (x >= 0 && x <= 1 && y >= 0 && y <= 1) {
+          central.push(c);
+        }
+        const on = isClass(c, PATH_CLASS);
+        any.assign(max(any, on));
+        cover.addAssign(on.mul(ax[x + 1].mul(ay[y + 1])));
+        grad.addAssign(
+          on.mul(vec2(bx[x + 1].mul(ay[y + 1]), ax[x + 1].mul(by_[y + 1])))
+        );
+        outer.assign(select(c.notEqual(PATH_CLASS), c, outer));
+      }
+    }
+    // the four central texels, the fragment's nearest first
+    const [k00, k10, k01, k11] = central as [I, I, I, I];
+    const left = f.x.lessThan(0.5);
+    const low = f.y.lessThan(0.5);
+    const at = (onLeft: B, onLow: B): I =>
+      select(onLeft, select(onLow, k00, k01), select(onLow, k10, k11));
+    const c0 = at(left, low).toVar();
+    const c1 = at(left.not(), low).toVar();
+    const c2 = at(left, low.not()).toVar();
+    const c3 = at(left.not(), low.not()).toVar();
+    const other = select(
+      c0.notEqual(PATH_CLASS),
+      c0,
+      select(
+        c1.notEqual(PATH_CLASS),
+        c1,
+        select(
+          c2.notEqual(PATH_CLASS),
+          c2,
+          select(c3.notEqual(PATH_CLASS), c3, outer)
+        )
+      )
+    ).toVar();
+    // a path's own middle (no other class round it) needs nothing
+    If(and(any.greaterThan(0.5), other.notEqual(PATH_CLASS)), () => {
+      const pathCol = paletteOf(int(PATH_CLASS)).toVar();
+      const otherCol = paletteOf(other).toVar();
+      // coverage per metre across an edge: the class texel's size (half a
+      // metre, a phone's metre) turns the metres below into coverage
+      const slope = vec2(size).x.div(inp.size[0]).mul(BSPLINE_STEP_SLOPE);
+      const wander = gdNoise(inp.xy.mul(0.45))
+        .sub(0.5)
+        .mul(0.75)
+        .add(gdNoise(inp.xy.mul(2.1).add(31)).sub(0.5).mul(0.25))
+        .mul(slope.mul(PATH_WANDER_M * 2));
+      // the coverage a pixel spans, and the worn edge's own width
+      const fade = max(inp.fw.mul(0.75), float(PATH_FADE_M)).mul(slope);
+      const m = smoothstep(
+        float(PATH_ISO).sub(fade),
+        float(PATH_ISO).add(fade),
+        cover.add(wander)
+      ).toVar();
+      // the palette's colours near the path only: farther out the splat's
+      // own blend of the classes beside it comes back, smoothly, so the
+      // window's end draws no seam
+      const own = smoothstep(0, 0.2, cover);
+      col.assign(mix(col, mix(otherCol, pathCol, m), near.mul(own)));
+      path.assign(mix(path, m, near.mul(own)));
+      side.assign(other);
+      // how near the path is, as smooth as its coverage: a hard 1 inside
+      // the 4×4 notched the lawn line where the window ends
+      by.assign(near.mul(smoothstep(0, 0.04, cover)));
+      // (the raster's rows run south)
+      // unit at an edge, shrinking to nothing where the coverage is flat
+      // (a narrow path's middle): no way to the path there
+      const way = vec2(grad.x, grad.y.negate());
+      toward.assign(way.div(max(length(way), 0.05)));
+    });
+  });
+  return { col, path, side, near: by, toward };
+}
+
+/** 1 on the ground a walk kind paints (`pavingKind`: built-up, path,
+ *  unclassified land), and along a path's smooth edge (`smoothPaths`) —
+ *  a walk's buffer burned over a meadow or a wood leaves it as it is. */
+const walkGround = (inp: GroundInputs, col: GroundColour): F => {
+  const cls = int(inp.cls);
+  return max(
+    select(
+      or(cls.equal(BUILTUP_CLASS), cls.equal(PATH_CLASS), cls.equal(0)),
+      float(1),
+      float(0)
+    ),
+    col.path
+  );
+};
+
+/** A weight that only a class default answers to: 0 where the paving
+ *  raster names the surface. */
+const byClass = (g: GroundFields, w: F): F =>
+  select(g.walkKind.greaterThan(0), float(0), w);
 
 /** The paving kind: the raster's, else the class's default. */
 function pavingKind(g: GroundFields, cls: I): void {
@@ -544,6 +834,10 @@ export function groundFields(
     alongM: float(0).toVar(),
     onRoad: bool(false),
     kind: int(0),
+    sealedW: float(0).toVar(),
+    concreteW: float(0).toVar(),
+    sandW: float(0).toVar(),
+    walkW: float(0).toVar(),
     w: float(0),
     near: float(0),
     mid: float(0),
@@ -565,6 +859,7 @@ export function groundFields(
   }
   if (surface) {
     pavingFields(inp, surface, g);
+    walkShares(inp, surface, g);
   }
   const cls = int(inp.cls).toVar();
   g.onRoad = g.dr.greaterThan(0).toVar();
@@ -582,6 +877,9 @@ export function groundFields(
     .toVar(); // stones, joints
   return g;
 }
+
+/** Whether a class is built-up land (or none). */
+const isBuiltUp = (c: I) => or(c.equal(BUILTUP_CLASS), c.equal(0));
 
 /**
  * Urban green: built-up or unclassified ground that is green — courtyards,
@@ -601,7 +899,13 @@ export function urbanGreen(
   ndvi?: Tex
 ): F {
   const cls = int(inp.cls);
-  const built = select(or(cls.equal(BUILTUP_CLASS), cls.equal(0)), 1, 0);
+  // a path in built-up land counts as the land beside it, its own share
+  // taken out along its smooth edge (`smoothPaths`) — not texel by texel
+  const built = select(
+    or(isBuiltUp(cls), and(cls.equal(PATH_CLASS), isBuiltUp(col.pathSide))),
+    float(1),
+    float(0)
+  ).mul(float(1).sub(col.path));
   let mask: F = float(0);
   if (g.hasEdge) {
     // edges.py's meadow also holds the green railway land off the tracks
@@ -611,7 +915,17 @@ export function urbanGreen(
       1,
       built
     );
-    mask = smoothstep(-0.15, 0.15, g.dl).mul(ground);
+    // beside a path the lawn reaches on to the path's own smooth edge:
+    // the baked lawn line keeps a texel off the path's stairs, which left
+    // a bare band between the two — on the lawn's side only (out of the
+    // lawn is toward the path), never across the path onto the paving
+    // beyond it
+    const lawnSide = smoothstep(0.05, 0.3, dot(g.outOfLawn, col.pathToward));
+    mask = smoothstep(
+      -0.15,
+      0.15,
+      g.dl.add(col.pathNear.mul(lawnSide).mul(PATH_LAWN_REACH_M))
+    ).mul(ground);
   } else if (ndvi) {
     const paved = and(
       g.walkKind.greaterThan(0),
@@ -731,7 +1045,7 @@ function paving(
     );
   })
     .ElseIf(g.kind.equal(id("concrete")), () => {
-      const size = vec2(5.5, 3.0);
+      const size = vec2(5.5, 3);
       const j = gdJoint(q, size, 0.015, g.w);
       const h = gdHash(floor(q.div(size).add(0.5)));
       c.mulAssign(
@@ -743,6 +1057,9 @@ function paving(
       );
     })
     .ElseIf(g.kind.equal(id("paving")), () => {
+      // a sanded path the class alone names takes the slabs' place along
+      // its smooth edge (`smoothPaths`), not along the class texels' stairs
+      const w = pave.mul(float(1).sub(byClass(g, col.path))).toVar();
       const size = vec2(0.5, 0.35);
       const row = floor(q.y.div(0.35).add(0.5));
       const qb = q.add(vec2(fract(row.mul(0.5)).mul(0.5), 0)).toVar(); // running bond
@@ -753,9 +1070,9 @@ function paving(
           .sub(0.5)
           .mul(0.04)
           .mul(g.fine)
-          .mul(pave)
+          .mul(w)
           .add(1)
-          .mul(float(1).sub(j.mul(0.09).mul(g.fine).mul(pave)))
+          .mul(float(1).sub(j.mul(0.09).mul(g.fine).mul(w)))
       );
     })
     .ElseIf(g.kind.equal(id("sett")), () => {
@@ -772,16 +1089,6 @@ function paving(
         )
       );
     })
-    .ElseIf(g.kind.equal(id("unpaved")), () => {
-      const n = gdNoise(xy.mul(3.1))
-        .mul(0.5)
-        .add(gdNoise(xy.mul(0.7)).mul(0.5));
-      c.mulAssign(
-        mix(vec3(1), vec3(1.03, 1.0, 0.92), pave).mul(
-          n.sub(0.5).mul(0.1).mul(g.mid).mul(pave).add(1)
-        )
-      );
-    })
     .ElseIf(g.kind.equal(id("grass")), () => {
       const size = vec2(0.55, 0.4);
       const cell = q.div(size).toVar();
@@ -790,6 +1097,36 @@ function paving(
       const green = mix(float(0.3), hole.mul(0.8), g.fine);
       c.assign(mix(c, inp.meadowColor, green.mul(pave)));
     });
+  // A sanded path: the raster's own (weight 1), else the class's — which
+  // follows the smooth edge `smoothPaths` cut, across the class texels
+  // beside it too, so no tooth of the stairs shows.
+  // On the carriageway: an unpaved road (its own kind, whole).
+  const walk = walkGround(inp, col);
+  const sand = select(
+    g.onRoad,
+    select(g.kind.equal(id("unpaved")), float(1), float(0)),
+    // (the class's sand only well off a named walk: at the raster's
+    // smoothed edge, half named, the path's rim is the walk's own)
+    clamp(
+      g.sandW
+        .mul(walk)
+        .add(col.path.mul(float(1).sub(smoothstep(0, 0.5, g.walkW)))),
+      0,
+      1
+    )
+  )
+    .mul(pave)
+    .toVar();
+  If(sand.greaterThan(0), () => {
+    const n = gdNoise(xy.mul(3.1))
+      .mul(0.5)
+      .add(gdNoise(xy.mul(0.7)).mul(0.5));
+    c.mulAssign(
+      mix(vec3(1), vec3(1.03, 1, 0.92), sand).mul(
+        n.sub(0.5).mul(0.1).mul(g.mid).mul(sand).add(1)
+      )
+    );
+  });
 }
 
 /** A painted line's half-width (m). */
@@ -904,13 +1241,28 @@ export function groundDetail(
   const pave = GROUND_DETAIL.mul(float(1).sub(ugW)).toVar();
   // Sealed ground off the carriageway (a car park, an asphalt path, a
   // concreted yard) takes on the road's grey, so it reads from afar too.
-  const sealed = or(g.kind.equal(id("asphalt")), g.kind.equal(id("concrete")));
-  If(and(g.onRoad.not(), g.walkKind.greaterThan(0), sealed), () => {
-    const tone = select(g.kind.equal(id("concrete")), 1.08, 1.0);
+  // Its share of the texels round the fragment, so a sealed path's edge
+  // (and a sealed texel among a path's sanded ones) fades, not steps.
+  const sealedW = g.sealedW.mul(walkGround(inp, col)).toVar();
+  If(and(g.onRoad.not(), sealedW.greaterThan(0)), () => {
+    const tone = mix(float(1), float(1.08), g.concreteW);
     col.baseCol.assign(
-      mix(col.baseCol, inp.roadColor.mul(tone), pave.mul(0.6))
+      mix(col.baseCol, inp.roadColor.mul(tone), pave.mul(0.6).mul(sealedW))
     );
   });
+  // A path's stray class texel off its smooth edge is paved as the ground
+  // beside it, so the slabs run on unbroken under the path's edge.
+  If(
+    and(
+      g.walkKind.equal(0),
+      g.onRoad.not(),
+      int(inp.cls).equal(PATH_CLASS),
+      col.pathSide.equal(BUILTUP_CLASS)
+    ),
+    () => {
+      g.kind.assign(id("paving"));
+    }
+  );
   paving(inp, col, g, q, pave);
   parking(inp, col, g, q);
 }

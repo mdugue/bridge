@@ -8,8 +8,8 @@ import {
   parseSiteStats,
   quantile,
   SITE_ORDERINGS,
-  type SiteStats,
 } from "./site-stats";
+import type { SiteStats } from "./site-stats";
 import type { CityJsonDocument } from "./types";
 
 const stats = (over: Partial<SiteStats>): SiteStats => ({

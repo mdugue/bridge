@@ -1,6 +1,8 @@
 # Plan 077: One rasters module — a tile's rasters loaded, shared and weighed behind one interface, their files named by the artifact table
 
-**Status:** TODO
+**Status:** BUILT (2026-11-05) — steps 0–6 (step 4 option (a) only).
+Open: a phone's memory on a device, then condense. The README row has the
+numbers and the deviations.
 
 > **Executor instructions**: Follow this plan step by step. Each step
 > ships on its own; run its verification before the next. If anything in
@@ -654,19 +656,19 @@ probe line; `git status --short` shows only in-scope files.
 
 ## Done criteria
 
-- [ ] `lib/city/tile.ts` has a `cultivatedLow` row and a `terrain` column;
+- [x] `lib/city/tile.ts` has a `cultivatedLow` row and a `terrain` column;
       `grep -n 'TileArtifactKind | "cultivatedLow"' scripts/prepare-data.ts` → no match
-- [ ] `grep -n "paintAndLight" scripts/prepare-data.ts` → no match
-- [ ] `public/data/dresden/` byte-identical to the base's
-- [ ] `app/_components/tile-rasters.ts` exports `createTileRasters`,
+- [x] `grep -n "paintAndLight" scripts/prepare-data.ts` → no match
+- [x] `public/data/dresden/` byte-identical to the base's
+- [x] `app/_components/tile-rasters.ts` exports `createTileRasters`,
       `RasterKind`, `TileRasters`, `RasterHold`
-- [ ] `grep -cn "createSharedRasters" app/_components/tile-stream.ts` → 0;
+- [x] `grep -cn "createSharedRasters" app/_components/tile-stream.ts` → 0;
       `grep -n "RasterShares" app/_components/tile-stream.ts` → no match
-- [ ] `grep -n "loadNdviTexture\|loadSurfaceTexture\|loadEdgesTexture\|loadColonyTexture\|loadSplatTexture\|loadSkyViewTexture\|loadLightRaster\|loadOptionalRaster" app/_components/*.ts` → no match
-- [ ] `bun test app/_components/tile-rasters.test.ts` → ≥ 9 pass
-- [ ] the probe's lite runs equal the base's (requests, graph keys, bytes)
-- [ ] `bun run verify` exits 0; the e2e passes
-- [ ] docs updated; `docs/plans/README.md` row for 077 updated
+- [x] `grep -n "loadNdviTexture\|loadSurfaceTexture\|loadEdgesTexture\|loadColonyTexture\|loadSplatTexture\|loadSkyViewTexture\|loadLightRaster\|loadOptionalRaster" app/_components/*.ts` → no match
+- [x] `bun test app/_components/tile-rasters.test.ts` → ≥ 9 pass
+- [x] the probe's lite runs equal the base's (requests, graph keys, bytes)
+- [x] `bun run verify` exits 0; the e2e passes
+- [x] docs updated; `docs/plans/README.md` row for 077 updated
 
 ## STOP conditions
 

@@ -15,7 +15,8 @@ import type {
 } from "../../lib/city/features";
 import { AxisIndex, clearOfTracks } from "../../lib/city/platform-clearance";
 import type { Passage } from "../../lib/city/passages";
-import { BED_SIDE_M, type Bed } from "../../lib/city/track-beds";
+import { BED_SIDE_M } from "../../lib/city/track-beds";
+import type { Bed } from "../../lib/city/track-beds";
 import type { DeckPoly } from "../../lib/city/decks";
 import type { LevelLine } from "../../lib/city/levels";
 import { tileExtentOf } from "../../lib/city/site";
@@ -23,7 +24,6 @@ import { sideFileSource } from "../../lib/city/tile";
 import { BAKE_ENTRIES } from "../bake-entries";
 import {
   levelInputs,
-  type SiteLevels,
   siteBeds,
   siteLineLevels,
   sitePassages,
@@ -32,6 +32,7 @@ import {
   siteDecks,
   underDecks,
 } from "../line-levels";
+import type { SiteLevels } from "../line-levels";
 import {
   SITE,
   TILES,
@@ -50,13 +51,13 @@ import {
  *  every tile's DGM (scripts/line-levels.ts): each tile's file publishes
  *  with them. */
 const levelsStarted = performance.now();
-const lineLevels = parse<SiteLevels>(
+const lineLevels = parse(
   await cached(
     `line-levels-${SITE.id}.json`,
     cacheKey(levelInputs(SITE), BAKE_ENTRIES.lineLevels),
     async () => utf8(await siteLineLevels(SITE))
   )
-);
+) as SiteLevels;
 log(`line levels: ${since(levelsStarted)} ms`);
 
 /** The passages the lines open through the fill under the decks
@@ -165,7 +166,7 @@ export function publishLevels(
   if (line === "tram" && Object.keys(solved).length === 0) {
     return publish(file, readFileSync(src));
   }
-  const doc = readJson<FeatureCollection<RailFeature | TramFeature>>(src);
+  const doc = readJson(src) as FeatureCollection<RailFeature | TramFeature>;
   // the rail lines as the levels were solved on (a DLM line's stretches
   // over a platform dropped, line-levels.ts `railFeatures`)
   const lines =
@@ -185,25 +186,39 @@ let trackAxes: AxisIndex | undefined;
  * beside the Basis-DLM's tracks stood over a rail where the two lie a
  * metre apart.
  */
-export function publishPlatforms(file: string): string {
+export async function publishPlatforms(file: string): Promise<string> {
   const src = at(sideFileSource(SITE, file));
+  // (the tracks' files and the DGMs their levels were solved on: every
+  // input of the axes; hashed once a run)
+  const key = cacheKey([src, ...levelInputs(SITE)], BAKE_ENTRIES.platforms);
+  return publish(
+    file,
+    await cached(file, key, () => utf8(clearPlatforms(file, src)))
+  );
+}
+
+function clearPlatforms(
+  file: string,
+  src: string
+): FeatureCollection<AreaFeature> {
   trackAxes ??= new AxisIndex(siteTrackAxes(SITE, lineLevels));
-  const doc = readJson<FeatureCollection<AreaFeature>>(src);
+  const axes = trackAxes;
+  const doc = readJson(src) as FeatureCollection<AreaFeature>;
   let cut = 0;
   const features = (doc.features ?? []).flatMap((f): AreaFeature[] => {
     const g = f.geometry;
     if (g?.type !== "Polygon" && g?.type !== "MultiPolygon") {
       return [f];
     }
-    const clear = clearOfTracks(g, trackAxes as AxisIndex);
+    const clear = clearOfTracks(g, axes);
     if (clear === g) {
       return [f];
     }
-    cut++;
+    cut += 1;
     return clear ? [{ ...f, geometry: clear }] : [];
   });
   if (cut > 0) {
     log(`${file}: ${cut} platforms cut back from the tracks`);
   }
-  return publish(file, utf8({ ...doc, features }));
+  return { ...doc, features };
 }

@@ -1,9 +1,9 @@
+import type { Mesh } from "three/webgpu";
 import {
   Color,
   CylinderGeometry,
   Group,
   Matrix4,
-  Mesh,
   MeshStandardNodeMaterial,
 } from "three/webgpu";
 import type {
@@ -14,7 +14,8 @@ import type {
 } from "@/lib/city/features";
 import type { DeckPoly } from "@/lib/city/decks";
 import { LEVEL_STEP } from "@/lib/city/levels";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
 import { LANDCOVER_CLASSES, MEADOW_CLASS } from "@/lib/city/landcover";
 import type { Point2 } from "@/lib/city/polyline";
 import { subdividePolyline } from "@/lib/city/polyline";
@@ -31,26 +32,17 @@ import {
   wireStations,
 } from "@/lib/city/tram";
 import { buildFurniture } from "./furniture-layer";
-import { finished, type Steps } from "@/lib/city/build-steps";
+import { finished } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import { Instances, instancePosition } from "./instancing";
-import {
-  addRibbon,
-  type Mesh3,
-  meshSteps,
-  mesh3,
-  type Pt,
-  quad,
-} from "./mesh-kit";
-import {
-  addRail,
-  buildDeckTable,
-  addSpanDeck,
-  COLORS,
-  lineLevelsAt,
-  spanRuns,
-} from "./rail-layer";
-import { sceneMaterial } from "./three-utils";
-import { addWire, wireMesh, wires, type Wires } from "./wire-ribbons";
+import { addRibbon, COLORS, meshSteps, mesh3, quad } from "./mesh-kit";
+import type { Mesh3, Pt } from "./mesh-kit";
+import { buildDeckTable } from "./bridge-deck";
+import { addSpanDeck, spanRuns } from "./bridge-layer";
+import { addRail, lineLevelsAt } from "./rail-layer";
+import { markThinCaster, sceneMaterial } from "./three-utils";
+import { addWire, wireMesh, wires } from "./wire-ribbons";
+import type { Wires } from "./wire-ribbons";
 
 /**
  * Trams (pipeline/bake/tram.py, OSM, ODbL): the tracks in their bed and the
@@ -163,7 +155,8 @@ function trackRuns(
   let run: TrackRun = { d: [], pts: [] };
   let d = 0;
   const drawn: (Pt | null)[] = [];
-  dense.forEach((p, i) => {
+  for (let i = 0; i < dense.length; i += 1) {
+    const p = dense[i];
     if (i > 0) {
       d += Math.hypot(p[0] - dense[i - 1][0], p[1] - dense[i - 1][1]);
     }
@@ -174,7 +167,7 @@ function trackRuns(
         runs.push(run);
       }
       run = { d: [], pts: [] };
-      return;
+      continue;
     }
     const w = epsgToWorld(p[0], p[1], ctx.offset);
     const top =
@@ -185,7 +178,7 @@ function trackRuns(
     drawn.push(pt);
     run.pts.push(pt);
     run.d.push(d);
-  });
+  }
   if (run.pts.length >= 2) {
     runs.push(run);
   }
@@ -258,8 +251,9 @@ const cellKey = (x: number, z: number) =>
 
 function segmentGrid(runs: TrackRun[]): SegmentGrid {
   const grid: SegmentGrid = new Map();
-  runs.forEach((run, r) => {
-    for (let i = 1; i < run.pts.length; i++) {
+  for (let r = 0; r < runs.length; r += 1) {
+    const run = runs[r];
+    for (let i = 1; i < run.pts.length; i += 1) {
       const a = run.pts[i - 1];
       const b = run.pts[i];
       const keys = new Set([cellKey(a.x, a.z), cellKey(b.x, b.z)]);
@@ -269,7 +263,7 @@ function segmentGrid(runs: TrackRun[]): SegmentGrid {
         grid.set(key, list);
       }
     }
-  });
+  }
   return grid;
 }
 
@@ -283,8 +277,8 @@ function nearestOther(
   let best: { d: number; x: number; z: number } | null = null;
   const cx = Math.floor(p.x / CELL_M);
   const cz = Math.floor(p.z / CELL_M);
-  for (let i = -1; i <= 1; i++) {
-    for (let j = -1; j <= 1; j++) {
+  for (let i = -1; i <= 1; i += 1) {
+    for (let j = -1; j <= 1; j += 1) {
       for (const [a, b, r] of grid.get(`${cx + i},${cz + j}`) ?? []) {
         if (r === self) {
           continue;
@@ -326,18 +320,19 @@ export function lawnHalves(runs: TrackRun[]): LawnHalves[] {
       sharedLeft: [],
       sharedRight: [],
     };
-    run.pts.forEach((p, i) => {
+    for (let i = 0; i < run.pts.length; i += 1) {
+      const p = run.pts[i];
       out.left.push(BED_HALF.grass);
       out.right.push(BED_HALF.grass);
       out.sharedLeft.push(false);
       out.sharedRight.push(false);
       const q = nearestOther(grid, p, r);
       if (!q || q.d < 0.5) {
-        return;
+        continue;
       }
       const side = (q.x - p.x) * n[i][0] + (q.z - p.z) * n[i][1];
       if (Math.abs(side) < LAWN_ACROSS * q.d) {
-        return;
+        continue;
       }
       const half = Math.max(q.d / 2 - LAWN_SEAM_M, 0);
       if (side >= 0) {
@@ -347,7 +342,7 @@ export function lawnHalves(runs: TrackRun[]): LawnHalves[] {
         out.right[i] = half;
         out.sharedRight[i] = true;
       }
-    });
+    }
     return out;
   });
 }
@@ -365,7 +360,7 @@ function addLawn(acc: Mesh3, pts: Pt[], halves: LawnHalves): void {
       pts[i].z + n[i][1] * w * sign,
     ];
   };
-  for (let i = 0; i < pts.length - 1; i++) {
+  for (let i = 0; i < pts.length - 1; i += 1) {
     const l0 = edge(i, 1);
     const l1 = edge(i + 1, 1);
     const r0 = edge(i, -1);
@@ -435,7 +430,11 @@ function addTrack(
 
 /** Where the contact wires are held (x, y projected; h wire height), so a
  *  hanger from a span ends exactly on its wire. */
-type WirePoint = { h: number; x: number; y: number };
+interface WirePoint {
+  h: number;
+  x: number;
+  y: number;
+}
 
 function addContactWire(
   w: Wires,
@@ -450,8 +449,7 @@ function addContactWire(
     z: p.z,
   }));
   addWire(w, wire, WIRE_HALF.contact);
-  for (let i = 0; i < wire.length; i++) {
-    const q = wire[i];
+  for (const q of wire) {
     held.push({
       x: q.x + ctx.offset.cx,
       y: ctx.offset.cy - q.z,
@@ -510,7 +508,7 @@ function addSpan(
   const hb = gb + anchor + lift;
   const n = 8;
   const pts: Pt[] = [];
-  for (let i = 0; i <= n; i++) {
+  for (let i = 0; i <= n; i += 1) {
     const t = i / n;
     pts.push(
       worldPt(
@@ -599,12 +597,13 @@ function buildMasts(masts: Point2[], ctx: GroundContext): Instances | null {
     return m;
   });
   const mesh = new Instances(geo, material, stood.length);
-  for (let i = 0; i < stood.length; i++) {
+  for (let i = 0; i < stood.length; i += 1) {
     mesh.setMatrixAt(i, stood[i]);
   }
   mesh.instanceMatrix.needsUpdate = true;
   mesh.computeBoundingSphere();
   mesh.castShadow = true;
+  markThinCaster(mesh, "slender");
   mesh.receiveShadow = true;
   mesh.name = "tram-masts";
   return mesh;
@@ -653,7 +652,7 @@ function* buildTracks(
       addTrack(acc, run, bed, f.properties?.g, halves.get(run));
     }
     let length = 0;
-    for (let i = 1; i < coords.length; i++) {
+    for (let i = 1; i < coords.length; i += 1) {
       length += Math.hypot(
         coords[i][0] - coords[i - 1][0],
         coords[i][1] - coords[i - 1][1]
@@ -665,16 +664,18 @@ function* buildTracks(
     }
     yield;
   }
-  const parts: [Mesh3, number, number][] = [
-    [acc.rail, TRAM_RAIL, -1],
-    [acc.streetRail, TRAM_RAIL, -2],
-    [acc.grass, MEADOW, -1],
-    [acc.ballast, COLORS.ballast, -1],
+  // the rails' steel catches the lamps by the track after dark
+  const parts: [Mesh3, number, number, boolean][] = [
+    [acc.rail, TRAM_RAIL, -1, true],
+    [acc.streetRail, TRAM_RAIL, -2, true],
+    [acc.grass, MEADOW, -1, false],
+    [acc.ballast, COLORS.ballast, -1, false],
   ];
   const meshes: Mesh[] = [];
-  for (const [part, color, offsetUnits] of parts) {
+  for (const [part, color, offsetUnits, glint] of parts) {
     const m = yield* meshSteps(part, color, {
       cast: false,
+      glint,
       offsetUnits,
       roughness: 0.9,
     });
@@ -727,7 +728,11 @@ export function buildTram(
   return finished(tramSteps(features, bridges, ctx));
 }
 
-/** `buildTram` in steps: per track (build-steps.ts). */
+/**
+ * `buildTram` in steps: per track (build-steps.ts).
+ *
+ * @yields {void} between tracks, so the caller can spread the build over frames
+ */
 export function* tramSteps(
   features: TramFeature[],
   bridges: BridgeFeature[],

@@ -227,11 +227,11 @@ tap: how far round it the question looked.
 Beyond the register's trees, the monuments and the bridges, every tree
 the canopy draws is asked now — the surface model's crowns, the laser
 scan's, the Basis-DLM rows' trees, placed as the layer places them and
-with the register's veto (`canopySets`, packed like the register's) —
+with the register's veto (`canopySetsSteps`, packed like the register's) —
 and the hedges (OSM's and the Basis-DLM's, one thing along the whole
 line), the street lamps, the street furniture and playgrounds, the tram
-stops and the landing stages (`lib/city/ask-more.ts`). Each card says
-what its data knows and no more (`lib/city/inquiry-more.ts`): a canopy
+stops and the landing stages (`lib/city/ask-items.ts`). Each card says
+what its data knows and no more (`lib/city/inquiry-features.ts`): a canopy
 tree its measured height and "Art: nicht bekannt", a lamp its post as
 assumed, a bench its length, backrest and facing. Crowns, hedges and a
 playground's outline are porous like the register's crowns: chosen only

@@ -1,0 +1,55 @@
+# ADR 0060: Glass fronts are read from street photos by an open image model, offline
+
+- **Status:** accepted
+- **Date:** 2026-11
+
+## Context
+
+A building draws as glass — the cool sheen, the sky in it, no drawn
+windows — only where OSM maps `building:material=glass`: a few dozen
+objects in Dresden. The Congress Center, a glass hall, is not tagged and drew a grid
+of punched windows. The street photos see such fronts, but nothing the
+facade profiles measure (facade_traits.py) tells a curtain wall from a
+wall with windows: the openings' share reads a stucco house as all
+openings, and the edge grid, the plaster's share and its colour overlap too. And the
+panoramas the profiles read are a car's: they rarely see a glass front set
+back behind a plaza or a forecourt; the ordinary photos people take there
+do.
+
+## Decision
+
+1. **An open image model reads glass**: CLIP (OpenAI's ViT-B/32, MIT, as
+   ONNX), comparing each rectified upper wall with "a glass facade" and "a
+   wall with windows". A wall is glass where most of several passes (one
+   photo each) that see enough of it say so with high confidence; an
+   object is glass where its glass walls make most of the length read and
+   enough of all its outer walls that one glazed stair tower or entrance
+   does not turn a stone house or a mall to glass; it is that object's
+   own, never passed from a Building to its parts. Never a rule for a
+   named building. The thresholds live in `windows.py` and
+   `lib/city/photo-glass.ts`, their reasons in docs/transformations.md.
+2. **Every camera is read for it**, panoramas and framed photos
+   (perspective, Brown, fisheye) alike, from further out than the facade
+   traits are read and with the wall in the frame. The other facade
+   traits stay the panoramas'.
+   A photo Mapillary never segmented is read too, on the wall the
+   geometry puts in it, where the model takes the crop for a facade rather
+   than sky, trees or a street.
+3. **The model runs only at fetch time**, in the pipeline (`onnxruntime`,
+   `tokenizers`): downloaded beside the raw data, pinned by commit and
+   SHA-256, never committed, never in the viewer. What reaches the bake is
+   one probability per photo and wall in the fetch cache.
+4. **The photos' glass is the material only where no source names one**
+   (OSM, Wikidata); the card says it was detected in street photos.
+
+## Consequences
+
+- A glass front draws as OSM's glass does, with no window grid on it;
+  the inquiry card names Mapillary as its source.
+- A fetch needs disk for the model and reads more photos per tile; the bake stays deterministic on the cached readings.
+- A changed prompt or model changes the readings: the fetch cache is
+  named by a hash of what a reading depends on (`reading_key`), and the
+  prompts' embeddings are keyed by their hash.
+- Rejected: the facade profiles' openings share, edge grids and colour
+  (they do not separate glass from stucco); a model run in the browser
+  (phone memory, ADR 0047).

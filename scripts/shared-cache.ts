@@ -116,12 +116,11 @@ export const allowedMs = (bytes: number) =>
  */
 function deadline(ms: number) {
   const controller = new AbortController();
-  let reject: (error: Error) => void = () => {};
-  const cut = new Promise<never>((_, no) => {
-    reject = no;
+  const { promise: cut, reject } = Promise.withResolvers<never>();
+  // only `race` waits on it; nobody else needs to hear it fail
+  cut.catch(() => {
+    // `race` hands the rejection to its caller, which handles it there
   });
-  // only `race` waits on it
-  cut.catch(() => {});
   const fire = () => {
     const error = new DOMException("timed out", "TimeoutError");
     controller.abort(error);
@@ -130,7 +129,7 @@ function deadline(ms: number) {
   let timer = setTimeout(fire, ms);
   return {
     signal: controller.signal,
-    race: <T>(work: Promise<T>) => Promise.race([work, cut]),
+    race: async <T>(work: Promise<T>) => await Promise.race([work, cut]),
     move(next: number) {
       clearTimeout(timer);
       timer = setTimeout(fire, next);
@@ -301,9 +300,10 @@ export function sharedCache(
         return null;
       }
       // every scope at once, the first that has it in `reads`' order
-      const found = (
-        await Promise.all(reads.map((from) => fetchFrom(name, key, from)))
-      ).find((bytes) => bytes);
+      const fetched = await Promise.all(
+        reads.map(async (from) => await fetchFrom(name, key, from))
+      );
+      const found = fetched.find(Boolean);
       if (found) {
         counts.hits += 1;
         counts.bytes += found.byteLength;

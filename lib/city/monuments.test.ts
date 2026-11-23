@@ -234,10 +234,10 @@ describe("pedestals and finishes", () => {
   });
 });
 
-describe("the QA's monument corrections", () => {
-  const topOf = (pieces: { lift: number; height: number }[]) =>
-    Math.max(...pieces.map((p) => p.lift + p.height));
+const topOf = (pieces: { lift: number; height: number }[]) =>
+  Math.max(...pieces.map((p) => p.lift + p.height));
 
+describe("the QA's monument corrections", () => {
   test("a column is a round shaft on its pedestal under a capital, at its height", () => {
     const column = markerPieces("column", "column", 15.4);
     expect(column.map((p) => p.solid)).toEqual(["block", "shaft", "block"]);
@@ -269,23 +269,23 @@ describe("the QA's monument corrections", () => {
   test("an unmeasured marker faces its bearing, at its tagged else its open height", () => {
     const at: [number, number] = [411_000, 5_656_000];
     const faced = monumentMarker(
-      { kind: "statue", form: "stele", a: 90 },
+      { kind: "statue", source: "osm", form: "stele", a: 90 },
       "statue",
       at
     );
     expect(faced.yaw).toBeCloseTo(yawOfBearing(90));
     // no bearing: the stable hash, as before
-    expect(monumentMarker({ kind: "statue" }, "statue", at).yaw).toBeCloseTo(
-      yawOf(...at)
-    );
+    expect(
+      monumentMarker({ kind: "statue", source: "osm" }, "statue", at).yaw
+    ).toBeCloseTo(yawOf(...at));
     const open = monumentMarker(
-      { kind: "statue", form: "statue", hm: 4.2 },
+      { kind: "statue", source: "osm", form: "statue", hm: 4.2 },
       "statue",
       at
     );
     expect(topOf(open.pieces)).toBeCloseTo(4.2);
     const tagged = monumentMarker(
-      { kind: "statue", form: "statue", height: 6, hm: 4.2 },
+      { kind: "statue", source: "osm", form: "statue", height: 6, hm: 4.2 },
       "statue",
       at
     );
@@ -294,6 +294,7 @@ describe("the QA's monument corrections", () => {
     const measured = monumentMarker(
       {
         kind: "statue",
+        source: "osm",
         a: 90,
         hm: 4.2,
         relief: { west: 0, north: 1, cols: 2, rows: 1, dm: [12, 25] },

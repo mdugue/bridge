@@ -146,6 +146,19 @@ def test_an_ordinary_roofs_antennas_make_no_relief():
     assert structures.relief(s, cell_box(20, 20, 60, 60), "x") == []
 
 
+def test_a_low_wing_drawn_too_high_borrows_no_relief_from_the_hall_beside_it():
+    roof = np.full((N, N), np.nan)
+    roof[20:40, 20:80] = GROUND + 8  # the wing, LoD2 2 m over the scan
+    roof[40:80, 20:80] = GROUND + 36  # the hall beside it
+    roof[39, 50:70] = GROUND + 36  # ... reaching into the wing's outline
+    dom = np.where(np.isfinite(roof), roof, GROUND)
+    dom[20:39, 20:80] = GROUND + 6
+    dom[39, 20:50] = dom[39, 70:80] = GROUND + 6
+    s = surfaces(dom, roof)
+    # no void to fill from the hall's cells: the wing's roof is simply high
+    assert structures.relief(s, cell_box(20, 20, 20, 60), "wing") == []
+
+
 def test_a_landmark_point_beside_its_building_finds_it():
     city = {"CityObjects": {"hall": {"children": ["part"]}, "part": {"parents": ["hall"]}}}
     ids = ["part"]
@@ -650,9 +663,95 @@ def test_an_old_cache_is_completed_with_the_state(tmp_path, monkeypatch):
         },
         {"i": {"value": "http://www.wikidata.org/entity/Q2"}},
     ]
-    monkeypatch.setattr(landmarks, "_ask", lambda query: rows)
+    bridges = [{"i": {"value": "http://www.wikidata.org/entity/Q2"}}]
+    monkeypatch.setattr(landmarks, "_ask", lambda query: bridges if "Q12280" in query else rows)
     assert landmarks.complete_status(dest)
     a, b = json.loads(dest.read_text())["landmarks"]
     assert a["dissolved"] == "1894-01-01" and a["states"] == [landmarks.DEMOLISHED]
     assert landmarks.gone(a) and not landmarks.gone(b)
+    assert not a["bridge"] and b["bridge"]
     assert not landmarks.complete_status(dest)  # complete already
+    # a cache with the state but from before the bridges is completed too
+    dest.write_text(json.dumps({"landmarks": [{"id": "Q2", "label": "B", "states": []}]}))
+    assert landmarks.complete_status(dest)
+    assert json.loads(dest.read_text())["landmarks"][0]["bridge"]
+
+
+def test_a_failed_bridge_query_keeps_the_state_and_asks_again(tmp_path, monkeypatch):
+    dest = tmp_path / "landmarks_t.json"
+    dest.write_text(json.dumps({"landmarks": [{"id": "Q1", "label": "A"}]}))
+    rows = [
+        {
+            "i": {"value": "http://www.wikidata.org/entity/Q1"},
+            "dissolved": {"value": "1894-01-01T00:00:00Z"},
+        }
+    ]
+
+    def ask(query):
+        if "Q12280" in query:
+            raise TimeoutError("query timed out")
+        return rows
+
+    monkeypatch.setattr(landmarks, "_ask", ask)
+    assert landmarks.complete_status(dest)
+    (a,) = json.loads(dest.read_text())["landmarks"]
+    assert a["dissolved"] == "1894-01-01" and "bridge" not in a
+    monkeypatch.setattr(landmarks, "_ask", lambda query: [] if "Q12280" in query else rows)
+    assert landmarks.complete_status(dest)  # the next fetch completes it
+    assert json.loads(dest.read_text())["landmarks"][0]["bridge"] is False
+
+
+def test_a_bridge_is_no_landmark_unless_it_is_a_building():
+    # München's Isar bridges (Luitpoldbrücke, Kabelsteg): the rail layer's
+    assert landmarks.is_bridge({"bridge": True, "building": False})
+    # a bridge house, a covered landing stage: a building
+    assert not landmarks.is_bridge({"bridge": True, "building": True})
+    assert not landmarks.is_bridge({"bridge": False, "building": False})
+    assert not landmarks.is_bridge({"building": False})  # an old cache
+
+
+def test_a_bridge_slab_the_mesh_leaves_out_is_never_matched():
+    ring = [[0, 1, 2, 3]]
+    solid = {
+        "boundaries": [ring],
+        "semantics": {"surfaces": [{"type": "GroundSurface"}], "values": [0]},
+    }
+    city = {
+        "vertices": [[0, 0, 0], [40, 0, 0], [40, 40, 0], [0, 40, 0]],
+        "CityObjects": {
+            "slab": {
+                "attributes": {"function": "53001_1800"},
+                "children": ["deck"],
+                "geometry": [{"type": "MultiSurface", **solid}],
+            },
+            "deck": {"parents": ["slab"], "geometry": [{"type": "MultiSurface", **solid}]},
+            "house": {
+                "attributes": {"function": "31001_1000"},
+                "geometry": [{"type": "MultiSurface", **solid}],
+            },
+        },
+    }
+    ids, _ = landmarks.drawn_footprints(city)
+    assert ids == ["house"]
+
+
+def test_a_hole_in_a_landmarks_roof_is_filled_a_roof_drawn_too_high_is_not():
+    roofed = np.ones((30, 30), bool)
+    void = np.zeros((30, 30), bool)
+    void[2:4, 2:4] = True  # a sound opening
+    void[6:14, 10:18] = True  # a glass roof over a courtyard, shut in
+    void[18:, :] = True  # a low wing (40 %), under a roof LoD2 drew too high
+    void[18:, 15] = False  # ... a skylight's strip across it
+    out = structures.roof_holes(void, roofed)
+    assert out[2:4, 2:4].all() and out[6:14, 10:18].all()
+    assert not out[18:, :].any()
+
+
+def test_an_inner_hall_drawn_too_high_is_no_hole():
+    roofed = np.ones((30, 30), bool)
+    void = np.zeros((30, 30), bool)
+    void[8:20, 8:20] = True  # shut in by the blocks around it
+    depth = np.full((30, 30), 12.0)
+    # its scan a lower roof 8 m up: no hole; down to the floor: a glass roof
+    assert not structures.roof_holes(void, roofed, 1.0, np.where(void, 8.0, depth)).any()
+    assert structures.roof_holes(void, roofed, 1.0, np.where(void, 0.5, depth))[void].all()

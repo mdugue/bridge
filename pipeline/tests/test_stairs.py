@@ -2,13 +2,19 @@
 steps, sides and handrails."""
 
 import numpy as np
+import pytest
 import shapely
 
 from bake import stairs
 from tests.synthetic import SIZE, X0, Y0, features, osm_tile, read, slope_tile, way, write_raster
 
 
-def test_a_flight_is_oriented_uphill_with_its_landings_and_tagged_steps(tmp_path, monkeypatch):
+# Hamburg, Bavaria and NRW are in zone 32: the bake reads the extract into
+# the tile's own CRS
+@pytest.mark.parametrize("epsg", [25833, 25832])
+def test_a_flight_is_oriented_uphill_with_its_landings_and_tagged_steps(
+    tmp_path, monkeypatch, epsg
+):
     from bake import stairs
 
     # Drawn top → bottom; 25 steps over the 4 m rise is a 16 cm riser.
@@ -16,7 +22,7 @@ def test_a_flight_is_oriented_uphill_with_its_landings_and_tagged_steps(tmp_path
         '<way id="1" version="1"><nd ref="1"/><nd ref="2"/>'
         '<tag k="highway" v="steps"/><tag k="step_count" v="25"/><tag k="width" v="3 m"/></way>'
     )
-    tile = slope_tile(tmp_path, monkeypatch, way)
+    tile = slope_tile(tmp_path, monkeypatch, way, epsg=epsg)
     stairs.run(tile)
     doc = read(tile, "stairs")
     assert doc["attribution"].startswith("©")
@@ -218,3 +224,119 @@ def test_stairs_run_writes_the_sides_material_and_width(tmp_path, monkeypatch):
     assert railed["rail"] == [True, True]
     assert plain["walled"] == [False, False] and "rail" not in plain
     assert plain["mat"] == "concrete"  # the site's majority: too few tagged
+
+
+def test_a_flight_across_a_seam_keeps_both_landings(tmp_path, monkeypatch):
+    # the tile's ground lies at 100 m, its eastern neighbour's at 103 m; the
+    # flight runs from 10 m inside the one to 10 m inside the other
+    import rasterio
+    import rasterio.transform
+
+    nodes = {1: (190.0, 100.0, ""), 2: (210.0, 100.0, "")}
+    ways = way(1, [1, 2], {"highway": "steps"})
+    tile = osm_tile(tmp_path, monkeypatch, nodes, ways)
+    east = tile.data / "dgm" / "dgm1_u_tiff" / "dgm1_u.tif"
+    east.parent.mkdir(parents=True)
+    with rasterio.open(
+        east,
+        "w",
+        driver="GTiff",
+        width=SIZE,
+        height=SIZE,
+        count=1,
+        dtype="float32",
+        crs="EPSG:25833",
+        transform=rasterio.transform.from_origin(X0 + SIZE, Y0 + SIZE, 1.0, 1.0),
+    ) as dst:
+        dst.write(np.full((1, SIZE, SIZE), 103.0, dtype="float32"))
+    stairs.run(tile)
+    [f] = read(tile, "stairs")["features"]
+    lo, hi = f["properties"]["z"]
+    assert abs(lo - 100) < 0.01 and abs(hi - 103) < 0.01
+    # bottom → top: from this tile up onto the neighbour's ground
+    (xa, _), (xb, _) = f["geometry"]["coordinates"]
+    assert xa < X0 + SIZE < xb
+
+
+def test_stairs_without_a_dgm_fail_rather_than_write_none(tmp_path, monkeypatch):
+    # a tile whose DGM1 is missing stops the bake: an empty stairs file
+    # would pass for a tile without flights
+    nodes = {1: (100, 70, ""), 2: (100, 90, "")}
+    tile = osm_tile(tmp_path, monkeypatch, nodes, way(1, [1, 2], {"highway": "steps"}))
+    tile.dgm.unlink()
+    with pytest.raises(SystemExit, match=f"no DGM1 for {tile.id}"):
+        stairs.run(tile)
+    assert not (tile.data / "dlm" / f"stairs_{tile.id}.geojson").exists()
+
+
+def _stairs_ground(tile):
+    return stairs.Dgm(tile).at
+
+
+def _rail_osm_ground(tile):
+    from bake.rail_osm import dgm_ground
+
+    xmin, ymin, xmax, ymax = tile.bounds
+    return dgm_ground(tile, (xmin - 50, ymin - 50, xmax + 50, ymax + 50))
+
+
+@pytest.mark.parametrize("reader", [_stairs_ground, _rail_osm_ground])
+def test_the_dgm_opens_only_the_tile_and_its_grid_neighbours(tmp_path, reader):
+    # a 2 km grid named as the downloads are: the tile, its eastern
+    # neighbour, and one two tiles away whose file is no raster at all —
+    # every step that reads the DGM across a seam (common.dgm_paths)
+    import rasterio
+    import rasterio.transform
+
+    from bake.common import Tile
+
+    tile = Tile(
+        "33410_5656_2_sn",
+        (410000.0, 5656000.0, 412000.0, 5658000.0),
+        25833,
+        tmp_path / "raw",
+        tmp_path / "data",
+    )
+
+    def dgm(tid: str, x0: float, z: float) -> None:
+        path = tile.data / "dgm" / f"dgm1_{tid}_tiff" / f"dgm1_{tid}.tif"
+        path.parent.mkdir(parents=True)
+        with rasterio.open(
+            path,
+            "w",
+            driver="GTiff",
+            width=SIZE,
+            height=SIZE,
+            count=1,
+            dtype="float32",
+            crs="EPSG:25833",
+            transform=rasterio.transform.from_origin(x0, 5656000.0 + SIZE, 1.0, 1.0),
+        ) as dst:
+            dst.write(np.full((1, SIZE, SIZE), z, dtype="float32"))
+
+    dgm("33410_5656_2_sn", 411800.0, 100.0)
+    dgm("33412_5656_2_sn", 412000.0, 103.0)
+    far = tile.data / "dgm" / "dgm1_33416_5656_2_sn_tiff" / "dgm1_33416_5656_2_sn.tif"
+    far.parent.mkdir(parents=True)
+    far.write_bytes(b"not a raster: opening it fails")
+    at = reader(tile)
+    assert at(411990.5, 5656100.5) == pytest.approx(100.0)
+    assert at(412010.5, 5656100.5) == pytest.approx(103.0)
+
+
+@pytest.mark.parametrize(
+    ("riser", "metres"),
+    [
+        ("0.16", 0.16),
+        ("16 cm", 0.16),
+        ("16", 0.16),  # a bare number of centimetres
+        ("ca. 16", 0.16),  # approximate, still bare
+        ("~16", 0.16),
+        ("16 m", stairs.TAGGED_RISER),  # metres as written: no riser
+        ("2", stairs.TAGGED_RISER),  # neither 2 m nor 2 cm
+        ("40", stairs.TAGGED_RISER),
+    ],
+)
+def test_a_tagged_rise_believes_only_a_plausible_riser(riser, metres):
+    tags = f'"step_count"=>"10","step:height"=>"{riser}"'
+    assert stairs.tagged_rise(tags) == pytest.approx(10 * metres)

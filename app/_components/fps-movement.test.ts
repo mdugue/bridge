@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { PerspectiveCamera, Vector3 } from "three/webgpu";
-import { createFpsMovement, type FpsMovementOptions } from "./fps-movement";
+import { createFpsMovement } from "./fps-movement";
+import type { FpsMovementOptions } from "./fps-movement";
 
 const EYE = 1.7;
 /** WALK_SPEED in fps-movement.ts — one second of input equals this many metres. */
@@ -63,7 +64,7 @@ test("the arrows walk (up, down) and turn (left, right), as in Street View", () 
   movement.release("ArrowRight");
   expect(movement.turnInput()).toBe(-1);
   // turning is not walking
-  const z = camera.position.z;
+  const { z } = camera.position;
   movement.update(1);
   expect(camera.position.z).toBeCloseTo(z, 5);
 });
@@ -301,15 +302,16 @@ test("snapToGround sets the eye height without smoothing", () => {
   expect(movement.getMode()).toBe("fly");
 });
 
+const speedAt = (height: number) => {
+  const { camera, movement } = rig();
+  camera.position.y = height;
+  movement.setMode("fly");
+  movement.press("KeyW");
+  movement.update(0.1);
+  return -camera.position.z / 0.1;
+};
+
 test("flying is slow near the ground and fast high above it", () => {
-  const speedAt = (height: number) => {
-    const { camera, movement } = rig();
-    camera.position.y = height;
-    movement.setMode("fly");
-    movement.press("KeyW");
-    movement.update(0.1);
-    return -camera.position.z / 0.1;
-  };
   expect(speedAt(EYE)).toBeCloseTo(15, 5);
   expect(speedAt(30)).toBeCloseTo(FLY_STEP - 1, 5);
   expect(speedAt(150)).toBeCloseTo(130, 5);
@@ -348,7 +350,7 @@ test("a dolly in the air follows the view, and a mode switch drops what is left"
   movement.dolly(20);
   movement.setMode("walk");
   movement.setMode("fly");
-  const z = camera.position.z;
+  const { z } = camera.position;
   movement.update(10);
   expect(camera.position.z).toBeCloseTo(z, 5);
 });

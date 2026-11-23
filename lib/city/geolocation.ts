@@ -5,7 +5,8 @@
  * adapter (app/_components/locate-me.ts) feeds it. No THREE, no DOM.
  */
 import { gridConvergenceDeg, latLngToUtm } from "./crs";
-import { type Site, tileExtentOf } from "./site";
+import { tileExtentOf } from "./site";
+import type { Site } from "./site";
 import type { TerrainBounds } from "./terrain-geometry";
 
 const DEG = Math.PI / 180;
@@ -163,6 +164,13 @@ export function placementOf(
   };
 }
 
+/** Whether a point in the site's projection lies on one of its tiles. */
+export function siteHoldsPoint(site: Site, x: number, y: number): boolean {
+  return site.tiles.some(
+    (cell) => distanceOutside(tileExtentOf(cell), x, y) === 0
+  );
+}
+
 /**
  * The site among `sites` whose tiles hold a fix (each in its own Land's
  * projection), if any: the off-site dialog offers to go there.
@@ -173,39 +181,34 @@ export function siteHolding(
 ): Site | undefined {
   return sites.find((site) => {
     const at = latLngToUtm(site.provider.epsg, fix.lat, fix.lng);
-    return (
-      at !== null &&
-      site.tiles.some(
-        (cell) => distanceOutside(tileExtentOf(cell), at.x, at.y) === 0
-      )
-    );
+    return at !== null && siteHoldsPoint(site, at.x, at.y);
   });
 }
 
-/** The fragment that hands a fix to another site's page (`#at=lat,lng`):
- *  a fragment never reaches a server — not in the request, not in a
- *  Referer — and the crash trail keeps the query alone. */
+/** The query parameter that hands a fix to another site's page
+ *  (`?at=lat,lng`). URL parameters go in the query (the maintainer,
+ *  2026-11-05): the host's request log shows it, which the privacy page
+ *  says; the crash trail and the reports keep no `at` (crash-trail.ts
+ *  `trailUrl`, the reports' path without its query). */
 export const ARRIVAL_PARAM = "at";
 
-/** `/<site>#at=lat,lng`: the other site's page, told where the player is. */
+/** `/<site>?at=lat,lng`: the other site's page, told where the player is. */
 export function arrivalHref(
   siteId: string,
   fix: Pick<GeoFix, "lat" | "lng">
 ): string {
-  return `/${siteId}#${ARRIVAL_PARAM}=${fix.lat.toFixed(6)},${fix.lng.toFixed(6)}`;
+  return `/${siteId}?${ARRIVAL_PARAM}=${fix.lat.toFixed(6)},${fix.lng.toFixed(6)}`;
 }
 
-/** The fix a page was opened with (its `#at=lat,lng`), or null. */
-export function arrivalOf(hash: string): Pick<GeoFix, "lat" | "lng"> | null {
-  // Only a fragment: URLSearchParams would read a `?query` just the same.
-  const value = hash.startsWith("#")
-    ? new URLSearchParams(hash.slice(1)).get(ARRIVAL_PARAM)
-    : null;
-  const m = value?.match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
+/** The fix a page was opened with (its `?at=lat,lng`, given
+ *  `location.search`), or null. */
+export function arrivalOf(search: string): Pick<GeoFix, "lat" | "lng"> | null {
+  const value = new URLSearchParams(search).get(ARRIVAL_PARAM);
+  const m = value?.match(/^(?<lat>-?\d+(?:\.\d+)?),(?<lng>-?\d+(?:\.\d+)?)$/u);
   if (!m) {
     return null;
   }
-  const lat = Number(m[1]);
-  const lng = Number(m[2]);
+  const lat = Number(m.groups?.lat);
+  const lng = Number(m.groups?.lng);
   return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
 }

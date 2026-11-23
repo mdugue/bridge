@@ -4,10 +4,8 @@
 
 Diese Seite geht das Einstellungsfeld Beschriftung für Beschriftung
 durch. Du brauchst einen Browser mit **WebGPU** (die neuere
-Grafikschnittstelle, die die meisten aktuellen Browser bieten) oder, wo
-das fehlt, **WebGL2** (jeder aktuelle Desktop- und Mobilbrowser hat es;
-das Bild ist dasselbe, nur kann die Ansicht kurz stocken, während neue
-Gegenden erscheinen) und für ein flüssiges Bild eine halbwegs aktuelle
+Grafikschnittstelle: Chrome, Edge und Safari ab iOS und macOS 26 bieten
+sie) und für ein flüssiges Bild eine halbwegs aktuelle
 Grafikkarte. Handys werden unterstützt: Sie bekommen
 automatisch ein leichteres Render-Budget.
 
@@ -34,8 +32,12 @@ Höhenunterschied im Gelände), die meisten Wahrzeichen, die größte Fläche.
 
 ## Laden
 
-Der Ladebildschirm listet fünf Stufen und einen Balken. Die ersten drei
-(Gebäude, Gelände, Licht) enden an der Marke *begehbar*: Ab da löst sich
+Der Ladebildschirm ist ein Blatt aus Ton mit Höhenlinien: Ein
+magentafarbener Ring in der Mitte weitet sich mit dem Laden, innen nimmt
+der Ton Farbe an, und die gestrichelte Linie markiert, wo die Szene
+begehbar wird. Darunter stehen fünf Stufen (auf dem Handy drei). Die
+ersten drei (Gebäude, Gelände, Licht) enden an einem feinen magentafarbenen
+Strich, ab dem die Szene *begehbar* ist: Ab da löst sich
 der Vorhang auf, und du kannst dich bewegen, während die übrigen zwei
 (die Umgebung im Blick, dann Bäume, Lampen, Schienen und Mauern) hinter
 einer kleinen Pille oben im Bild nachladen. *Alles geladen* heißt, alles
@@ -45,6 +47,13 @@ gestreamt, in deiner Nähe detailliert, weiter weg grob. Dauert das einen
 Moment, etwa bei einem langen Flug, zeigt ein kleiner Hinweis *Umgebung
 lädt* oben im Bild (siehe
 [Wie ein Besuch abläuft](./how-it-works.md#wie-ein-besuch-abläuft)).
+
+Das Bild zeigt dasselbe: Solange die Stadt noch nachlädt, färbt sie sich
+von deinem Standort aus ein. Was vollständig da ist, hat seine Farben;
+hinter einer langsam atmenden magentafarbenen Linie liegt die Stadt als
+ungebrannter Ton, grau und mit Höhenlinien, bis die Linie sie erreicht.
+Kommt nichts mehr, läuft die Linie bis zum Horizont, und die Farben
+folgen.
 
 Die Seitenleiste ist von Anfang an da, über dem Ladebildschirm. Schon
 während die Stadt lädt, kannst du einen Ort wählen, einen Punkt auf der
@@ -125,10 +134,10 @@ bietet an, wohin es stattdessen gehen kann: zu einem der Aussichtspunkte, zu
 einer Stelle, die du auf der Karte wählst, oder du bleibst, wo du bist.
 Stehst du in einer anderen Stadt, die diese Seite auch zeigt, sagt das
 Fenster das zuerst und bietet an, dorthin zu springen: Ihr Viewer öffnet
-sich mit dir dort, wo du stehst (die Position reist im Fragment des Links
-mit, das nie beim Server ankommt). Browser fragen dafür um Erlaubnis
-(iPhones auch für den
-Kompass); der Standort verlässt das Gerät nicht — auch nicht in einem
+sich mit dir dort, wo du stehst (die Position reist in den Parametern des
+Links mit, `?at=`, und landet so im Zugriffsprotokoll des Hosters, wenn du
+ihm folgst). Browser fragen dafür um Erlaubnis (iPhones auch für den
+Kompass); sonst verlässt der Standort das Gerät nicht — auch nicht in einem
 Absturzbericht (siehe *Wenn es abstürzt*).
 
 *Live* erscheint, sobald dein Telefon Kompasswerte liefert (auf dem iPhone
@@ -230,15 +239,33 @@ Quellenvermerken.
 
 ## Ein Gebäude befragen
 
-Die Stadt selbst trägt keine Schrift. Du kannst sie stattdessen fragen:
+Die Stadt trägt keine Beschriftung, bis du fragst. Frag sie:
 Mit der Maus genügt ein **Klick** auf ein Gebäude, auf einem Touchscreen
 **langes Drücken** (den Finger eine halbe Sekunde ruhig halten); `I`
 fragt, was unter dem Mauszeiger steht (im immersiven Modus, der den
 Zeiger ausblendet, was in der Bildmitte steht; nur dort markiert ein
 Punkt die Mitte). Das Gebäude bekommt eine feine
 Schraffur und eine Linie um seinen Umriss, beide in der pinken
-Akzentfarbe der Bedienelemente, und eine Karte öffnet sich. Ein Klick ins Leere
-schließt sie wieder. Ein kleines Haus musst du
+Akzentfarbe der Bedienelemente (in den anderen Darstellungsstilen in der
+Schriftfarbe des Stils), und eine Karte öffnet sich. Ein Klick ins Leere
+schließt sie wieder. Neben dem Gebäude steht jetzt sein **Name** in der
+Stadt selbst, solange die Frage gilt: bei einem Wahrzeichen groß, darunter
+wann und von wem es erbaut, wann es wiederaufgebaut wurde und wie hoch es
+ist (aus Wikidata, auch auf der Karte); bei einem benannten Gebäude mit seiner Adresse; bei
+einem gewöhnlichen Haus nur die Adresse, klein; bei einem Baum, einer
+Laterne oder einer Bank, was es ist. Die Buchstaben sind gebaut: ein wenig
+tief, von der Sonne beleuchtet, mit eigenem Schatten, wo die Sonne
+hinkommt, bis hinunter auf den Boden. Von der Straße aus
+stehen sie auf dem Dach (bei einer Kirche auf dem Schiff), zur Fassade gedreht, die du am besten siehst,
+oder neben dem Gebäude; steil aus der Luft
+liegen sie neben ihm auf dem Boden (aus flacherem Winkel stehen sie auf,
+damit sie lesbar bleiben); ganz nah stehen sie wie eine Inschrift vor seiner Fassade; von
+weit nur der Name. Ein langer Name bricht auf einige Zeilen um. Er weicht aus, wenn ein anderes Gebäude ihn verdecken
+oder ein Bedienfeld ihn überdecken würde (erst wenn der neue Platz eine
+Weile besser bleibt), erscheint als blasse Kontur, wo
+die Stadt ihn doch verdeckt, und ist in jedem Darstellungsstil anders
+gesetzt — im Comic in einem gelben Erzählkasten, der das Gebäude frei lässt, im Schwarzplan, von oben
+gesehen, auf dem Boden wie die Beschriftung eines Plans. Ein kleines Haus musst du
 nicht genau treffen: Steht direkt unter dem Finger nichts, antwortet das
 Gebäude, zu dem das meiste rund um die Stelle gehört. Auf dem Telefon ist
 die Karte ein Blatt am unteren Rand: eingeklappt sagt es, was das Gebäude
@@ -274,7 +301,7 @@ keine Geschosszeile.
 Unter **Daten** (eingeklappt am Ende der Karte) steht, wie der Viewer das
 Gebäude zeichnet, Wert für Wert: Geschosse, Material und Grundton der
 Fassade, die Fenster, Sockel und Gesimse, Haustüren, Durchgänge,
-Schaufenster, Gauben, die Dachfarbe, das Abendlicht und ob es ein Wahrzeichen ist. Jeder
+Schaufenster, Gauben und Schornsteine, die Dachfarbe, das Abendlicht und ob es ein Wahrzeichen ist. Jeder
 Wert nennt seine Quelle (etwa *Material Glas — OpenStreetMap ·
 building:material*), trägt das Abzeichen, wie der Viewer zu ihm kam, und
 verlinkt, wo es geht, auf die Stelle: die OpenStreetMap-Objekte dort, die
@@ -287,7 +314,8 @@ Hauses, wo keine Fotos sie gemessen haben. Bei einem Gebäude aus mehreren
 Teilen gilt das für den angeklickten Teil.
 
 Bäume, Denkmale und Brunnen und Brücken antworten genauso. Was du
-gefragt hast, umrahmt eine weiche pinke Linie auf einem hellen Saum —
+gefragt hast, umrahmt eine weiche Linie auf einem hellen Saum (pink oder
+in der Schriftfarbe des Darstellungsstils) —
 entlang seines Umrisses, so wie du ihn gerade siehst, gleich breit auf
 dem Bildschirm, ob nah oder fern. Beim Antippen leuchtet der Saum kurz
 auf. Ein
@@ -387,7 +415,68 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
     darunter, wie viele gerade unterwegs sind.
 
   Aus der Luft werden Ströme, Säulen und Spuren breiter und satter, damit
-  sie lesbar bleiben.
+  sie lesbar bleiben. Jeder Bildstil zeichnet sie auf seine Art: *Pastell*
+  als Glas, *Comic* in Druckfarben (blau, gelb, rot nach der Menge) mit
+  schwarzer Kontur, *Film noir* als Lichtspuren wie bei langer
+  Belichtung, *Sin City* rot, *Papier* als farbiges Seidenpapier (nachts
+  von innen beleuchtet), *Strich* in Planfarben mit Tuschekante (nachts
+  als warmes Licht), der *Schwarzplan* als schwarz umrandetes Band.
+- **Spaziergänge** — Rundgänge durch die Stadt, erzählt von Claude,
+  einer KI, und an jeder Station so gekennzeichnet. In Dresden vier:
+  *Augusts Bühne* (die Altstadt als Theater der Macht), *Narben und
+  Nähte* (wie die Stadt mit ihren Wunden lebt), *Gold, Milch und
+  Eigensinn* (die Neustadt) und *Wunder am Elbhang* (flussaufwärts nach
+  Loschwitz); in Leipzig, Hamburg, München, Meißen, Grimma und Unna
+  je einer: *Messe, Musik und Montag*
+  (Leipzig), *Backstein und Wasser* (Hamburg), *Teufel, Tanz und Löwen*
+  (München), *Schloss, Dom und Porzellan* (Meißen), *Grimma an der
+  Mulde* und *Licht unter der Stadt* (Unna). Ein Spaziergang öffnet eine
+  Karte über der Szene: Jede Station gleitet langsam zu ihrem Blick,
+  stellt das heutige Datum zu der Stunde ein, in der sie am besten
+  aussieht (eine Fassade im Abendlicht, ein Platz bei Nacht), und, wo
+  die Station es will, einen Bildstil; aus dem Modell geht ein
+  Spaziergang einmal hinaus, denn erzählt wird, was man sieht. Die
+  Karte erzählt die Station schon während des Flugs dorthin; während des
+  Flugs kannst du dich umschauen, er landet trotzdem an der Station, und
+  das Licht wandert mit dem Flug zur Uhrzeit der nächsten Station. Sie
+  ergänzt, was heute oder in dieser Jahreszeit besonders ist, und nennt
+  ein Detail, das im Bild zu finden ist. Was das Modell nicht zeigt —
+  eine Statue, ein Relief, eine Inschrift, ein Innenraum —, zeigt ein Foto
+  von Wikimedia Commons in der Karte, mit Urheber und Lizenz: ein
+  Querformat oben über die ganze Breite, ein Hochformat neben dem Text
+  (auf dem Handy darüber); ein Klick zeigt es ganz. Es liegt auf dieser
+  Seite, nicht bei Wikimedia. *Belege* klappt jede Angabe der Station mit ihrer Quelle
+  auf — Wikipedia, die Seite einer Einrichtung, die Daten des
+  Stadtmodells selbst; Legenden werden als Legenden erzählt. *Weiter*
+  und *Zurück* gehen von Station zu Station, ✕ beendet den Spaziergang
+  und stellt Bildstil und Uhrzeit zurück. Auf dem Telefon ist die
+  Karte ein Blatt am unteren Rand, das eingeklappt beginnt: Antippen oder
+  Hochziehen am Griff öffnet es, Herunterziehen klappt es wieder ein;
+  Joystick und Werkzeugleiste weichen ihm, solange der Spaziergang läuft. Wie sie geschrieben werden:
+  [walks.md](../../walks.md).
+- **Frag die Stadt** — Fragen zur Stadt in eigenen Worten („Wer hat
+  die Frauenkirche gebaut?“, „Was steht hier vor mir?“, „Wie sieht es
+  hier am Abend aus?“). Ein Sprachmodell sucht im Wissen des
+  Stadtmodells — Namen, Adressen, Nutzung und Höhe der Gebäude, die
+  Wahrzeichen mit dem, was Wikidata über sie sagt —, fliegt die Ansicht
+  zum Ort, stellt bei Bedarf Uhrzeit, Bildstil oder eine Datenebene ein
+  und antwortet in wenigen Sätzen mit ihrer Quelle. Unter jeder Antwort
+  steht, was es nachgeschlagen und getan hat; jede Antwort ist als *KI*
+  gekennzeichnet. Es läuft mit deinem eigenen Schlüssel eines Anbieters
+  (Anthropic, OpenAI, OpenRouter oder Vercel AI Gateway) und auf deine
+  Kosten, meist unter einem Cent je Frage; der Schlüssel bleibt in
+  deinem Browser ([Datenschutz](/datenschutz#frag-die-stadt)). Auch über
+  *Fragen* in der Werkzeugleiste. Als **Sprachführer**: *Sprechen* nimmt
+  eine Frage per Mikrofon an (wo der Browser Sprache erkennt),
+  *Vorlesen* liest die Antworten vor (eingeschaltet gleich die letzte),
+  und der *Hörmodus* dunkelt die Ränder leicht ab und lässt die Szene
+  ruhen — für unterwegs, das Telefon in der Tasche, zusammen mit *Live*
+  in der Werkzeugleiste; endet er, endet auch das Vorlesen, das er
+  eingeschaltet hat. Abbrechen hält eine Antwort an, und die Ansicht
+  bleibt stehen, wo sie gerade ist.
+  „Was ist das da vorne?“ fragt das Stadtmodell nach dem, was in der
+  Bildmitte steht (im Modell: wo es ausgerichtet ist), und öffnet dessen
+  Karte.
 - **Steuerung** — die vollständige Tastentabelle, eingeklappt, bis du
   sie öffnest (die Leiste über der Szene zeigt die ersten Tasten).
 
@@ -405,13 +494,16 @@ Der Knopf in der Ecke öffnet ein Feld mit drei Reitern.
   aktuelle Ansicht zu allen zwölf Zeitpunkten und speichert sie als ein
   Blatt — eine Zeile je Tag, eine Spalte je Uhrzeit — mit der Legende
   darunter (im Modell mit Maßstabsleiste und Nordpfeil). Die Uhrzeiten
-  sind die Ortszeit deines Geräts.
+  sind die Ortszeit deines Geräts. In *Sin City* und im *Schwarzplan*
+  ruhen Datum, Uhrzeit und Studie (sie zeichnen in ihrem eigenen Licht);
+  ein Hinweis sagt es, und beim Wechsel des Stils gilt die eingestellte
+  Zeit wieder.
 - **Darstellung** — ganz oben der **Bildstil**, darunter der eine
-  verbliebene Regler, *Nebel* (der Entfernungsdunst, eine Prozentzahl),
-  und der Schalter *Multi-Tuft-Kronen (nah)* (reiche Mehrbüschel-Kronen
-  nahe der Kamera; aus = die einfache Krone überall). *Zurücksetzen*
-  stellt beide auf ihren Startwert zurück und lässt den Bildstil, wie er
-  ist. Der übrige Look ist fest (unten).
+  verbliebene Regler, *Nebel* (der Entfernungsdunst, eine Prozentzahl).
+  *Zurücksetzen* stellt ihn auf seinen Startwert zurück und lässt den
+  Bildstil, wie er ist. Der übrige Look ist fest (unten), auch die
+  Bäume: nahe der Kamera tragen sie immer ihre reiche Mehrbüschel-Krone,
+  soweit das Budget der Stadt reicht.
 
 Der Bildstil zeichnet dieselbe Stadt auf eine andere Art; er lässt sich
 jederzeit wechseln, per Klick oder mit `V`. Der Browser merkt sich den
@@ -420,12 +512,12 @@ zuletzt gewählten Stil für den nächsten Besuch:
 | Bildstil | So sieht er aus |
 |---|---|
 | *Pastell* | der Grundstil: Tonmodell auf Papier, weiches Licht, keine Umrisse |
-| *Comic* | Pop-Art wie aus dem Druck: wenige knallige Farben (Papierweiß, Rot, Gelb, Blau, Grün, Schwarz) ohne Verläufe, kräftige gleichmäßige schwarze Konturen; was im Schatten liegt, bekommt Rasterpunkte, die fest auf den Flächen sitzen und beim Fliegen nicht wandern; rote Dächer rot, andere schieferblau, die Elbe blau, Wiesen und Bäume grün (ein Herbstbaum gelb, ein kahler oder blühender weiß); die Bäume werden runde Comic-Wolken aus drei Kugeln, flach gedruckt; der Himmel ein Blau, zum Horizont hin heller gepunktet; nachts eine nachtblaue Stadt mit gelben Lichtkegeln und Fenstern |
+| *Comic* | Pop-Art wie aus dem Druck: wenige knallige Farben (Papierweiß, Rot, Gelb, Blau, Grün, Schwarz) ohne Verläufe, kräftige gleichmäßige schwarze Konturen; was im Schatten liegt, bekommt Rasterpunkte, die fest auf den Flächen sitzen und beim Fliegen nicht wandern; rote Dächer rot, andere schieferblau, die Elbe blau, Wiesen und Bäume grün (ein Herbstbaum gelb, ein kahler oder blühender weiß); die Bäume werden runde Comic-Wolken aus drei Kugeln, flach gedruckt; der Himmel ein Blau, zum Horizont hin heller gepunktet; nachts (sobald die Laternen angehen) eine nachtblaue Stadt mit gelben Lichtkegeln und Fenstern |
 | *Film noir* | Schwarzweiß mit harter Gradation, rauchige Ferne, ein Himmel, der nach oben dunkel wird, laufendes Filmkorn und ein dunkler Bildrand; unter jeder Straßenlaterne ein weicher Lichtkegel — am Tag nur angedeutet, in der Dämmerung voll; wenn es dunkel wird, blendet die Kamera auf, statt alles schwarz werden zu lassen |
-| *Sin City* | harte Schwarzweiß-Flächen: weiß, was die Sonne trifft, schwarz der Schatten, so fallen die Schlagschatten als scharfe schwarze Formen; Baumkronen und die Elbe tiefschwarz, die Ferne verschwindet in weißem Dunst; Regen fällt vor der Szene; nur die roten Ziegeldächer behalten Farbe |
-| *Papier* | die Stadt als weißes Papiermodell: jede Fläche aus leicht gebrochenem Weiß, echtes Sonnenlicht und echte Schatten (bläulich-grau), feine gezeichnete Graphitkonturen; die Bäume werden gefaltete Karton-Polyeder; Fahrbahnmarkierungen und Sportplatzlinien bleiben als zartes Grau, Wasser als etwas kühleres, tieferes Papier; Lichter und Nebelschleier fallen weg |
-| *Strich* | Strichzeichnung wie im Plan: das weiße Modell mit jeder Kante in einer gleich starken Linie, auch in der Ferne; der Schatten schraffiert wie mit dem Tuschestift, das Gelände in Planfarben (zartes Grün, hellblaues Wasser, fast weiße Straßen), die Bäume aus gefaltetem Karton, der im Wind stillhält, damit die Schraffur darauf nicht wandert |
-| *Schwarzplan* | die Gebäude schwarz, alles andere weiß, die Bäume des Baumkatasters als Kronenkreise mit Stammpunkt (gemessen, darum nur sie) — keine Schatten, nur eine feine weiße Linie, wo ein Gebäude vor einem anderen steht; gemacht für den *Lageplan*, überall wählbar |
+| *Sin City* | harte Schwarzweiß-Flächen: weiß, was die Sonne trifft, schwarz der Schatten, so fallen die Schlagschatten als scharfe schwarze Formen; Baumkronen und die Elbe tiefschwarz, die Ferne verschwindet in weißem Dunst; Regen fällt vor der Szene; nur die roten Ziegeldächer behalten Farbe. Sin City zeichnet immer im selben harten Nachmittagslicht (15. September, 16:30): Datum und Uhrzeit ruhen, solange der Stil an ist |
+| *Papier* | die Stadt als weißes Papiermodell: jede Fläche aus leicht gebrochenem Weiß, echtes Sonnenlicht und echte Schatten (bläulich-grau), feine gezeichnete Graphitkonturen; die Bäume werden gefaltete Karton-Polyeder; Fahrbahnmarkierungen und Sportplatzlinien bleiben als zartes Grau, Wasser als etwas kühleres, tieferes Papier; Lichter und Nebelschleier fallen weg. Nachts steht das Modell auf dunkelblauem Tonpapier: die Fenster leuchten warm durch die Pappe, Laternenlicht liegt warm auf Straßen und Wänden, gezeichnet mit weißem Stift |
+| *Strich* | Strichzeichnung wie im Plan: das weiße Modell mit jeder Kante in einer gleich starken Linie, auch in der Ferne; der Schatten schraffiert wie mit dem Tuschestift, das Gelände in Planfarben (zartes Grün, hellblaues Wasser, fast weiße Straßen), die Bäume aus gefaltetem Karton, der im Wind stillhält, damit die Schraffur darauf nicht wandert. Nachts eine Radierung: das Dunkel schraffiert (an Wänden und Dächern gekreuzt), der Himmel mit waagrechten Linien, nur was Laternen und Fenster beleuchten bleibt weiß unter einer gelben Lasur |
+| *Schwarzplan* | die Gebäude schwarz, alles andere weiß, die Bäume des Baumkatasters als Kronenkreise mit Stammpunkt (gemessen, darum nur sie) — keine Schatten, nur eine feine weiße Linie, wo ein Gebäude vor einem anderen steht; gemacht für den *Lageplan*, überall wählbar. Er kennt keine Tageszeit: Datum und Uhrzeit ruhen, solange er an ist |
 
 In den grafischen Stilen *Comic*, *Sin City*, *Strich* und *Schwarzplan*
 ruht die Tiefenschärfe (ein unscharfer Hintergrund unter scharfen Linien
@@ -443,21 +535,19 @@ Code und Wissensbasis für sie verwenden:
 | | *Laterne* | nach Einbruch der Dunkelheit trägst du zu Fuß ein kleines warmes Licht, das Boden, Bänke und Hauswände ein paar Meter um dich aufhellt; am Rechner wirft es Schatten, am Handy nicht; aus der Luft und im Modell erlischt es |
 | Gebäude | *Boden-Verlauf* | Abdunkeln der Wände zum Boden hin |
 | | *Höhenlinien* | zarte Geschossbänder, aus der gemessenen Höhe abgeleitet |
-| | *Streiflicht* | Kantenlicht an sonnenabgewandten Kanten |
+| | *Streiflicht* | Kantenlicht an schräg gesehenen Wänden, auf sonnenabgewandten Flächen auf ein Viertel gedämpft |
 | | *Farbvariation* | Wandton je Gebäude aus Nutzung und Höhe |
 | | *Dachfarbe* | wie stark die echte (oder synthetische) Dachfarbe durchkommt |
 | | *Dachsättigung* | hebt die Sättigung der Luftbild-Dachfarben, ohne den Farbton zu verschieben; 0 = rohes Luftbild |
 | | *Traufkante* | eine weiche Linie, wo Wand auf Dach trifft |
 | | *Gliederung* | was ein Haus auf Augenhöhe zeigt, gemalt: eine dunklere Ladenzone, wo ein Laden erfasst ist. Sockel, Gesims über dem Erdgeschoss und Traufgesims sind modelliert, laufen von Haus zu Haus durch und sind immer da |
-| | *Fenster* | Fensterreihen an jedem Haus, in die Wand gezeichnet: eine Öffnung, in die man hineinsieht, die Laibungen im Putz der Wand, der Grund dunkler und kühler, eine schmale Sohlbank mit ihrem Schatten — kein Glas, keine Scheiben, keine Sprossen. Achsweite und Größe, wo Straßenfotos das Haus vermessen haben (Dresden), sonst die des nächsten gemessenen Hauses derselben Art, sonst die seines Typs; eine Reihe je Geschoss, die Fenster so hoch, wie das Geschoss es zulässt, die des Erdgeschosses über dem Sockel, die des obersten unter dem Traufgesims; das Erdgeschoss eines Bürgerhauses etwas erhöht, seine Fenster mit Faschen. Keine an Brandwänden, neben Türen, über Ladenfronten, an Kirchen, Schlössern und Hallen. Aus der Ferne gehen sie im Ton der Fassade auf |
+| | *Fenster* | Fensterreihen an jedem Haus, in die Wand gezeichnet: eine Öffnung, in die man hineinsieht, die Laibungen im Putz der Wand, der Grund dunkler und kühler, eine schmale Sohlbank mit ihrem Schatten, im Grund bei schrägem Blick ein wenig gespiegelter Himmel — keine Scheiben, keine Sprossen. Achsweite und Größe, wo Straßenfotos das Haus vermessen haben (Dresden), sonst die des nächsten gemessenen Hauses derselben Art, sonst die seines Typs; eine Reihe je Geschoss, die Fenster so hoch, wie das Geschoss es zulässt, die des Erdgeschosses über dem Sockel, die des obersten unter dem Traufgesims; das Erdgeschoss eines Bürgerhauses etwas erhöht, seine Fenster mit Faschen. Keine an Brandwänden, neben Türen, über Ladenfronten, an Kirchen, Schlössern und Hallen. Aus der Ferne gehen sie im Ton der Fassade auf |
 | | *Fassadenbild* | was Straßenfotos (Mapillary) über eine Fassade sagen, abstrahiert: ein feines Relief, wo sie unruhig ist, ein Gesims an jedem Geschoss einer unruhigen Gründerzeitfront, ein etwas dunklerer oder hellerer Ton, ein Ladensockel, wo ein Ladenschild hängt; wo Rundumfotos die Fassade zeigen (in jeder Stadt außer Unna, das keine hat) |
 | | *Abendlicht* | nach Einbruch der Dunkelheit: ein Viertel der Fenster leuchtet warm, Läden und öffentliche Bauten werden von Lichtkegeln am Fuß der Fassade angestrahlt, manche Wahrzeichen von ungleichmäßigem Flutlicht bis zur Traufe — die Wände selbst leuchten nie |
 | | *Materialstreuung* | Variation zwischen matt und seidig je Gebäude |
 | Vegetation | *Bodendetail* | Bordsteine, Rasenkanten, Stellplätze, Fahrbahnmarkierungen (Überwege, Halt-, Rad- und Mittellinien), die Gärten der Kleingartenanlagen und der Belag unter den Füßen (Asphalt, Platten, Kopfsteinpflaster aus OpenStreetMap), die Mähstreifen und Körnung der Sportplätze, aus der Nähe sichtbar |
 | | *Stadtgrün* | färbt begrünte Höfe, Vorgärten und Parks im Siedlungsgebiet und die grünen Bahnböschungen wie Wiese, aus dem Infrarot-Luftbild |
 | | *Wiesenfärbung* | färbt Wiesen saftig bis trocken aus dem Infrarot-Luftbild |
-| | *Gegenlicht-Schimmer* | Gegenlichtschimmer auf Kronen zwischen dir und der Sonne |
-| | *Blattdurchscheinen* | Durchleuchtung naher, großer Kronen (schattenabhängig) |
 | Rendering | *Kontaktschatten* | Umgebungsverdunkelung in Ecken und unter Traufen |
 | | *Himmelslicht* | enge Höfe und Straßenschluchten bekommen weniger Himmelslicht als offene Wiesen — aus Gelände und Gebäudemodell vorberechnet |
 | | *Ferne Schatten* | Schatten jenseits der gewöhnlichen Schattenreichweite: lange Schatten ferner Häuser und Hänge bei tiefer Sonne, und in der Ferne auch die Schatten der Nachbarhäuser |
@@ -467,18 +557,25 @@ Code und Wissensbasis für sie verwenden:
 
 Drei weitere Effekte gehören zum festen Look. Der Nebel über dem Fluss
 treibt erst ab etwa 120 m vor dir über dem Wasser, dichter erst in der
-Ferne.
-Die fotografische Tiefenschärfe macht nur unscharf, was hinter dem Fokus
-liegt (der Vordergrund bleibt scharf), und scharf ist immer, was in der
-Bildmitte liegt. Solange sich die Kamera bewegt, ist die Unschärfe
-abgeschaltet (das Auge kann sie in Bewegung nicht auflösen) und kommt
-zurück, sobald du stehst. Telefone zeichnen ohne sie: Die Unschärfe
-braucht mehr Grafikspeicher, als ein Telefon für einen Hauch erübrigen
-kann, den ein kleiner Bildschirm kaum zeigt. Und solange du im
-Pastell-Look gehst, dich drehst oder fliegst, verwischt das Bild leicht
-entlang der Kamerabewegung, wie bei einer Kamera mit kurzer Belichtung;
-auch auf Telefonen, ohne zusätzlichen Speicher. Die anderen Bildstile
-und das Modell behalten ihre scharfen Linien.
+Ferne. Die fotografische Tiefenschärfe macht unscharf, was hinter dem Fokus
+liegt und was davor steht (ein Baum am Bildrand, eine Laterne gleich vor
+dir, die Straße zu deinen Füßen), wie bei einer echten Linse, und scharf ist
+immer, was in der Bildmitte liegt, ein Baum ebenso wie eine Fassade. Sie ist
+so stark wie bei einer echten Kamera mit diesem Bildwinkel und der Öffnung
+eines 50-mm-Objektivs bei Blende 1,8: Liegt der Fokus auf einer Fassade die
+Straße hinunter, bleibt die Stadt dahinter fast scharf, ein Baum wenige
+Schritte vor dir aber wird weich; liegt er auf einer Laterne gleich vor dir,
+wird der Hintergrund weich. Liegt in der Bildmitte nichts (der Himmel),
+stellt das Objektiv auf die Ferne. Solange sich die Kamera bewegt, ist die
+Unschärfe abgeschaltet (das Auge kann sie in Bewegung nicht auflösen); wenn
+du stehst, wächst sie in knapp einer Sekunde wieder herein, wie wenn ein
+Objektiv scharfstellt. Telefone zeichnen ohne sie: Die Unschärfe braucht
+mehr Grafikspeicher, als ein Telefon für einen Hauch erübrigen kann, den ein
+kleiner Bildschirm kaum zeigt. Und solange du im Pastell-Look gehst, dich
+drehst oder fliegst, verwischt das Bild leicht entlang der Kamerabewegung,
+wie bei einer Kamera mit kurzer Belichtung; auch auf Telefonen, ohne
+zusätzlichen Speicher. Die anderen Bildstile und das Modell behalten ihre
+scharfen Linien.
 
 ### Erweitert
 
@@ -487,10 +584,69 @@ und das Modell behalten ihre scharfen Linien.
   lässt sich nicht rückgängig machen. *Bild speichern* speichert die
   Ansicht als PNG mit ihren Quellen (siehe [Modell](#modell-die-stadt-als-planzeichnung)). *Immersiver Modus* fängt den
   Mauszeiger für ein Ego-Perspektive-Gefühl ein; `Esc` verlässt ihn.
+- **Entwurf** — lädt einen eigenen Entwurf in die Stadt: eine glTF-Datei
+  (`.glb`, oder `.gltf` mit ihrer `.bin` und den Texturen zusammen
+  ausgewählt), wie sie SketchUp, Rhino, Revit, Archicad, Vectorworks oder
+  Blender exportieren, ein IFC-Modell (`.ifc`), ein OBJ (`.obj`, mit
+  `.mtl` und Texturen zusammen ausgewählt; gelesen als Meter, Y nach oben)
+  oder eine Rhino-Datei (`.3dm`, mit Render-Netzen gespeichert); auch auf
+  das Feld ziehen. Eine Rhino-Datei mit gesetztem Geo-Ankerpunkt steht an
+  ihrem Ort (auf dem Gelände, wenn der Anker keine Höhe oder Rhinos
+  Voreinstellung 0 nennt). Landschaftspläne lädt man genauso: ein ASCII-DXF, ein
+  Shapefile (die `.shp` mit `.dbf`, `.prj` und `.cpg` zusammen
+  auswählen), ein GeoPackage (`.gpkg`) oder LandXML (`.xml`). Schraffuren
+  und Flächen werden nach dem Namen ihres Layers oder ihren Attributen
+  zu Rasen, Beet, Pflaster, Weg, Wasser, Sand oder Kies (deutsch oder
+  englisch, etwa „Rasen“, „Pflaster“, „Staudenbeet“; ein Attribut wie
+  *Nutzung*, *Art* oder *Belag* zuerst, Namen und Adressen zuletzt, damit
+  ein Park an der „Kamenzer Straße“ Rasen bleibt), in den Farben der
+  Stadt aufs Gelände gelegt; Baumsymbole werden Bäume in der gezeichneten
+  Kronengröße, ein DGM ein geplantes Gelände. Ein Layer, dessen Name
+  nichts sagt, bleibt grau, und das Feld nennt ihn. Ein Plan in
+  UTM-Koordinaten liegt an seinem Ort auf dem dort schon geladenen
+  Gelände. Eine IFC mit Verortung (`IfcMapConversion` in ETRS89/UTM) steht
+  von selbst an ihrem Ort; eine, die nur Breite und Länge des Grundstücks
+  kennt, steht ungefähr dort, und das Feld bittet ums Prüfen. Liegt der
+  Ort aus der Datei mehr als 2 km außerhalb der Kacheln der Stadt oder in
+  den Koordinaten eines anderen Orts, wird der Entwurf vor dir abgesetzt,
+  und das Feld sagt warum. Die Datei wird nur in
+  deinem Browser gelesen und nirgends hochgeladen. Stehen Landeskoordinaten
+  (UTM, auch mit vorangestellter Zone) in der Datei, steht der Entwurf
+  gleich an seinem Ort, mit seinen NHN-Höhen, wenn sie zum Gelände passen;
+  sonst wird er vor dir aufs Gelände gesetzt — mit seinem Nullpunkt (±0),
+  wenn er ein Untergeschoss darunter hat. *Hierher holen*, *Aufs
+  Gelände*, *Ost*, *Nord*, *Höhe* und *Drehung* verschieben, setzen und
+  drehen ihn; *Maßstab* liest die Datei in einer anderen Einheit (m, cm,
+  mm, Zoll, Fuß) und mit einem Faktor, etwa für ein OBJ, das keine
+  Einheit kennt, oder ein Modell im Maßstab 1:100; ist ein Entwurf kleiner
+  als 4 m oder größer als 3 km, schlägt das Feld das vor (Landschaftspläne
+  haben keinen Maßstab: ihre Koordinaten sagen ihn). *Lage sichern* speichert die Lage samt Maßstab als kleine Datei
+  (`….lage.json`), die beim nächsten Mal mit dem Entwurf zusammen geladen
+  wird. Gebäude, deren Grundriss der Entwurf zu mehr als der Hälfte
+  überdeckt, treten beiseite (*Bestand im Umriss ausblenden*); flache
+  Bodenplatten am tiefsten Punkt des Entwurfs zählen dabei nicht. Der
+  Entwurf ist modellweiß, oder in den *Farben der Datei*; er wirft
+  Schatten, man läuft nicht durch ihn hindurch, und Modell und
+  Verschattungsstudie zeigen ihn mit. Auf dem Handy darf er höchstens
+  250 000 Dreiecke und 40 MB haben (am Rechner 3 Millionen und 400 MB);
+  Texturen, die nicht hineinpassen, bleiben weg. Mit den Gebäuden
+  verschwinden auch Bäume, Hecken, Laternen und Stadtmöbel im Grundriss
+  des Entwurfs (seine Bodenplatte eingeschlossen), und das Gelände, Mauern,
+  Bordsteine, Treppen, Gleise, Bahnsteige und Wasser liegen dort unter
+  seinem Boden (eine Strecke auf einer Brücke darüber bleibt). Ein Klick
+  auf den Entwurf befragt ihn wie ein Gebäude: Die Karte nennt das
+  Bauteil — ein IFC-Element mit Typ und GlobalId, eine Fläche des Plans
+  nach ihrer Art, ein Objekt aus glTF oder OBJ mit seinem Namen — und wo
+  der Entwurf steht.
 - **Snapshot** — *Kopieren* kopiert deine genaue Position, Datum und
-  Uhrzeit, den Bildstil, den *Nebel*, den Kronen-Schalter und die
+  Uhrzeit, den Bildstil, den *Nebel* und die
   Datenebenen als kleinen JSON-Text; einen solchen Text in das Feld
-  einfügen und *Anwenden* drücken stellt ihn wieder her. So wird eine
+  einfügen und *Anwenden* drücken stellt ihn wieder her. *Link kopieren*
+  kopiert einen Link auf diese Seite, der mit derselben Ansicht öffnet
+  (der Snapshot steht in den Parametern der Adresse, `?snap=`, und landet
+  so bei jedem Öffnen im Zugriffsprotokoll des Hosters; Absturzberichte
+  lassen ihn weg); er enthält den Ort der Kamera, nach *Standort* oder
+  *Live* also deinen. So wird eine
   bestimmte Ansicht geteilt oder für einen Screenshot reproduziert. Ein
   Snapshot von vor dem festen Look lädt weiter; die Regler, die er nennt,
   werden übergangen. Ein fehlerhafter Snapshot wird mit einer Meldung

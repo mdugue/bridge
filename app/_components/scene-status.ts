@@ -25,16 +25,15 @@ import type {
   SkippedStages,
   StageFractions,
 } from "@/lib/city/load-stages";
-import type { FootprintPoly } from "@/lib/city/minimap";
+import { NO_FOOTPRINTS } from "@/lib/city/minimap";
+import type { MapFootprints } from "@/lib/city/minimap";
 import type { PlayerPose } from "@/lib/city/pose";
-import {
-  createSliceStore,
-  dataEqual,
-  type SliceStore,
-} from "@/lib/city/slice-store";
+import { createSliceStore, dataEqual } from "@/lib/city/slice-store";
+import type { SliceStore } from "@/lib/city/slice-store";
 import type { TrafficHourStatus } from "@/lib/city/traffic-hours";
 import { layerErrorText } from "./boot-error";
 import type { CityWalkOptions, CityWalkStats, SiteInfo } from "./create-app";
+import type { DesignStatus } from "./design-layer";
 import type { ModelHud, ViewMode } from "./model-rig";
 import { updatePocDebug } from "./poc-debug";
 import type { TramCarsStatus } from "./tram-cars";
@@ -69,7 +68,7 @@ export interface SceneStatusSlices {
   gpuFailure: string | null;
   stats: HudStats | null;
   /** every loaded tile's building footprints, for the minimap */
-  footprints: FootprintPoly[];
+  footprints: MapFootprints;
   /** smoothed, whole frames per second */
   fps: number | null;
   /** the site as the tileset describes it (`onSiteInfo`) */
@@ -86,6 +85,8 @@ export interface SceneStatusSlices {
   trafficHour: TrafficHourStatus | null;
   /** the player's pose (~10 Hz), for the minimap's dot */
   pose: PlayerPose | null;
+  /** the loaded design (ADR 0054), for the *Entwurf* panel */
+  design: DesignStatus | null;
 }
 
 export type SceneStatus = SliceStore<SceneStatusSlices>;
@@ -98,7 +99,7 @@ const INITIAL: SceneStatusSlices = {
   streamError: null,
   gpuFailure: null,
   stats: null,
-  footprints: [],
+  footprints: NO_FOOTPRINTS,
   fps: null,
   site: null,
   mode: "walk",
@@ -108,6 +109,7 @@ const INITIAL: SceneStatusSlices = {
   tramStatus: null,
   trafficHour: null,
   pose: null,
+  design: null,
 };
 
 /**
@@ -138,6 +140,7 @@ export function createSceneStatus(
       modelView: dataEqual,
       tramStatus: dataEqual,
       trafficHour: dataEqual,
+      design: dataEqual,
     },
     schedule,
   });
@@ -160,6 +163,7 @@ export type SceneReports = Required<
     CityWalkOptions,
     | "onBikeCounts"
     | "onBusy"
+    | "onDesign"
     | "onError"
     | "onErrorCleared"
     | "onFatal"
@@ -199,7 +203,7 @@ export function sceneReports(
   {
     footprints,
     live,
-  }: { footprints: () => FootprintPoly[] | undefined; live: () => boolean }
+  }: { footprints: () => MapFootprints | undefined; live: () => boolean }
 ): SceneReports {
   // The render stopped for good (onFatal): its message stays, and a tile
   // still in flight failing must not add a layer's hole under its card.
@@ -207,12 +211,16 @@ export function sceneReports(
   const on = <A extends unknown[]>(report: (...args: A) => void) =>
     whileLive(live, report);
   return {
-    onSiteInfo: on((info) => status.set("site", info)),
-    onStage: on((update) =>
-      status.update("progress", (p) => withStage(p, update))
-    ),
+    onSiteInfo: on((info) => {
+      status.set("site", info);
+    }),
+    onStage: on((update) => {
+      status.update("progress", (p) => withStage(p, update));
+    }),
     onLoaded: on(() => updatePocDebug({ ready: true })),
-    onBusy: on((busy) => status.set("busy", busy)),
+    onBusy: on((busy) => {
+      status.set("busy", busy);
+    }),
     // One tile (or one tile's dressing) failed after the first frame: it
     // leaves a hole, and the rest keeps streaming — the stages still finish
     // on their own (a failed tile counts as done). A failure before the
@@ -245,16 +253,33 @@ export function sceneReports(
       }
     }),
     // (shown as whole frames: a report that rounds the same is no change)
-    onFps: on((fps) => status.set("fps", Math.round(fps))),
-    onTramStatus: on((tram) => status.set("tramStatus", tram)),
-    onTrafficHour: on((hour) => status.set("trafficHour", hour)),
-    onBikeCounts: on((counters) => status.set("bikeCounters", counters)),
-    onModeChange: on((mode) => status.set("mode", mode)),
-    onModelView: on((view) => status.set("modelView", view)),
-    onInquiry: on((inquiry, along) =>
-      status.set("inquiry", inquiry ? { inquiry, along } : null)
-    ),
-    onPose: on((pose) => status.set("pose", pose)),
+    onFps: on((fps) => {
+      status.set("fps", Math.round(fps));
+    }),
+    onTramStatus: on((tram) => {
+      status.set("tramStatus", tram);
+    }),
+    onTrafficHour: on((hour) => {
+      status.set("trafficHour", hour);
+    }),
+    onBikeCounts: on((counters) => {
+      status.set("bikeCounters", counters);
+    }),
+    onModeChange: on((mode) => {
+      status.set("mode", mode);
+    }),
+    onModelView: on((view) => {
+      status.set("modelView", view);
+    }),
+    onInquiry: on((inquiry, along) => {
+      status.set("inquiry", inquiry ? { inquiry, along } : null);
+    }),
+    onPose: on((pose) => {
+      status.set("pose", pose);
+    }),
+    onDesign: on((design) => {
+      status.set("design", design);
+    }),
   };
 }
 

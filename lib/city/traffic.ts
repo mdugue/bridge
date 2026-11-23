@@ -75,7 +75,7 @@ export function trafficLoad(dtv: number): number {
     return 0;
   }
   const span = stops.length - 1;
-  for (let i = 0; i < span; i++) {
+  for (let i = 0; i < span; i += 1) {
     const hi = stops[i + 1].dtv;
     if (dtv < hi) {
       const lo = stops[i].dtv;
@@ -118,7 +118,7 @@ export function flowTaper(length: number): number {
  */
 export function flowProfile(segments: number): [number, number][] {
   const out: [number, number][] = [];
-  for (let i = 0; i <= segments; i++) {
+  for (let i = 0; i <= segments; i += 1) {
     const t = (Math.PI * i) / segments;
     out.push([Math.cos(t), Math.sin(t) ** 0.45]);
   }
@@ -189,6 +189,9 @@ export const JOIN_M = 3;
 /** An end this close (m) to the tile's edge was cut there by the bake. */
 const SEAM_M = 0.05;
 
+/** The join grid's cell of one coordinate. */
+const cell = (v: number): number => Math.floor(v / JOIN_M);
+
 /**
  * Which ends of each section are open — where the flow really ends and its
  * body tapers to a point — and which run on: into another counted section
@@ -203,13 +206,14 @@ export function openEnds(
   bounds?: readonly [number, number, number, number]
 ): [boolean, boolean][] {
   const ends: { f: number; p: Point2 }[] = [];
-  features.forEach((f, i) => {
+  for (let i = 0; i < features.length; i += 1) {
+    const f = features[i];
     const c = f.geometry.coordinates;
-    if (c.length >= 2) {
-      ends.push({ f: i, p: c[0] }, { f: i, p: c[c.length - 1] });
+    const last = c.at(-1);
+    if (c.length >= 2 && last) {
+      ends.push({ f: i, p: c[0] }, { f: i, p: last });
     }
-  });
-  const cell = (v: number) => Math.floor(v / JOIN_M);
+  }
   const grid = new Map<string, { f: number; p: Point2 }[]>();
   for (const e of ends) {
     const key = `${cell(e.p[0])},${cell(e.p[1])}`;
@@ -227,8 +231,8 @@ export function openEnds(
     }
     const cx = cell(p[0]);
     const cy = cell(p[1]);
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
         for (const e of grid.get(`${cx + dx},${cy + dy}`) ?? []) {
           if (e.f !== i && Math.hypot(e.p[0] - p[0], e.p[1] - p[1]) <= JOIN_M) {
             return true;
@@ -240,9 +244,10 @@ export function openEnds(
   };
   return features.map((f, i) => {
     const c = f.geometry.coordinates;
-    if (c.length < 2) {
+    const last = c.at(-1);
+    if (c.length < 2 || !last) {
       return [true, true];
     }
-    return [!joined(i, c[0]), !joined(i, c[c.length - 1])];
+    return [!joined(i, c[0]), !joined(i, last)];
   });
 }

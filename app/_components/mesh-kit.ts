@@ -1,8 +1,8 @@
 /**
- * The triangle-soup kit the runtime's line and bridge layers build their
- * meshes with (rail-layer.ts, tram-layer.ts, riverside-layer.ts,
- * catenary-layer.ts): an accumulator of positions and per-vertex normals
- * in the Y-up scene frame, the primitives that push into it — a triangle
+ * The triangle kit the runtime's line and bridge layers build their
+ * meshes with (rail-layer.ts, bridge-layer.ts, tram-layer.ts,
+ * riverside-layer.ts, catenary-layer.ts), and their palette (`COLORS`): an
+ * accumulator of positions and per-vertex normals in the Y-up scene frame, the primitives that push into it — a triangle
  * or quad wound to face its normal (the one guarantee: every material is
  * FrontSide), a ribbon along a run of points, a footprint's slab, a box
  * column, a strut — and the finish into a mesh of the scene-wide material
@@ -14,15 +14,37 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
-  type Material,
   Mesh,
   MeshStandardNodeMaterial,
   ShapeUtils,
   Vector2,
 } from "three/webgpu";
-import { finished, type Steps } from "@/lib/city/build-steps";
+import type { Material } from "three/webgpu";
+import { finished } from "@/lib/city/build-steps";
+import type { Steps } from "@/lib/city/build-steps";
 import type { Ring2 } from "@/lib/city/decks";
+import { packed, weldSteps } from "@/lib/city/weld";
+import type { WeldColumn } from "@/lib/city/weld";
+import { normalWorld } from "three/tsl";
+import { lineUnderDesign } from "./design-site";
+import { railGlints } from "./lamp-reflections";
 import { sceneMaterial } from "./three-utils";
+import { viewDirection } from "./view-direction";
+
+/** The line and bridge layers' palette. */
+export const COLORS = {
+  ballast: 0x9a_8f_85, // warm grey-brown crushed stone
+  rail: 0x4a_4a_50, // dark weathered steel
+  // the decks in the ground's own palette (lib/city/landcover.ts), the
+  // structure in the buildings' cool clay: a bridge is part of the city
+  deckStone: 0xd9_d5_cc, // cool clay (building-tint's `cool` family)
+  deckRoad: 0xc8_c8_ce, // the road class
+  deckPath: 0xe0_cd_a8, // the path class
+  deckRail: 0xb2_a9_a0, // the railway class
+  platform: 0xcf_c9_bd, // pale platform concrete
+  steel: 0xd9_dd_e0, // painted steel: the palest slate of the clay family
+  mast: 0xa9_ad_a6, // galvanised steel: the catenary's masts and portals
+};
 
 /** Accumulates a non-indexed triangle soup (positions + per-vertex normals). */
 export interface Mesh3 {
@@ -135,7 +157,7 @@ function* floats(src: readonly number[]): Steps<Float32Array> {
   const out = new Float32Array(src.length);
   for (let i = 0; i < src.length; i += FLOAT_RUN) {
     const end = Math.min(src.length, i + FLOAT_RUN);
-    for (let k = i; k < end; k++) {
+    for (let k = i; k < end; k += 1) {
       out[k] = src[k];
     }
     yield;
@@ -143,21 +165,90 @@ function* floats(src: readonly number[]): Steps<Float32Array> {
   return out;
 }
 
-function* finishGeo(acc: Mesh3): Steps<BufferGeometry | null> {
-  if (acc.pos.length === 0) {
+/** Normals as signed bytes (a unit axis is exact, any other within half a
+ *  degree): four bytes a vertex on the GPU where three floats were twelve.
+ * @yields {void} after each run of numbers, to hand the thread back
+ */
+function* snorm8(src: readonly number[]): Steps<Int8Array<ArrayBuffer>> {
+  const out = new Int8Array(src.length);
+  // (whole normals a run: one cut in two would be scaled by its halves)
+  const run = FLOAT_RUN - (FLOAT_RUN % 3);
+  for (let i = 0; i < src.length; i += run) {
+    const end = Math.min(src.length, i + run);
+    for (let k = i; k < end; k += 3) {
+      const x = src[k];
+      const y = src[k + 1];
+      const z = src[k + 2];
+      const scale = 127 / (Math.hypot(x, y, z) || 1);
+      out[k] = Math.round(x * scale);
+      out[k + 1] = Math.round(y * scale);
+      out[k + 2] = Math.round(z * scale);
+    }
+    yield;
+  }
+  return out;
+}
+
+/**
+ * Triangles given corner by corner as a geometry: welded (lib/city/weld.ts:
+ * a soup's corners that agree in everything are one vertex) and indexed,
+ * with 16-bit indices where they reach. A yard's ballast keeps a sixth of
+ * its vertices, a rail's ribbon under half. `more`: further attributes, by
+ * name, with how many values a vertex has.
+ * @yields {void} after each run of numbers, to hand the thread back
+ */
+export function* geometrySteps(
+  positions: readonly number[],
+  normals: readonly number[],
+  more: readonly (readonly [string, readonly number[], number])[] = []
+): Steps<BufferGeometry | null> {
+  if (positions.length === 0) {
     return null;
   }
-  const g = new BufferGeometry();
-  g.setAttribute("position", new BufferAttribute(yield* floats(acc.pos), 3));
-  g.setAttribute("normal", new BufferAttribute(yield* floats(acc.nrm), 3));
-  if (acc.deck?.length === (acc.pos.length / 3) * 4) {
-    g.setAttribute("aDeck", new BufferAttribute(yield* floats(acc.deck), 4));
+  const count = positions.length / 3;
+  const pos = yield* floats(positions);
+  const nrm = yield* snorm8(normals);
+  const columns: WeldColumn[] = [
+    [pos, 3],
+    [nrm, 3],
+  ];
+  const others: [string, Float32Array, number][] = [];
+  for (const [name, values, n] of more) {
+    const column = yield* floats(values);
+    columns.push([column, n]);
+    others.push([name, column, n]);
   }
+  const w = yield* weldSteps(columns, count);
+  const g = new BufferGeometry();
+  g.setAttribute("position", new BufferAttribute(packed(pos, 3, w), 3));
+  g.setAttribute("normal", new BufferAttribute(packed(nrm, 3, w), 3, true));
+  for (const [name, column, n] of others) {
+    g.setAttribute(name, new BufferAttribute(packed(column, n, w), n));
+  }
+  g.setIndex(
+    new BufferAttribute(
+      // (65 535 is WebGL2's restart index: never a vertex of 16 bits)
+      w.unique < 0x1_00_00 ? Uint16Array.from(w.indices) : w.indices,
+      1
+    )
+  );
   g.computeBoundingSphere();
   return g;
 }
 
+function finishGeo(acc: Mesh3): Steps<BufferGeometry | null> {
+  const framed = acc.deck?.length === (acc.pos.length / 3) * 4;
+  return geometrySteps(
+    acc.pos,
+    acc.nrm,
+    framed && acc.deck ? [["aDeck", acc.deck, 4]] : []
+  );
+}
+
 export interface MatOpts {
+  /** a rail's steel: it catches the lamps by the track after dark
+   *  (lamp-reflections.ts `railGlints`) */
+  glint?: boolean;
   offsetUnits?: number;
   roughness?: number;
 }
@@ -174,12 +265,18 @@ export function material(
 ): MeshStandardNodeMaterial {
   const roughness = opts.roughness ?? 0.95;
   const offsetUnits = opts.offsetUnits ?? 0;
-  const key = `rail:${color.toString(16)}:${roughness}:${offsetUnits}`;
+  const glint = opts.glint === true;
+  const key = `rail:${color.toString(16)}:${roughness}:${offsetUnits}:${glint}`;
   return sceneMaterial(key, () => {
     const m = new MeshStandardNodeMaterial({
       color: new Color(color),
       roughness,
     });
+    // under a planner's design (design-site.ts)
+    m.positionNode = lineUnderDesign;
+    if (glint) {
+      m.emissiveNode = railGlints(normalWorld, viewDirection().negate());
+    }
     if (offsetUnits) {
       m.polygonOffset = true;
       m.polygonOffsetFactor = -1;
@@ -243,7 +340,7 @@ export function addFootprint(
     }
   }
   const winding = ringWinding(pts);
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < pts.length; i += 1) {
     const j = (i + 1) % pts.length;
     const [nx, nz] = outward(pts, i, winding);
     quad(
@@ -260,7 +357,7 @@ export function addFootprint(
 /** +1 when the ring runs counter-clockwise in (x, z), else −1. */
 export function ringWinding(pts: readonly { x: number; z: number }[]): 1 | -1 {
   let area = 0;
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < pts.length; i += 1) {
     const j = (i + 1) % pts.length;
     area += pts[i].x * pts[j].z - pts[j].x * pts[i].z;
   }
@@ -297,7 +394,7 @@ export function addColumn(
     [cx + h, cz + h],
     [cx - h, cz + h],
   ];
-  for (let s = 0; s < 4; s++) {
+  for (let s = 0; s < 4; s += 1) {
     const a = c[s];
     const b = c[(s + 1) % 4];
     let nx = b[1] - a[1];
@@ -333,7 +430,7 @@ export interface Pt {
 
 export function tangentsXZ(pts: Pt[]): Vector2[] {
   const t: Vector2[] = [];
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < pts.length; i += 1) {
     const a = pts[Math.max(0, i - 1)];
     const b = pts[Math.min(pts.length - 1, i + 1)];
     const v = new Vector2(b.x - a.x, b.z - a.z);
@@ -373,7 +470,7 @@ export function addRibbon(
     });
   const left = side(1);
   const right = side(-1);
-  for (let i = 0; i < pts.length - 1; i++) {
+  for (let i = 0; i < pts.length - 1; i += 1) {
     const l0 = left[i];
     const l1 = left[i + 1];
     const r0 = right[i];
@@ -444,6 +541,8 @@ export function addRibbon(
 
 export interface MeshOpts {
   cast: boolean;
+  /** a rail's steel (`MatOpts.glint`) */
+  glint?: boolean;
   /** a material of its own (the bridges' surfaces) instead of the plain one */
   material?: Material;
   offsetUnits?: number;
@@ -458,7 +557,9 @@ export function meshFrom(
   return finished(meshSteps(acc, color, opts));
 }
 
-/** `meshFrom` in steps: its floats copied a run at a time. */
+/** `meshFrom` in steps: its floats copied a run at a time.
+ * @yields {void} after each run of floats, to hand the thread back
+ */
 export function* meshSteps(
   acc: Mesh3,
   color: number,
@@ -472,6 +573,7 @@ export function* meshSteps(
     geo,
     opts.material ??
       material(color, {
+        glint: opts.glint,
         offsetUnits: opts.offsetUnits,
         roughness: opts.roughness,
       })
@@ -507,7 +609,7 @@ export function addStrut(acc: Mesh3, a: P3, b: P3, half: number): void {
     [-top[0], -top[1], -top[2]],
     side,
   ];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 4; i += 1) {
     const j = (i + 1) % 4;
     quad(
       acc,

@@ -12,14 +12,15 @@
  * through three's per-vertex accessors: up to 1.4 s on a phone). No
  * THREE, no DOM.
  */
-import { planTriangles, TinIndex, type TinBuckets } from "./terrain-tin";
+import { planTriangles, TinIndex } from "./terrain-tin";
+import type { TinBuckets } from "./terrain-tin";
 import {
   MIST_REACH_M,
   reach,
   trianglesOver,
   WATER_REACH_M,
-  type WaterMask,
 } from "./water-mask";
+import type { WaterMask } from "./water-mask";
 
 export type GroundIndex = Uint16Array | Uint32Array;
 export type GroundPositions =
@@ -105,7 +106,7 @@ export function localReader(input: GroundPrepInput): VertexReader {
     (positions instanceof Int16Array || positions instanceof Int8Array);
   return (i, out) => {
     const at = i * stride + offset;
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 3; k += 1) {
       const v = positions[at + k] / scale;
       out[k] = clamp ? Math.max(v, -1) : v;
     }
@@ -139,9 +140,9 @@ export function indexBox(index: GroundIndex, read: VertexReader): Float64Array {
     Number.NEGATIVE_INFINITY,
   ]);
   const v = new Float64Array(3);
-  for (let i = 0; i < index.length; i++) {
-    read(index[i], v);
-    for (let k = 0; k < 3; k++) {
+  for (const vertex of index) {
+    read(vertex, v);
+    for (let k = 0; k < 3; k += 1) {
       if (v[k] < box[k]) {
         box[k] = v[k];
       }
@@ -169,7 +170,7 @@ function vertexCells(
   const sx = cells / (maxX - minX);
   const sy = cells / (maxY - minY);
   const p = new Float64Array(3);
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     projected(i, p);
     const cx = Math.floor((p[0] - minX) * sx);
     const cy = Math.floor((maxY - p[1]) * sy);
@@ -227,23 +228,11 @@ export function prepareGround(input: GroundPrepInput): GroundPrep {
   };
   const out: GroundPrep = {};
   let projected: (i: number, p: Float64Array) => void;
-  if (input.grid !== null) {
-    const elevations = new Float32Array(input.grid * input.grid);
-    for (let i = 0; i < elevations.length; i++) {
-      atData(i);
-      elevations[i] = data[2];
-    }
-    out.elevations = elevations;
-    projected = (i, p) => {
-      atData(i);
-      p[0] = data[0] + cx;
-      p[1] = data[1] + cy;
-    };
-  } else {
-    const count = input.count;
+  if (input.grid === null) {
+    const { count } = input;
     const xy = new Float64Array(count * 2);
     const z = new Float32Array(count);
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count; i += 1) {
       atData(i);
       xy[2 * i] = data[0] + cx;
       xy[2 * i + 1] = data[1] + cy;
@@ -263,6 +252,18 @@ export function prepareGround(input: GroundPrepInput): GroundPrep {
     projected = (i, p) => {
       p[0] = xy[2 * i];
       p[1] = xy[2 * i + 1];
+    };
+  } else {
+    const elevations = new Float32Array(input.grid * input.grid);
+    for (let i = 0; i < elevations.length; i += 1) {
+      atData(i);
+      elevations[i] = data[2];
+    }
+    out.elevations = elevations;
+    projected = (i, p) => {
+      atData(i);
+      p[0] = data[0] + cx;
+      p[1] = data[1] + cy;
     };
   }
   if (input.mask && input.index) {

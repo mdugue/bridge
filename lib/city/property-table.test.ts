@@ -1,9 +1,6 @@
 import { expect, test } from "bun:test";
-import {
-  propertyTableViews,
-  readStructuralMetadata,
-  type StructuralMetadataJson,
-} from "./property-table";
+import { propertyTableViews, readStructuralMetadata } from "./property-table";
+import type { StructuralMetadataJson } from "./property-table";
 
 const buffer = (array: ArrayBufferView): ArrayBuffer =>
   new Uint8Array(array.buffer, array.byteOffset, array.byteLength).slice()

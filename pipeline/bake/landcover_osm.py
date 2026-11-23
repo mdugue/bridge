@@ -18,11 +18,24 @@ import re
 import numpy as np
 import shapely
 
+from .classes import (
+    ARABLE,
+    BACKGROUND,
+    BUILTUP,
+    CLASSES,
+    COPSE,
+    FOREST,
+    MEADOW,
+    PATH,
+    RAILWAY,
+    ROAD,
+    WATER,
+)
 from .common import Tile, column, feature, geometry_json
-from .osm import read_osm, read_ways, tag
+from .osm import osm_width, read_osm, read_ways, tag
 
 AREAS = {
-    1: {
+    MEADOW: {
         "landuse": {
             "meadow",
             "grass",
@@ -34,10 +47,10 @@ AREAS = {
         },
         "natural": {"grassland", "heath"},
     },
-    2: {"landuse": {"forest"}, "natural": {"wood"}},
-    3: {"natural": {"scrub"}},
+    FOREST: {"landuse": {"forest"}, "natural": {"wood"}},
+    COPSE: {"natural": {"scrub"}},
     # The DLM's settlement areas include parks and sports grounds (sie02).
-    4: {
+    BUILTUP: {
         "landuse": {
             "residential",
             "commercial",
@@ -50,12 +63,12 @@ AREAS = {
         },
         "leisure": {"park", "garden", "pitch", "playground", "sports_centre"},
     },
-    5: {"landuse": {"railway"}},
-    8: {"natural": {"water"}, "landuse": {"basin", "reservoir"}},
-    9: {"landuse": {"farmland"}},  # arable (landcover.py ARABLE_VEG)
+    RAILWAY: {"landuse": {"railway"}},
+    WATER: {"natural": {"water"}, "landuse": {"basin", "reservoir"}},
+    ARABLE: {"landuse": {"farmland"}},  # arable (landcover.py ARABLE_VEG)
 }
 # Settlement first: OSM's green areas lie inside it (see the module doc).
-BURN_ORDER = (4, 1, 9, 2, 3, 5, 6, 7, 8)
+BURN_ORDER = (BUILTUP, MEADOW, ARABLE, FOREST, COPSE, RAILWAY, PATH, ROAD, WATER)
 PATHS = {"footway", "path", "cycleway", "steps", "track", "bridleway", "pedestrian"}
 # Road half-widths (m) by highway class when no `width` tag says otherwise.
 ROAD_HALF_WIDTH = {
@@ -90,8 +103,10 @@ def hidden_water(other_tags: str | None) -> bool:
 
 
 def _width(other_tags: str | None) -> float | None:
-    num = re.search(r"\d*\.?\d+", tag(other_tags, "width") or "")
-    return float(num.group()) if num else None
+    """A way's mapped `width` (m) through `osm.osm_width`, the one bound
+    every way's width is read with: `150 cm` is 1.5 m, feet, a range or
+    past 60 m none (a wider river is its water area, not its line)."""
+    return osm_width(tag(other_tags, "width"))
 
 
 # A lane's width (m): a road whose `lanes` counts two or more and that has
@@ -149,7 +164,7 @@ def rail_half(railway: str | None, other_tags: str | None) -> float | None:
 
 
 def road_buffers(tile: Tile) -> list[shapely.Geometry]:
-    """The roads the class raster burns as road (7): each carriageway on
+    """The roads the class raster burns as road (`ROAD`): each carriageway on
     the ground (`read_ways`) at its `width`, else its `lanes` (LANE_M
     each), else at its class's half-width (halved one way, `DUAL`)."""
     kinds = ", ".join(f"'{k}'" for k in ROAD_HALF_WIDTH)
@@ -167,7 +182,7 @@ def road_buffers(tile: Tile) -> list[shapely.Geometry]:
 
 
 def _area_class(values: dict[str, str | None]) -> int | None:
-    for cls in (8, 5, 4, 3, 2, 9, 1):  # the most specific first
+    for cls in (WATER, RAILWAY, BUILTUP, COPSE, FOREST, ARABLE, MEADOW):  # the most specific first
         for key, wanted in AREAS[cls].items():
             if values.get(key) in wanted:
                 return cls
@@ -181,14 +196,14 @@ def _area_class(values: dict[str, str | None]) -> int | None:
 
 def burn_order(tile: Tile) -> tuple[list[tuple[int, list[shapely.Geometry]]], list[dict]]:
     """(class id, geometries) in burn order, and the veg-row features."""
-    by_class: dict[int, list[shapely.Geometry]] = {c: [] for c in range(1, 10)}
+    by_class: dict[int, list[shapely.Geometry]] = {c: [] for c in CLASSES if c != BACKGROUND}
     where = " OR ".join(f"{c} IS NOT NULL" for c in AREA_COLUMNS)
     geoms, fields = read_osm(tile, "multipolygons", where, [*AREA_COLUMNS, "other_tags"])
     cols = {c: column(fields, c, geoms) for c in AREA_COLUMNS}
     hidden = [hidden_water(t) for t in column(fields, "other_tags", geoms)]
     for i, g in enumerate(geoms):
         cls = _area_class({c: cols[c][i] for c in AREA_COLUMNS})
-        if cls is not None and g is not None and not (cls == 8 and hidden[i]):
+        if cls is not None and g is not None and not (cls == WATER and hidden[i]):
             by_class[cls].append(g)
 
     rows: list[dict] = []
@@ -207,16 +222,16 @@ def burn_order(tile: Tile) -> tuple[list[tuple[int, list[shapely.Geometry]]], li
         if tag(other[i], "natural") == "tree_row":
             rows += [feature(geometry_json(p), {"kind": "treerow"}) for p in shapely.get_parts(g)]
         elif highway[i] in PATHS:
-            by_class[6].append(shapely.buffer(g, width / 2 if width else 1.0))
+            by_class[PATH].append(shapely.buffer(g, width / 2 if width else 1.0))
         elif highway[i] in ROAD_HALF_WIDTH:
             half = _road_half(highway[i], width, lanes(other[i]), one_way(highway[i], other[i]))
-            by_class[7].append(shapely.buffer(g, half))
+            by_class[ROAD].append(shapely.buffer(g, half))
         elif waterway[i] in WATERWAY_HALF_WIDTH:
             if not hidden_water(other[i]):
                 half = width / 2 if width else WATERWAY_HALF_WIDTH[waterway[i]]
-                by_class[8].append(shapely.buffer(g, half))
+                by_class[WATER].append(shapely.buffer(g, half))
         elif (half := rail_half(railway[i], other[i])) is not None:
-            by_class[5].append(shapely.buffer(g, half))
+            by_class[RAILWAY].append(shapely.buffer(g, half))
     order = [(c, by_class[c]) for c in BURN_ORDER]
     # Clip the veg rows to the tile, like the DLM bake's bbox read.
     box = shapely.box(*tile.bounds)

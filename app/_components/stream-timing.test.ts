@@ -19,7 +19,6 @@ test("measures add up by category: count, total and the longest", async () => {
   timings.timedSync("tile:bvh", () => clock.advance(75), "33414_5656_2_sn");
   await timings.timed("tile:rasters", async () => {
     clock.advance(12);
-    return Promise.resolve();
   });
   const start = clock.now();
   clock.advance(5);
@@ -58,7 +57,7 @@ test("the tile id goes to the browser's timeline only, never into the summary", 
   timings.timedSync("tile:compile", () => clock.advance(9), "33412_5656_2_sn");
   timings.markOnce("boot:light-done");
   expect(names).toEqual(["tile:compile 33412_5656_2_sn", "boot:light-done"]);
-  expect(JSON.stringify(timings.summary())).not.toMatch(/\d{5}_\d{4}/);
+  expect(JSON.stringify(timings.summary())).not.toMatch(/\d{5}_\d{4}/u);
 });
 
 test("a timeline that throws (an old WebKit) costs nothing but its entry", () => {
@@ -116,7 +115,7 @@ test("the boot's frames are timed from the placing on: the first with a shadow m
   draw(40, false);
   draw(900, true);
   draw(30, true);
-  for (let i = 0; i < BOOT_FRAMES; i++) {
+  for (let i = 0; i < BOOT_FRAMES; i += 1) {
     draw(10, false);
   }
   const summary = timings.summary();

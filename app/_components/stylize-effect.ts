@@ -1,12 +1,5 @@
-import {
-  Color,
-  DepthTexture,
-  LessEqualCompare,
-  Matrix3,
-  type Matrix4,
-  Vector2,
-  Vector3,
-} from "three/webgpu";
+import { Color, Matrix3, Vector2, Vector3 } from "three/webgpu";
+import type { DepthTexture } from "three/webgpu";
 import {
   abs,
   asin,
@@ -31,6 +24,7 @@ import {
   max,
   min,
   mix,
+  mod,
   normalize,
   pow,
   select,
@@ -47,8 +41,14 @@ import {
   vec4,
 } from "three/tsl";
 import type { RenderStyleDef } from "@/lib/city/render-style";
-import { fogFactorAt, type SceneFog } from "./height-fog";
+import { DATA_HUE } from "./glass";
+import { fogFactorAt } from "./height-fog";
+import type { SceneFog } from "./height-fog";
+import { hash21 } from "./shader-chunks";
 import type { F, V2, V3, V4 } from "./shader-chunks";
+import { sceneNight } from "./scene-environment";
+import { readSunShadow, shadowStandIn } from "./sun-shadow-read";
+import type { ShadowRingNodes } from "./sun-rings";
 import type { ViewLens } from "./view-lens";
 
 /**
@@ -222,12 +222,6 @@ const PENS: Record<number, Pen> = {
 
 // --- small helpers --------------------------------------------------------
 
-function hash21(p: V2): F {
-  const q = fract(p.mul(vec2(123.34, 456.21)));
-  const r = q.add(dot(q, q.add(45.32)));
-  return fract(r.x.mul(r.y));
-}
-
 function valueNoise(p: V2): F {
   const i = floor(p);
   const f0 = fract(p);
@@ -318,13 +312,45 @@ const DOT_CSS = 4;
 /** The sun's world height (sin of its altitude) where `inSun` has faded
  *  it out entirely. */
 const SUN_GONE_Y = -0.02;
-/** The sun's altitude (°) below which the swapped card has no light
- *  left to cut (`Stylize.night`): where `inSun` lets go of the sun, so
- *  the card is never drawn without one (≈ −1.1°). */
-const NIGHT_ALTITUDE = (Math.asin(SUN_GONE_Y) * 180) / Math.PI;
 /** The sky screen's finest cell (rad): a whole fraction of the circle,
  *  as is every coarser one (`skyDots`). */
 const SKY_CELL = (2 * Math.PI) / 8192;
+/**
+ * Papier's night card (perceptual): its own faces, those the sky's light
+ * reaches, what the lamps and lit windows light, the sky overhead and at
+ * the horizon, and the white pencil it is drawn with. The night's light
+ * is dim: `gain` opens it up before the cut (as Film noir's camera does).
+ */
+const PAPER_NIGHT = {
+  card: vec3(0.1, 0.115, 0.18),
+  moon: vec3(0.3, 0.34, 0.46),
+  glow: vec3(1, 0.86, 0.6),
+  sky: vec3(0.06, 0.075, 0.13),
+  horizon: vec3(0.15, 0.17, 0.25),
+  dusk: vec3(0.6, 0.53, 0.6),
+  pencil: vec3(0.66, 0.7, 0.8),
+  gain: 2,
+  moonFrom: 0.06,
+  moonTo: 0.3,
+};
+/** What counts as a night light (a lamp's pool, a lit window), on the
+ *  gained lightness: from, to. */
+const NIGHT_LIGHT = { from: 0.32, to: 0.6 };
+/** Strich's gain on the night's light, and the warm wash under a lamp. */
+const STRICH_NIGHT_GAIN = 2;
+const NIGHT_WASH = vec3(1, 0.9, 0.62);
+/**
+ * Strich's night as an etcher prints it: an aquatint's tone under the
+ * hatch — the ground's, a dark wall's, the sky's from the horizon to the
+ * zenith — and the pen's black, so what a lamp leaves white stands out.
+ */
+const AQUATINT = {
+  ground: vec3(0.42, 0.43, 0.5),
+  deep: vec3(0.27, 0.28, 0.34),
+  horizon: vec3(0.38, 0.39, 0.46),
+  zenith: vec3(0.16, 0.17, 0.23),
+  pen: vec3(0.05, 0.055, 0.07),
+};
 /** Strich's hatch lines lie this many CSS pixels apart. */
 const HATCH_CSS = 6;
 /** The finest screen's cell (m); each coarser one doubles it. */
@@ -361,14 +387,18 @@ export interface StylizeInputs {
   sunDirection: Vector3;
   /** the sun's shadow map */
   sunShadow: SunShadowMap;
+  /** the renderer's depth runs from 1 at the near plane to 0 at the far
+   *  one (three's `reversedDepthBuffer`), the scene's and the shadow map's
+   *  alike */
+  reversedDepth: boolean;
 }
 
 /** What the styles read of the sun's shadow map (sun-rig.ts `shadowMap`). */
 export interface SunShadowMap {
-  /** its depth, null until the first lit material made it */
+  /** its depth array, null until the first lit material made it */
   depth: () => DepthTexture | null;
-  /** world → map ([0, 1]³), kept current by three */
-  matrix: Matrix4;
+  /** the rings' uniforms, as the scene's own lookup reads them */
+  rings: ShadowRingNodes;
 }
 
 export interface Stylize {
@@ -385,13 +415,6 @@ export interface Stylize {
    * follows from there to civil dusk (-6°), where the lamps are all lit.
    */
   setSunAltitude: (altitudeDeg: number) => void;
-  /**
-   * Is it night for the styles that draw on a swapped card? Sin City's
-   * card knows only the sun: after it has set, the scene's own frame —
-   * its lit windows, lamps and floodlights — is what the night is cut
-   * from (post-stack.ts leaves the swap off).
-   */
-  night: () => boolean;
   /** Per frame: the camera's frame and the drawing buffer's pixels. */
   update: (pixelRatio: number, size: Vector2) => void;
   /**
@@ -403,16 +426,101 @@ export interface Stylize {
   dispose: () => void;
 }
 
+/** How much of the light at a pixel is warm — a lamp's, a lit
+ *  window's, the walker's lantern — not the night sky's cool fill
+ *  (0..1, from the perceptual colour). */
+const warmth = (p: V3): F =>
+  clamp(
+    p.x
+      .sub(p.z)
+      .div(max(max(p.x, p.y), 1e-3))
+      .mul(2.5),
+    0,
+    1
+  );
+
+/** Sin City's rain: streaks on a grid of world DIRECTIONS (azimuth,
+ *  elevation), so they stay put when the camera turns and fall with
+ *  time, slanted by the wind. Each layer stands at a distance and is
+ *  hidden behind anything nearer — rain in front of a wall, not painted
+ *  on it. */
+const rainLayer = (
+  dir: V3,
+  cellsPerRad: number,
+  speed: number,
+  seed: number,
+  pixelAngle: F
+): F => {
+  const az = atan(dir.z, dir.x);
+  const el = asin(clamp(dir.y, -1, 1));
+  // The clock wraps at 2560 cells: 10 × 256 along y and 0.9 × 2560 = 9 × 256
+  // along x, so the wrap moves the cell by whole keys and keeps `fract(q)`
+  // — no seam, and the streak's place in its cell stays precise all session.
+  const qy = el.mul(cellsPerRad * 0.22).add(mod(time.mul(speed), 2560));
+  const q = vec2(az.mul(cellsPerRad).add(qy.mul(0.9)), qy);
+  const cell = floor(q).toVar();
+  const f = fract(q).toVar();
+  // The cell index, wrapped: the hash keeps its precision (unwrapped:
+  // columns after ≈ 51 min, a constant after ≈ 3.4 h). 256 cells are more
+  // than a screen shows, and small enough that `hash21` stays even: over
+  // 512–1024 its columns are twice as strong.
+  const key = mod(cell, 256);
+  const present = step(0.84, hash21(key.add(seed)));
+  const x0 = hash21(key.add(seed + 7.1))
+    .mul(0.6)
+    .add(0.2);
+  const y0 = hash21(key.add(seed + 3.3))
+    .mul(0.4)
+    .add(0.1)
+    .toVar();
+  const len = hash21(key.add(seed + 9.9))
+    .mul(0.22)
+    .add(0.28);
+  // At least a pixel wide, whatever the layer's scale.
+  const w = max(0.035, pixelAngle.mul(1.1 * cellsPerRad));
+  const across = float(1).sub(smoothstep(w.mul(0.5), w, abs(f.x.sub(x0))));
+  const end = y0.add(len);
+  const along = smoothstep(y0, y0.add(0.05), f.y).mul(
+    float(1).sub(smoothstep(end.sub(0.05), end, f.y))
+  );
+  return present.mul(across).mul(along);
+};
+
+// --- Schwarzplan: the figure black, the ground white. ---
+//
+// Only the buildings are drawn (unlit black) on the terrain's white
+// (paper-scene.ts); the light the ground still carries — shade, contact
+// shadows, the sky view — is cut away by one threshold.
+const figure = (p: V3, sky: F, line: F): V3 => {
+  const ground = max(aaStep(0.16, lumaOf(p)), sky);
+  // In a view from the side the blocks stand in front of each other: a
+  // white hairline where one building's outline crosses another's
+  // keeps them apart. On the white nothing is drawn.
+  const parted = float(1)
+    .sub(ground)
+    .mul(smoothstep(0.25, 0.6, line));
+  return mix(mix(vec3(0.07), vec3(1), ground), vec3(1), parted);
+};
+
+/** A night light on the card: bright and warm (lamps, lit windows). */
+const nightLight = (p: V3, y: F): F =>
+  smoothstep(NIGHT_LIGHT.from, NIGHT_LIGHT.to, y).mul(
+    smoothstep(0.12, 0.45, warmth(p))
+  );
+
 export function createStylize(inputs: StylizeInputs): Stylize {
   const { lens, fog, litAt } = inputs;
-  const camera = lens.camera;
+  const { camera } = lens;
   const skyZ = uniform(6000 * SKY_FAR_SHARE);
   const ortho = lens.ortho.greaterThan(0.5);
-  const inverseProjection = uniform(camera.projectionMatrixInverse);
+  // the lens's one shared node (the shadow of the nameplate reads it too)
+  const { inverseProjection } = lens;
   const mode = uniform(1);
   const ink = uniform(0.7);
   const dusk = uniform(0);
-  let sunAltitude = 90;
+  // the sun rig's night factor (scene-environment.ts `sceneNight`): the nights of
+  // Papier and Strich follow the lamps, not the fading sun
+  const night = sceneNight;
   const pixelScale = uniform(1);
   const resolution = uniform(new Vector2(1, 1));
   const upView = uniform(new Vector3(0, 1, 0));
@@ -424,11 +532,9 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   // the read binds a stand-in until then, swapped for the map (a binding,
   // not a build) in `update`. The stand-in compares like the map.
   const frameFog = uniform(new Color());
-  const shadowStandIn = new DepthTexture(1, 1);
-  shadowStandIn.compareFunction = LessEqualCompare;
+  const standIn = shadowStandIn(inputs.reversedDepth);
   // every read of it, so `update` can bind the map to each
   const shadowReads: ReturnType<typeof texture>[] = [];
-  const shadowMatrix = uniform(inputs.sunShadow.matrix);
   const shadowReady = uniform(0);
   const pen = {
     sil: uniform(new Vector2(0.012, 0.045)),
@@ -455,8 +561,14 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   const viewDistance = (at: V2): F =>
     lens.distance(texture(inputs.depth, at).r);
   /** Is the pixel at `at` (whose distance is `z`) sky — the background? */
+  // the sky at a parallel view's far plane: depth 1, or 0 where the buffer
+  // runs reversed
+  const skyDepth = (depth: F): F =>
+    inputs.reversedDepth
+      ? step(depth, float(1 - SKY_DEPTH))
+      : step(SKY_DEPTH, depth);
   const isSky = (at: V2, z: F): F =>
-    select(ortho, step(SKY_DEPTH, texture(inputs.depth, at).r), step(skyZ, z));
+    select(ortho, skyDepth(texture(inputs.depth, at).r), step(skyZ, z));
 
   /**
    * What the stencil differences: in perspective w = 1/z, which is affine
@@ -472,27 +584,24 @@ export function createStylize(inputs: StylizeInputs): Stylize {
    * cast shadow: the pixel's world point tested against the sun's own
    * shadow map — the shadow the scene drew, exactly, whatever the colour
    * of the surface (a post pass cannot tell a dark roof in the sun from a
-   * pale one in shade by its colour). Off the map's frustum (it follows
-   * the camera, a few hundred metres round) the caller's `beyond` stands
-   * in — the style's guess from lightness —, faded in over the frustum's
-   * last 4 % so its edge draws no line; below the horizon nothing is in
+   * pale one in shade by its colour). Off the map's rings (they follow
+   * the camera, about two kilometres round) the caller's `beyond` stands
+   * in — the style's guess from lightness —, faded in over the widest's
+   * edge band so its edge draws no line; below the horizon nothing is in
    * the sun. 0..1, the map's own 2×2 filter at a shadow's edge.
    */
   const inSun = (world: V3, n: V3, z: F, beyond: F): F => {
     const towards = aaStep(0.02, dot(n, sunWorld));
     // off the surface a little, against its own depth's quantisation
     const lifted = world.add(n.mul(z.mul(0.0015).add(0.12)));
-    const s = shadowMatrix.mul(vec4(lifted, 1));
-    const c = s.xyz.div(s.w);
-    const at = vec2(c.x, float(1).sub(c.y));
-    const edge = min(
-      min(at.x, float(1).sub(at.x)),
-      min(at.y, float(1).sub(at.y))
+    const { inside, shadowed, read } = readSunShadow(
+      lifted,
+      inputs.sunShadow.rings,
+      shadowReady,
+      standIn,
+      inputs.reversedDepth
     );
-    const inside = smoothstep(0, 0.04, edge).mul(step(c.z, 1)).mul(shadowReady);
-    const read = texture(shadowStandIn, at);
     shadowReads.push(read);
-    const shadowed = read.compare(c.z.sub(0.0003)).x;
     const cast = mix(beyond, shadowed, inside);
     return towards.mul(cast).mul(smoothstep(SUN_GONE_Y, 0.04, sunWorld.y));
   };
@@ -542,7 +651,7 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       plane.y.mul(c).sub(plane.x.mul(t))
     ).toVar();
     // metres a device pixel spans here, foreshortening included
-    const mpp = max(length(fwidth(plane)).mul(0.7071), 1e-4).toVar();
+    const mpp = max(length(fwidth(plane)).mul(Math.SQRT1_2), 1e-4).toVar();
     const level = log2(mpp.mul(pixelScale.mul(cellCss)).div(SCREEN_BASE_M));
     const l0 = floor(level);
     const blend = smoothstep(0.3, 0.7, level.sub(l0));
@@ -585,12 +694,14 @@ export function createStylize(inputs: StylizeInputs): Stylize {
         // mean size: on a foreshortened plane the two differ many times.
         const r = length(cell.sub(0.5));
         const aa = max(fwidth(r), pixel.mul(0.5)).mul(0.8);
-        const dot = float(1).sub(smoothstep(radius.sub(aa), aa.add(radius), r));
+        const disc = float(1).sub(
+          smoothstep(radius.sub(aa), aa.add(radius), r)
+        );
         const x = abs(cell.x.sub(0.5));
         const ax = max(fwidth(x), pixel.mul(0.5)).mul(0.8);
         const w = max(half, pixel.mul(0.5));
         const stripe = float(1).sub(smoothstep(w.sub(ax), w.add(ax), x));
-        return mix(dot, stripe, stripes);
+        return mix(disc, stripe, stripes);
       },
       fill.mul(mix(1, 0.8, stripes)),
       facing,
@@ -805,8 +916,8 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   const blurredColor = (at: V2, radiusCss: number, haze?: F): V3 => {
     const clear = (c: V3): V3 => toPerceptual(haze ? unhaze(c, haze) : c);
     const r = texel.mul(max(pixelScale.mul(radiusCss), 1));
-    const d = r.mul(0.7071);
-    const e = vec2(r.x, r.y.negate()).mul(0.7071);
+    const d = r.mul(Math.SQRT1_2);
+    const e = vec2(r.x, r.y.negate()).mul(Math.SQRT1_2);
     const taps = [
       at.add(vec2(r.x, 0)),
       at.sub(vec2(r.x, 0)),
@@ -968,8 +1079,24 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       mix(POP.greenDeep, POP.green, crownLit),
       step(0.2, hue)
     );
-    day = mix(day, printInk, printed);
-    day = mix(day, mix(POP.blueDeep, POP.blue, lit), water);
+    // A data mark wears a marker ink too (glass.ts `dataMarkColour`), on
+    // hues clear of the crowns': printed in a pop ink by its place on its
+    // scale — blue, yellow, red — flat, its light left white.
+    const dataT = hue.sub(DATA_HUE.from).div(DATA_HUE.to - DATA_HUE.from);
+    const dataInk = mix(
+      mix(POP.blue, POP.yellow, step(1 / 3, dataT)),
+      POP.red,
+      step(2 / 3, dataT)
+    );
+    const isData = step(DATA_HUE.from - 0.05, hue);
+    const dataPrinted = printed.mul(isData).toVar();
+    day = mix(day, mix(printInk, dataInk, isData), printed);
+    // (a marker ink is no river: a blue data mark lies flat, faces up)
+    day = mix(
+      day,
+      mix(POP.blueDeep, POP.blue, lit),
+      water.mul(float(1).sub(printed))
+    );
     // The sky: one blue, printed lighter towards the horizon with dots of
     // the pale blue (`skyDots`) — a printed gradient, no band.
     const daySky = mix(POP.skyHigh, POP.sky, skyDots(at));
@@ -991,15 +1118,31 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     // The dots only up close and where the night is deepest: from the air
     // a city of dots on blue is a blur.
     const nightDots = dots.mul(float(1).sub(smoothstep(120, 500, z)));
-    const night = mix(
+    // (a lamp's light is warm: the dusk sky's on a wall is not a lamp —
+    // but a white light is one, a data mark's comet or head)
+    const lamp = aaStep(0.3, l).mul(
+      max(smoothstep(0.05, 0.25, warmth(b)), aaStep(0.8, l))
+    );
+    const nightInk = mix(
       mix(mix(nightTone, POP.black, nightDots), nightTone, aaStep(0.12, l)),
       mix(POP.yellow, POP.paper, aaStep(0.72, l)),
-      aaStep(0.3, l)
+      lamp
     );
-    const nightHazed = mix(night, POP.nightHaze, toPaper);
-    const col = mix(day, nightHazed, dusk);
+    // (a data mark keeps its pop ink at night: printed over the plate —
+    // a mark is lit, a night-blue surface as saturated is not)
+    const nightHazed = mix(
+      mix(nightInk, dataInk, dataPrinted.mul(aaStep(0.25, l))),
+      POP.nightHaze,
+      toPaper
+    );
+    // The night plate is printed once the lamps are all lit (the sun rig's
+    // night factor, at civil dusk), over a short step: earlier, the dusk
+    // sky's light on a wall printed as lamp yellow. Until then the blue
+    // hour prints in the day's inks, all of it in the shade's dots.
+    const printNight = smoothstep(0.85, 1, night);
+    const col = mix(day, nightHazed, printNight);
     return {
-      col: mix(col, mix(daySky, POP.nightSky, dusk), sky),
+      col: mix(col, mix(daySky, POP.nightSky, printNight), sky),
       foliage: max(foliage, printed).mul(float(1).sub(sky)),
     };
   };
@@ -1069,45 +1212,6 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     );
   };
 
-  /** Sin City's rain: streaks on a grid of world DIRECTIONS (azimuth,
-   *  elevation), so they stay put when the camera turns and fall with
-   *  time, slanted by the wind. Each layer stands at a distance and is
-   *  hidden behind anything nearer — rain in front of a wall, not painted
-   *  on it. */
-  const rainLayer = (
-    dir: V3,
-    cellsPerRad: number,
-    speed: number,
-    seed: number,
-    pixelAngle: F
-  ): F => {
-    const az = atan(dir.z, dir.x);
-    const el = asin(clamp(dir.y, -1, 1));
-    const qy = el.mul(cellsPerRad * 0.22).add(time.mul(speed));
-    const q = vec2(az.mul(cellsPerRad).add(qy.mul(0.9)), qy);
-    const cell = floor(q).toVar();
-    const f = fract(q).toVar();
-    const present = step(0.84, hash21(cell.add(seed)));
-    const x0 = hash21(cell.add(seed + 7.1))
-      .mul(0.6)
-      .add(0.2);
-    const y0 = hash21(cell.add(seed + 3.3))
-      .mul(0.4)
-      .add(0.1)
-      .toVar();
-    const len = hash21(cell.add(seed + 9.9))
-      .mul(0.22)
-      .add(0.28);
-    // At least a pixel wide, whatever the layer's scale.
-    const w = max(0.035, pixelAngle.mul(1.1 * cellsPerRad));
-    const across = float(1).sub(smoothstep(w.mul(0.5), w, abs(f.x.sub(x0))));
-    const end = y0.add(len);
-    const along = smoothstep(y0, y0.add(0.05), f.y).mul(
-      float(1).sub(smoothstep(end.sub(0.05), end, f.y))
-    );
-    return present.mul(across).mul(along);
-  };
-
   const sinCityRain = (at: V2, z: F): F => {
     const dir = viewRayWorld(at).toVar();
     const pixelAngle = length(fwidth(dir)).toVar();
@@ -1128,31 +1232,27 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   ): { col: V3; white: F } => {
     const { haze } = surface;
     const ground = float(1).sub(sky);
-    const blurred = blurredColor(at, 1).toVar();
-    // Dusk: the camera opens up as the light goes (as Film noir's does).
     // A pixel's worth of blur: the shadow map's soft edge and the contact
     // shadows' noise would otherwise cut into a stipple along every shadow.
-    const y = unhazed(blurred, haze)
-      .mul(mix(1, 1.9, dusk))
-      .toVar();
+    const blurred = blurredColor(at, 1).toVar();
+    const y = unhazed(blurred, haze).toVar();
     // White is what the sun reaches (`inSun`) — unless the card is dark
-    // there (foliage, the river: black shapes in any light); after dusk
-    // what the lamps light. Past where the haze leaves enough light to
-    // cut, the smoke: white, the far city one pale ground under the night.
+    // there (foliage, the river: black shapes in any light). Past where
+    // the haze leaves enough light to cut, the smoke: white. Sin City
+    // always draws in its own afternoon sun (render-style.ts `ownLight`):
+    // its masses are the sun's, and it has no night to cut.
     const sunWhite = inSun(surface.world, surface.n, z, aaStep(0.55, y)).mul(
       aaStep(0.4, y)
     );
     const white = max(
-      mix(sunWhite, aaStep(0.5, y), dusk),
-      smoothstep(HAZE_CAP - HAZE_FADE, HAZE_CAP, haze).mul(float(1).sub(dusk))
+      sunWhite,
+      smoothstep(HAZE_CAP - HAZE_FADE, HAZE_CAP, haze)
     )
       .mul(ground)
       .toVar();
     // The red roofs: the only colour the card carries. Lit slopes glow,
-    // slopes in shade stay a deep oxblood.
-    // Decided on the pixel's worth of blur too: at night the frame is the
-    // scene's own, whose roof colours vary from pixel to pixel, and a cut
-    // per pixel printed them as red grain.
+    // slopes in shade stay a deep oxblood. Decided whole on the blur too:
+    // a half-red is pink.
     const hsl = rgbToHsl(blurred).toVar();
     const hueToRed = min(hsl.x, float(1).sub(hsl.x));
     const red = float(1)
@@ -1160,12 +1260,8 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       .mul(aaStep(0.35, hsl.y))
       .mul(step(0.04, hsl.z))
       .mul(ground)
-      // by day the card is red on the roof faces only; by night the frame
-      // is the scene's own, and only a pitched roof may be one — decided
-      // whole, never half (a half-red is pink)
-      .mul(step(0.5, mix(1, step(0.5, surface.roofSlope), dusk)))
       .toVar();
-    const lit = aaStep(0.3, lumaOf(p).mul(mix(1, 1.9, dusk))).toVar();
+    const lit = aaStep(0.3, lumaOf(p)).toVar();
     const blood = mix(vec3(0.42, 0.015, 0.04), vec3(0.86, 0.05, 0.09), lit);
     const paper = vec3(0.97, 0.965, 0.95);
     const col = mix(mix(vec3(0.012), paper, white), blood, red);
@@ -1178,20 +1274,97 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   // one paper material for this style); here its light is laid out as a
   // duotone — shade a cool graphite-blue, light a warm paper — so the
   // shadows read as drawn, not photographed.
-  const paperTone = (p: V3, haze: F, sky: F): V3 => {
+  //
+  // At night the model stands on dark blue card (Tonpapier): the card's
+  // own faces a deep blue, those the night sky reaches a slate, and what
+  // the lamps and the lit windows light — the card glows through
+  // (paper-scene.ts `windowGlow`) — warm, like a paper lantern; drawn
+  // with a white pencil (`node`). The sky is the card, paler towards the
+  // horizon; the far city fades into it as into the day's paper.
+  const paperTone = (p: V3, at: V2, haze: F, sky: F): V3 => {
     const paper = vec3(0.972, 0.958, 0.93);
     // the light as it is under the haze: a far block keeps its shade
     // side, where the hazed light had lifted it into the paper
-    const y = unhazed(p, haze);
+    const y = unhazed(p, haze).toVar();
     // Sunlit card is the paper itself; only true shade turns blue-grey.
     const t = smoothstep(0.08, 0.6, y);
     const shade = vec3(0.55, 0.58, 0.67);
-    // Keep the whisper of hue the paper material lets through.
+    // Keep the whisper of hue the paper material lets through — and more
+    // of a hue the card never carries: a data mark's tissue paper.
     const tint = p.div(max(y, 1e-3));
-    const model = mix(shade, paper, t).mul(mix(vec3(1), tint, 0.35));
+    const hcv = rgbToHcv(p);
+    // (a cool hue only, and by day: a low sun's or a lit window's warmth
+    // on the card, and the blue hour's sky light, keep their whisper)
+    const saturated = smoothstep(0.3, 0.5, hcv.y.div(max(hcv.z, 1e-3)))
+      .mul(float(1).sub(smoothstep(0.12, 0.45, warmth(p))))
+      .mul(float(1).sub(dusk));
+    const model = mix(shade, paper, t).mul(
+      mix(vec3(1), tint, mix(0.35, 0.8, saturated))
+    );
     // ...and a little of the haze laid back over: a model's far end is
     // paler, not gone
-    return mix(mix(model, paper, haze.mul(0.2)), paper.mul(0.985), sky);
+    // the sky through the dusk: the day's paper, a mauve card, the night's
+    const daySky = mix(
+      paper.mul(0.985),
+      PAPER_NIGHT.dusk,
+      smoothstep(0, 0.5, night)
+    );
+    const day = mix(mix(model, paper, haze.mul(0.2)), daySky, sky);
+    const moonlit = smoothstep(
+      PAPER_NIGHT.moonFrom,
+      PAPER_NIGHT.moonTo,
+      y.mul(PAPER_NIGHT.gain)
+    );
+    const lamp = nightLight(p, y.mul(PAPER_NIGHT.gain));
+    const card = mix(
+      mix(PAPER_NIGHT.card, PAPER_NIGHT.moon, moonlit),
+      PAPER_NIGHT.glow,
+      lamp
+    );
+    const el = viewRayWorld(at).y;
+    const nightSky = mix(
+      PAPER_NIGHT.horizon,
+      PAPER_NIGHT.sky,
+      smoothstep(0, 0.5, el)
+    );
+    // (the card at night knows no hue but a lamp's: the night light is
+    // as blue as a cool tissue, so a data mark reads as lit card — and a
+    // warm one glows like a lamp)
+    const nightCol = mix(
+      mix(card, PAPER_NIGHT.horizon, haze.mul(0.6)),
+      nightSky,
+      sky
+    );
+    return mix(day, nightCol, mix(night, smoothstep(0.5, 1, night), sky));
+  };
+
+  /**
+   * Strich's night sky: the etcher's ruled lines — level lines of the
+   * view's elevation, so a turn carries them like the sky — denser
+   * towards the zenith and opening up over the horizon, where the city's
+   * light is. Their spacing keeps to `HATCH_CSS` through a ladder of cells
+   * that halve. A parallel view (Modell) has none: its background is the
+   * sheet the plan is drawn on.
+   */
+  const skyHatch = (at: V2): F => {
+    const ray = viewRayWorld(at);
+    const el = asin(clamp(ray.y, -1, 1)).toVar();
+    const fill = mix(0.16, 0.5, smoothstep(0.02, 0.7, el)).toVar();
+    const rpp = max(fwidth(el), 1e-5).toVar();
+    const level = log2(rpp.mul(pixelScale.mul(HATCH_CSS)).div(SKY_CELL));
+    const l0 = floor(level);
+    const blend = smoothstep(0.3, 0.7, level.sub(l0));
+    const cell0 = exp2(l0).mul(SKY_CELL).toVar();
+    const lineAt = (cell: F): F => {
+      const d = abs(fract(el.div(cell)).sub(0.5));
+      const pixel = rpp.div(cell);
+      const half = max(fill.mul(0.5), pixel.mul(0.5));
+      const aa = pixel.mul(0.7);
+      return float(1).sub(smoothstep(half.sub(aa), half.add(aa), d));
+    };
+    const ruled = mix(lineAt(cell0), lineAt(cell0.mul(2)), blend);
+    // (a parallel view's background is the sheet round the plan, no sky)
+    return ruled.mul(float(1).sub(step(0.5, lens.ortho)));
   };
 
   // --- Strich: a pen drawing — lines, a hatch for the shade. ---
@@ -1200,18 +1373,35 @@ export function createStylize(inputs: StylizeInputs): Stylize {
   // (paper-scene.ts, terrain-layer.ts). Nothing is shaded: the sheet is
   // white, the ground keeps its plan colours, and what lies in shade —
   // turned from the sun or in a cast shadow — is hatched with the pen at
-  // a pen's angle, the hatch printed on the surface (`lines`), so it stays put in a
-  // flight. That is the whole difference to Papier's tonal card model:
-  // there the light is a tone, here it is a line.
-  const strich = (p: V3, z: F, sky: F, surface: Surface): V3 => {
+  // a pen's angle, the hatch printed on the surface (`lines`), so it stays
+  // put in a flight. That is the whole difference to Papier's tonal card
+  // model: there the light is a tone, here it is a line.
+  //
+  // The night is an etcher's nocturne: the dark lies in an aquatint's
+  // tone and is hatched over it — once where the sky's light still
+  // reaches, crossed where it does not — the sky is a darker tone, ruled,
+  // and only what a lamp or a lit window lights is left white, under a
+  // wash of warm yellow.
+  const strich = (p: V3, at: V2, z: F, sky: F, surface: Surface): V3 => {
+    // (a plan has no night: in Modell's parallel view the sheet stays
+    // unshaded, its lines alone; the nocturne is the perspective's)
+    const plan = step(0.5, lens.ortho);
+    const nightHere = night.mul(float(1).sub(plan)).toVar();
+    // The light fades long before the night: from a sun at 12° to civil
+    // dusk (`dusk`) the whole sheet lies in shade and the scene's light
+    // dims under it. What is deep shade and what is poché is read on that
+    // dimming light, not the day's — else a sunset hatches the sheet
+    // crossed all over and blacks it in before the nocturne begins.
+    const evening = dusk.mul(float(1).sub(plan)).toVar();
     const sheet = vec3(0.995, 0.993, 0.99);
-    // in the sun or not; after dusk a plan has no night: the sheet stays
-    // unshaded, lines and plan colours alone
-    const y = unhazed(p, surface.haze);
+    const y = unhazed(p, surface.haze).toVar();
+    // by day in the sun or not; by night under a lamp or not
+    const lamp = nightLight(p, y.mul(STRICH_NIGHT_GAIN)).toVar();
+    // (a plan from a low sun on: an unshaded sheet, as one with no sun)
     const lit = mix(
-      inSun(surface.world, surface.n, z, aaStep(0.42, y)),
+      mix(inSun(surface.world, surface.n, z, aaStep(0.42, y)), lamp, nightHere),
       1,
-      dusk
+      dusk.mul(plan)
     ).toVar();
     // the surface's colour (its hue and chroma) without the light — the
     // plan's greens and blues. The warm hues (red to yellow) are the sun's
@@ -1221,12 +1411,19 @@ export function createStylize(inputs: StylizeInputs): Stylize {
     const cool = smoothstep(0.19, 0.24, hcv.x).mul(
       float(1).sub(smoothstep(0.85, 0.92, hcv.x))
     );
-    // (after dusk the light's own blue is all the hue left: a white sheet)
+    // (from dusk on the light's own blue is all the hue left: no plan
+    // colour, in Modell's plan too — its night is the bare sheet — but
+    // what is saturated beyond a sky's tint on white, a data mark's plan
+    // colour, chroma 0.22 at its palest)
     const planned = smoothstep(0.03, 0.08, hcv.y)
       .mul(cool)
-      .mul(float(1).sub(dusk));
+      .mul(float(1).sub(dusk.mul(float(1).sub(smoothstep(0.12, 0.2, hcv.y)))));
     const tint = mix(vec3(1), hue, planned.mul(mix(0.35, 0.85, lit)));
-    const pen = vec3(0.2, 0.21, 0.24);
+    const penColour = mix(
+      vec3(0.2, 0.21, 0.24),
+      AQUATINT.pen,
+      nightHere
+    ).toVar();
     // The hatch as a draughtsman lays it: each face of a block at its own
     // angle (the two wall directions crossed, the ground and the roofs
     // nearly level), a second layer across only where the shade is deep,
@@ -1249,6 +1446,16 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       turn,
       HATCH_CSS
     );
+    // deep shade by day; from dusk on the dark of a wall the sky's light
+    // leaves (what faces up — the ground, a roof under 45° — keeps one
+    // layer: crossed all over, the ground read as a fence)
+    const deep = mix(
+      smoothstep(0.3, 0.12, y),
+      float(1)
+        .sub(smoothstep(0.03, 0.12, y.mul(STRICH_NIGHT_GAIN)))
+        .mul(float(1).sub(top)),
+      evening
+    );
     const across = lines(
       surface.world,
       surface.n,
@@ -1256,34 +1463,37 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       surface.facing,
       turn.add(Math.PI / 2),
       HATCH_CSS
-    ).mul(smoothstep(0.3, 0.12, y));
-    const strength = mix(0.6, 0.35, top).mul(
-      mix(1, 0.45, smoothstep(150, 1200, z))
+    ).mul(deep);
+    const strength = mix(
+      mix(0.6, 0.35, top),
+      mix(0.72, 0.5, top),
+      nightHere
+    ).mul(mix(1, 0.45, smoothstep(150, 1200, z)));
+    // by night the hatch lies on the aquatint's tone, deeper where it is
+    // crossed
+    const ground = mix(
+      tint,
+      mix(AQUATINT.ground, AQUATINT.deep, deep),
+      nightHere
     );
-    const hatched = mix(tint, pen, max(first, across).mul(strength));
-    let col = mix(hatched, tint, lit);
+    const hatched = mix(ground, penColour, max(first, across).mul(strength));
+    // what the night lights: the sheet under a warm wash
+    const lamplit = mix(tint, NIGHT_WASH, lamp.mul(nightHere));
+    let col = mix(hatched, lamplit, lit);
     // the near-black stays black: the Schnitt's poché, not a shade
+    // (from dusk on, in Modell's plan too: the evening's dark is no poché)
     const fill = float(1)
       .sub(smoothstep(0.2, 0.28, lumaOf(p)))
       .mul(float(1).sub(dusk));
     col = mix(col, vec3(0.11), fill);
-    return mix(col, sheet, sky);
-  };
-
-  // --- Schwarzplan: the figure black, the ground white. ---
-  //
-  // Only the buildings are drawn (unlit black) on the terrain's white
-  // (paper-scene.ts); the light the ground still carries — shade, contact
-  // shadows, the sky view — is cut away by one threshold.
-  const figure = (p: V3, sky: F, line: F): V3 => {
-    const ground = max(aaStep(0.16, lumaOf(p)), sky);
-    // In a view from the side the blocks stand in front of each other: a
-    // white hairline where one building's outline crosses another's
-    // keeps them apart. On the white nothing is drawn.
-    const parted = float(1)
-      .sub(ground)
-      .mul(smoothstep(0.25, 0.6, line));
-    return mix(mix(vec3(0.07), vec3(1), ground), vec3(1), parted);
+    const el = viewRayWorld(at).y;
+    const tone = mix(
+      sheet,
+      mix(AQUATINT.horizon, AQUATINT.zenith, smoothstep(0, 0.5, el)),
+      nightHere
+    );
+    const ruled = mix(tone, penColour, skyHatch(at).mul(0.6).mul(nightHere));
+    return mix(col, ruled, sky);
   };
 
   // An Fn: `If` builds into the current function's stack.
@@ -1353,18 +1563,19 @@ export function createStylize(inputs: StylizeInputs): Stylize {
         .ElseIf(mode.greaterThan(4.5), () => {
           out.assign(
             mix(
-              strich(p, zFade, sky, surface),
+              strich(p, at, zFade, sky, surface),
               vec3(0.11, 0.115, 0.13),
               clamp(line, 0, 1)
             )
           );
         })
         .ElseIf(mode.greaterThan(3.5), () => {
+          // by night a white pencil on the dark card
           out.assign(
             mix(
-              paperTone(p, surface.haze, sky),
-              vec3(0.22, 0.23, 0.28),
-              clamp(line, 0, 1).mul(0.92)
+              paperTone(p, at, surface.haze, sky),
+              mix(vec3(0.22, 0.23, 0.28), PAPER_NIGHT.pencil, night),
+              clamp(line, 0, 1).mul(mix(0.92, 0.7, night))
             )
           );
         })
@@ -1419,16 +1630,14 @@ export function createStylize(inputs: StylizeInputs): Stylize {
       ink.value = Math.max(value, 0);
     },
     setSunAltitude: (altitudeDeg) => {
-      sunAltitude = altitudeDeg;
       const t = Math.min(Math.max((12 - altitudeDeg) / 18, 0), 1);
       dusk.value = t * t * (3 - 2 * t);
     },
-    night: () => sunAltitude < NIGHT_ALTITUDE,
     captureFog: () => {
       frameFog.value.copy(fog.color.value);
     },
     dispose: () => {
-      shadowStandIn.dispose();
+      standIn.dispose();
     },
     update: (pixelRatio, size) => {
       skyZ.value = camera.far * SKY_FAR_SHARE;

@@ -4,6 +4,7 @@ import {
   bloomAt,
   climateDay,
   dayOfYear,
+  leafLitterAt,
   PHENOLOGY,
   phenologyOf,
   SEASON_JITTER_DAYS,
@@ -44,7 +45,7 @@ test("a lime is bare in January, in full summer leaf in July, gone by December",
 });
 
 test("leaf is monotone through leaf-out and leaf fall, autumn through colouring", () => {
-  for (let g = 0; g < TREE_GENERA.length; g++) {
+  for (let g = 0; g < TREE_GENERA.length; g += 1) {
     const p = phenologyOf(g);
     let prev = -1;
     for (let d = p.leafOut[0]; d <= p.leafOut[1]; d += 0.5) {
@@ -161,7 +162,7 @@ test("a city's day is Dresden's shifted by its spring and its autumn", () => {
     expect(climateDay(d, none)).toBeCloseTo(d, 9);
   }
   // Unna's spring comes six days early: its 10 April is Dresden's 16 April
-  const unna = SITE_SEASON.unna;
+  const { unna } = SITE_SEASON;
   expect(climateDay(99, unna)).toBe(105);
   // Hamburg colours five days late: its 15 October is Dresden's 10 October
   expect(climateDay(287, SITE_SEASON.hamburg)).toBe(282);
@@ -186,4 +187,17 @@ test("a birch turns and drops when DWD's reporters saw it around Dresden", () =>
   expect(seasonAt(296, birch).leaf).toBe(1);
   expect(seasonAt(312, birch).leaf).toBeCloseTo(0.5, 1);
   expect(seasonAt(330, birch).leaf).toBe(0);
+});
+
+test("leaf litter lies from the turn of the leaves into the winter", () => {
+  expect(leafLitterAt(180)).toBe(0);
+  expect(leafLitterAt(270)).toBe(0);
+  expect(leafLitterAt(320)).toBe(1);
+  expect(leafLitterAt(360)).toBeGreaterThan(0.3);
+  expect(leafLitterAt(30)).toBeGreaterThan(0);
+  expect(leafLitterAt(30)).toBeLessThan(0.3);
+  expect(leafLitterAt(100)).toBe(0);
+  // continuous over the new year
+  // (climateDay's days run 0 … 365, YEAR)
+  expect(Math.abs(leafLitterAt(364.99) - leafLitterAt(0))).toBeLessThan(0.01);
 });

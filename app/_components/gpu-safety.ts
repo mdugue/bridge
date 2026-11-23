@@ -3,15 +3,18 @@ import {
   parseStoredSafety,
   raisedSafety,
   resolveSafety,
-  type SafetyLevel,
   safetyOverride,
-  type SafetyStanding,
   safetyStanding,
-  type StoredSafety,
 } from "@/lib/city/gpu-safety";
-import { offerAsCrash, type Trail } from "@/lib/city/crash-trail";
+import type {
+  SafetyLevel,
+  SafetyStanding,
+  StoredSafety,
+} from "@/lib/city/gpu-safety";
+import { offerAsCrash } from "@/lib/city/crash-trail";
+import type { Trail } from "@/lib/city/crash-trail";
 import { pageStillOpen, previousTrail } from "./crash-trail";
-import { recentlyRecovered } from "./gpu-recovery";
+import { pageRecovery } from "./gpu-recovery";
 import { STORAGE_KEYS } from "./storage-keys";
 
 /**
@@ -142,7 +145,7 @@ export function resetSafety({
 function crashedBefore(): Trail | null {
   const previous = previousTrail();
   return previous?.backend === "WebGPU" &&
-    offerAsCrash(previous, recentlyRecovered())
+    offerAsCrash(previous, pageRecovery().followsRecovery())
     ? previous
     : null;
 }
@@ -180,9 +183,9 @@ let pageLevel: Promise<SafetyLevel> | null = null;
  * still open (up to 250 ms, beside the manifest's fetch — and only for a
  * record that looks crashed).
  */
-export function pageSafety(): Promise<SafetyLevel> {
+export async function pageSafety(): Promise<SafetyLevel> {
   if (typeof window === "undefined") {
-    return Promise.resolve(0);
+    return 0;
   }
   pageLevel ??= settleAfterAsking(
     location.search,
@@ -190,5 +193,5 @@ export function pageSafety(): Promise<SafetyLevel> {
     crashedBefore(),
     pageStillOpen
   );
-  return pageLevel;
+  return await pageLevel;
 }

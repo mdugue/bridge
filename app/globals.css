@@ -72,21 +72,23 @@
      pill, the settings button and the hint bar are one surface. */
   --hud: oklch(0.195 0.011 260.66);
   --hud-foreground: oklch(0.941 0.01 252.81);
+  /* The loading screen's clay and ink (load-screen.tsx): the city not yet
+     there as unfired clay, progress in the brand's magenta — the scene's
+     own loading veil (load-veil.ts) at screen size. */
+  --load-ink: oklch(0.56 0.25 330);
+  --load-line: oklch(0.58 0.012 70);
+  --load-text: oklch(0.24 0.012 60);
   --hud-scrim: radial-gradient(
-    ellipse at 50% 40%,
-    oklch(0.25 0.015 256.8) 0%,
-    oklch(0.195 0.011 260.66) 70%
+    ellipse at 50% 45%,
+    oklch(0.86 0.008 75) 0%,
+    oklch(0.76 0.01 70) 75%
   );
-  /* The same surface, translucent: the loading screen is frosted glass over
-     the canvas, not a curtain in front of it. While the scene has nothing to
-     show it sits on the opaque scrim above and reads exactly as dark; the
-     moment the first frame is drawn the city appears behind it, softened.
-     Denser towards the edges, where the stage list and the bar need to stay
-     legible against a bright sky. */
-  --hud-veil: radial-gradient(
-    ellipse at 50% 40%,
-    oklch(0.25 0.015 256.8 / 0.82) 0%,
-    oklch(0.195 0.011 260.66 / 0.93) 70%
+  /* The clay as frosted glass: over the opaque scrim it reads the same;
+     once the first frame is drawn the city shows through, softened. */
+  --load-veil: radial-gradient(
+    ellipse at 50% 45%,
+    oklch(0.86 0.008 75 / 0.84) 0%,
+    oklch(0.76 0.01 70 / 0.94) 75%
   );
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
@@ -156,7 +158,7 @@
    There is none, on purpose. Every animated version of it — the shared-element
    morph first, then a plain cross-fade — stuttered, because the frames it has
    to play on are the scene's most expensive ones. What replaces it is the
-   frosted veil above (--hud-veil): the loading screen stays put while the city
+   frosted veil above (--load-veil): the loading screen stays put while the city
    appears behind it, and is then removed in a single frame. Nothing animates,
    so there is nothing left to drop frames. See app/_components/handover.ts. */
 
@@ -231,4 +233,33 @@
 [data-slot="sheet-overlay"] {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+}
+
+/* The loading screen's ring breathes as the scene's does (load-veil.ts:
+   3.4 s, slow in, quicker out). Only the ring's own layer, an element the
+   compositor scales: the contours hold still, and a repaint per frame is
+   what the boot cannot spare (handover.ts). In the components layer, so
+   the screen's `**:[animation-play-state:paused]` utility (a later layer
+   than this shorthand's implicit `running`) holds it at the handover. */
+@layer components {
+  .load-breathe {
+    transform-origin: center;
+    animation: load-breathe 3.4s cubic-bezier(0.45, 0, 0.3, 1) infinite;
+  }
+}
+@keyframes load-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  68% {
+    transform: scale(1.035);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  @layer components {
+    .load-breathe {
+      animation: none;
+    }
+  }
 }

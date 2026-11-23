@@ -10,10 +10,10 @@ import {
   MODEL_PRESET_BY_ID,
   MODEL_PRESETS,
   MODEL_SCALES,
-  type ModelPresetId,
   presetGlyph,
   scaleLabel,
 } from "@/lib/city/model-view";
+import type { ModelPresetId } from "@/lib/city/model-view";
 import { cn } from "cn";
 import type { ModelHud } from "./model-rig";
 
@@ -39,7 +39,7 @@ const CHIP =
   "h-6 rounded-full px-2 font-mono text-[10px] tabular-nums text-muted-foreground data-pressed:border-ring data-pressed:bg-background data-pressed:text-foreground data-pressed:ring-1 data-pressed:ring-ring";
 
 /** A card's glyph: a cube as the view draws it (lib/city/model-view.ts). */
-function PresetGlyph({ id }: { id: ModelPresetId }) {
+const PresetGlyph = ({ id }: { id: ModelPresetId }) => {
   const lines = presetGlyph(id);
   return (
     <svg
@@ -73,25 +73,32 @@ function PresetGlyph({ id }: { id: ModelPresetId }) {
       ))}
     </svg>
   );
-}
+};
 
 /** What a view's lengths mean, under the cards. */
 function presetNote(view: ModelHud): string {
   switch (view.preset) {
-    case "iso":
+    case "iso": {
       return "Längen entlang der drei Achsen × 0,816 — die Maßstabsleiste misst parallel zum Bild";
-    case "bird":
+    }
+    case "bird": {
       return "Die Maßstabsleiste misst parallel zum Bild, waagerecht";
-    case "military":
+    }
+    case "military": {
       return "Der Grundriss ist unverzerrt; Höhen stehen senkrecht darüber";
-    case "plan":
+    }
+    case "plan": {
       return "Senkrecht von oben: jede Länge im Plan im Maßstab";
-    case "elevation":
+    }
+    case "elevation": {
       return "Was vor der Bildmitte steht, ist weggeschnitten";
-    case "section":
+    }
+    case "section": {
       return "Schnitt durch die Bildmitte: Schnittflächen gefüllt, das Gelände als Profil";
-    default:
+    }
+    default: {
       return "";
+    }
   }
 }
 
@@ -113,7 +120,7 @@ function cutOutHint(view: ModelHud): string {
  * scale is "bei 96 dpi", the CSS pixel; the export (Bild speichern) prints
  * its own at 300 dpi.
  */
-export function ProjectionPanel({
+export const ProjectionPanel = ({
   onCutOut,
   onExport,
   onPreset,
@@ -131,7 +138,7 @@ export function ProjectionPanel({
   onTilt: (deg: number) => void;
   onTurnTo: (deg: number) => void;
   view: ModelHud;
-}) {
+}) => {
   const onStep = MODEL_SCALES.find(
     (s) => Math.abs(view.scale - s) / s < ON_STEP
   );
@@ -332,4 +339,4 @@ export function ProjectionPanel({
       </button>
     </div>
   );
-}
+};

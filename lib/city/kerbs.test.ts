@@ -9,6 +9,9 @@ import {
 
 const offset = { cx: 0, cy: 0 };
 const flat = () => 100;
+/** A level road at 100 m, its south side (y < −0.1) at `high`. */
+const pavementAt = (high: number) => (_x: number, y: number) =>
+  y < -0.1 ? high : 100;
 // Eastward, so the road (on the left) is to the north.
 const east: [number, number][] = [
   [0, 0],
@@ -38,7 +41,7 @@ test("the stone stands its height above the road, its face toward it", () => {
 
 test("on a road lower than the pavement the top is level with the pavement", () => {
   // Pavement (south, y < 0) 0.3 m above the road: the stone tops out there.
-  const step = (_x: number, y: number) => (y < -0.1 ? 100.3 : 100);
+  const step = pavementAt(100.3);
   const ys = (kerbGeometry([east], step, offset)?.positions ?? []).filter(
     (_, i) => i % 3 === 1
   );
@@ -47,7 +50,7 @@ test("on a road lower than the pavement the top is level with the pavement", () 
 
 test("the top falls to the pavement at the back: no second step there", () => {
   // The smoothed DGM: the pavement (south) only 4 cm above the road.
-  const ramp = (_x: number, y: number) => (y < -0.1 ? 100.04 : 100);
+  const ramp = pavementAt(100.04);
   const g = kerbGeometry([east], ramp, offset);
   const pos = g?.positions ?? [];
   const backTops: number[] = [];
@@ -108,12 +111,12 @@ test("a kerb line's drops lower its face top there and nowhere else", () => {
     const [x, y, z] = [pos[i], pos[i + 1], pos[i + 2]];
     if (Math.abs(z) < 1e-6 && y > 100) {
       // a face-top vertex (on the line): its stone's height there
-      const want =
-        x >= 4 - 1e-6 && x <= 6 + 1e-6
-          ? 0.03
-          : x <= 4 - RAMP_M || x >= 6 + RAMP_M
-            ? KERB_HEIGHT
-            : null;
+      let want: number | null = null;
+      if (x >= 4 - 1e-6 && x <= 6 + 1e-6) {
+        want = 0.03;
+      } else if (x <= 4 - RAMP_M || x >= 6 + RAMP_M) {
+        want = KERB_HEIGHT;
+      }
       if (want !== null) {
         expect(y).toBeCloseTo(100 + want, 6);
       }
@@ -127,7 +130,7 @@ test("a kerb line's drops lower its face top there and nowhere else", () => {
     expect(xs.has(x.toFixed(3))).toBe(true);
   }
   // a flush stretch on a pavement above the road still meets the pavement
-  const step = (_x: number, y: number) => (y < -0.1 ? 100.05 : 100);
+  const step = pavementAt(100.05);
   const flush = kerbGeometry(
     [{ coords: east, low: [[0, 10, 0]] }],
     step,

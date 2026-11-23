@@ -5,7 +5,6 @@ import {
   groundUnder,
   KEEP_M,
   LINTEL_M,
-  type PassageAxis,
   passageHeight,
   passageLining,
   passageRegions,
@@ -13,6 +12,7 @@ import {
   touches,
   WALK_H,
 } from "./building-passages";
+import type { PassageAxis } from "./building-passages";
 import { SINK } from "./ground-join";
 
 /** A triangle's area (flat x, y, z ×3). */

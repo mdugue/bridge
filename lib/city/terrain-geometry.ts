@@ -74,9 +74,9 @@ function appendSkirts(
         grid[gi * 3 + 1],
         grid[gi * 3 + 2] - SKIRT_DEPTH
       );
-      s++;
+      s += 1;
     }
-    for (let k = 0; k < top.length - 1; k++) {
+    for (let k = 0; k < top.length - 1; k += 1) {
       const tp = top[k];
       const tq = top[k + 1];
       if (!(valid[tp] && valid[tq])) {
@@ -95,11 +95,11 @@ function appendSkirts(
   const south: number[] = [];
   const west: number[] = [];
   const east: number[] = [];
-  for (let col = 0; col < n; col++) {
+  for (let col = 0; col < n; col += 1) {
     north.push(col);
     south.push((n - 1) * n + col);
   }
-  for (let row = 0; row < n; row++) {
+  for (let row = 0; row < n; row += 1) {
     west.push(row * n);
     east.push(row * n + (n - 1));
   }
@@ -116,11 +116,11 @@ function meanValidElevation(
 ): number {
   let sum = 0;
   let valid = 0;
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     const z = elevations[i];
     if (!isInvalidElevation(z)) {
       sum += z;
-      valid++;
+      valid += 1;
     }
   }
   return valid === 0 ? 0 : sum / valid;
@@ -147,8 +147,8 @@ function fillGrid(
   const fallback = meanValidElevation(elevations, n * n);
   let p = 0;
   let minElevation = Number.POSITIVE_INFINITY;
-  for (let row = 0; row < n; row++) {
-    for (let col = 0; col < n; col++) {
+  for (let row = 0; row < n; row += 1) {
+    for (let col = 0; col < n; col += 1) {
       const i = row * n + col;
       const z = elevations[i];
       const bad = isInvalidElevation(z);
@@ -157,9 +157,12 @@ function fillGrid(
         minElevation = z;
       }
       // Pixel centers; raster row 0 = north (maxY).
-      grid[p++] = minX + (col + 0.5) * dx - offset.cx;
-      grid[p++] = maxY - (row + 0.5) * dy - offset.cy;
-      grid[p++] = bad ? fallback : z;
+      grid[p] = minX + (col + 0.5) * dx - offset.cx;
+      p += 1;
+      grid[p] = maxY - (row + 0.5) * dy - offset.cy;
+      p += 1;
+      grid[p] = bad ? fallback : z;
+      p += 1;
     }
   }
   return minElevation;
@@ -185,19 +188,19 @@ export function buildTerrainGeometryData(
   const eMaxX = maxX - offset.cx;
   const eMinY = minY - offset.cy;
   const eMaxY = maxY - offset.cy;
-  for (let col = 0; col < n; col++) {
+  for (let col = 0; col < n; col += 1) {
     grid[(0 * n + col) * 3 + 1] = eMaxY; // north row -> maxY
     grid[((n - 1) * n + col) * 3 + 1] = eMinY; // south row -> minY
   }
-  for (let row = 0; row < n; row++) {
+  for (let row = 0; row < n; row += 1) {
     grid[(row * n + 0) * 3] = eMinX; // west col -> minX
     grid[(row * n + (n - 1)) * 3] = eMaxX; // east col -> maxX
   }
 
   // Skip quads that touch a NoData vertex: holes instead of spikes.
   const indices: number[] = [];
-  for (let row = 0; row < n - 1; row++) {
-    for (let col = 0; col < n - 1; col++) {
+  for (let row = 0; row < n - 1; row += 1) {
+    for (let col = 0; col < n - 1; col += 1) {
       const a = row * n + col;
       const b = a + 1;
       const c = a + n;

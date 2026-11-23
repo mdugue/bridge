@@ -1,16 +1,18 @@
 "use client";
 
+import { SHADOW_RINGS } from "@/lib/city/shadow-rings";
 import { RotateCcwIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { MAX_SAFETY, type SafetyStanding } from "@/lib/city/gpu-safety";
+import { MAX_SAFETY } from "@/lib/city/gpu-safety";
+import type { SafetyStanding } from "@/lib/city/gpu-safety";
 import { currentSafetyStanding } from "./gpu-safety";
 import {
   pixelRatioFor,
-  type SceneBudget,
   shadowMapSizeFor,
   tileCacheBytesFor,
 } from "./scene-profile";
+import type { SceneBudget } from "./scene-profile";
 
 const SECTION_LABEL =
   "font-semibold text-[11px] uppercase leading-none tracking-widest text-muted-foreground";
@@ -76,13 +78,13 @@ function standingNote({ fallsAt, level, next, pinned }: SafetyStanding) {
  * is false when the browser would not store it. A page whose address sets
  * the level (`?safety=N`) offers no reset: the address would win.
  */
-export function QualityPanel({
+export const QualityPanel = ({
   budget,
   onReset,
 }: {
   budget: SceneBudget;
   onReset: () => boolean;
-}) {
+}) => {
   // Read when the tab opens: another tab may have raised it meanwhile.
   const [standing, setStanding] = useState(() =>
     currentSafetyStanding(budget.safety)
@@ -144,7 +146,9 @@ export function QualityPanel({
           {ratio.toLocaleString("de-DE", { maximumFractionDigits: 2 })}×
         </span>
         <span>Schattenkarte</span>
-        <span className="font-mono tabular-nums">{shadow}²</span>
+        <span className="font-mono tabular-nums">
+          {SHADOW_RINGS} × {shadow}²
+        </span>
         <span>Kachelspeicher</span>
         <span className="font-mono tabular-nums">bis {bytesLabel(cache)}</span>
       </div>
@@ -159,4 +163,4 @@ export function QualityPanel({
       )}
     </section>
   );
-}
+};

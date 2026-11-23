@@ -13,12 +13,13 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import "./collision";
 import { buildBvhOffThread, bvhBuilding } from "./bvh-client";
 import {
-  type CityLayer,
   cityObjectsAlong,
   ensureCityBvh,
+  hangsShown,
   nearestCityHit,
   nearestWithoutBvh,
 } from "./city-layer";
+import type { CityLayer } from "./city-layer";
 
 type CountedLayer = CityLayer & { builds: number };
 
@@ -54,7 +55,7 @@ function tile(
     hasBvh: () => Boolean(geometry.boundsTree),
     ensureBvh: () => {
       if (!geometry.boundsTree) {
-        layer.builds++;
+        layer.builds += 1;
       }
       ensureCityBvh(mesh);
     },
@@ -148,11 +149,11 @@ test("the tile built next in idle time is the nearest without a BVH within reach
 test("a pick waits for a tile whose BVH the worker builds: no answer from the building behind", async () => {
   const near = tile("near", 20);
   const far = tile("far", 200, true);
-  const geometry = near.mesh.geometry;
+  const { geometry } = near.mesh;
   await buildBvhOffThread(new BoxGeometry(1, 1, 1));
   const done = buildBvhOffThread(geometry);
   // (its turn within a few microtasks of a worker that runs)
-  for (let i = 0; i < 20 && !bvhBuilding(geometry); i++) {
+  for (let i = 0; i < 20 && !bvhBuilding(geometry); i += 1) {
     await Promise.resolve();
   }
   expect(bvhBuilding(geometry)).toBe(true);
@@ -161,4 +162,17 @@ test("a pick waits for a tile whose BVH the worker builds: no answer from the bu
   expect(nearestCityHit(rayAlongX(1000), [near, far], false)?.layer).toBe(far);
   await done;
   expect(nearestCityHit(rayAlongX(1000), [near, far], true)?.layer).toBe(near);
+});
+
+test("what hangs on a building shows while all of it stands", () => {
+  const alive = new Uint8Array([1, 1, 1]);
+  expect(hangsShown([0, 2], alive, new Set())).toBe(true);
+  // a design stands in for one of its parts
+  expect(hangsShown([0, 2], alive, new Set([2]))).toBe(false);
+  // a part demolished
+  alive[0] = 0;
+  expect(hangsShown([0, 2], alive, new Set())).toBe(false);
+  expect(hangsShown([1], alive, new Set())).toBe(true);
+  // a building the tile does not hold
+  expect(hangsShown([], alive, new Set([1]))).toBe(true);
 });

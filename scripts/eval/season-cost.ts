@@ -17,13 +17,11 @@
  * Run: bun scripts/eval/season-cost.ts
  */
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { isInstances } from "../../app/_components/instancing";
 import { buildTreeInventory } from "../../app/_components/tree-inventory-layer";
-import {
-  buildVegetation,
-  type VegetationControl,
-} from "../../app/_components/vegetation-layer";
+import { buildVegetation } from "../../app/_components/vegetation-layer";
+import type { VegetationControl } from "../../app/_components/vegetation-layer";
 import type {
   CanopyExtraFeature,
   CanopyFeature,
@@ -34,7 +32,7 @@ import type {
 import { sideFileSource, tileIds } from "../../lib/city/tile";
 import { REFERENCE_SITE, SITES, siteFromArgs } from "../../sites";
 
-const ROOT = join(import.meta.dir, "..", "..");
+const ROOT = path.join(import.meta.dir, "..", "..");
 // The site named first on the command line, else the reference site.
 const site =
   process.argv.length > 2
@@ -45,13 +43,25 @@ const features = <F>(file: string): F[] => {
     return (
       (
         JSON.parse(
-          readFileSync(join(ROOT, sideFileSource(site, file)), "utf8")
+          readFileSync(path.join(ROOT, sideFileSource(site, file)), "utf-8")
         ) as FeatureCollection<F>
       ).features ?? []
     );
   } catch {
     return []; // an optional artifact this tile does not have
   }
+};
+
+/** The seasonal crowns a group draws at build: the cheap LOD (the rich one
+ *  shares its buffers). */
+const crownsIn = (group: VegetationControl["group"]): number => {
+  let drawn = 0;
+  group.traverse((o) => {
+    if (isInstances(o) && o.visible && o.geometry.getAttribute("aBare")) {
+      drawn += o.drawCount;
+    }
+  });
+  return drawn;
 };
 
 const ctx = { offset: { cx: 412_000, cy: 5_657_000 }, heightAt: () => 100 };
@@ -74,13 +84,8 @@ for (const tile of tileIds(site)) {
   );
   controls.push(veg, inv.control);
   for (const group of [veg.group, inv.control.group]) {
-    // A seasonal crown carries `aBare`; count the cheap LOD (visible at
-    // build), the rich one shares its buffers.
-    group.traverse((o) => {
-      if (isInstances(o) && o.visible && o.geometry.getAttribute("aBare")) {
-        crowns += o.drawCount;
-      }
-    });
+    // A seasonal crown carries `aBare`.
+    crowns += crownsIn(group);
   }
 }
 
@@ -95,7 +100,7 @@ const steps: [string, number][] = [
 const runs = 5;
 for (const [label, day] of steps) {
   const times: number[] = [];
-  for (let r = 0; r < runs; r++) {
+  for (let r = 0; r < runs; r += 1) {
     // Start each run from the previous step's day so the transition is real.
     const from =
       steps[Math.max(steps.findIndex((s) => s[1] === day) - 1, 0)][1];

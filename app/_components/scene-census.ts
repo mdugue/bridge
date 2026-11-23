@@ -12,7 +12,7 @@ export interface SceneCensus {
 }
 
 function triangleCount(mesh: Mesh): number {
-  const geometry = mesh.geometry;
+  const { geometry } = mesh;
   const index = geometry.getIndex();
   const vertices = index
     ? index.count

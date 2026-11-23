@@ -1,4 +1,4 @@
-"""`python -m bake {fetch,bake} --spec JSON [--step S] [--tile ID ...]
+"""`python -m bake {fetch,bake,coverage} --spec JSON [--step S] [--tile ID ...]
 [--jobs N]`.
 
 `bun run fetch` / `bun run bake` (scripts/pipeline.ts) call this with the
@@ -11,11 +11,14 @@ import datetime
 import hashlib
 import multiprocessing
 import os
+import sys
+import time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from . import (
     canopy,
+    coverage,
     cultivated,
     doors,
     dop_balance,
@@ -25,13 +28,16 @@ from . import (
     fetch,
     furniture,
     lamp_heights,
+    lamp_water,
     lamps,
     landcover,
+    landmark_facts,
     landmarks,
     lowveg,
     mapillary,
     markings,
     monuments,
+    murals,
     ndvi,
     osm_buildings,
     passages,
@@ -108,9 +114,19 @@ STEPS = {
     "riverside": riverside.run,
     # The site's counted motor traffic (its source, cached by the fetch).
     "traffic": traffic.run,
-    # After NDVI (a crown over a roof is not the roof): the LoD2 roofs that
-    # miss DOM1, rebuilt in its form (scripts/bake-city-mesh.ts).
+    # Wikidata's notable buildings (fetched by `bun run fetch`), matched to
+    # the LoD2 objects that draw them: marked, named, listed in the HUD.
+    # After osm-buildings (its names), before roofs (a landmark's roof may
+    # curve as the scan shows).
+    "landmarks": landmarks.run,
+    # After NDVI (a crown over a roof is not the roof) and the landmarks:
+    # the LoD2 roofs that miss DOM1, rebuilt in its form
+    # (scripts/bake-city-mesh.ts).
     "roofs": roofs.run,
+    # After the lamp heights and the roofs (the rebuilt ones occlude): which
+    # lamps see the water past the buildings, and its level there, for the
+    # river's mirror of them.
+    "lamp-water": lamp_water.run,
     # Last: thinned against the canopy and the cadastre, masked by the walls
     # and the bridges.
     "lowveg": lowveg.run,
@@ -126,9 +142,6 @@ STEPS = {
     # rail (bridges), monuments and furniture (stop shelters): the small
     # structures LoD2 lacks, appended to the city mesh at build time.
     "small-buildings": small_buildings.run,
-    # Wikidata's notable buildings (fetched by `bun run fetch`), matched to
-    # the LoD2 objects that draw them: marked, named, listed in the HUD.
-    "landmarks": landmarks.run,
     # After landmarks (their roofs' relief): DOM1 against LoD2, confirmed by
     # OSM — the chimneys, towers and masts LoD2 leaves out, the buildings it
     # does not carry yet, and a landmark's roof form it flattens (plan 050).
@@ -138,16 +151,17 @@ STEPS = {
     # LoD2 lacks are read too); after landcover: the site's carriageways
     # give its flight's cast.
     "roof-colour": roof_colour.run,
-    # After roofs (the rebuilt ones are measured already) and the tree bakes
-    # (a crown over a roof is no dormer): the dormers DOM1 shows on the
-    # pitched LoD2 roofs.
+    # After roofs (a rebuilt roof is read, and its dormers stand, on its
+    # rebuilt parts) and the tree bakes (a crown over a roof is no dormer)
+    # and windows (the measured window axes its rows stand over): the
+    # dormers DOM1 shows on the pitched roofs.
     "dormers": dormers.run,
 }
 
 
 # Run once for the site, after every tile (they read the tiles' files: the
-# timetable trams ride the tram tracks).
-SITE_STEPS = ("transit",)
+# timetable trams ride the tram tracks; the murals hang on the LoD2 walls).
+SITE_STEPS = ("transit", "landmark-facts", "murals")
 
 
 def site_extent(spec) -> tuple[float, float, float, float]:
@@ -166,6 +180,11 @@ def run_site_step(spec, step: str) -> None:
             print(f"{spec.site}: the site runs no timetable trams — skipping transit")
             return
         transit.run_site(spec.raw, spec.data, site_extent(spec), spec.epsg)
+    elif step == "landmark-facts":
+        # the nameplates' facts for the landmarks the tiles' step matched
+        landmark_facts.run_site(spec.raw, spec.data, spec.site)
+    elif step == "murals":
+        murals.run_site(spec)
 
 
 def run_tile(step: str, tile, site_tiles, research: bool = False) -> None:
@@ -201,15 +220,25 @@ def step_key(step: str, research: bool, spec_hash: str) -> dict:
 
 def recorded_tile(spec, step: str, tile, research: bool, key: dict, save: bool) -> None:
     """The step on the tile, its run recorded (step_cache.py) — or, with the
-    cache off, its old record dropped."""
-    manifest = step_cache.manifest_path(spec.raw, spec.site, step, tile.id)
-    if not save:
-        Path(manifest).unlink(missing_ok=True)
-        run_tile(step, tile, spec.tiles, research)
-        return
-    with step_cache.recording([os.getcwd(), str(spec.data), str(spec.raw)]) as rec:
-        run_tile(step, tile, spec.tiles, research)
-    step_cache.save(manifest, key, rec)
+    cache off, its old record dropped. A step that fails says on which
+    site, tile and step before the error goes on (in a worker of a
+    `--jobs` run as well): tile 11 of 15 names itself."""
+    started = time.perf_counter()
+    try:
+        manifest = step_cache.manifest_path(spec.raw, spec.site, step, tile.id)
+        if not save:
+            Path(manifest).unlink(missing_ok=True)
+            run_tile(step, tile, spec.tiles, research)
+        else:
+            with step_cache.recording([os.getcwd(), str(spec.data), str(spec.raw)]) as rec:
+                run_tile(step, tile, spec.tiles, research)
+            step_cache.save(manifest, key, rec)
+        # where a bake's minutes go, tile by tile (the step's own line says
+        # what it found)
+        print(f"{tile.id}: {step} took {time.perf_counter() - started:.1f} s")
+    except (Exception, SystemExit) as exc:  # a step's `SystemExit("no OSM extract")` too
+        print(f"{spec.site} {tile.id} {step}: {exc}", file=sys.stderr)
+        raise
 
 
 def warm(spec, step: str, tiles, jobs: int) -> None:
@@ -248,6 +277,14 @@ class Bake:
         self.tiles = {t.id: t for t in spec.tiles}
 
     def _run(self, step: str, tiles) -> None:
+        started = time.perf_counter()
+        try:
+            self._run_tiles(step, tiles)
+        finally:
+            took = time.perf_counter() - started
+            print(f"{self.spec.site}: {step} over {len(tiles)} tile(s) took {took:.1f} s")
+
+    def _run_tiles(self, step: str, tiles) -> None:
         key = step_key(step, self.research, self.spec_hash)
         args = (self.research, key, self.mode != "off")
         if self.jobs <= 1 or len(tiles) <= 1:
@@ -301,7 +338,7 @@ class Bake:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="bake")
-    parser.add_argument("command", choices=["fetch", "bake"])
+    parser.add_argument("command", choices=["fetch", "bake", "coverage"])
     parser.add_argument("--spec", required=True, help="the site spec as JSON")
     parser.add_argument("--step", choices=[*STEPS, *SITE_STEPS, "all"], default="all")
     parser.add_argument("--tile", nargs="*", default=[], help="only these tile ids")
@@ -335,6 +372,8 @@ def main() -> None:
     if args.command == "fetch":
         fetch.run(spec, tiles, lsc=args.lsc)
         return
+    if args.command == "coverage":
+        raise SystemExit(coverage.run(tiles[0].osm_extract() if tiles else None, tiles, spec.site))
     if args.step in SITE_STEPS:
         run_site_step(spec, args.step)
         return

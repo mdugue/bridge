@@ -49,13 +49,40 @@ reproducible, but they can be wrong where the world does not fit the rule.
   viewer rebuilds the roof from the measurement — on a fifth of it already
   where the surface is level there and the model's roof slopes where the
   surface does not (a low hipped roof drawn over a flat department store).
-  A height above the building
-  model becomes a chimney or tower only where OpenStreetMap names one.
+  Its slopes are drawn as an ordinary pitched roof: each house of a row
+  and each bend of a wing on its own plane, eaves and ridges level, not
+  dented by its dormers and chimneys, ridges, hips and valleys where two
+  planes cross, and outlines running along the building's walls and
+  meeting at corners rather than curves; only a landmark keeps the measured surface
+  itself, and a slope that fits no roof form stays flat.
+  A tall height above the building
+  model becomes a chimney or tower only where OpenStreetMap names one. The
+  roof's small things come from the surface model alone: every bump over
+  a pitched roof is a dormer, however small and however close to the next;
+  a small one at the ridge, or on a flat roof, is a house chimney — unless
+  it lies along a ridge or valley the building model drew a little off, or
+  stands on a flat roof in a row of others (masts on a platform roof).
+  Where the whole building model lies evenly higher than the
+  measurement (the Taschenbergpalais by 1.2 m), it is set onto it first;
+  a part with steep roof faces drawn off in plan (the palais' north wing
+  by about a metre) is read a second time moved onto the measurement.
+  A steep roof face a shallower upper roof goes on from is a mansard,
+  even where the building model does not call it one; its dormers may
+  stand on up to 80°. A building's dormers facing the same way at one
+  height form a row: set straight, of one size and form, at one height,
+  on one grid of equal spacing along the whole row — over the window
+  axes below where the street photos measured them, else the spacing
+  the dormers agree on best. A single empty place between two takes one
+  like its neighbour, unless a chimney stands there. Last, each dormer
+  takes its height from the building model's exact roof face, not from
+  the 1 m grid, so it sits on the roof that is drawn.
 - **Bridge superstructure:** what stands at least 3 m above the deck along
   the bridge's axis, for at least 25 m, becomes an arch or a truss.
 - **Assignments:** a shop from OpenStreetMap belongs to the building whose
   footprint holds its point, else to the nearest within a few metres; a
   landmark from Wikidata to the building parts its outline covers.
+  A bridge is no landmark (it belongs to the bridges) unless Wikidata
+  also knows it as a building.
 - **Someone else's recognition:** lamps Mapillary found in street photos
   were detected there by Mapillary's own image recognition — trained
   networks whose hits the viewer takes over.
@@ -84,18 +111,25 @@ why Munich is yellow there in [Sources by city](./sources-by-city.md).
 | Green of meadows and foliage | aerial photo, infrared (Munich: visible colours) | `= computed` |
 | Footprint, height and roof shape of buildings | 3D building model LoD2 | `❝ taken` |
 | Roofs where the model misses them | Surface model DOM1 | `◎ detected` |
-| Chimneys, towers, newer buildings, dormers | DOM1, confirmed by OpenStreetMap | `◎ detected` |
+| Chimneys, towers, newer buildings | DOM1, confirmed by OpenStreetMap | `◎ detected` |
+| Dormers and house chimneys | DOM1 over the building model's roof | `◎ detected` |
 | Platform roofs, carports, shelters | DOM1, confirmed by OpenStreetMap | `◎ detected` |
 | Sheds and garden houses | Laser scan | `◎ detected` |
 | Roof colour | Aerial photo | `= computed` |
 | Facade colour and material, where mapped | OpenStreetMap | `❝ taken` |
+| Glass facades where nothing is mapped | street photos (Mapillary), read by an image model | `◎ detected` |
 | Brick or plaster where nothing is mapped | OpenStreetMap, the neighbourhood | `≈ assumed` |
 | Tint per building, storey bands | the viewer | `≈ assumed` |
 | Front doors | OpenStreetMap, the entrances | `❝ taken` |
 | Passages through buildings, their width | OpenStreetMap, the passages (`tunnel=building_passage`) | `❝ taken` |
 | A passage's height where none is mapped, its rectangular opening | the viewer, from the ground storey | `≈ assumed` |
+| A mural's picture | Wikimedia Commons, a photo that shows the whole mural straight on | `❝ taken` |
+| A mural's drawing: its pen lines, its wash and its ink | computed from that photo (its light flattened, lines where its lightness turns, its colours sorted into five fields and lifted into the pastel) | `= computed` |
+| A mural's size and its place on the wall | OpenStreetMap (else Wikidata), on the nearest wall of the building model | `= computed` |
+| How high a mural starts where OpenStreetMap does not say | the viewer, a storey up | `≈ assumed` |
 | Shop or restaurant on the ground floor | OpenStreetMap, assigned to the building | `◎ detected` |
 | Landmarks | Wikidata, assigned to the building parts | `◎ detected` |
+| An asked landmark's facts under its name in the scene (built, architect, rebuilt, height) | Wikidata | `❝ taken` |
 | Several buildings of the city model as one (the Residenzschloss with the Hausmannsturm) | OpenStreetMap, one named building outline over several buildings, across tile edges too | `◎ detected` |
 | Street trees: place, species, size | Street-tree register | `❝ taken` |
 | Trees without a register: place | DOM1 or laser scan | `◎ detected` |
@@ -109,6 +143,7 @@ why Munich is yellow there in [Sources by city](./sources-by-city.md).
 | Bridges: piers | the viewer, clear of the fairway | `≈ assumed` |
 | Tracks and their course | Basis-DLM or OpenStreetMap | `❝ taken` |
 | Which level a track runs on (ground, deck, cut) | from ground and decks along the whole line | `◎ detected` |
+| A monorail's beam: its height and supports | from the ground along the whole line, a car's clearance; the supports the viewer's | `= computed` `≈ assumed` |
 | Lamps, benches, street furniture: place | OpenStreetMap | `❝ taken` |
 | Lamps from street photos | Mapillary | `◎ detected` |
 | Their form; where a bench without a direction faces | the viewer | `≈ assumed` |

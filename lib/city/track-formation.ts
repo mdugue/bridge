@@ -32,7 +32,7 @@ type Ring2 = readonly (readonly [number, number])[];
 /** Whether (x, y) lies inside a ring. */
 function inside(x: number, y: number, ring: Ring2): boolean {
   let c = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
@@ -86,17 +86,20 @@ class SampleGrid {
       }
     }
   }
-  /** Every sample in the box. */
+  /**
+   * Every sample in the box.
+   * @yields {Sample} each sample of the cells the box touches
+   */
   *within(x0: number, y0: number, x1: number, y1: number): Generator<Sample> {
     for (
       let cx = Math.floor(x0 / CELL_M);
       cx <= Math.floor(x1 / CELL_M);
-      cx++
+      cx += 1
     ) {
       for (
         let cy = Math.floor(y0 / CELL_M);
         cy <= Math.floor(y1 / CELL_M);
-        cy++
+        cy += 1
       ) {
         for (const s of this.cells.get(`${cx}:${cy}`) ?? []) {
           if (s.x >= x0 && s.x <= x1 && s.y >= y0 && s.y <= y1) {
@@ -110,12 +113,14 @@ class SampleGrid {
 
 function samplesOf(beds: readonly Bed[]): Sample[] {
   const out: Sample[] = [];
-  beds.forEach((bed, k) => {
+  for (let k = 0; k < beds.length; k += 1) {
+    const bed = beds[k];
     if (bed.shallow !== undefined) {
-      return; // a line in a cut runs under what lies over it
+      continue; // a line in a cut runs under what lies over it
     }
     const n = bed.coords.length;
-    bed.coords.forEach(([x, y], i) => {
+    for (let i = 0; i < bed.coords.length; i += 1) {
+      const [x, y] = bed.coords[i];
       const prev = i > 0 ? bed.coords[i - 1] : bed.coords[i];
       const next = i + 1 < n ? bed.coords[i + 1] : bed.coords[i];
       const length =
@@ -123,8 +128,8 @@ function samplesOf(beds: readonly Bed[]): Sample[] {
           Math.hypot(next[0] - x, next[1] - y)) /
         2;
       out.push({ bed: k, length, x, y, z: bed.z[i] });
-    });
-  });
+    }
+  }
   return out;
 }
 
@@ -147,7 +152,7 @@ function onOrInside(x: number, y: number, ring: Ring2): boolean {
   if (inside(x, y, ring)) {
     return true;
   }
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
     const [ax, ay] = ring[j];
     const [bx, by] = ring[i];
     const dx = bx - ax;
@@ -249,7 +254,7 @@ function loweredTo(
 }
 
 /** Every vertex index under a geometry's boundaries. */
-function indices(b: unknown, out: Set<number> = new Set()): Set<number> {
+function indices(b: unknown, out = new Set<number>()): Set<number> {
   if (typeof b === "number") {
     out.add(b);
   } else if (Array.isArray(b)) {

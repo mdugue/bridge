@@ -6,10 +6,10 @@ import {
   rgbOf,
   siteWaterTints,
   WATER_SHEET,
-  type WaterBodyRow,
   waterLook,
   waterTint,
 } from "./water-bodies";
+import type { WaterBodyRow } from "./water-bodies";
 
 // 4 × 4: (0, 0) and (3, 3) lifted to the first level, (1, 1) to the second
 const LIFT_PNG =

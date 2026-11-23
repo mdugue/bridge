@@ -22,14 +22,15 @@ import {
 } from "three/webgpu";
 import {
   decodePlate,
-  type PlateRef,
-  type PlateTile,
   plateHeightIndex,
   plateIndex,
   plateNormals,
   platePositions,
 } from "@/lib/city/ground-plate";
+import type { PlateRef, PlateTile } from "@/lib/city/ground-plate";
 import { landcoverSrgb, srgbToLinear } from "@/lib/city/landcover";
+import { plateHeightAt } from "@/lib/city/plate-height";
+import type { DrawnPlateTile } from "@/lib/city/plate-height";
 import { fetchOptionalBinary } from "./fetch-optional";
 import { disposeObject3D, sceneMaterial } from "./three-utils";
 
@@ -38,6 +39,8 @@ export interface GroundPlate {
   /** Shows each tile's plate unless that tile has a terrain level on
    *  screen (`covered`: tile ids). */
   showUnder: (covered: ReadonlySet<string>) => void;
+  /** the plate's coarse ground (m) at EPSG (x, y); undefined off it */
+  heightAt: (x: number, y: number) => number | undefined;
   dispose: () => void;
 }
 
@@ -45,13 +48,14 @@ export interface GroundPlate {
  *  normalised bytes, four a vertex (WebGPU has no three-byte format). */
 export function plateColours(classes: Uint8Array): Uint8Array {
   const out = new Uint8Array(classes.length * 4);
-  classes.forEach((id, v) => {
+  for (let v = 0; v < classes.length; v += 1) {
+    const id = classes[v];
     const [r, g, b] = landcoverSrgb(id);
     out[v * 4] = Math.round(srgbToLinear(r) * 255);
     out[v * 4 + 1] = Math.round(srgbToLinear(g) * 255);
     out[v * 4 + 2] = Math.round(srgbToLinear(b) * 255);
     out[v * 4 + 3] = 255;
-  });
+  }
   return out;
 }
 
@@ -80,12 +84,13 @@ export function buildGroundPlate(
   const material = plateMaterial();
   const meshes = new Map<string, Mesh>();
   const heightAt = plateHeightIndex(tiles, n);
+  const drawn: DrawnPlateTile[] = [];
   for (const tile of tiles) {
     const geometry = new BufferGeometry();
-    geometry.setAttribute(
-      "position",
-      new Float32BufferAttribute(platePositions(tile, n, offset), 3)
-    );
+    const positions = platePositions(tile, n, offset);
+    drawn.push({ bounds: tile.bounds, positions });
+    // not copied (a Float32BufferAttribute would): the coarse ground reads it
+    geometry.setAttribute("position", new BufferAttribute(positions, 3));
     geometry.setAttribute(
       "color",
       new BufferAttribute(plateColours(tile.classes), 4, true)
@@ -102,7 +107,9 @@ export function buildGroundPlate(
     mesh.receiveShadow = true;
     mesh.castShadow = false;
     // nothing to pick or stand on: rays go to the terrain
-    mesh.raycast = () => undefined;
+    mesh.raycast = () => {
+      // never picked
+    };
     meshes.set(tile.id, mesh);
     group.add(mesh);
   }
@@ -113,6 +120,7 @@ export function buildGroundPlate(
         mesh.visible = !covered.has(id);
       }
     },
+    heightAt: plateHeightAt(drawn, n),
     dispose: () => {
       group.removeFromParent();
       disposeObject3D(group);

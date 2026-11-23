@@ -7,10 +7,8 @@ import {
   parseTrail,
   pushBeat,
   pushEvent,
-  type Trail,
-  type TrailBeat,
-  type TrailEvent,
 } from "@/lib/city/crash-trail";
+import type { Trail, TrailBeat, TrailEvent } from "@/lib/city/crash-trail";
 import { STORAGE_KEYS } from "./storage-keys";
 
 /**
@@ -44,11 +42,13 @@ const PREVIOUS_KEY = STORAGE_KEYS.trailPrevious;
  *  reports and the crash card's text. */
 const TRAIL_QUERY = [
   "scene",
-  "gpu",
+  "thread",
   "block",
   "safety",
   "trail",
   "trace",
+  "inspect",
+  "depth",
 ] as const;
 
 /** The path plus the known knobs of `search`, in TRAIL_QUERY's order. */
@@ -100,7 +100,7 @@ export function errorCoalescer(
     error: (text) => {
       const t = now();
       if (text === last.text && t - last.at < ERROR_REPEAT_S) {
-        last.count++;
+        last.count += 1;
         return;
       }
       flush();
@@ -165,16 +165,18 @@ interface LivenessMessage {
  */
 function answerFor(startedAt: string): () => void {
   if (typeof BroadcastChannel === "undefined") {
-    return () => {};
+    return () => {
+      // no channel in this browser: nothing was opened, nothing to stop
+    };
   }
   let channel: BroadcastChannel | null = null;
   const open = () => {
     channel = new BroadcastChannel(CHANNEL);
-    channel.onmessage = (event: MessageEvent) => {
+    channel.addEventListener("message", (event: MessageEvent) => {
       if ((event.data as LivenessMessage | null)?.ask === startedAt) {
         channel?.postMessage({ open: startedAt } satisfies LivenessMessage);
       }
-    };
+    });
   };
   const close = () => {
     channel?.close();
@@ -199,11 +201,14 @@ function answerFor(startedAt: string): () => void {
  * Whether the page that wrote `trail` is still open (it answers within
  * `waitMs`); false where no page can answer (no channel in this browser).
  */
-export function pageStillOpen(trail: Trail, waitMs = 250): Promise<boolean> {
+export async function pageStillOpen(
+  trail: Trail,
+  waitMs = 250
+): Promise<boolean> {
   if (typeof BroadcastChannel === "undefined") {
-    return Promise.resolve(false);
+    return false;
   }
-  return new Promise((resolve) => {
+  return await new Promise((resolve) => {
     const channel = new BroadcastChannel(CHANNEL);
     const done = (open: boolean) => {
       clearTimeout(timer);
@@ -211,11 +216,11 @@ export function pageStillOpen(trail: Trail, waitMs = 250): Promise<boolean> {
       resolve(open);
     };
     const timer = setTimeout(() => done(false), waitMs);
-    channel.onmessage = (event: MessageEvent) => {
+    channel.addEventListener("message", (event: MessageEvent) => {
       if ((event.data as LivenessMessage | null)?.open === trail.startedAt) {
         done(true);
       }
-    };
+    });
     channel.postMessage({ ask: trail.startedAt } satisfies LivenessMessage);
   });
 }
@@ -237,6 +242,12 @@ export interface CrashTrail {
   startedAt: string;
   /** One event: a boot stage, a style switch, an error, a lost device. */
   note: (kind: string, detail?: string) => void;
+  /**
+   * An error that is no exception of the page's own (three's console
+   * errors, three-console.ts): noted as `error`, a repeat counted as
+   * the page's own errors are.
+   */
+  error: (text: string) => void;
   /** One heartbeat (the record adds the time). */
   beat: (beat: Omit<TrailBeat, "t">) => void;
   /**
@@ -356,6 +367,7 @@ export function startCrashTrail(listener?: TrailListener): CrashTrail {
   return {
     startedAt: trail.startedAt,
     note,
+    error: (text) => errors.error(text.slice(0, 300)),
     beat: (beat) => {
       const entry = { t: seconds(), ...beat };
       pushBeat(trail, entry);

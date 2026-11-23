@@ -17,7 +17,7 @@ test("a tile without a tint gets one texel of the sheet's colour", () => {
 
 test("each tint cell takes its body's colour, the sheet's where none", () => {
   // 2 × 2: body 1, none, body 2, body 1 (row 0 = north)
-  const cells = btoa(String.fromCharCode(1, 0, 2, 1));
+  const cells = btoa(String.fromCodePoint(1, 0, 2, 1));
   const t = tintTexture({
     tint: { n: 2, cells, colours: [0xa8_98_76, 0x7f_a8_88] },
   });

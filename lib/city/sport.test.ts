@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { DRESDEN } from "../../sites/dresden";
 import {
   packSportTable,
@@ -14,8 +14,8 @@ import {
   sportMarkingId,
   sportShapeId,
   sportSurfaceId,
-  type SportTable,
 } from "./sport";
+import type { SportTable } from "./sport";
 import { siteDataDir } from "./tile";
 
 interface CommittedTable extends SportTable {
@@ -24,10 +24,13 @@ interface CommittedTable extends SportTable {
   surfaces: Record<string, string>;
 }
 
-const DLM = join(import.meta.dir, "../..", siteDataDir(DRESDEN), "dlm");
+const DLM = path.join(import.meta.dir, "../..", siteDataDir(DRESDEN), "dlm");
 const committed = readdirSync(DLM)
   .filter((f) => /^sport_.*\.json$/u.test(f))
-  .map((f) => JSON.parse(readFileSync(join(DLM, f), "utf8")) as CommittedTable);
+  .map(
+    (f) =>
+      JSON.parse(readFileSync(path.join(DLM, f), "utf-8")) as CommittedTable
+  );
 
 const asMap = (keys: readonly string[]) =>
   Object.fromEntries(keys.map((k, i) => [String(i), k]));
@@ -47,7 +50,7 @@ test("every committed row is a known, finite ground on its tile", () => {
     for (const row of grounds) {
       expect(row).toHaveLength(9);
       expect(row.every(Number.isFinite)).toBe(true);
-      const [, , , p1, p2, p3, surface, marking, shape] = row;
+      const [p1, p2, p3, surface, marking, shape] = row.slice(3);
       expect(surface).toBeLessThan(SPORT_SURFACES.length);
       expect(marking).toBeLessThan(SPORT_MARKINGS.length);
       expect(shape).toBeLessThan(SPORT_SHAPES.length);

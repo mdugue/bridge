@@ -1,8 +1,5 @@
-import {
-  type DeviceAim,
-  deviceAim,
-  devicePitchDeg,
-} from "@/lib/city/geolocation";
+import { deviceAim, devicePitchDeg } from "@/lib/city/geolocation";
+import type { DeviceAim } from "@/lib/city/geolocation";
 
 /** iOS Safari's compass: degrees from north, clockwise; −1 = uncalibrated. */
 type CompassEvent = DeviceOrientationEvent & { webkitCompassHeading?: number };
@@ -61,30 +58,32 @@ export function orientationNeedsPermission(): boolean {
  * elsewhere. Must be called straight from a click — iOS only grants it
  * inside a user gesture, which is gone once the first `await` yields.
  */
-export function requestOrientationPermission(): Promise<boolean> {
+export async function requestOrientationPermission(): Promise<boolean> {
   const request = ctor()?.requestPermission;
   if (typeof request !== "function") {
-    return Promise.resolve(ctor() !== undefined);
+    return ctor() !== undefined;
   }
-  return request().then(
+  return await request().then(
     (state) => state === "granted",
     () => false
   );
 }
 
 /**
- * Calls `cb` with every compass-bearing orientation reading. Events that
+ * Calls `onAim` with every compass-bearing orientation reading. Events that
  * carry no compass are dropped; on iOS nothing arrives until the permission
  * was granted. Returns the unsubscribe.
  */
-export function subscribeAim(cb: (aim: DeviceAim) => void): () => void {
+export function subscribeAim(onAim: (aim: DeviceAim) => void): () => void {
   if (!ctor()) {
-    return () => undefined;
+    return () => {
+      // no orientation events on this platform: nothing was subscribed
+    };
   }
   const onEvent = (event: Event) => {
     const aim = aimOf(event as CompassEvent);
     if (aim) {
-      cb(aim);
+      onAim(aim);
     }
   };
   for (const type of EVENT_TYPES) {

@@ -37,16 +37,33 @@
  * Writes public/data/<site>/ (gitignored), the folder the route /<site>
  * streams from.
  */
-import { existsSync, readFileSync } from "node:fs";
-import { PLATE_N, type PlateExtras } from "../lib/city/ground-plate";
-import { type LandmarkFile, siteLandmarks } from "../lib/city/landmarks";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import nodePath from "node:path";
+import { PLATE_N } from "../lib/city/ground-plate";
+import type { PlateExtras } from "../lib/city/ground-plate";
+import { siteLandmarks } from "../lib/city/landmarks";
+import type { LandmarkFile } from "../lib/city/landmarks";
 import {
-  PROVENANCE_FILE,
-  type ProvenanceRecord,
-  siteProvenance,
-} from "../lib/city/provenance";
+  MURALS_FILE,
+  muralCredit,
+  muralFileSource,
+  muralsSource,
+  parseMurals,
+} from "../lib/city/murals";
+import type { MinimapExtras } from "../lib/city/minimap";
+import type { MuralExtras } from "../lib/city/murals";
+import { PROVENANCE_FILE, siteProvenance } from "../lib/city/provenance";
+import type { ProvenanceRecord } from "../lib/city/provenance";
 import { tileExtentOf } from "../lib/city/site";
-import { groundRelief, type ValleyRim } from "../lib/city/valley-fog";
+import {
+  WALKS_DIR,
+  WALKS_FILE,
+  walkBundle,
+  walkPhotoFile,
+} from "../lib/city/walks";
+import type { Walk, WalkBundle, WalksExtras } from "../lib/city/walks";
+import { groundRelief } from "../lib/city/valley-fog";
+import type { ValleyRim } from "../lib/city/valley-fog";
 import {
   ASK_KINDS,
   pickFiles,
@@ -54,12 +71,22 @@ import {
   siteDataDir,
 } from "../lib/city/tile";
 import {
-  type BakedTile,
   buildTileset,
   TILESET_FILE,
   TILESET_SPAWN_FILE,
-  type TilesetExtras,
 } from "../lib/city/tileset";
+import type { BakedTile, TilesetExtras } from "../lib/city/tileset";
+import {
+  LANDMARK_FACTS_FILE,
+  landmarkFactsSource,
+} from "../lib/city/landmark-facts";
+import type { LandmarkFactsExtras } from "../lib/city/landmark-facts";
+import { LANDMARK_FACTS_FILE_SPEC } from "../lib/city/landmark-facts-file";
+import { MURALS_FILE_SPEC } from "../lib/city/murals-file";
+import { TRAMS_FILE } from "../lib/city/tram-timetable-file";
+import { HORIZON_LEGEND_FILE } from "../lib/city/horizon-legend-file";
+import { parseBakeFile } from "../lib/city/bake-file";
+import type { BakeFile } from "../lib/city/bake-file";
 import {
   TRAM_TIMETABLE_FILE,
   tramTimetableSource,
@@ -72,6 +99,7 @@ import {
   WARMING,
   at,
   log,
+  parse,
   publish,
   publisher,
   readJson,
@@ -88,7 +116,9 @@ import { bakeCity } from "./prepare/city";
 import { bakeTerrain, dropTerrain } from "./prepare/terrain";
 import { bakePlate } from "./prepare/plate";
 import { publishHero } from "./prepare/hero";
+import { publishMinimap } from "./prepare/minimap";
 import { publishStats } from "./prepare/stats";
+import { publishStadtwissen } from "./prepare/stadtwissen";
 
 /** The valley's rim around each tile, where the sky-view bake read the
  *  land beyond the site (pipeline/bake/glo30.py `rims`, in the horizon
@@ -99,10 +129,12 @@ function valleyRims(): ValleyRim[] {
     if (!existsSync(legend)) {
       return [];
     }
-    const valley = readJson<{ valley?: Partial<ValleyRim> }>(legend).valley;
-    return typeof valley?.floorM === "number" && Array.isArray(valley.rimM)
-      ? [{ floorM: valley.floorM, rimM: valley.rimM }]
-      : [];
+    const { valley } = parseBakeFile(
+      HORIZON_LEGEND_FILE,
+      readJson(legend),
+      legend
+    );
+    return valley ? [{ floorM: valley.floorM, rimM: valley.rimM }] : [];
   });
 }
 
@@ -128,7 +160,8 @@ if (MODE.kind === "ground") {
 const baked: BakedTile[] = [];
 const footprintFiles = new Map<string, string>();
 const groundHeights: number[] = [];
-for (const [i, tile] of TILES.entries()) {
+for (let i = 0; i < TILES.length; i += 1) {
+  const tile = TILES[i];
   if (!OWN.has(tile)) {
     continue;
   }
@@ -150,6 +183,7 @@ for (const [i, tile] of TILES.entries()) {
     bounds: tileExtentOf(SITE.tiles[i]),
     city: city.file,
     cityFar: city.far,
+    files: { city: city.files, terrain: { 0: fine.files, 1: coarse.files } },
     terrain: { 0: fine.file, 1: coarse.file },
     zRange: [
       Number.isFinite(minZ) ? minZ : 0,
@@ -187,26 +221,141 @@ function readProvenance(): ProvenanceRecord {
     );
     return {};
   }
-  return readJson<ProvenanceRecord>(path);
+  return readJson(path) as ProvenanceRecord;
 }
-const provenanceFile = publish(
-  PROVENANCE_FILE,
-  utf8(
-    siteProvenance(
-      readProvenance(),
-      baked.map((t) => t.id),
-      SITE
-    )
-  )
+const provenance = siteProvenance(
+  readProvenance(),
+  baked.map((t) => t.id),
+  SITE
 );
+const provenanceFile = publish(PROVENANCE_FILE, utf8(provenance));
+/** A site-wide file a bake hands over, checked against its schema every
+ *  run (ADR 0059: a mismatch ends the build) and published as the bytes
+ *  it read. */
+function publishParsed(name: string, path: string, spec: BakeFile): string {
+  const bytes = readFileSync(path);
+  parseBakeFile(spec, parse(bytes), path);
+  return publish(name, bytes);
+}
 // The trams' timetable, site-wide (pipeline/bake/transit.py): optional.
 const tramSource = at(tramTimetableSource(siteDataDir(SITE)));
-const trams = existsSync(tramSource)
-  ? publish(TRAM_TIMETABLE_FILE, readFileSync(tramSource))
+// The landmarks' facts, site-wide (pipeline/bake/landmark_facts.py): what
+// the nameplate says under a landmark's name; optional.
+const factsSource = at(landmarkFactsSource(siteDataDir(SITE)));
+const landmarkFacts = existsSync(factsSource)
+  ? publishParsed(LANDMARK_FACTS_FILE, factsSource, LANDMARK_FACTS_FILE_SPEC)
   : undefined;
+const trams = existsSync(tramSource)
+  ? publishParsed(TRAM_TIMETABLE_FILE, tramSource, TRAMS_FILE)
+  : undefined;
+// The murals on their walls, site-wide (pipeline/bake/murals.py): optional,
+// each drawing's pen lines and wash under their own published names, the
+// file naming them so.
+const muralsDir = siteDataDir(SITE);
+const muralsPath = at(muralsSource(muralsDir));
+// a malformed mural fails the build (ADR 0059), never vanishes
+const muralFile = existsSync(muralsPath)
+  ? parseBakeFile(MURALS_FILE_SPEC, readJson(muralsPath), muralsPath)
+  : null;
+const muralPath = (name: string) => at(muralFileSource(muralsDir, name));
+const murals = (parseMurals(muralFile) ?? [])
+  .filter(
+    (m) => existsSync(muralPath(m.lines)) && existsSync(muralPath(m.wash))
+  )
+  .map((m) => ({
+    ...m,
+    lines: publish(
+      `mural-${m.id}.lines.webp`,
+      readFileSync(muralPath(m.lines))
+    ),
+    wash: publish(`mural-${m.id}.wash.webp`, readFileSync(muralPath(m.wash))),
+  }));
+const muralsFile =
+  murals.length > 0
+    ? publish(
+        MURALS_FILE,
+        utf8({ attribution: muralFile?.attribution ?? "", murals })
+      )
+    : undefined;
 
-const extras: TilesetExtras & PlateExtras = {
+// --- the walks --------------------------------------------------------------------
+// Erzählte Spaziergänge (lib/city/walks.ts, ADR 0055): the site's written
+// walks, checked and bundled into one file the HUD loads when it lists them.
+
+const walksDir = at(`${siteDataDir(SITE)}/${WALKS_DIR}`);
+const walkFiles = existsSync(walksDir)
+  ? readdirSync(walksDir)
+      .filter((name) => name.endsWith(".json"))
+      .sort()
+  : [];
+/** A walk with each stop's photo published beside it (`photo.src`). The
+ *  walks are checked as written (walkBundle), credits included; a stop
+ *  whose copy is missing then shows none, so a preview still builds — the
+ *  walks' unit test fails until it is committed. */
+function withPhotos(walk: Walk): Walk {
+  return {
+    ...walk,
+    stops: walk.stops.map((stop) => {
+      if (!stop.photo) {
+        return stop;
+      }
+      const file = nodePath.join(walksDir, walkPhotoFile(walk.id, stop.id));
+      if (!existsSync(file)) {
+        log(
+          `${walk.id}/${stop.id}: no photo copy, shown without (bun scripts/walks.ts ${SITE.id} photos)`
+        );
+        const { photo: _missing, ...rest } = stop;
+        return rest;
+      }
+      const src = publish(
+        `walk-photo_${walk.id}--${stop.id}.webp`,
+        readFileSync(file)
+      );
+      return { ...stop, photo: { ...stop.photo, src } };
+    }),
+  };
+}
+/** The checked bundle with its photos published (checked before: a
+ *  sentence about the photo stays right when only the copy is missing). */
+function publishedWalks(bundle: WalkBundle): WalkBundle {
+  return { ...bundle, walks: bundle.walks.map(withPhotos) };
+}
+const walks =
+  walkFiles.length > 0
+    ? publish(
+        WALKS_FILE,
+        utf8(
+          publishedWalks(
+            walkBundle(
+              SITE.id,
+              walkFiles.map(
+                (name) => readJson(nodePath.join(walksDir, name)) as Walk
+              )
+            )
+          )
+        )
+      )
+    : undefined;
+
+await publishStadtwissen(
+  baked.map((t) => t.id),
+  frame.epsg,
+  provenance.sources
+);
+
+type SiteExtras = TilesetExtras &
+  PlateExtras &
+  LandmarkFactsExtras &
+  MinimapExtras &
+  MuralExtras &
+  WalksExtras;
+
+// the minimap's picture of the site (scripts/prepare/minimap.ts)
+const map = await publishMinimap(footprintFiles);
+
+const extras: SiteExtras = {
   site: SITE.id,
+  ...(map ? { map } : {}),
   landmarks: siteLandmarks(
     TILES.map(landmarkFile).filter((f): f is LandmarkFile => f !== undefined)
   ),
@@ -225,11 +374,15 @@ const extras: TilesetExtras & PlateExtras = {
     id: t.id,
     bounds: t.bounds,
     footprints: footprintFiles.get(t.id) ?? "",
-    minimap: sideFiles.get(t.id)?.landcoverSmall ?? "",
     bridges: sideFiles.get(t.id)?.bridge,
     ask: pickFiles(sideFiles.get(t.id) ?? {}, ASK_KINDS),
   })),
   ...(trams ? { trams } : {}),
+  ...(walks ? { walks } : {}),
+  ...(landmarkFacts ? { landmarkFacts } : {}),
+  ...(muralsFile
+    ? { murals: { credits: murals.map(muralCredit), file: muralsFile } }
+    : {}),
 };
 publish(TILESET_FILE, utf8(buildTileset(baked, extras)));
 publish(

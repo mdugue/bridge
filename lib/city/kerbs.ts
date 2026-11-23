@@ -21,15 +21,12 @@
  * its drop's height over the road — 3 cm, or flush — and ramps back to the
  * full height over RAMP_M either side.
  */
-import {
-  followGround,
-  type JoinPoint,
-  joinsAlong,
-  meetGround,
-  SINK,
-} from "./ground-join";
-import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
-import { type Point2, subdividePolyline } from "./polyline";
+import { followGround, joinsAlong, meetGround, SINK } from "./ground-join";
+import type { JoinPoint } from "./ground-join";
+import { epsgToWorld } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
+import { subdividePolyline } from "./polyline";
+import type { Point2 } from "./polyline";
 
 type HeightAt = (x: number, y: number) => number | null;
 
@@ -59,7 +56,12 @@ export interface KerbLine {
 export function kerbHeightAt(s: number, low: readonly KerbDrop[]): number {
   let h = KERB_HEIGHT;
   for (const [s0, s1, dh] of low) {
-    const out = s < s0 ? s0 - s : s > s1 ? s - s1 : 0;
+    let out = 0;
+    if (s < s0) {
+      out = s0 - s;
+    } else if (s > s1) {
+      out = s - s1;
+    }
     if (out < RAMP_M) {
       h = Math.min(h, dh + ((KERB_HEIGHT - dh) * out) / RAMP_M);
     }
@@ -79,17 +81,17 @@ function profilePoints(line: Point2[], low: readonly KerbDrop[]): Point2[] {
   const pts: Point2[] = [line[0]];
   let s = 0;
   let m = 0;
-  for (let i = 1; i < line.length; i++) {
+  for (let i = 1; i < line.length; i += 1) {
     const [x0, y0] = line[i - 1];
     const [x1, y1] = line[i];
     const len = Math.hypot(x1 - x0, y1 - y0);
     while (m < marks.length && marks[m] <= s) {
-      m++;
+      m += 1;
     }
     while (m < marks.length && marks[m] < s + len) {
       const t = (marks[m] - s) / len;
       pts.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t]);
-      m++;
+      m += 1;
     }
     pts.push(line[i]);
     s += len;
@@ -100,7 +102,7 @@ function profilePoints(line: Point2[], low: readonly KerbDrop[]): Point2[] {
 /** Each point's distance along the polyline (m). */
 function alongOf(pts: Point2[]): number[] {
   const out = [0];
-  for (let i = 1; i < pts.length; i++) {
+  for (let i = 1; i < pts.length; i += 1) {
     out.push(
       out[i - 1] +
         Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1])
@@ -280,7 +282,7 @@ export function kerbGeometry(
         low.length > 0 ? kerbHeightAt(along[i], low) : KERB_HEIGHT
       )
     );
-    for (let i = 0; i < cols.length - 1; i++) {
+    for (let i = 0; i < cols.length - 1; i += 1) {
       const a = cols[i];
       const b = cols[i + 1];
       if (a && b) {

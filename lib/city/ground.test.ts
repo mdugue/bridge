@@ -50,3 +50,15 @@ test("a pinned ground keeps the sources it was pinned over", () => {
   expect(ground.heightAt(1500, 2000)).toBe(110);
   expect(pinned(1500, 2000)).toBe(100);
 });
+
+test("a design's site caps the walked ground there, not the terrain's own", () => {
+  const ground = createGround(offset);
+  ground.setSources([fine]);
+  // a design floor at 105 m over x 1000…1020
+  ground.setCap((x) => (x >= 1000 && x <= 1020 ? 105 : null));
+  expect(ground.atWorld(10, 0)).toBe(105);
+  expect(ground.atWorld(30, 0)).toBe(110);
+  expect(ground.heightAt(1010, 2000)).toBe(110);
+  ground.setCap(null);
+  expect(ground.atWorld(10, 0)).toBe(110);
+});

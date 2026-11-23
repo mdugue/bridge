@@ -22,7 +22,7 @@ precision, could not shear, and still broke every depth-keyed term.
    pick ray through `setPickRay`, a material's view direction through
    `viewDirection()`, a distance-keyed look through the equivalent
    distance. Entering Modell builds nothing.
-3. **Scale, not distance.** The shadow frustum fits the footprint, the
+3. **Scale, not distance.** The shadow map's tiled square fits the footprint, the
    vegetation and lamps read an eye at the equivalent distance, fog and sky
    are off, the background is the style's paper.
 4. **Each terrain level carries its trees** (the coarse level a third of

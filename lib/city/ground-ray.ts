@@ -40,7 +40,7 @@ export function groundRayDistance(
       // The crossing lies in (prev, t]: bisect to a few centimetres.
       let lo = prev;
       let hi = t;
-      for (let i = 0; i < 24 && hi - lo > 0.02; i++) {
+      for (let i = 0; i < 24 && hi - lo > 0.02; i += 1) {
         const mid = (lo + hi) / 2;
         if (below(mid) === true) {
           hi = mid;

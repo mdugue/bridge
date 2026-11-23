@@ -15,7 +15,7 @@ how it is built.
 | [0001](./0001-client-only-static-app.md) | Static where possible: no database, no accounts, nothing kept about a visitor; stateless server functions only where a source or service needs one |
 | [0002](./0002-imperative-threejs-in-a-react-shell.md) | Imperative three.js inside a React shell, not react-three-fiber |
 | [0005](./0005-one-projected-crs-and-a-rotated-world-group.md) | Data stays in its provider's UTM zone, under one recenter offset and a rotated `world` group |
-| [0009](./0009-shadow-recipe.md) | Light, shadows and post: soft PCF redrawn on demand, a baked horizon for the far field, a fixed lamp pool, DoF dropped while moving, AO never |
+| [0009](./0009-shadow-recipe.md) | Light, shadows and post: soft PCF redrawn on demand, four concentric rings, a baked horizon for the far field, a fixed lamp pool, DoF dropped while moving, AO never |
 | [0010](./0010-opaque-clay-buildings-only.md) | The look: opaque clay on a painted ground, colours within one palette, windows drawn by the shader, detail soft, water matte |
 | [0012](./0012-openstreetmap-for-what-official-data-lacks.md) | Sources: official data first, OSM and Wikidata for what it lacks, named stand-ins marked per city, no look switch per city |
 | [0018](./0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md) | Headless tests run a lite profile and count frames; visuals are judged on a real GPU; the Snapshot is a validated contract |
@@ -34,12 +34,19 @@ how it is built.
 | [0044](./0044-modell-parallel-projections.md) | Modell: the city in parallel projection, every pass reading the camera through a lens |
 | [0047](./0047-phone-memory-budget-in-true-bytes.md) | Every device gets a budget in true bytes, a phone's memory never grows, a device that lost its GPU gets a lighter page |
 | [0048](./0048-network-failures-are-retried.md) | A network failure is retried for a budget of the page's visible time, never decided at once |
+| [0054](./0054-a-design-is-loaded-on-the-device.md) | A planner's design is read on the device, never uploaded, placed by its coordinates or by hand, and stands in for the buildings it covers |
+| [0055](./0055-stadtwissen-and-written-walks.md) | What the twin knows is baked as files for agents; walks are written ahead, checked against the data, their narration marked as Claude's |
+| [0056](./0056-frag-die-stadt-runs-on-the-visitors-key.md) | *Frag die Stadt* runs on the visitor's own key through one stateless function with a fixed prompt and fixed tools; the key stays in the browser, the answers are marked |
+| [0057](./0057-the-sprachfuehrer-speaks-with-the-browsers-voice.md) | The Sprachführer speaks and listens with the browser's own voice, and the scene rests while it does |
+| [0059](./0059-one-schema-per-file-a-bake-hands-over.md) | Every file a bake hands over to TypeScript has one strict zod schema; the build parses it and fails on a mismatch, a test parses every committed file, the viewer takes the types only |
+| [0060](./0060-glass-fronts-read-from-street-photos-by-an-image-model.md) | Glass fronts are read from street photos of any camera by an open image model at fetch time, never in the viewer; the photos' glass is the material where no source names one |
+| [0061](./0061-the-scene-runs-in-a-worker.md) | The scene runs in a worker on an OffscreenCanvas and touches no DOM; the page hosts it; a browser whose worker cannot draw is told so, and the page runs the same server only for debugging (`?thread=main`, `?inspect=1`) |
 
 ## Numbering
 
 Numbers missing from the index belonged to records merged into others;
 they are never reused. A new record takes the next number after the
-highest ever used (0053), checked against main and the open PRs' branches.
+highest ever used (0061), checked against main and the open PRs' branches.
 
 ## Format
 

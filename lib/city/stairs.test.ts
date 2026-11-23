@@ -7,12 +7,12 @@ import {
   STAIR_BURN_M,
   STAIR_RISER,
   STAIR_TREAD,
-  type StairLine,
   stairColors,
   stairGeometry,
   stairLineOf,
   stairRails,
 } from "./stairs";
+import type { StairLine } from "./stairs";
 import { sampleHeightfield } from "./terrain-geometry";
 
 // A 100 m tile at 2 m/cell whose DGM is the smoothed bank a flight of steps
@@ -35,8 +35,8 @@ function bank(y: number): number {
 
 function grid(): Float32Array {
   const el = new Float32Array(N * N);
-  for (let row = 0; row < N; row++) {
-    for (let col = 0; col < N; col++) {
+  for (let row = 0; row < N; row += 1) {
+    for (let col = 0; col < N; col += 1) {
       el[row * N + col] = bank(100 - (row + 0.5) * DX);
     }
   }
@@ -79,7 +79,7 @@ test("over a bank the burn only lowers, and leaves the ground alone away from th
     bounds: BOUNDS,
     stairs: [FLIGHT],
   });
-  for (let i = 0; i < el.length; i++) {
+  for (let i = 0; i < el.length; i += 1) {
     expect(out[i]).toBeLessThanOrEqual(el[i]);
   }
   expect(at(out, 20, 50)).toBe(at(el, 20, 50)); // 30 m to the side
@@ -90,8 +90,8 @@ test("over a bank the burn only lowers, and leaves the ground alone away from th
 test("no terrain triangle under a flight keeps a vertex above its tread", () => {
   // A terrace 3 m above the ramp right beside the flight, no wall between.
   const el = grid();
-  for (let row = 0; row < N; row++) {
-    for (let col = 0; col < N; col++) {
+  for (let row = 0; row < N; row += 1) {
+    for (let col = 0; col < N; col += 1) {
       if ((col + 0.5) * DX > 53) {
         el[row * N + col] += 3;
       }
@@ -145,8 +145,8 @@ test("beside a raised flight the DGM's shoulder is dug down to the ground around
   // Flat ground at 100 m, a flight climbing 4 m that the DGM has as a ramp
   // with 2 m shoulders sloping off either side of its 4 m width.
   const el = new Float32Array(N * N);
-  for (let row = 0; row < N; row++) {
-    for (let col = 0; col < N; col++) {
+  for (let row = 0; row < N; row += 1) {
+    for (let col = 0; col < N; col += 1) {
       const x = (col + 0.5) * DX;
       const y = 100 - (row + 0.5) * DX;
       const ramp = y > 40 && y < 60 ? ((y - 40) / 20) * 4 : 0;
@@ -217,10 +217,12 @@ test("a flight's axis middle", () => {
 
 test("the flight's treads climb one riser per step to the top landing", () => {
   const geo = stairGeometry(FLIGHT, { cx: 0, cy: 0 });
-  expect(geo).not.toBeNull();
-  const g = geo as NonNullable<typeof geo>;
+  if (!geo) {
+    throw new Error("the flight has no geometry");
+  }
+  const g = geo;
   const treadY = new Set<number>();
-  for (let v = 0; v < g.kinds.length; v++) {
+  for (let v = 0; v < g.kinds.length; v += 1) {
     if (g.kinds[v] === STAIR_TREAD) {
       treadY.add(Math.round(g.positions[v * 3 + 1] * 1000) / 1000);
       expect(g.normals[v * 3 + 1]).toBe(1); // up
@@ -263,6 +265,19 @@ test("every triangle is wound to face its normal", () => {
   }
 });
 
+/** The ground beside the flight stands 1 m above its treads, level along it. */
+// The bank beside the flight stands 1 m above its treads, level along it.
+const cut = (x: number, y: number) =>
+  Math.abs(x - 50) > 2 ? bank(y) + 1 : bank(y);
+
+/** The Wange triangles a flight gets, by the sides it is walled on. */
+const banksOf = (walled: [boolean, boolean]) =>
+  stairGeometry(
+    { ...FLIGHT, walled },
+    { cx: 0, cy: 0 },
+    { groundAt: cut }
+  )?.kinds.filter((k) => k === STAIR_BANK).length ?? 0;
+
 function windsToItsNormals(g: { normals: number[]; positions: number[] }) {
   const p = g.positions;
   const nrm = g.normals;
@@ -277,17 +292,16 @@ function windsToItsNormals(g: { normals: number[]; positions: number[] }) {
 }
 
 test("a flight cut into a bank gets Wangen at the bank's level", () => {
-  // The bank beside the flight stands 1 m above its treads, level along it.
-  const cut = (x: number, y: number) =>
-    Math.abs(x - 50) > 2 ? bank(y) + 1 : bank(y);
   const g = stairGeometry(FLIGHT, { cx: 0, cy: 0 }, { groundAt: cut });
-  expect(g).not.toBeNull();
-  const geo = g as NonNullable<typeof g>;
+  if (!g) {
+    throw new Error("the flight has no geometry");
+  }
+  const geo = g;
   const banks = geo.kinds.filter((k) => k === STAIR_BANK).length;
   // both sides, every section: two triangles of the ground-toned top
   expect(banks).toBe(2 * 25 * 6);
   // a Wange top stands at the bank beyond it (world y), not at the tread
-  for (let v = 0; v < geo.kinds.length; v++) {
+  for (let v = 0; v < geo.kinds.length; v += 1) {
     if (geo.kinds[v] === STAIR_BANK) {
       const z = -geo.positions[v * 3 + 2]; // data y
       expect(geo.positions[v * 3 + 1]).toBeGreaterThan(bank(z) + 0.5);
@@ -337,14 +351,6 @@ test("a malformed feature is not a flight", () => {
 
 test("only a side with a wall or building along it becomes a Wange", () => {
   // the bank beside the flight 1 m above its treads, as above
-  const cut = (x: number, y: number) =>
-    Math.abs(x - 50) > 2 ? bank(y) + 1 : bank(y);
-  const banksOf = (walled: [boolean, boolean]) =>
-    stairGeometry(
-      { ...FLIGHT, walled },
-      { cx: 0, cy: 0 },
-      { groundAt: cut }
-    )?.kinds.filter((k) => k === STAIR_BANK).length ?? 0;
   // open on both sides (Meißen's grass banks): plain cheeks, the bank
   // stays ground
   expect(banksOf([false, false])).toBe(0);

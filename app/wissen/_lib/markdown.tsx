@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import rehypeShiki, { type RehypeShikiOptions } from "@shikijs/rehype";
+import rehypeShiki from "@shikijs/rehype";
+import type { RehypeShikiOptions } from "@shikijs/rehype";
 import type { Element, Root as HastRoot } from "hast";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { toString as hastText } from "hast-util-to-string";
@@ -17,7 +18,8 @@ import { unified } from "unified";
 import { visit } from "unist-util-visit";
 import { METHODS, methodOfToken } from "@/lib/city/methods";
 import { diagramKey } from "@/lib/docs/diagrams";
-import { type Lang, resolveHref } from "@/lib/docs/routes";
+import { resolveHref } from "@/lib/docs/routes";
+import type { Lang } from "@/lib/docs/routes";
 import { Diagram } from "../_components/diagram";
 
 export interface TocEntry {
@@ -66,16 +68,18 @@ function remarkDiagrams() {
       const file = path.join(process.cwd(), "docs", "diagrams", `${key}.svg`);
       let svg: string;
       try {
-        svg = readFileSync(file, "utf8").trim();
+        svg = readFileSync(file, "utf-8").trim();
       } catch {
         throw new Error(
           `No rendered diagram docs/diagrams/${key}.svg – run \`bun run docs:diagrams\``
         );
       }
-      const box = svg.match(/viewBox="[\d.-]+ [\d.-]+ ([\d.]+) ([\d.]+)"/u);
+      const box = /viewBox="[\d.-]+ [\d.-]+ (?<w>[\d.]+) (?<h>[\d.]+)"/u.exec(
+        svg
+      );
       const attrs = [
-        `data-width="${Math.round(Number(box?.[1] ?? 0))}"`,
-        `data-height="${Math.round(Number(box?.[2] ?? 0))}"`,
+        `data-width="${Math.round(Number(box?.groups?.w ?? 0))}"`,
+        `data-height="${Math.round(Number(box?.groups?.h ?? 0))}"`,
         heading ? `data-title="${heading.replaceAll('"', "&quot;")}"` : "",
       ].join(" ");
       parent.children[index] = {
@@ -176,7 +180,7 @@ function tocOf(tree: HastRoot): TocEntry[] {
       node.properties.id
     ) {
       toc.push({
-        id: String(node.properties.id),
+        id: node.properties.id,
         text: hastText(node),
         depth: node.tagName === "h2" ? 2 : 3,
       });
@@ -185,8 +189,8 @@ function tocOf(tree: HastRoot): TocEntry[] {
   return toc;
 }
 
-function DocLink({ children, href = "", ...rest }: ComponentProps<"a">) {
-  return href.startsWith("/") ? (
+const DocLink = ({ children, href = "", ...rest }: ComponentProps<"a">) =>
+  href.startsWith("/") ? (
     <Link href={href} {...rest}>
       {children}
     </Link>
@@ -195,7 +199,6 @@ function DocLink({ children, href = "", ...rest }: ComponentProps<"a">) {
       {children}
     </a>
   );
-}
 
 /** The code fences' languages the highlighter loads up front (```mermaid
  *  becomes a diagram before it runs). */

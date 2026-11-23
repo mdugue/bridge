@@ -6,7 +6,10 @@
  * Every part of an object is a prism from the object's own LoD2 base (the
  * lowest vertex of its LoD2 shell: where its walls stood on the ground
  * before) up to the part's roof — flat at its measured `z`, or, for a face
- * (a pitched roof, a vault, a dome), its measured surface: an
+ * (a pitched roof, a vault, a dome), its measured surface: where the bake
+ * drew it as planes, its facets (`facetPrism`: each plane's polygon flat
+ * on its plane, a ridge, a hip, a valley the straight line two of them
+ * share, a step of more than the scan can tell between two a wall); else an
  * error-bounded TIN of the surface grid (`FACE_TIN_MAX_ERROR`), its
  * vertices inside the outline triangulated with the outline's own points
  * where the height along it bends, the walls' tops on those same points —
@@ -73,7 +76,7 @@ export function measuredRoofsById(
 /** Twice the signed area of a ring (positive = counter-clockwise). */
 function signedArea(ring: readonly Point2[]): number {
   let a = 0;
-  for (let i = 0; i < ring.length; i++) {
+  for (let i = 0; i < ring.length; i += 1) {
     const [x0, y0] = ring[i];
     const [x1, y1] = ring[(i + 1) % ring.length];
     a += x0 * y1 - x1 * y0;
@@ -113,7 +116,7 @@ function faceTin(s: MeasuredSurface, z: number): FaceTin {
   const corners = new Float64Array(count * 6);
   const planes = new Float64Array(count * 3);
   const boxes = new Float64Array(count * 4);
-  for (let k = 0; k < count; k++) {
+  for (let k = 0; k < count; k += 1) {
     const p = [0, 1, 2].map((j) => {
       const v = triangles[k * 3 + j];
       const gx = coords[v * 2];
@@ -186,7 +189,7 @@ function segmentInside(
 ): [number, number] | null {
   let t0 = 0;
   let t1 = 1;
-  for (let e = 0; e < 3; e++) {
+  for (let e = 0; e < 3; e += 1) {
     const p = tinCorner(t, k, e);
     const q = tinCorner(t, k, (e + 1) % 3);
     const fa = (q[0] - p[0]) * (a[1] - p[1]) - (q[1] - p[1]) * (a[0] - p[0]);
@@ -217,7 +220,7 @@ function segmentBox(a: Point2, b: Point2): number[] {
 function crossings(t: FaceTin, a: Point2, b: Point2): number[] {
   const box = segmentBox(a, b);
   const ts = [0, 1];
-  for (let k = 0; k < t.count; k++) {
+  for (let k = 0; k < t.count; k += 1) {
     const span = overlaps(t, k, box) ? segmentInside(t, k, a, b) : null;
     if (span) {
       ts.push(...span);
@@ -230,7 +233,7 @@ function crossings(t: FaceTin, a: Point2, b: Point2): number[] {
 /** The TIN's height at `p` (any triangle holding it: on a shared edge two
  *  give the same), `fallback` outside it. */
 function tinZ(t: FaceTin, p: Point2, fallback: number): number {
-  for (let k = 0; k < t.count; k++) {
+  for (let k = 0; k < t.count; k += 1) {
     if (!overlaps(t, k, [p[0], p[1], p[0], p[1]])) {
       continue;
     }
@@ -257,7 +260,7 @@ type Push = (
 function insideRings(rings: Point2[][], [x, y]: Point2): boolean {
   let inside = false;
   for (const ring of rings) {
-    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
       const [xi, yi] = ring[i];
       const [xj, yj] = ring[j];
       if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
@@ -316,7 +319,7 @@ function profilePoints(
   const split = (i: number, j: number) => {
     let worst = -1;
     let dev = FACE_TIN_MAX_ERROR;
-    for (let k = i + 1; k < j; k++) {
+    for (let k = i + 1; k < j; k += 1) {
       const f = (us[k] - us[i]) / (us[j] - us[i]);
       const d = Math.abs(zs[k] - (zs[i] + f * (zs[j] - zs[i])));
       if (d > dev) {
@@ -380,13 +383,13 @@ function canonicalIds(points: readonly Point2[]): number[] {
  *  the outline are dropped. */
 function conformingRoof(rings: Point2[][], inner: readonly Point2[]): FaceRoof {
   let current = rings;
-  for (let round = 0; ; round++) {
+  for (let round = 0; ; round += 1) {
     const points = [...current.flat(), ...inner];
     const ids = canonicalIds(points);
     const t = new Delaunator(Float64Array.from(points.flat())).triangles;
     const edges = new Set<string>();
     for (let k = 0; k < t.length; k += 3) {
-      for (let e = 0; e < 3; e++) {
+      for (let e = 0; e < 3; e += 1) {
         const a = ids[t[k + e]];
         const b = ids[t[k + ((e + 1) % 3)]];
         edges.add(a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -396,16 +399,17 @@ function conformingRoof(rings: Point2[][], inner: readonly Point2[]): FaceRoof {
     let start = 0;
     const next = current.map((ring) => {
       const out: Point2[] = [];
-      ring.forEach((p, i) => {
+      for (let i = 0; i < ring.length; i += 1) {
+        const p = ring[i];
         const q = ring[(i + 1) % ring.length];
         const a = ids[start + i];
         const b = ids[start + ((i + 1) % ring.length)];
         out.push(p);
         if (a !== b && !edges.has(a < b ? `${a}|${b}` : `${b}|${a}`)) {
-          missing++;
+          missing += 1;
           out.push([(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]);
         }
-      });
+      }
       start += ring.length;
       return out;
     });
@@ -436,8 +440,8 @@ function conformingRoof(rings: Point2[][], inner: readonly Point2[]): FaceRoof {
 function innerVertices(rings: Point2[][], tin: FaceTin): Point2[] {
   const out: Point2[] = [];
   const seen = new Set<string>();
-  for (let k = 0; k < tin.count; k++) {
-    for (let j = 0; j < 3; j++) {
+  for (let k = 0; k < tin.count; k += 1) {
+    for (let j = 0; j < 3; j += 1) {
       const p = tinCorner(tin, k, j);
       const key = `${p[0]},${p[1]}`;
       if (seen.has(key)) {
@@ -457,6 +461,12 @@ function innerVertices(rings: Point2[][], tin: FaceTin): Point2[] {
     }
   }
   return out;
+}
+
+/** A vector scaled to length one (the zero vector kept). */
+function unit(n: readonly number[]): number[] {
+  const len = Math.hypot(n[0], n[1], n[2]) || 1;
+  return n.map((x) => x / len);
 }
 
 /** A face: its surface as one triangulation of the TIN's vertices and the
@@ -507,16 +517,12 @@ function facePrism(
       u[2] * w[0] - u[0] * w[2],
       u[0] * w[1] - u[1] * w[0],
     ]);
-    for (let j = 0; j < 3; j++) {
+    for (let j = 0; j < 3; j += 1) {
       around[t[k + j]].push(k / 3);
     }
   }
-  const unit = (n: readonly number[]) => {
-    const len = Math.hypot(n[0], n[1], n[2]) || 1;
-    return n.map((x) => x / len);
-  };
   const cosCrease = Math.cos((CREASE_DEG * Math.PI) / 180);
-  for (let k = 0; k < t.length; k++) {
+  for (let k = 0; k < t.length; k += 1) {
     const own = unit(facets[Math.floor(k / 3)]);
     const n = [0, 0, 0];
     for (const f of around[t[k]]) {
@@ -532,7 +538,7 @@ function facePrism(
     push(1, p[0], p[1], z[t[k]], unit(n));
   }
   for (const ring of roof.rings) {
-    for (let i = 0; i < ring.length; i++) {
+    for (let i = 0; i < ring.length; i += 1) {
       const p = ring[i];
       const q = ring[(i + 1) % ring.length];
       const [zp, zq] = [height(p), height(q)];
@@ -546,11 +552,203 @@ function facePrism(
   }
 }
 
+/** Two facets' heights at a corner within this (m) of each other are one
+ *  height there: a crease (the corner lies on the bake's centimetre grid,
+ *  not on the two planes' crossing itself), or two planes the scan cannot
+ *  tell from two that meet (the bake's FLANK_TOL_M: a cell this far off a
+ *  plane is still on it) — drawn as a step that would be a sliver of wall
+ *  a hand high across the roof. Further apart, a step. */
+const FACET_STEP_M = 0.5;
+
+/** Two facets' heights at a corner within this (m) of each other meet at
+ *  a crease there: never parted by the weld above. */
+const FACET_CREASE_M = 0.05;
+
+/** A corner's key on the bake's centimetre grid. */
+function cornerKey(p: Point2): string {
+  return `${Math.round(p[0] * 100)},${Math.round(p[1] * 100)}`;
+}
+
+/** An edge's key, the same from either end. */
+function edgeKey(a: Point2, b: Point2): string {
+  return [cornerKey(a), cornerKey(b)].sort().join("|");
+}
+
+/** A face's facets: each one's rings (the outside on the right of every
+ *  edge) and its height at a point. */
+interface Facet {
+  normal: number[];
+  rings: Point2[][];
+  z: (p: Point2) => number;
+}
+
+function surfaceFacets(s: MeasuredSurface, top: number): Facet[] {
+  return (s.facets ?? []).map((f) => {
+    const [a, b, c] = f.plane;
+    return {
+      normal: unit([-b, -c, 1]),
+      rings: f.rings
+        .map((ring, i) => openRing(ring, i === 0))
+        .filter((ring) => ring.length >= 3),
+      z: (p: Point2) => top + a + b * (p[0] - s.x) + c * (p[1] - s.y),
+    };
+  });
+}
+
+/** Per corner, each facet's height there: its plane's, or the mean of
+ *  those of the facets meeting there within FACET_STEP_M of the lowest of
+ *  them, so a crease has no crack; the facets meeting at a crease there
+ *  (FACET_CREASE_M, chained) weld as one; never under `base`. */
+function facetHeights(facets: readonly Facet[], base: number) {
+  const at = new Map<string, { facet: number; z: number }[]>();
+  for (const [facet, f] of facets.entries()) {
+    for (const p of f.rings.flat()) {
+      const key = cornerKey(p);
+      const list = at.get(key) ?? [];
+      if (!list.some((e) => e.facet === facet)) {
+        list.push({ facet, z: Math.max(f.z(p), base) });
+      }
+      at.set(key, list);
+    }
+  }
+  for (const list of at.values()) {
+    for (const weld of welds(list)) {
+      const mean = weld.reduce((sum, e) => sum + e.z, 0) / weld.length;
+      for (const e of weld) {
+        e.z = mean;
+      }
+    }
+  }
+  return (facet: number, p: Point2): number =>
+    at.get(cornerKey(p))?.find((e) => e.facet === facet)?.z ?? base;
+}
+
+/** A corner's facet heights in the groups that take one height: the
+ *  creases first (FACET_CREASE_M, chained), then those within
+ *  FACET_STEP_M of the lowest crease of a group. */
+function welds<T extends { z: number }>(list: T[]): T[][] {
+  const sorted = [...list].sort((x, y) => x.z - y.z);
+  const creases: T[][] = [];
+  for (const e of sorted) {
+    const last = creases.at(-1);
+    const prev = last?.at(-1);
+    if (last && prev && e.z - prev.z <= FACET_CREASE_M) {
+      last.push(e);
+    } else {
+      creases.push([e]);
+    }
+  }
+  const out: T[][] = [];
+  let floor = Number.NEGATIVE_INFINITY;
+  for (const crease of creases) {
+    const last = out.at(-1);
+    if (last && crease[0].z - floor <= FACET_STEP_M) {
+      last.push(...crease);
+    } else {
+      out.push([...crease]);
+      floor = crease[0].z;
+    }
+  }
+  return out;
+}
+
+/** One vertex a prism pushes. */
+type Pushed = [number, number, number, number, (readonly number[])?];
+
+/** A wall along a → b (the outside on its right) from `low` up to `high`
+ *  at either end; the triangles of no height left out. */
+function wallQuad(
+  a: Point2,
+  b: Point2,
+  low: readonly number[],
+  high: readonly number[],
+  out: Pushed[]
+): void {
+  if (high[1] - low[1] > 1e-6) {
+    out.push(
+      [0, a[0], a[1], low[0]],
+      [0, b[0], b[1], low[1]],
+      [0, b[0], b[1], high[1]]
+    );
+  }
+  if (high[0] - low[0] > 1e-6) {
+    out.push(
+      [0, a[0], a[1], low[0]],
+      [0, b[0], b[1], high[1]],
+      [0, a[0], a[1], high[0]]
+    );
+  }
+}
+
+/** A face drawn as planes: each facet a flat roof on its plane (shaded
+ *  with the plane's own normal), a wall wherever a facet's edge has no
+ *  neighbour (the outline: from `base`) or a lower one (a step: from the
+ *  neighbour's height). Null where the facets do not cover the outline. */
+function facetPrism(
+  rings: Point2[][],
+  facets: readonly Facet[],
+  base: number
+): Pushed[] | null {
+  const height = facetHeights(facets, base);
+  const out: Pushed[] = [];
+  const edges = new Map<string, number[]>();
+  let covered = 0;
+  for (const [index, f] of facets.entries()) {
+    const [contour, ...holes] = f.rings;
+    if (contour === undefined) {
+      continue;
+    }
+    const all = f.rings.flat();
+    const tris = ShapeUtils.triangulateShape(
+      contour.map(([x, y]) => new Vector2(x, y)),
+      holes.map((h) => h.map(([x, y]) => new Vector2(x, y)))
+    );
+    for (const [a, b, c] of tris) {
+      const [p, q, r] = [all[a], all[b], all[c]];
+      const area = cross2(p, q, r);
+      covered += Math.abs(area) / 2;
+      // counter-clockwise from above
+      for (const v of area > 0 ? [p, q, r] : [p, r, q]) {
+        out.push([1, v[0], v[1], height(index, v), f.normal]);
+      }
+    }
+    for (const ring of f.rings) {
+      for (let i = 0; i < ring.length; i += 1) {
+        const key = edgeKey(ring[i], ring[(i + 1) % ring.length]);
+        edges.set(key, [...(edges.get(key) ?? []), index]);
+      }
+    }
+  }
+  const area = rings.reduce((sum, ring) => sum + signedArea(ring) / 2, 0);
+  if (Math.abs(covered - area) > COVER_TOLERANCE * area) {
+    return null;
+  }
+  for (const [index, f] of facets.entries()) {
+    for (const ring of f.rings) {
+      for (let i = 0; i < ring.length; i += 1) {
+        const a = ring[i];
+        const b = ring[(i + 1) % ring.length];
+        const other = edges.get(edgeKey(a, b))?.find((k) => k !== index);
+        const high = [height(index, a), height(index, b)];
+        const low =
+          other === undefined
+            ? [base, base]
+            : [
+                Math.min(height(other, a), high[0]),
+                Math.min(height(other, b), high[1]),
+              ];
+        wallQuad(a, b, low, high, out);
+      }
+    }
+  }
+  return out;
+}
+
 /** A flat part: walls from `base` to `top` and a flat roof at `top`. */
 function flatPrism(rings: Point2[][], base: number, top: number, push: Push) {
   const [contour, ...holes] = rings;
   for (const ring of rings) {
-    for (let i = 0; i < ring.length; i++) {
+    for (let i = 0; i < ring.length; i += 1) {
       const [ax, ay] = ring[i];
       const [bx, by] = ring[(i + 1) % ring.length];
       push(0, ax, ay, base);
@@ -592,7 +790,8 @@ export function measuredRoofMesh(
     out.isRoof.push(roof);
     out.normals.push(...(normal ?? FLAT));
   };
-  for (const [index, f] of parts.entries()) {
+  for (let index = 0; index < parts.length; index += 1) {
+    const f = parts[index];
     const before = out.isRoof.length;
     addPrism(f, base, push);
     out.parts.push(...out.isRoof.slice(before).map(() => index));
@@ -615,7 +814,16 @@ function addPrism(f: MeasuredRoofFeature, base: number, push: Push): void {
   }
   const rings = [contour, ...inner.map((h) => openRing(h, false))];
   const surface = f.properties?.surface;
-  if (surface) {
+  // a face drawn as planes: its facets; where they do not cover it, and on
+  // every other face, the surface grid
+  const planes = surface?.facets
+    ? facetPrism(rings, surfaceFacets(surface, top), base)
+    : null;
+  if (planes) {
+    for (const v of planes) {
+      push(...v);
+    }
+  } else if (surface) {
     facePrism(rings, faceTin(surface, top), base, top, push);
   } else {
     flatPrism(rings, base, top, push);

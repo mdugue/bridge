@@ -10,7 +10,7 @@ import type { GroundContext } from "@/lib/city/ground-clamp";
 import { CONTACT_WIRE_M, RAIL_TOP_M } from "@/lib/city/tram";
 import type { Instances } from "./instancing";
 import { deckLift } from "@/lib/city/decks";
-import { buildDeckTable } from "./rail-layer";
+import { buildDeckTable } from "./bridge-deck";
 import { buildTram, lawnHalves } from "./tram-layer";
 
 const ctx: GroundContext = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
@@ -81,11 +81,12 @@ test("a lawn track has rails and a meadow strip under them", () => {
   expect(named(group, "tram-track").length).toBe(2); // rails + lawn
 });
 
+const mast = (x: number, y: number): TramFeature => ({
+  geometry: { type: "Point", coordinates: [x, y] },
+  properties: { k: "mast" },
+});
+
 test("masts stand instanced and cast; a span hangs over the wire it crosses", () => {
-  const mast = (x: number, y: number): TramFeature => ({
-    geometry: { type: "Point", coordinates: [x, y] },
-    properties: { k: "mast" },
-  });
   const span: TramFeature = {
     geometry: {
       type: "LineString",
@@ -114,6 +115,9 @@ test("masts stand instanced and cast; a span hangs over the wire it crosses", ()
   expect(maxY(wires.geometry)).toBeCloseTo(107, 5);
 });
 
+const top = (g: ReturnType<typeof buildTram>) =>
+  maxY(named(g, "tram-track")[0].geometry);
+
 test("a track the OSM way puts on a bridge rides the deck, along its ramp", () => {
   const deck: BridgeFeature = {
     geometry: {
@@ -136,8 +140,6 @@ test("a track the OSM way puts on a bridge rides the deck, along its ramp", () =
   expect(deckLift(decks, 30, 0, ["rail"])).toBeNull();
   const on = buildTram([track("street", { bridge: 1 })], [deck], ctx);
   const off = buildTram([track("street")], [deck], ctx);
-  const top = (g: ReturnType<typeof buildTram>) =>
-    maxY(named(g, "tram-track")[0].geometry);
   expect(top(on)).toBeGreaterThan(107);
   expect(top(off)).toBeCloseTo(100 + RAIL_TOP_M.street, 5);
 });
@@ -189,7 +191,7 @@ test("a double lawn track shares one lawn, its inner edges at the midpoint", () 
   const pos = named(group, "tram-track")
     .map((m) => m.geometry.getAttribute("position"))
     .find((p) => {
-      for (let i = 0; i < p.count; i++) {
+      for (let i = 0; i < p.count; i += 1) {
         if (Math.abs(p.getZ(i) + 1.7) < 0.02) {
           return true;
         }
@@ -200,16 +202,17 @@ test("a double lawn track shares one lawn, its inner edges at the midpoint", () 
   expect(pos).toBeDefined();
 });
 
+// one track split into two ways at x 30, its points every 2 m
+const run = (x0: number) => ({
+  d: Array.from({ length: 16 }, (_, k) => k * 2),
+  pts: Array.from({ length: 16 }, (_, k) => ({
+    x: x0 + k * 2,
+    y: 100,
+    z: 0,
+  })),
+});
+
 test("a lawn track's next piece, end to end, is no neighbour", () => {
-  // one track split into two ways at x 30, its points every 2 m
-  const run = (x0: number) => ({
-    d: Array.from({ length: 16 }, (_, k) => k * 2),
-    pts: Array.from({ length: 16 }, (_, k) => ({
-      x: x0 + k * 2,
-      y: 100,
-      z: 0,
-    })),
-  });
   const halves = lawnHalves([run(0), run(32)]);
   expect(halves).toHaveLength(2);
   for (const h of halves) {
@@ -268,11 +271,12 @@ test("lawn tracks further apart than 4.5 m keep their own strips", () => {
   expect(d.right[0]).toBeCloseTo(1.99, 5);
 });
 
+const pole = (x: number, y: number): TramFeature => ({
+  geometry: { type: "Point", coordinates: [x, y] },
+  properties: { k: "pole" },
+});
+
 test("a pole the bake placed stands like a mapped mast", () => {
-  const pole = (x: number, y: number): TramFeature => ({
-    geometry: { type: "Point", coordinates: [x, y] },
-    properties: { k: "pole" },
-  });
   const group = buildTram(
     [
       track("street"),

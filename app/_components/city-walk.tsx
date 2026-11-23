@@ -1,89 +1,86 @@
 "use client";
 
-import { createFramePace } from "@/lib/city/frame-pace";
-import { arrivalOf, placementOf } from "@/lib/city/geolocation";
+import { ARRIVAL_PARAM, arrivalOf, placementOf } from "@/lib/city/geolocation";
 import { EYE_HEIGHT } from "@/lib/city/pose";
-import type { Site } from "@/lib/city/site";
+import type { Site, ViewpointGeometry } from "@/lib/city/site";
 import {
   BoxIcon,
   LocateFixedIcon,
+  MessageCircleQuestionIcon,
   NavigationIcon,
   PlaneIcon,
   SlidersHorizontalIcon,
 } from "lucide-react";
 import {
-  type CSSProperties,
-  type RefObject,
   useCallback,
   useEffect,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
+import type { CSSProperties, RefObject } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
-import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { useCoarsePointer } from "./use-coarse-pointer";
 import { loadPercent, loadStageStates } from "@/lib/city/load-stages";
 import { dataLayersOf } from "@/lib/city/data-layers";
 import { LOOK_DEFAULTS } from "@/lib/city/look-controls";
 import { createLookState } from "@/lib/city/look-state";
 import type { CameraState } from "@/lib/city/pose";
+import type { RenderStyle } from "@/lib/city/render-style";
+import { stopCamera, stopDate, stopView } from "@/lib/city/walks";
+import type { Walk } from "@/lib/city/walks";
 import {
   decodeLook,
   encodeSnapshot,
   parseSnapshot,
-  type Snapshot,
+  snapshotFromSearch,
+  snapshotHref,
   snapshotInstant,
 } from "@/lib/city/snapshot";
+import type { Snapshot } from "@/lib/city/snapshot";
+import { arrivalOf as recoveryArrival } from "@/lib/city/gpu-recovery";
 import { restoresLook } from "@/lib/city/gpu-safety";
 import { AltitudeStick } from "./altitude-stick";
 import { BootError } from "./boot-error";
 import { ControlHintBar } from "./control-hints";
 import { CrashReport } from "./crash-report";
 import { startCrashReports } from "./crash-reports";
-import { type CrashTrail, startCrashTrail } from "./crash-trail";
+import { startCrashTrail } from "./crash-trail";
+import type { CrashTrail } from "./crash-trail";
 import { GpuFailureCard } from "./gpu-failure-card";
-import {
-  keepPlaceForReload,
-  peekRecoverySnapshot,
-  recoverFromGpuLoss,
-  recoverOnRequest,
-  recoveryWasReset,
-  takeRecoverySnapshot,
-} from "./gpu-recovery";
+import { pageRecovery } from "./gpu-recovery";
 import { raiseSafety, resetSafety } from "./gpu-safety";
 import { VEIL_HOLD_MS } from "./handover";
-import { streamTimings } from "./stream-timing";
-import type { CityWalkHandle } from "./create-app";
+import { createScenePace, settle, startScene } from "./scene-client";
+import type { CityWalkHandle } from "./scene-client";
 import { LoadScreen } from "./load-screen";
-import { type HudTool, HudToolbar } from "./hud-toolbar";
+import { HudToolbar } from "./hud-toolbar";
+import type { HudTool } from "./hud-toolbar";
 import type { ExportContext } from "./image-export";
 import { InquiryCard } from "./inquiry-card";
 import { InquiryStrip, InquiryTapRing } from "./inquiry-strip";
 import { useLiveMode } from "./live-mode";
-import {
-  LocateMessage,
-  type Say,
-  useHudMessage,
-  useLocateMe,
-} from "./locate-button";
+import { LocateMessage, useHudMessage, useLocateMe } from "./locate-button";
+import type { Say } from "./locate-button";
 import { LocateOffsiteDialog } from "./locate-offsite-dialog";
 import { ModelInstruments } from "./model-instruments";
 import type { ViewMode } from "./model-rig";
 import { updatePocDebug } from "./poc-debug";
 import type { SceneBudget } from "./scene-profile";
-import {
-  overlook,
-  spawnViewpoint,
-  type ViewpointGeometry,
-} from "@/lib/city/site";
+import { overlook, spawnViewpoint } from "@/lib/city/site";
 import {
   BikeCountList,
   TrafficHourLine,
   TramStatusLine,
 } from "./data-layers-panel";
 import { SceneSidebar } from "./scene-sidebar";
+import { WalkCard } from "./walk-player";
+import { useAskScene } from "./ask-scene";
 import { SidebarPace } from "./sidebar-pace";
+import { whenVisible } from "./page-visible";
 import {
   afterTask,
   createSceneStatus,
@@ -95,11 +92,27 @@ import {
 } from "./scene-status";
 import type { SceneTabId } from "./scene-tabs";
 import { StreamPill } from "./stream-pill";
-import { readStoredStyle, writeStoredStyle } from "./style-memory";
+import { readStoredStyle, rememberStyle } from "./style-memory";
 import { INITIAL_MINUTES, useSceneTime } from "./scene-time";
 import { useSite } from "./site-context";
 import { VirtualJoystick } from "./virtual-joystick";
 import { missingPrerequisite } from "./gpu-support";
+import { useOnce } from "./use-once";
+import { TEARDOWN_WAIT_MS } from "./scene-protocol";
+
+/**
+ * *Frag die Stadt* (ADR 0056): the chat client, its tool schemas and the
+ * card are a chunk of their own, loaded on the first open. (The import
+ * stays written out inside dynamic(): Next matches the call to its chunk
+ * by it.)
+ */
+const AskCity = dynamic(async () => await import("./ask-city"), { ssr: false });
+
+/** A walk's glides take this much longer than a jump to a place: the
+ *  stop's story starts on the way. */
+const WALK_PACE = 2.2;
+/** The visitor's day, read when a walk's stop is shown (not in a render). */
+const today = () => new Date();
 
 interface Props {
   /** The render budget the page was opened with (see scene-profile.ts) */
@@ -127,9 +140,6 @@ interface StartPick {
   label: string;
   view?: ViewpointGeometry;
 }
-
-/** The three.js half of the viewer, loaded beside the HUD (create-app.ts). */
-const loadScene = () => import("./create-app");
 
 /**
  * Two phases, one handover. `loading` is the full-bleed Laden screen; `running`
@@ -184,7 +194,7 @@ function usePointerLocked(): boolean {
 }
 
 /** Floating button that opens the sidebar; hidden while it is open. */
-function SettingsToggle() {
+const SettingsToggle = () => {
   const { toggleSidebar, state, isMobile, openMobile } = useSidebar();
   const open = isMobile ? openMobile : state === "expanded";
   if (open) {
@@ -201,7 +211,7 @@ function SettingsToggle() {
       <SlidersHorizontalIcon />
     </Button>
   );
-}
+};
 
 /**
  * The tools the floating toolbar offers here: "take me to where I am"
@@ -210,17 +220,21 @@ function SettingsToggle() {
  * fly, the F key's stand-in, and everywhere Modell (plan 055), the M key's.
  */
 function sceneTools({
+  asking,
   coarse,
   live,
   locate,
   mode,
+  onAsk,
   onToggleMode,
   onToggleModel,
 }: {
+  asking: boolean;
   coarse: boolean;
   live: ReturnType<typeof useLiveMode>;
   locate: ReturnType<typeof useLocateMe>;
   mode: ViewMode;
+  onAsk: () => void;
   onToggleMode: () => void;
   onToggleModel: () => void;
 }): HudTool[] {
@@ -256,15 +270,26 @@ function sceneTools({
       title: "Zwischen Gehen und Fliegen wechseln",
     });
   }
-  tools.push({
-    id: "model",
-    label: "Modell",
-    icon: BoxIcon,
-    pressed: mode === "model",
-    onClick: onToggleModel,
-    title:
-      "Modell: die Stadt in Parallelprojektion — Isometrie, Lageplan, Ansicht (M)",
-  });
+  tools.push(
+    {
+      id: "model",
+      label: "Modell",
+      icon: BoxIcon,
+      pressed: mode === "model",
+      onClick: onToggleModel,
+      title:
+        "Modell: die Stadt in Parallelprojektion — Isometrie, Lageplan, Ansicht (M)",
+    },
+    {
+      id: "ask",
+      label: "Fragen",
+      icon: MessageCircleQuestionIcon,
+      pressed: asking,
+      onClick: onAsk,
+      title:
+        "Frag die Stadt: Fragen zur Stadt, mit deinem eigenen KI-Schlüssel",
+    }
+  );
   return tools;
 }
 
@@ -277,10 +302,12 @@ function sceneTools({
  * so a joystick left mounted underneath would be a dead control the player
  * can still see.
  */
-function SceneOverlays({
+const SceneOverlays = ({
+  asking,
   coarse,
   live,
   locate,
+  onAsk,
   onClimb,
   onMovementMode,
   onMove,
@@ -288,9 +315,12 @@ function SceneOverlays({
   onToggleModel,
   onTurn,
 }: {
+  asking: boolean;
   coarse: boolean;
   live: ReturnType<typeof useLiveMode>;
   locate: ReturnType<typeof useLocateMe>;
+  /** opens or closes Frag die Stadt */
+  onAsk: () => void;
   onClimb: (v: number) => void;
   /** walk or fly (the touch toolbar's switch) */
   onMovementMode: (mode: "fly" | "walk") => void;
@@ -298,7 +328,7 @@ function SceneOverlays({
   onNorth: () => void;
   onToggleModel: () => void;
   onTurn: (deg: number) => void;
-}) {
+}) => {
   const { state, isMobile, openMobile } = useSidebar();
   const mode = useSceneStatus("mode");
   const inquiry = useSceneStatus("inquiry");
@@ -340,10 +370,12 @@ function SceneOverlays({
         {flying && <AltitudeStick onChange={onClimb} />}
         <HudToolbar
           tools={sceneTools({
+            asking,
             coarse,
             live,
             locate,
             mode,
+            onAsk,
             onToggleMode: () => onMovementMode(flying ? "walk" : "fly"),
             onToggleModel,
           })}
@@ -351,14 +383,14 @@ function SceneOverlays({
       </div>
     </>
   );
-}
+};
 
 /**
  * Modell's scale bar and north arrow, at its view's rate (the pose tick):
  * the only part of the overlays that follows the view. Nothing until the
  * first view is in.
  */
-function LiveModelInstruments({
+const LiveModelInstruments = ({
   className,
   onNorth,
   onTurn,
@@ -367,7 +399,7 @@ function LiveModelInstruments({
   className?: string;
   onNorth: () => void;
   onTurn: (deg: number) => void;
-}) {
+}) => {
   const view = useSceneStatus("modelView");
   if (!view) {
     return null;
@@ -380,13 +412,58 @@ function LiveModelInstruments({
   ) : (
     instruments
   );
+};
+
+/** The effect's cleanup when nothing was started. */
+const nothingToClean = (): void => {
+  // the boot has not begun: no scene, no listeners, no timers
+};
+
+/** How long a reload waits at most for the scene to let its GPU go (ms). */
+const RELOAD_WAIT_MS = 1000;
+/** How long a reload waits at most for the whole scene to go (ms): just
+ *  past the scene's own bound, so its answer comes first. */
+const TEARDOWN_RELOAD_WAIT_MS = TEARDOWN_WAIT_MS + 500;
+
+/** Reloads the page once the scene let its GPU go (`letGo`), failed to,
+ *  or kept silent for `waitMs`: the reload comes either way. */
+async function reloadWithin(
+  letGo: Promise<void> | undefined,
+  waitMs = RELOAD_WAIT_MS
+): Promise<void> {
+  await Promise.race([
+    letGo?.catch(() => null),
+    new Promise((resolve) => {
+      setTimeout(resolve, waitMs);
+    }),
+  ]);
+  location.reload();
 }
+
+/** (image-export.ts is the scene's: loaded with it, not with the HUD) */
+const saveImageLazily = async (
+  h: CityWalkHandle,
+  info: ExportContext
+): Promise<void> => {
+  const { saveImage } = await import("./image-export");
+  await saveImage(h, info);
+};
+
+/** The shadow study's images, saved the same way. */
+const saveStudyLazily = async (
+  h: CityWalkHandle,
+  info: ExportContext,
+  progress: (n: number, total: number) => void
+): Promise<void> => {
+  const { saveShadowStudy } = await import("./image-export");
+  await saveShadowStudy(h, info, progress);
+};
 
 /**
  * The off-site dialog, wired to the scene and the sidebar: a vantage flies
  * there, "Auf der Karte wählen" opens the sidebar on the minimap.
  */
-function OffsiteDialog({
+const OffsiteDialog = ({
   handleRef,
   locate,
   onTab,
@@ -394,12 +471,13 @@ function OffsiteDialog({
   handleRef: RefObject<CityWalkHandle | null>;
   locate: ReturnType<typeof useLocateMe>;
   onTab: (tab: SceneTabId) => void;
-}) {
+}) => {
   const { isMobile, setOpen, setOpenMobile } = useSidebar();
+  const handleDismiss = locate.dismissOffsite;
   return (
     <LocateOffsiteDialog
       offsite={locate.offsite}
-      onClose={locate.dismissOffsite}
+      onClose={handleDismiss}
       onShowMap={() => {
         onTab("erkunden");
         if (isMobile) {
@@ -408,25 +486,26 @@ function OffsiteDialog({
           setOpen(true);
         }
       }}
-      onTravel={(view) => handleRef.current?.flyToViewpoint(view)}
+      onTravel={(view) => {
+        handleRef.current?.flyToViewpoint(view);
+      }}
     />
   );
-}
+};
 
 /**
  * The page was opened from another city's off-site dialog with where the
- * player stands (`#at=lat,lng`, lib/city/geolocation.ts `arrivalHref` — the
- * fragment: never sent to the server, not kept by the trail): put them
- * there, on foot, and drop the fragment so a reload starts at the site's
- * spawn again.
+ * player stands (`?at=lat,lng`, lib/city/geolocation.ts `arrivalHref`; not
+ * kept by the trail): put them there, on foot, and drop the parameter so a
+ * reload starts at the site's spawn again.
  */
 function arriveAt(h: CityWalkHandle, site: Site, say: Say): void {
-  const at = arrivalOf(location.hash);
+  const at = arrivalOf(location.search);
   if (!at) {
     return;
   }
   const url = new URL(location.href);
-  url.hash = "";
+  url.searchParams.delete(ARRIVAL_PARAM);
   history.replaceState(history.state, "", url);
   const placement = placementOf(
     { ...at, accuracy: 0, headingDeg: null },
@@ -459,7 +538,10 @@ function standsAt(h: CityWalkHandle, view: ViewpointGeometry): boolean {
  * desktop, so its text keeps clear of the panel, and a place picked there
  * is named — the scene starts at it.
  */
-function ShellLoadScreen(props: { destination?: string; handedOver: boolean }) {
+const ShellLoadScreen = (props: {
+  destination?: string;
+  handedOver: boolean;
+}) => {
   const { isMobile, state } = useSidebar();
   const { fractions, skipped } = useSceneStatus("progress");
   return (
@@ -470,19 +552,19 @@ function ShellLoadScreen(props: { destination?: string; handedOver: boolean }) {
       stages={loadStageStates(fractions, skipped)}
     />
   );
-}
+};
 
 /** The loading screen at pill size, once the scene is up (stream-pill.tsx). */
-function ScenePill() {
+const ScenePill = () => {
   const { fractions, skipped } = useSceneStatus("progress");
   const busy = useSceneStatus("busy");
   return (
     <StreamPill busy={busy} stages={loadStageStates(fractions, skipped)} />
   );
-}
+};
 
 /** A tile that failed after the first frame, until it comes back. */
-function StreamErrorLine() {
+const StreamErrorLine = () => {
   const message = useSceneStatus("streamError");
   return message ? (
     <output
@@ -492,7 +574,7 @@ function StreamErrorLine() {
       {message}
     </output>
   ) : null;
-}
+};
 
 /**
  * No dot in the middle: the pointer aims (I and R act under it). Only
@@ -500,7 +582,7 @@ function StreamErrorLine() {
  * instead, and so does the panel's demolish button while it is pointed at
  * or focused — it acts at the centre. Never on Modell's sheet.
  */
-function CentreMark({ shown }: { shown: boolean }) {
+const CentreMark = ({ shown }: { shown: boolean }) => {
   const mode = useSceneStatus("mode");
   return shown && mode !== "model" ? (
     <div
@@ -508,29 +590,29 @@ function CentreMark({ shown }: { shown: boolean }) {
       className="pointer-events-none absolute top-1/2 left-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)]"
     />
   ) : null;
-}
+};
 
 /** The failure card once the render stopped for good (gpu-failure-card.tsx). */
-function GpuFailure({
+const GpuFailure = ({
   onLighter,
   onReload,
 }: {
   onLighter: () => void;
   onReload: () => void;
-}) {
+}) => {
   const detail = useSceneStatus("gpuFailure");
   return detail === null ? null : (
     <GpuFailureCard detail={detail} onLighter={onLighter} onReload={onReload} />
   );
-}
+};
 
-export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
+const CityWalk = ({ budget, manifestError, tilesetUrl }: Props) => {
   const site = useSite();
   const mountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CityWalkHandle | null>(null);
   // the render loop's pace behind the phone's sidebar (sidebar-pace.tsx):
   // one for the page, every boot's loop asks it
-  const [pace] = useState(createFramePace);
+  const pace = useOnce(createScenePace);
   const applySceneTime = useCallback(
     (date: Date, preview?: boolean) => handleRef.current?.setSun(date, preview),
     []
@@ -545,7 +627,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   // Probed once, before the renderer is created: three's raw backend error
   // (or a tile's bare ReferenceError) is replaced by a sentence naming the
   // missing prerequisite.
-  const [missing] = useState(missingPrerequisite);
+  const missing = useOnce(missingPrerequisite);
   const supported = missing === null;
   const [status, setStatus] = useState<Status>(() =>
     missing === null
@@ -556,7 +638,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   // view, the data layers, the inquiry: scene-status.ts), each widget
   // reading its own slice — a report re-renders what shows it, not this
   // component. It outlives the boots, as these states did.
-  const [sceneStatus] = useState(() => createSceneStatus(afterTask));
+  const sceneStatus = useOnce(() => createSceneStatus(afterTask));
   // Kept past the handover: the city arrives behind the frosted screen, which
   // is only then removed (handover.ts).
   const [veilUp, setVeilUp] = useState(true);
@@ -566,7 +648,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   // boots the new instance from it, so sliders and scene never disagree.
   // The picture style starts as the viewer last left it (style-memory.ts) —
   // from safety level 2 in the default one (lib/city/gpu-safety.ts).
-  const [look] = useState(() =>
+  const look = useOnce(() =>
     createLookState({
       ...LOOK_DEFAULTS,
       style:
@@ -575,15 +657,13 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     })
   );
   const lookValues = useSyncExternalStore(look.subscribe, look.get, look.get);
-  useEffect(() => {
-    let remembered = look.get().style;
-    return look.subscribe((values) => {
-      if (values.style !== remembered) {
-        remembered = values.style;
-        writeStoredStyle(values.style);
-      }
-    });
-  }, [look]);
+  /** the time and style before a walk, put back when it ends; while it
+   *  runs, its stops' styles are not the visitor's to remember */
+  const beforeWalk = useRef<{ at: Date; style: RenderStyle } | null>(null);
+  useEffect(
+    () => rememberStyle(look, () => beforeWalk.current !== null),
+    [look]
+  );
   // Befragen (ADR 0042): the card closes, and the scene's mark with it.
   const closeInquiry = useCallback(() => {
     handleRef.current?.clearInquiry();
@@ -602,8 +682,9 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   // (gpu-recovery.ts): the boot effect reads this render's time and look
   // through a ref, as it does live mode. The time and the look go back
   // before the boot, so the scene starts with them; the camera goes to the
-  // boot itself (`initialCamera`), Modell after its first frame. From
-  // safety level 2 neither the picture style nor Modell come back.
+  // boot itself (`initialCamera`), Modell after its first frame. What comes
+  // back is the arrival's (lib/city/gpu-recovery.ts `arrivalOf`): from
+  // safety level 2 without the picture style and without Modell.
   const recovery = useRef<{
     capture: () => string | null;
     prepare: (snapshot: Snapshot) => void;
@@ -620,11 +701,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       },
       prepare: (snapshot) => {
         time.setInstant(snapshotInstant(snapshot));
-        const patch = decodeLook(snapshot.look);
-        if (!restoresLook(budget.safety)) {
-          delete patch.style;
-        }
-        look.set(patch);
+        look.set(decodeLook(snapshot.look));
       },
     };
   });
@@ -635,20 +712,21 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
    */
   const reloadAfterFailure = (lighter: boolean) => {
     if (lighter) {
-      recoverOnRequest(
-        recovery.current?.capture() ?? null,
-        budget.safety,
-        (from) => raiseSafety(from)
+      pageRecovery().leave(
+        {
+          kind: "lighter",
+          ladder: { level: budget.safety, raise: (from) => raiseSafety(from) },
+        },
+        recovery.current?.capture() ?? null
       );
     }
-    const released = handleRef.current?.releaseGpu() ?? Promise.resolve();
-    void released.then(() => location.reload());
+    void reloadWithin(handleRef.current?.releaseGpu());
   };
   /**
    * *Qualität*'s way back to full detail: level 0 from the next page on,
    * and — when this page runs lighter, its budget built at boot — that
-   * next page now, where the player stands (gpu-recovery.ts
-   * `keepPlaceForReload`). The scene goes first, whole, and the reload
+   * next page now, where the player stands (gpu-recovery.ts, a `reset`
+   * leaving). The scene goes first, whole, and the reload
    * waits for its device (create-app.ts `disposeForReload`): the heavier
    * page boots in the same process, and with this one's memory still held
    * it died on the way in. False when it could not be stored.
@@ -658,13 +736,89 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       return false;
     }
     if (budget.safety > 0) {
-      keepPlaceForReload(recovery.current?.capture() ?? null, undefined, {
-        reset: true,
-      });
-      const gone = handleRef.current?.disposeForReload() ?? Promise.resolve();
-      void gone.then(() => location.reload());
+      pageRecovery().leave(
+        { kind: "reset" },
+        recovery.current?.capture() ?? null
+      );
+      void reloadWithin(
+        handleRef.current?.disposeForReload(),
+        TEARDOWN_RELOAD_WAIT_MS
+      );
     }
     return true;
+  };
+  // A walk under way (walk-player.tsx): which stop the card tells, and the
+  // picture style and time it found, to give back when it ends.
+  const [walking, setWalking] = useState<{ index: number; walk: Walk } | null>(
+    null
+  );
+  /** the walk's own glide while it flies: its flight tells when it ends,
+   *  is cancelled or gives way to another (`onProgress` 1) */
+  const walkGlide = useRef<object | null>(null);
+  /**
+   * Shows a walk's stop: a slow glide to its view (the card can be read,
+   * or heard, on the way) — a jump only out of Modell, which no glide
+   * leaves —, today at the stop's hour, in its picture style.
+   */
+  const showStop = (walk: Walk, index: number) => {
+    const stop = walk.stops[index];
+    const h = handleRef.current;
+    if (!(stop && h)) {
+      return;
+    }
+    if (walking === null) {
+      beforeWalk.current = { at: time.current(), style: look.get().style };
+    }
+    setAsking(false);
+    setWalking({ index, walk });
+    // the sun travels with the camera: no jump from one hour to the next
+    const hour = time.glideTo(stopDate(stop, today()));
+    if (h.getViewMode() === "model") {
+      walkGlide.current = null;
+      h.applyCameraState(stopCamera(stop, h.offset));
+      hour(1);
+    } else {
+      // a slow glide the visitor looks about in while the text is read:
+      // a drag on the way turns the view, it does not stop the walk
+      const mine = {};
+      walkGlide.current = mine;
+      h.flyToViewpoint(stopView(stop), {
+        ground: stop.ground,
+        lookAround: true,
+        onProgress: (t) => {
+          hour(t);
+          if (t >= 1 && walkGlide.current === mine) {
+            walkGlide.current = null;
+          }
+        },
+        pace: WALK_PACE,
+      });
+    }
+    look.set({ style: stop.style ?? "pastel" });
+  };
+  // Frag die Stadt (ask-city.tsx): its card in the walk card's place, so
+  // one ends the other.
+  const [asking, setAsking] = useState(false);
+  const askScene = useAskScene(handleRef, look, time, site, pace);
+  const toggleAsk = () => {
+    if (!asking && walking) {
+      endWalk();
+    }
+    setAsking((open) => !open);
+  };
+  const endWalk = () => {
+    // ended on the way: the camera stays where it is, not flying on alone
+    // (only the walk's own glide: one to a place picked since goes on)
+    if (walkGlide.current) {
+      walkGlide.current = null;
+      handleRef.current?.stopGlide();
+    }
+    setWalking(null);
+    if (beforeWalk.current) {
+      time.setInstant(beforeWalk.current.at);
+      look.set({ style: beforeWalk.current.style });
+      beforeWalk.current = null;
+    }
   };
   const [snapshotText, setSnapshotText] = useState("");
   const [snapshotMsg, setSnapshotMsg] = useState<string | null>(null);
@@ -707,8 +861,13 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   // error tracker hears of one session (ADR 0043), not one per pick.
   const trailRef = useRef<CrashTrail | null>(null);
   const pageTrail = useCallback(() => {
-    trailRef.current ??= startCrashTrail(startCrashReports() ?? undefined);
-    return trailRef.current;
+    const existing = trailRef.current;
+    if (existing) {
+      return existing;
+    }
+    const created = startCrashTrail(startCrashReports() ?? undefined);
+    trailRef.current = created;
+    return created;
   }, []);
   useEffect(
     () => () => {
@@ -726,15 +885,14 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   useEffect(() => {
     const container = mountRef.current;
     if (!container) {
-      return;
+      return nothingToClean;
     }
     // The GPU preflight already failed (see the status initializer): no
     // renderer, no handle, nothing to clean up. Without the tileset's name
     // (the manifest is still on its way) the HUD is up and the scene waits.
     if (!supported || tilesetUrl === null) {
-      return;
+      return nothingToClean;
     }
-    let cancelled = false;
     let handle: CityWalkHandle | null = null;
     let veilTimer: ReturnType<typeof setTimeout> | undefined;
     let streamFallback: ReturnType<typeof setTimeout> | undefined;
@@ -745,83 +903,111 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       // (not which: the reports carry no position, ADR 0043)
       trail.note("boot restarted", "a place picked while loading");
     }
-    // Back where the player stood before the GPU was lost (gpu-recovery.ts):
-    // read now, taken once the scene is up — a boot that StrictMode aborts
-    // leaves it for the next.
-    const text = peekRecoverySnapshot();
-    const parsed = text ? parseSnapshot(text) : null;
-    const restored = parsed?.ok ? parsed.snapshot : null;
-    // (or where the player asked for full detail: Qualität)
-    const afterReset = restored !== null && recoveryWasReset();
-    // A place picked in the panel meanwhile wins over the recovered one,
-    // and the time and look the player set are theirs.
-    if (restored && !start) {
-      recovery.current?.prepare(restored);
+    // Back where the player stood before the GPU was lost, or asked for
+    // full detail (gpu-recovery.ts): peeked now, committed once the scene
+    // is up — a boot that StrictMode aborts leaves it for the next
+    // (`RecoverySession.peek`). A place picked in the panel meanwhile wins,
+    // and the time and look the player set are theirs. With nothing
+    // waiting, the view the page's link names (`?snap=`, snapshot.ts),
+    // the same way; the address keeps it, so a reload opens it again.
+    // Another link is another page load (a new query is a navigation, and
+    // nothing in the app routes to one), so the boot is its one reader.
+    const recoveries = pageRecovery();
+    const waiting = recoveries.peek();
+    const parsed = waiting ? parseSnapshot(waiting.snapshot) : null;
+    const linked = snapshotFromSearch(location.search);
+    const arrival = recoveryArrival({
+      snapshot: parsed?.ok ? parsed.snapshot : null,
+      reset: waiting?.reset ?? false,
+      picked: start !== null,
+      level: budget.safety,
+      linked: linked?.ok ? linked.snapshot : null,
+    });
+    if (arrival.snapshot) {
+      recovery.current?.prepare(arrival.snapshot);
     }
 
-    let settled = () => {};
+    let settled = () => {
+      // replaced by the resolver of this boot's promise just below
+    };
     const previous = lastBoot.current;
     lastBoot.current = new Promise((resolve) => {
       settled = resolve;
     });
-    previous
-      .then(loadScene)
-      .then(({ createCityWalkApp }) => {
+    // The scene starts once the last boot's teardown is through: what it
+    // asks for (boot-ahead.ts: the tileset and the first tile's contents,
+    // beside the scene's chunk) is not held beside the scene that goes (a
+    // phone's peak at a change of place). The first boot waits on nothing.
+    const initialCamera = start ? start.camera : arrival.snapshot?.camera;
+    void previous
+      .then(async () => {
         if (aborter.signal.aborted) {
           throw new DOMException("CityWalk startup aborted", "AbortError");
         }
-        return createCityWalkApp({
+        return await startScene({
           container,
           budget,
           look,
+          pace,
           site,
           tilesetUrl,
-          initialCamera: start ? start.camera : restored?.camera,
+          initialCamera,
           initialView: start?.view,
           initialDate: timeNow(),
           signal: aborter.signal,
           trail,
-          pace,
+          reloadable: () => recoveries.recoverable(budget.safety),
           // Everything the scene only reports goes to the store, for the
           // widgets that show it (scene-status.ts) — while this boot is
           // the page's.
           ...sceneReports(sceneStatus, {
             footprints: () => handleRef.current?.getFootprints(),
-            live: () => !cancelled,
+            live: () => !aborter.signal.aborted,
           }),
-          // A loss raises the level as this page's (`by`): after its own
-          // memory emergency the same incident, renewed rather than raised
-          // again (gpu-safety.ts).
-          onGpuLost: (how) =>
-            !cancelled &&
-            recoverFromGpuLoss(
+          // The render stopped and the scene freed its GPU: a loss raises
+          // the level as this page's (`by`) — after its own memory
+          // emergency the same incident, renewed rather than raised again
+          // (gpu-safety.ts) — and the page reloads where the player stood
+          // once in view; one it may not recover from says so.
+          onReload: (how) => {
+            if (aborter.signal.aborted) {
+              return;
+            }
+            const recovers = recoveries.onLoss(
               how,
               recovery.current?.capture() ?? null,
-              budget.safety,
-              (from) => raiseSafety(from, { by: trail.startedAt })
-            )
-              ? () => location.reload()
-              : null,
+              {
+                level: budget.safety,
+                raise: (from) => raiseSafety(from, { by: trail.startedAt }),
+              }
+            );
+            if (recovers) {
+              whenVisible(() => location.reload());
+            } else {
+              sceneStatus.set("gpuFailure", `GPU ${how}`);
+            }
+          },
+          onRaiseSafety: () => {
+            raiseSafety(budget.safety, { by: trail.startedAt });
+          },
           onFollowEnd: () => {
-            if (!cancelled) {
+            if (!aborter.signal.aborted) {
               liveEnded.current();
             }
           },
         });
       })
-      .then((h) => {
-        if (cancelled) {
-          h.dispose();
-          return;
+      .then((h): Promise<void> | null => {
+        if (aborter.signal.aborted) {
+          // the next boot waits for this one's teardown (lastBoot)
+          return h.dispose();
         }
         handle = h;
         handleRef.current = h;
         trail.note("first frame");
+        // What waited is taken: used, or a place the player chose won.
+        recoveries.landed();
         if (start) {
-          // Not back where the GPU was lost: the player chose a place.
-          if (restored) {
-            takeRecoverySnapshot();
-          }
           // The boot stood on the camera's spot; Modell only now. A place
           // off every tile the boot streams (the lite profile's spawn tile
           // alone) is glided to from the spawn.
@@ -830,24 +1016,20 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
           } else if (start.view && !standsAt(h, start.view)) {
             h.flyToViewpoint(start.view);
           }
-        } else if (restored) {
+        } else if (arrival.snapshot) {
           // The scene booted there; Modell (where the safety level keeps
           // it) and a place off every tile only now.
-          takeRecoverySnapshot();
-          h.applyCameraState(
-            restoresLook(budget.safety)
-              ? restored.camera
-              : { ...restored.camera, model: undefined }
-          );
-          if (afterReset) {
-            trail.note("quality reset", "back where the player stood");
-          } else {
-            trail.note("recovered", "after a lost GPU");
-            if (budget.safety > 0) {
-              sayHud("Mit weniger Details neu geladen – Erweitert › Qualität");
-            }
+          h.applyCameraState(arrival.snapshot.camera);
+          if (arrival.note) {
+            trail.note(arrival.note.event, arrival.note.detail);
+          }
+          if (arrival.sayLighter) {
+            sayHud("Mit weniger Details neu geladen – Erweitert › Qualität");
           }
         } else {
+          if (linked && !linked.ok) {
+            sayHud("Der Link enthält keine gültige Ansicht");
+          }
           arriveAt(h, site, sayHud);
         }
         syncTime();
@@ -860,13 +1042,9 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         // Then the glass is removed, in one frame, with nothing in between.
         veilTimer = setTimeout(() => {
           setVeilUp(false);
-          // how late the veil's timer fired after the light stage: what a
-          // busy page shows as a load frozen at 52 % (stream-timing.ts)
-          streamTimings.markOnce("boot:veil-drop");
-          const light = streamTimings.markedAt("boot:light-done");
-          if (light !== undefined) {
-            streamTimings.since("boot:light-to-veil", light);
-          }
+          // the trace's veil marks are the scene's: its thread times the
+          // light stage and the load (stream-timing.ts)
+          h.veilDropped();
         }, VEIL_HOLD_MS);
         // The dressing (vegetation, lamps, rails, walls) and the terrain BVHs wait until
         // then: each is a long synchronous task, and the frames while the city
@@ -876,29 +1054,32 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
           beginStreaming,
           VEIL_HOLD_MS + STREAM_SETTLE_MS
         );
+        return null;
       })
-      .catch((err: unknown) => {
+      .catch((bootError: unknown) => {
         // Aborted = StrictMode remount / navigation away, not a failure.
         const aborted =
-          err instanceof DOMException && err.name === "AbortError";
-        if (!(cancelled || aborted)) {
+          bootError instanceof DOMException && bootError.name === "AbortError";
+        if (!(aborter.signal.aborted || aborted)) {
           // A place that failed the boot is not tried again on the next
           // load: the recovery's snapshot goes with this boot.
-          takeRecoverySnapshot();
+          recoveries.abandoned();
           trail.note(
             "boot failed",
-            err instanceof Error ? err.message : String(err)
+            bootError instanceof Error ? bootError.message : String(bootError)
           );
           setStatus({
             phase: "error",
-            message: err instanceof Error ? err.message : String(err),
+            message:
+              bootError instanceof Error
+                ? bootError.message
+                : String(bootError),
           });
         }
       })
       .finally(settled);
 
     return () => {
-      cancelled = true;
       aborter.abort();
       // The card belongs to the scene that marked its building: a route
       // kept hidden (and shown again) boots a new scene without that mark.
@@ -906,7 +1087,16 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       clearTimeout(veilTimer);
       clearTimeout(streamFallback);
       handleRef.current = null;
-      handle?.dispose();
+      if (handle) {
+        // the next boot waits for this teardown too: a worker ends up to
+        // seconds later, and two devices are not held at once
+        const gone = handle.dispose();
+        const booted = lastBoot.current;
+        lastBoot.current = (async () => {
+          await booted;
+          await gone;
+        })();
+      }
       // The hook must not keep a disposed scene callable (or alive): the
       // next boot republishes.
       updatePocDebug({
@@ -931,7 +1121,11 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     pace,
   ]);
 
-  const copySnapshot = () => {
+  /** *Kopieren* (the JSON) or *Link kopieren* (the site's page opened at
+   *  the view, `?snap=` and no other parameter — this page's QA knobs, a
+   *  pinned `?safety=`, are this device's, not the view's): the JSON
+   *  shows either way. */
+  const copySnapshot = (as: "json" | "link") => {
     const h = handleRef.current;
     if (!h) {
       return;
@@ -939,8 +1133,17 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
     const snap = encodeSnapshot(look.get(), h.getCameraState(), time.current());
     const text = JSON.stringify(snap, null, 2);
     setSnapshotText(text);
-    navigator.clipboard?.writeText(text).then(
-      () => setSnapshotMsg("In die Zwischenablage kopiert"),
+    const copied =
+      as === "link"
+        ? `${location.origin}${snapshotHref(location.pathname, snap)}`
+        : text;
+    navigator.clipboard?.writeText(copied).then(
+      () =>
+        setSnapshotMsg(
+          as === "link"
+            ? "Link in die Zwischenablage kopiert"
+            : "In die Zwischenablage kopiert"
+        ),
       () => setSnapshotMsg("Kopieren fehlgeschlagen — Text manuell auswählen")
     );
   };
@@ -976,7 +1179,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
   const runExport = (
     what: (h: CityWalkHandle, info: ExportContext) => Promise<void>,
     busy: string,
-    done: string
+    saved: string
   ) => {
     const h = handleRef.current;
     if (!h || exporting.current) {
@@ -992,32 +1195,29 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       style: look.get().style,
     })
       .then(
-        () => hud.say(done),
-        (err: unknown) =>
+        () => hud.say(saved),
+        (saveError: unknown) =>
           hud.say(
-            `Speichern fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`
+            `Speichern fehlgeschlagen: ${saveError instanceof Error ? saveError.message : String(saveError)}`
           )
       )
       .finally(() => {
         exporting.current = false;
         setExportVeil(false);
+      })
+      .catch(() => {
+        // The HUD line is best effort: a message that cannot be said must
+        // not surface as an unhandled rejection.
       });
   };
   // (image-export.ts is the scene's: loaded with it, not with the HUD)
   const exportImage = () =>
-    runExport(
-      (h, info) =>
-        import("./image-export").then(({ saveImage }) => saveImage(h, info)),
-      "Bild wird gerendert …",
-      "Bild gespeichert"
-    );
+    runExport(saveImageLazily, "Bild wird gerendert …", "Bild gespeichert");
   const exportStudy = () =>
     runExport(
-      (h, info) =>
-        import("./image-export").then(({ saveShadowStudy }) =>
-          saveShadowStudy(h, info, (n, total) =>
-            hud.say(`Verschattungsstudie: Bild ${n} von ${total} …`, true)
-          )
+      async (h, info) =>
+        await saveStudyLazily(h, info, (n, total) =>
+          hud.say(`Verschattungsstudie: Bild ${n} von ${total} …`, true)
         ),
       "Verschattungsstudie wird gerendert …",
       "Verschattungsstudie gespeichert"
@@ -1025,6 +1225,8 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
 
   const booted = status.phase === "running";
   const failure = bootFailureOf(status, supported, manifestError);
+  const handleRetry = failure?.onRetry;
+  const handleLook = look.set;
 
   return (
     <SceneStatusContext value={sceneStatus}>
@@ -1083,23 +1285,48 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
                 onTab={setTab}
               />
 
+              {asking && (
+                <AskCity
+                  coarse={coarse}
+                  onClose={() => setAsking(false)}
+                  scene={askScene}
+                  site={site.id}
+                />
+              )}
+              {walking && (
+                <WalkCard
+                  coarse={coarse}
+                  index={walking.index}
+                  onClose={endWalk}
+                  onIndex={(i) => showStop(walking.walk, i)}
+                  walk={walking.walk}
+                />
+              )}
               <InquiryPanel
                 coarse={coarse}
                 onClose={closeInquiry}
                 onPreview={(i) => handleRef.current?.previewCandidate(i)}
-                onSelect={(i) => handleRef.current?.selectCandidate(i)}
+                onSelect={(i) => {
+                  settle(handleRef.current?.selectCandidate(i));
+                }}
               />
-              <SceneOverlays
-                coarse={coarse}
-                live={live}
-                locate={locate}
-                onClimb={(v) => handleRef.current?.setClimbInput(v)}
-                onMovementMode={(m) => handleRef.current?.setMovementMode(m)}
-                onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
-                onNorth={() => handleRef.current?.turnModelTo(0)}
-                onToggleModel={() => handleRef.current?.toggleModel()}
-                onTurn={(deg) => handleRef.current?.turnModel(deg)}
-              />
+              {/* a phone's walk sheet owns the bottom: the stick and the
+                  toolbar would stand under it (a drag still looks about) */}
+              {!(coarse && walking) && (
+                <SceneOverlays
+                  asking={asking}
+                  coarse={coarse}
+                  onAsk={toggleAsk}
+                  live={live}
+                  locate={locate}
+                  onClimb={(v) => handleRef.current?.setClimbInput(v)}
+                  onMovementMode={(m) => handleRef.current?.setMovementMode(m)}
+                  onMove={(x, y) => handleRef.current?.setMoveInput(x, y)}
+                  onNorth={() => handleRef.current?.turnModelTo(0)}
+                  onToggleModel={() => handleRef.current?.toggleModel()}
+                  onTurn={(deg) => handleRef.current?.turnModel(deg)}
+                />
+              )}
             </>
           )}
         </div>
@@ -1112,7 +1339,7 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
         />
 
         {failure && (
-          <BootError message={failure.message} onRetry={failure.onRetry} />
+          <BootError message={failure.message} onRetry={handleRetry} />
         )}
 
         <SceneSidebar
@@ -1147,8 +1374,15 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
           handleRef={handleRef}
           look={lookValues}
           minutes={time.minutes}
-          onLook={look.set}
+          onLook={handleLook}
           onResetQuality={resetQuality}
+          onStartWalk={(walk) => showStop(walk, 0)}
+          onAsk={() => {
+            if (walking) {
+              endWalk();
+            }
+            setAsking(true);
+          }}
           onDefaultTime={() => time.set(time.day, INITIAL_MINUTES)}
           onExport={exportImage}
           onStudy={exportStudy}
@@ -1200,14 +1434,27 @@ export default function CityWalk({ budget, manifestError, tilesetUrl }: Props) {
       </SidebarProvider>
     </SceneStatusContext>
   );
-}
+};
+
+/**
+ * The viewer under the tooltips' provider (the panel's open at once: its
+ * delay). Here, not in the root layout: no other page shows a tooltip,
+ * and each would load the tooltips' code for it.
+ */
+const CityWalkWithTooltips = (props: Props) => (
+  <TooltipProvider>
+    <CityWalk {...props} />
+  </TooltipProvider>
+);
+
+export default CityWalkWithTooltips;
 
 /**
  * The asked thing's card and what else the ray met: on a desktop one
  * column at the left, the card over the list; on a touch screen the sheet
  * with the chips above it. The tap's ring either way.
  */
-function InquiryPanel({
+const InquiryPanel = ({
   coarse,
   onClose,
   onPreview,
@@ -1217,7 +1464,7 @@ function InquiryPanel({
   onClose: () => void;
   onPreview: (index: number | null) => void;
   onSelect: (index: number) => void;
-}) {
+}) => {
   const asked = useSceneStatus("inquiry");
   const provenanceUrl = useSceneStatus("site")?.provenanceUrl ?? null;
   if (!asked) {
@@ -1256,4 +1503,4 @@ function InquiryPanel({
       )}
     </>
   );
-}
+};

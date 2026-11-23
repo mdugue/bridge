@@ -65,7 +65,7 @@ export function wires(): Wires {
 }
 
 export function addWire(w: Wires, pts: Pt[], half: number): void {
-  for (let i = 0; i < pts.length - 1; i++) {
+  for (let i = 0; i < pts.length - 1; i += 1) {
     const a = pts[i];
     const b = pts[i + 1];
     const dx = b.x - a.x;

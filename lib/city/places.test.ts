@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import type { Landmark } from "./landmarks";
 import { filterPlaces, placeWords, sitePlaces } from "./places";
-import { overlook, type Viewpoint } from "./site";
+import { overlook } from "./site";
+import type { Viewpoint } from "./site";
 
 const walk = (id: string, label: string): Viewpoint => ({
   id,

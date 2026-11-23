@@ -29,22 +29,26 @@ export function isAllocationFailure(error: unknown): boolean {
   const text = typeof message === "string" ? message : "";
   const trace = typeof stack === "string" ? stack : "";
   switch (name) {
-    case "RangeError":
+    case "RangeError": {
       return OUT_OF_ROOM.test(text) || GPU_CALLS.test(trace);
-    case "InvalidStateError":
-      return /unable to/i.test(text);
+    }
+    case "InvalidStateError": {
+      return /unable to/iu.test(text);
+    }
     case "OperationError":
-    case "GPUOutOfMemoryError":
+    case "GPUOutOfMemoryError": {
       return true;
-    default:
-      return /out of memory/i.test(text);
+    }
+    default: {
+      return /out of memory/iu.test(text);
+    }
   }
 }
 
 /** A RangeError's words for memory that could not be had. */
 const OUT_OF_ROOM =
-  /out of bounds|out of memory|allocation fail|array buffer allocation|invalid (typed )?array (buffer )?length/i;
+  /out of bounds|out of memory|allocation fail|array buffer allocation|invalid (?:typed )?array (?:buffer )?length/iu;
 
 /** The three.js and WebGPU calls that allocate, in a RangeError's stack. */
 const GPU_CALLS =
-  /createAttribute|createIndexAttribute|getMappedRange|createBuffer|createTexture|writeBuffer|writeTexture/;
+  /createAttribute|createIndexAttribute|getMappedRange|createBuffer|createTexture|writeBuffer|writeTexture/u;

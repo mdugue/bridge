@@ -1,11 +1,13 @@
 """The facade traits per LoD2 wall, from the street panoramas' trait
-profiles (facade_traits.py, the `<tile>.v3.jsonl` cache), and the abstract
-facade they model (docs/transformations.md, *Facade traits*).
+profiles (facade_traits.py, the `<tile>.v4.jsonl` cache), and the abstract
+facade they model (docs/transformations.md, *Windows on every house*).
 
 Per image and wall the profiles give features that do not change when the
-image is moved along the wall — the poses of two drives differ by ~0.6 m,
-which is why the first reading's window size, count and storey height
-did not agree between two of them (2026-10-07):
+image is moved along the wall — one drive's pose is off along it by
+~0.2 m, two drives' by up to a metre, which is why the first reading's
+window size, count and storey height did not agree between two of them
+(2026-10-07); where the axes stand comes from the drives registered onto
+each other (window_axes.py):
 
    1 `axis`    the period of the column darkness profile (`cd`): the
                window axes' spacing (`period`, `AXIS_M`);
@@ -35,8 +37,10 @@ axis periods agree within `AXIS_TOL` (`axis_agrees`):
 
   - windows only on a regular or loose grid (`grid`); none without a
     period — no window is invented where nothing was measured;
-  - the axis spacing measured, the axes centred on the wall (their
-    position is not measured);
+  - the axis spacing measured; where the drives that saw the wall
+    register onto each other, the axes where they stand (`phase`, metres
+    from the wall's start `a` to an axis, window_axes.py), else centred
+    on the wall;
   - width and height from the measured duty and share where those are
     reliable, else the median proportions of Dresden's measured walls;
   - a frame, sill band, lisenes or ornament where that feature is
@@ -47,10 +51,18 @@ The bake writes `dlm/windows_<tile>.json`:
     {"attribution", "reliability": {feature: [ρ, walls]},
      "buildings": {"<gml:id>": [{"oid", "wi", "a", "b", "L", "n", "z",
        "imgs", "seqs", "traits": {...}, "model": {"axis", "grid", "w",
-       "h", "storey"?, "frame"?, "sill"?, "lisene"?, "orn"?}}, …]}}
+       "h", "phase"?, "frame"?, "sill"?, "lisene"?, "orn"?},
+       "drives"?}, …]}}
 
 with the wall's frame as in shopfronts.py (`_wall_entry`). Its own file,
-credited to Mapillary (CC BY-SA 4.0)."""
+credited to Mapillary (CC BY-SA 4.0).
+
+The street photos' glass readings (facade_glass.py, the
+`<tile>.glass.<key>.jsonl` cache) add each wall's `"glass": {"glass",
+"n", "p"}` (`wall_glass`; a wall no panorama measured enters with it
+alone) and the file's `"outer"`, per object with a wall read for glass the
+length of its outer walls: the building bake decides which objects are
+glass (lib/city/photo-glass.ts, ADR 0060)."""
 
 from __future__ import annotations
 
@@ -63,9 +75,20 @@ import numpy as np
 
 from .common import Tile
 from .facade_traits import STEP_M
-from .facades import ATTRIBUTION, traits_path, walls
+from .facades import (
+    ATTRIBUTION,
+    GLASS_NEAR_M,
+    GLASS_SEQ,
+    complete,
+    glass_path,
+    plan_key,
+    traits_path,
+    wall_key,
+    walls,
+)
 from .osm_buildings import root_of
 from .shopfronts import _Raster, _wall_entry
+from .window_axes import wall_phase
 
 AXIS_M = (1.2, 7.0)  # a window axis' spacing
 STOREY_M = (2.6, 5.0)  # a storey
@@ -79,6 +102,7 @@ MIN_IMAGES = 2
 AXIS_TOL = 0.15  # the images' axis periods agree this well (relative) ...
 AXIS_AGREE = 0.6  # ... in this share of them
 MIN_RHO = 0.6
+MIN_OPENINGS = 2  # whole openings an image must see to give their size
 MIN_PAIRS = 30  # walls a feature's ρ needs
 FEATURES = (
     "axis",
@@ -100,16 +124,35 @@ FEATURES = (
     "plinth_h",
     "rustic",
     "panel",
+    "ow",
+    "oh",
+    "oprop",
 )
 # ρ ≥ MIN_RHO over Dresden's thirteen measured tiles pooled (1 931 walls,
 # 2026-10-09; docs/transformations.md has every feature's ρ). `sill` passed
 # on the spawn tile alone (0.65 over 48 walls) and failed pooled (0.53
 # over 85): it is out.
+# The openings' own size joined on 2026-11-06 (Dresden pooled again, 141
+# walls: ow 0.69, oh 0.71, oprop 0.76); `storey` no longer sets the rows
+# (lib/city/windows.ts `windowStorey`) and fell to 0.59 there.
 RELIABLE: frozenset[str] = frozenset(
-    {"axis", "grid", "storey", "share", "dark", "wduty", "width", "height", "prop", "orn"}
+    {
+        "axis",
+        "grid",
+        "storey",
+        "share",
+        "dark",
+        "wduty",
+        "width",
+        "height",
+        "prop",
+        "orn",
+        "ow",
+        "oh",
+        "oprop",
+    }
 )
 AXIS_DRAWN = (1.8, 4.8)  # a window axis drawn: no stucco band, no double period
-STOREY_DRAWN = (2.8, 4.6)
 WINDOW_W_M = (0.7, 2.2)
 WINDOW_H_M = (0.8, 2.4)
 MIN_PIER_M = 0.6  # wall left between two windows at least
@@ -278,7 +321,26 @@ def image_features(r: dict) -> dict:
         out["rustic"] = g / up
     pe, pv = period(eh, *PANEL_M), period(ev, *PANEL_M)
     out["panel"] = min(pe[1] if pe else 0.0, pv[1] if pv else 0.0)
+    out |= opening_sizes(r.get("op"))
     return out
+
+
+def opening_sizes(op: list[list[int]] | None) -> dict:
+    """The size of the openings an image saw whole (facade_traits.py
+    `openings`), where it saw at least `MIN_OPENINGS`: their median width
+    and height (`ow`, `oh`, m) and the median of each one's width over its
+    height (`oprop`). Read off each opening, not off a profile's duty: two
+    drives agree on the height and the proportion better (ρ 0.71 and 0.76
+    against the profiles' 0.59 and 0.65, the width alike at 0.69; Dresden's
+    tiles pooled, 2026-11-06)."""
+    ops = op or []
+    if len(ops) < MIN_OPENINGS:
+        return {}
+    return {
+        "ow": float(np.median([o[2] for o in ops])) / 100,
+        "oh": float(np.median([o[3] for o in ops])) / 100,
+        "oprop": float(np.median([o[2] / o[3] for o in ops])),
+    }
 
 
 # --- per wall (pure) --------------------------------------------------------
@@ -367,30 +429,96 @@ def _clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
 
+def _first(traits: dict, reliable: frozenset[str], *names: str) -> float | None:
+    """The first of the features that is reliable and measured: the
+    openings' own size before the profiles'."""
+    return next((traits[n] for n in names if n in reliable and n in traits), None)
+
+
 def model(traits: dict, axis: float | None, reliable: frozenset[str] = RELIABLE) -> dict | None:
     """The abstract facade a wall's traits give (see the module), or None:
     no reliable axis in AXIS_DRAWN (a window rhythm, not a stucco band or a
     double period), or no grid. Each part only from a reliable feature;
-    the window's width and proportion fall back to Dresden's medians where
-    theirs is not."""
+    the window's width and proportion are the whole openings' (`ow`,
+    `oprop`), else the profiles' (`width`, `prop`), else Dresden's medians."""
     if axis is None or "axis" not in reliable or not AXIS_DRAWN[0] <= axis <= AXIS_DRAWN[1]:
         return None
     g = traits.get("grid", 0.0)
     grid = "regular" if g >= REGULAR else "loose" if g >= LOOSE else None
     if grid is None or "grid" not in reliable:
         return None
-    width = traits.get("width") if "width" in reliable else None
-    w = _clamp(width if width is not None else WIDTH_SHARE * axis, *WINDOW_W_M)
+    w = _clamp(_first(traits, reliable, "ow", "width") or WIDTH_SHARE * axis, *WINDOW_W_M)
     w = min(w, axis - MIN_PIER_M)
-    prop = traits.get("prop") if "prop" in reliable else None
+    prop = _first(traits, reliable, "oprop", "prop")
     h = _clamp(w / (prop if prop is not None else PROPORTION), *WINDOW_H_M)
     out: dict = {"axis": round(axis, 2), "grid": grid, "w": round(w, 2), "h": round(h, 2)}
-    if "storey" in reliable and (st := traits.get("storey")) is not None:
-        out["storey"] = round(_clamp(st, *STOREY_DRAWN), 2)
     for name, least in FLAG_MIN.items():
         if name in reliable and traits.get(name, -1.0) >= least:
             out[name] = True
     return out
+
+
+# --- glass (pure) ------------------------------------------------------------
+
+# A wall is glass where its photos say so (facade_glass.py): at least
+# GLASS_IMAGES readings of it, each from a photo that sees MIN_COVER of
+# its upper wall (no photo that sees less is read), and GLASS_SHARE of
+# them at GLASS_MIN or more. On the probe
+# (2026-11-10) every known glass front read 0.91–1.00 on its clear views;
+# over all of Dresden 0.9 also took metal cladding, ribbon-window blocks and
+# a plastered house with balconies (all below 0.95 on most views), 0.95 left
+# about a dozen objects of which the contact sheets showed two doubtful.
+# Two photos keep a single reflection or a scaffold from deciding.
+GLASS_MIN = 950  # ‰
+GLASS_IMAGES = 2
+GLASS_SHARE = 2 / 3
+
+
+def glass_records(
+    lines: list[str], plan: dict[str, list[list]] | None = None
+) -> dict[tuple[str, int, float], list[int]]:
+    """Per wall (`wall_key`) the glass readings (‰) of the photos that saw
+    enough of it from near enough (`GLASS_NEAR_M`), one a sequence — its
+    photo that saw most of the wall — so that two readings are two passes,
+    not two frames of one; of the GLASS_SEQ sequences that saw most of it.
+    Given the `plan` the cache was read through for (`plan_of`), only the
+    photos it picked for each wall: one an earlier plan under other limits
+    picked does not count."""
+    picked = None if plan is None else {(i, tuple(k)) for i, keys in plan.items() for k in keys}
+    best: dict[tuple, tuple[float, int]] = {}
+    for line in lines:
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        for w in r.get("walls", []):
+            if picked is not None and (r.get("img"), wall_key(w)) not in picked:
+                continue
+            if "gl" in w and w.get("dist", 0) <= GLASS_NEAR_M:
+                key = (*wall_key(w), r.get("seq", r["img"]))
+                cov = w.get("cov", 0)
+                if key not in best or cov > best[key][0]:
+                    best[key] = (cov, int(w["gl"]))
+    seqs: dict[tuple, list[tuple[float, str, int]]] = collections.defaultdict(list)
+    for (*wall, seq), (cov, gl) in best.items():
+        seqs[tuple(wall)].append((cov, seq, gl))
+    return {
+        key: [gl for _, _, gl in sorted(rs, key=lambda r: (-r[0], r[1]))[:GLASS_SEQ]]
+        for key, rs in sorted(seqs.items())
+    }
+
+
+def wall_glass(readings: list[int]) -> dict | None:
+    """A wall's glass entry — {"p": the readings' median, ‰, "n": how many,
+    "glass": whether it is glass} — or None with too few readings."""
+    if len(readings) < GLASS_IMAGES:
+        return None
+    hits = sum(g >= GLASS_MIN for g in readings)
+    return {
+        "glass": hits >= GLASS_SHARE * len(readings),
+        "n": len(readings),
+        "p": int(np.median(readings)),
+    }
 
 
 # --- the tile ---------------------------------------------------------------
@@ -409,52 +537,136 @@ def _records(path: Path) -> dict[tuple[str, int], list[dict]]:
     return by
 
 
-def windows(city: dict, by_wall: dict, ground=None) -> tuple[dict, dict]:
+def windows(
+    city: dict,
+    by_wall: dict,
+    ground=None,
+    glass: dict | None = None,
+    ws: list[dict] | None = None,
+) -> tuple[dict, dict]:
     """Per Building gml:id its measured walls with traits and model, and
-    the agreement table."""
-    ws = walls(city)
+    the agreement table. `glass` holds each wall's glass entry by
+    `wall_key` (`wall_glass` of its readings, `decided_glass`); a wall no
+    panorama measured enters with its glass alone. `ws` the city's
+    `walls`, where the caller has them."""
+    ws = walls(city) if ws is None else ws
     out: dict[str, list[dict]] = collections.defaultdict(list)
     all_seqs = []
     for w in ws:
         recs = by_wall.get((w["oid"], w["wi"]), [])
-        if not recs:
+        seqs = by_sequence(recs) if recs else {}
+        gl = (glass or {}).get(wall_key(w))
+        if not seqs and gl is None:
             continue
-        seqs = by_sequence(recs)
-        if not seqs:
-            continue
-        all_seqs.append(seqs)
-        traits = wall_traits(seqs)
+        if seqs:
+            all_seqs.append(seqs)
+        traits = wall_traits(seqs) if seqs else {}
         entry = _wall_entry(w, ground) | {
             "eave": round(w["eave"], 2),
             "imgs": sum(len(v) for v in seqs.values()),
             "seqs": len(seqs),
             "traits": traits,
         }
-        if (m := model(traits, axis_agrees(seqs))) is not None:
+        if gl is not None:
+            entry["glass"] = gl
+        # a glass wall has no model: its mullions are no window rhythm, for
+        # its own building, another's windows or the dormers over it
+        glazed = gl is not None and gl["glass"]
+        if seqs and not glazed and (m := model(traits, axis_agrees(seqs))) is not None:
+            if (at := wall_phase(recs, m["axis"])) is not None:
+                m["phase"] = at["phase"]
+                entry["drives"] = at["drives"]
             entry["model"] = m
         out[root_of(city, w["oid"])].append(entry)
     return dict(sorted(out.items())), agreement(all_seqs)
 
 
-def write(path: Path, buildings: dict, reliability: dict) -> None:
+def outer_lengths(ws: list[dict], buildings: dict) -> dict[str, float]:
+    """Per object with a wall read for glass, the length of all its outer
+    walls (`ws`: the caller passes every edge, however short — a bay's or
+    a setback's count too): the building bake weighs its glass against it,
+    so one glazed stair tower read alone does not make a stone house
+    glass."""
+    read = {w["oid"] for entries in buildings.values() for w in entries if "glass" in w}
+    total: dict[str, float] = collections.defaultdict(float)
+    for w in ws:
+        if w["oid"] in read:
+            total[w["oid"]] += w["L"]
+    return {oid: round(v, 1) for oid, v in sorted(total.items())}
+
+
+def write(path: Path, buildings: dict, reliability: dict, outer: dict | None = None) -> None:
     doc = {"attribution": ATTRIBUTION, "reliability": reliability, "buildings": buildings}
+    if outer:
+        doc["outer"] = outer
     path.write_text(json.dumps(doc, separators=(",", ":"), sort_keys=True))
+
+
+def decided_glass(lines: list[str]) -> dict[tuple[str, int, float], dict]:
+    """Per wall (`wall_key`) its glass entry from the readings of a cache
+    read through (`complete`), of the photos its plan picked
+    (`glass_records`, `wall_glass`), where it has enough of them."""
+    try:
+        plan = json.loads(lines[-1]).get("plan") if lines else None
+    except (ValueError, AttributeError):
+        plan = None
+    return {
+        k: g for k, rs in glass_records(lines, plan).items() if (g := wall_glass(rs)) is not None
+    }
+
+
+def prior_glass(out: Path) -> dict[tuple[str, int, float], dict]:
+    """Per wall (`wall_key`) the glass entry the tile's windows file holds:
+    kept where the readings to decide anew are not there."""
+    try:
+        doc = json.loads(out.read_text())
+    except (OSError, ValueError):
+        return {}
+    return {
+        wall_key(w): w["glass"]
+        for ws in doc.get("buildings", {}).values()
+        for w in ws
+        if "glass" in w
+    }
 
 
 def run(tile: Tile) -> None:
     out = tile.out("dlm", f"windows_{tile.id}.json")
-    path = traits_path(tile)
-    if not tile.mapillary or not path.exists():
-        if tile.mapillary:
-            print(f"{tile.id}: no facade traits measured — no wall gets windows")
+    path, gpath = traits_path(tile), glass_path(tile)
+    if not tile.mapillary:
         write(out, {}, {})
         return
     city = json.loads(tile.cityjson.read_text())
-    buildings, reliability = windows(city, _records(path), _Raster(tile.dgm))
-    write(out, buildings, reliability)
+    ws = walls(city)
+    lines = gpath.read_text().splitlines() if gpath.exists() else None
+    if lines is not None and complete(lines, plan_key(ws)):
+        glass = decided_glass(lines)
+    else:
+        # none read here, read in part, or for other walls, limits
+        # (plan_key), prompts or model (reading_key): the glass the file
+        # holds is kept, never dropped
+        glass = prior_glass(out)
+        print(
+            f"{tile.id}: WARNING {gpath.name} is missing or not read through — "
+            f"{'the windows file’s glass kept' if glass else 'no wall read for glass'}; "
+            f"run the glass fetch"
+        )
+    if not path.exists():
+        print(f"{tile.id}: no facade traits measured — no wall gets a measured rhythm")
+    if not (path.exists() or glass):
+        write(out, {}, {})
+        return
+    by_wall = _records(path) if path.exists() else {}
+    buildings, reliability = windows(city, by_wall, _Raster(tile.dgm), glass, ws)
+    write(out, buildings, reliability, outer_lengths(walls(city, min_len=0.01), buildings))
     n_walls = sum(len(v) for v in buildings.values())
     modelled = sum("model" in w for v in buildings.values() for w in v)
-    print(f"{tile.id}: {n_walls} walls with traits, {modelled} modelled")
+    read = sum("glass" in w for v in buildings.values() for w in v)
+    glazed = sum(w.get("glass", {}).get("glass", False) for v in buildings.values() for w in v)
+    print(
+        f"{tile.id}: {n_walls} walls with traits, {modelled} modelled, "
+        f"{read} read for glass, {glazed} glass"
+    )
     for name, (rho, n) in reliability.items():
         mark = "✓" if rho is not None and rho >= MIN_RHO and n >= MIN_PAIRS else " "
         print(f"  {mark} {name:13s} ρ {rho if rho is not None else '—'} over {n} walls")

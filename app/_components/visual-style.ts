@@ -1,17 +1,17 @@
 import {
-  type DataTexture,
+  Color,
   DoubleSide,
   FrontSide,
   InterpolationSamplingType,
   MeshStandardNodeMaterial,
-  type Node,
-  type Texture,
-  type UniformNode,
+  SRGBColorSpace,
   Vector3,
 } from "three/webgpu";
+import type { DataTexture, Node, Texture, UniformNode } from "three/webgpu";
 import {
   abs,
   attribute,
+  bool,
   cameraWorldMatrix,
   clamp,
   dot,
@@ -46,19 +46,14 @@ import {
 } from "three/tsl";
 import {
   OBJECT_FLAG_FLOODLIT,
+  OBJECT_FLAG_NICHED,
   OBJECT_TEXTURE_WIDTH,
 } from "@/lib/city/city-mesh";
 import { FACADE_UNIT } from "@/lib/city/facade-reading";
 import { SELECTION_ACCENT } from "@/lib/city/outline";
 import { FACADE_ROOF, NO_DOOR, WALL_EAVE } from "@/lib/city/windows";
-import {
-  dataPosition,
-  type F,
-  type Live,
-  type V3,
-  type V2,
-  type V4,
-} from "./shader-chunks";
+import { dataPosition } from "./shader-chunks";
+import type { F, Live, V3, V2, V4 } from "./shader-chunks";
 import {
   setGraph,
   setSlots,
@@ -66,7 +61,15 @@ import {
   slotTexture,
   slotUniform,
 } from "./material-slots";
-import { clayWindows } from "./clay-windows";
+import {
+  PANE_SKY_NIGHT_DIM,
+  PANE_SKY_RGB,
+  WINDOW_PANE_ROUGHNESS,
+  clayWindows,
+  paneFresnel,
+} from "./clay-windows";
+import type { ClayWindows } from "./clay-windows";
+import { streetLight } from "./lamp-reflections";
 import { nightShadowFree } from "./lantern";
 import {
   claySkySlots,
@@ -74,7 +77,9 @@ import {
   openSkySlots,
   SKY_VIEW,
 } from "./sky-light";
-import { mirrorWeight, REFLECTIONS, skyReflection } from "./sky-reflection";
+import { mirrorWeight, REFLECTIONS } from "./sky-reflection";
+import { clayHorizonSlots, createCityMirror } from "./city-mirror";
+import type { MirrorSeen } from "./city-mirror";
 import { viewDirection } from "./view-direction";
 
 /** A building tile's object table (lib/city/city-mesh.ts). */
@@ -92,6 +97,9 @@ interface ClayGraph {
   /** the sun's light where a window's sill or reveal shades it */
   receivedShadow: (shadow?: Node) => Node;
   roughness: F;
+  /** false where a window opening is cut for the niche behind it
+   *  (window-niche-layer.ts); only where the app draws niches */
+  mask?: Node;
 }
 
 /**
@@ -112,6 +120,9 @@ export interface ClayDetailUniforms {
   /** world, surface → sun (the sun rig's vector, shared by reference):
    *  the windows' own shadows */
   uSun: UniformNode<"vec3", Vector3>;
+  /** the app draws real niches behind the near windows
+   *  (window-niche-layer.ts): the clay cuts their openings */
+  niches?: boolean;
 }
 
 // --- the fixed look ----------------------------------------------------------
@@ -122,8 +133,10 @@ export interface ClayDetailUniforms {
 /** Farbvariation: the clay colour each building takes from its use and
  *  height, mixed into the base — a middling mix breaks the uniform massing
  *  and stays painterly. The shopfronts' baked colours assume it
- *  (scripts/bake-city-mesh.ts `WALL_TINT_SHOWN`): tune both together. */
-const TINT = float(0.6);
+ *  (scripts/city-shopfronts.ts `WALL_TINT_SHOWN`): tune both together; the
+ *  niches read it as it is (window-niche-layer.ts `wallColour`). */
+export const TINT_SHARE = 0.6;
+const TINT = float(TINT_SHARE);
 /** Dachfarbe: terracotta or slate per roof, from its form and pitch —
  *  roofs carry more colour than walls, the strongest readability cue. */
 const ROOF_TINT = float(0.7);
@@ -156,10 +169,13 @@ const WINDOWS = float(1);
 const FACADE_READING = float(1);
 /** Abendlicht: the lit windows' strength after dark (clay-windows.ts),
  *  and the shops' (`SHOP_LIGHT`). */
-const DUSK_GLOW = float(0.5);
-/** Streiflicht's share left at night: a rim is the sky's light on a
- *  grazing wall, and the night sky has none to give. */
-const NIGHT_RIM = float(0.1);
+export const DUSK_GLOW = float(0.5);
+/** Streiflicht's share on a face turned from the sun, by day: the rim
+ *  is the sky's light on a grazing wall, and lit as fully there a wall in
+ *  its own shade read as bright as a sunlit one beside the dark shadow it
+ *  casts — seen from above, where every wall grazes, each shadow looked
+ *  cut loose from its caster (a dormer's cheek, a house's back). */
+const SHADE_RIM = float(0.25);
 /** Lichtkegel: the light at a commercial or public wall's foot after dark
  *  (`nightLight`) — light on the wall from in front, never the wall
  *  glowing. */
@@ -199,6 +215,39 @@ export interface StyleResources {
  */
 export const clayPoche = uniform(0);
 const POCHE = vec3(0.025, 0.024, 0.027);
+
+/**
+ * The asked building's colours (linear): the pale it is lifted towards and
+ * the hatch drawn over it. Shared uniforms the picture style sets
+ * (`setAskedColours`), so the mark on the clay is drawn in the same hand
+ * as the outline and the lettering; Pastell's are the HUD's accent.
+ */
+const askedPale = uniform(new Color(...SELECTION_ACCENT.halo));
+const askedInk = uniform(new Color(...SELECTION_ACCENT.ink));
+// reason: a colour uniform is a vec3 in the graph; its type says Color.
+const ASKED_PALE = askedPale as unknown as Node<"vec3">;
+// reason: as above.
+const ASKED_INK = askedInk as unknown as Node<"vec3">;
+/** The hatch's share of the darker colour (Pastell's magenta to the
+ *  HUD's own ink). */
+const ASKED_INK_SHARE = 0.7;
+
+/** A colour's luminance (sRGB 0…1, Rec. 709 weights). */
+const lum = (c: readonly [number, number, number]) =>
+  0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+
+/** The asked building's colours from a style's outline (sRGB 0…1): lifted
+ *  towards the lighter of the two, hatched in the darker. */
+export function setAskedColours(
+  line: readonly [number, number, number],
+  halo: readonly [number, number, number]
+): void {
+  const [pale, dark] = lum(line) > lum(halo) ? [line, halo] : [halo, line];
+  askedPale.value.setRGB(pale[0], pale[1], pale[2], SRGBColorSpace);
+  askedInk.value
+    .setRGB(dark[0], dark[1], dark[2], SRGBColorSpace)
+    .multiplyScalar(ASKED_INK_SHARE);
+}
 
 /**
  * Procedural facade detail on the opaque clay node material, keyed to each
@@ -282,7 +331,8 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
   // interpolated float's last-bit drift into a different window position
   // every pixel — a loose grid's openings frayed at their sides.
   const rough = varying(c.z).setInterpolation(InterpolationSamplingType.FLAT);
-  const flags = varying(c.w);
+  // flat as well: a packed word (the niche bit is 2^16)
+  const flags = varying(c.w).setInterpolation(InterpolationSamplingType.FLAT);
   // A triangle that was degenerate when its flat normal was baked has a zero
   // normal, and position quantisation can give it area again: it then
   // rasterises with normalize(0) = NaN lighting — single black pixels on
@@ -308,24 +358,43 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     .mul(float(1).sub(build.x));
   // along the view, in Modell's parallel projection too
   const view = viewDirection();
+  const niched = d.niches ? nichedOf(flags) : undefined;
   const windows = clayWindows({
     eave: build.z,
     // the windows read no roof vertex's slots: they hold its colour
     facade: varying(mix(facade, vec4(0, 0, FACADE_ROOF, NO_DOOR), roof)),
     h,
     seed: rough,
-    shop: shopOf(flags),
     spec,
     storey: build.y,
     strength: WINDOWS,
+    sharp: niched,
+    sharpFromPx: NICHE_PREFILTER_PX,
     sun: d.uSun,
     view,
     wall,
     wn,
   });
+  // Der Skyline-Spiegel (city-mirror.ts): what a window's back and a glass
+  // wall mirror, read once on the facet
+  const mirror = createCityMirror(d.uSun).at(wn, h);
+  // a glass wall's panes between its mullions and transoms
+  const glass = glassPane(flags, wall, h, build.y, wn);
   // the wall's own looks (relief, tone, ledges) stay off the openings
   const plaster = wall.mul(float(1).sub(windows.opening));
+  const colour = clayAlbedo(windows, {
+    build,
+    flags,
+    glass,
+    h,
+    plaster,
+    sn,
+    tint,
+    wall,
+    wn,
+  });
   return {
+    mask: niched ? nicheMask(windows, niched) : undefined,
     normal: normalize(mix(viewNormal, windows.normal, windows.normalMix)),
     // A facet turned from the sun is in its own shadow, whatever its
     // rounded normal says: buildings cast with their back faces (sun-rig.ts),
@@ -341,52 +410,109 @@ function clayGraph(d: ClayDetailUniforms, objects: ObjectTable): ClayGraph {
     },
     // Materialstreuung: nudge roughness per building so the matte sheen
     // varies house-to-house (clamped to stay matte, no shiny clay).
-    roughness: facadeRoughness(
-      clamp(float(1).add(ROUGHNESS.mul(rough)), 0.55, 1),
-      facadeMaterial(flags, wall),
-      shopPane(flags),
-      rough
-    ),
-    // A mix, not a select: three emits a select as if/else, and the facade
-    // drawn inside its arm — the windows first among it — would be built
-    // twice (the normal, light and glow read it outside), its derivatives in
-    // a branch.
-    colour: mix(
-      askedColour(
-        windows
-          .colour(
-            facadeReading(
-              clayColour(tint, build, h, wall, flags),
-              build,
-              h,
-              plaster,
-              flags,
-              wn
-            )
-          )
-          .mul(float(1).sub(facadeMirror(flags, wall, sn).mul(0.6))),
-        h,
-        wall,
-        flags,
-        wn
+    // a window's back is a pane: smooth, the sun glints in it
+    roughness: mix(
+      facadeRoughness(
+        clamp(float(1).add(ROUGHNESS.mul(rough)), 0.55, 1),
+        facadeMaterial(flags, wall),
+        shopPane(flags),
+        rough
       ),
-      POCHE,
-      step(0.5, clayPoche).mul(float(1).sub(float(frontFacing)))
+      WINDOW_PANE_ROUGHNESS,
+      windows.pane
     ),
+    colour,
     // Himmelslicht: the courtyard's ground floor gets less of the sky;
     // a window's recess and the wall under its sill less still.
     ao: createClaySky().ao(h, build.z, SKY_VIEW).mul(windows.ao),
-    emissive: clayGlow(d, build, h, wall, flags, wn, sn).add(
-      windows.glow.mul(DUSK_GLOW).mul(d.uNight)
-    ),
+    // after dark the street lamps light the walls that face them, each
+    // as its colour takes their light (lamp-reflections.ts `streetLight`)
+    emissive: clayGlow(d, { build, h, wall, flags, wn, sn, mirror, glass })
+      .add(windows.glow.mul(DUSK_GLOW).mul(d.uNight))
+      .add(colour.mul(streetLight(wn)))
+      // a window's back mirrors the sky as a shop window's pane does
+      // (`paneSky`), dimmed after dark
+      .add(
+        vec3(...PANE_SKY_RGB)
+          .mul(mirror.tone)
+          .mul(windows.sky.mul(float(1).sub(d.uNight.mul(PANE_SKY_NIGHT_DIM))))
+      ),
   };
+}
+
+/**
+ * Where the clay cuts a window's opening for the real niche behind it:
+ * on a front face, in an opening (its middle half and more), of a house
+ * the niche set holds (OBJECT_FLAG_NICHED, set per house at runtime:
+ * window-niche-layer.ts). Behind it the niche's reveals and pane are
+ * drawn; on every other house the opening is drawn on the wall.
+ */
+function nicheMask(windows: ClayWindows, niched: F): Node {
+  // only a window drawn whole: under NICHE_PREFILTER_PX the opening is
+  // its row's mean, and a cut through it would run along the whole row
+  const cut = step(0.5, windows.cut).mul(float(frontFacing)).mul(niched);
+  return cut.lessThan(0.5);
+}
+
+/** Under this width (px) a niched house's window hands over to its mean
+ *  tone (every tier; a temporal antialiasing tried in its place smeared):
+ *  narrower, a niche hops from pixel to pixel as the eye moves. */
+export const NICHE_PREFILTER_PX = 2;
+
+/** 1 on an object the niche set holds (OBJECT_FLAG_NICHED). */
+const nichedOf = (flags: F): F =>
+  mod(floor(floor(flags.add(0.5)).div(OBJECT_FLAG_NICHED)), 2);
+
+/** The clay's colour (clayGraph): the facade's looks over the tint, the
+ *  Schnitt's poché on a cut's inside. */
+function clayAlbedo(
+  windows: ClayWindows,
+  parts: {
+    build: V4;
+    flags: F;
+    glass: F;
+    h: F;
+    plaster: F;
+    tint: V3;
+    wall: F;
+    wn: V3;
+    sn: V3;
+  }
+): V3 {
+  const { build, flags, glass, h, plaster, tint, wall, wn, sn } = parts;
+  // A mix, not a select: three emits a select as if/else, and the facade
+  // drawn inside its arm — the windows first among it — would be built
+  // twice (the normal, light and glow read it outside), its derivatives in
+  // a branch.
+  return mix(
+    askedColour(
+      windows
+        .colour(
+          facadeReading(
+            clayColour(tint, build, h, wall, flags),
+            build,
+            h,
+            plaster,
+            flags,
+            wn
+          )
+        )
+        .mul(facadeBody(flags, wall, sn, glass)),
+      h,
+      wall,
+      flags,
+      wn
+    ),
+    POCHE,
+    step(0.5, clayPoche).mul(float(1).sub(float(frontFacing)))
+  );
 }
 
 /** How far a wall vertex's own eave lies over its object's (m), from the
  *  code in its second door slot (lib/city/windows.ts `WALL_EAVE`,
  *  `slotWallEave`); 0 on a door's code, `NO_DOOR` and every roof vertex
  *  (whose slots hold its colour). */
-function wallEaveUp(facade: V4, roof: F): F {
+export function wallEaveUp(facade: V4, roof: F): F {
   const code = floor(facade.w.mul(32_767).add(0.5));
   const own = step(WALL_EAVE.code0 - 0.5, code)
     .mul(step(code, WALL_EAVE.top + 0.5))
@@ -583,7 +709,7 @@ function readingOf(flags: F): { busy: F; dark: F; shop: F } {
 
 /** A shop on the ground floor: OSM's (flag 1), or a shop sign the street
  *  photos saw (on Fassadenbild's strength). */
-function shopOf(flags: F): F {
+export function shopOf(flags: F): F {
   return max(
     mod(floor(flags.add(0.5)), 2),
     readingOf(flags).shop.mul(FACADE_READING)
@@ -697,13 +823,86 @@ function facadeMaterial(flags: F, wall: F): { glass: F; metal: F } {
  * strength (REFLECTIONS), at 0 the clay it was. The clay's own colour
  * gives way by part of it (clayGraph), as a pane's would.
  */
-function facadeMirror(flags: F, wall: F, normal: V3): F {
+function facadeMirror(flags: F, wall: F, normal: V3, glass: F): F {
   const m = facadeMaterial(flags, wall);
-  // a shop window's pane keeps its own calm sky (paneSky), never a mirror
-  const glass = m.glass.mul(float(1).sub(shopPane(flags)));
-  return mirrorWeight(normal, 0.1)
-    .mul(glass.add(m.metal.mul(0.35)))
+  return mirrorWeight(normal, GLASS_MIRROR.base)
+    .mul(glass)
+    .add(mirrorWeight(normal, 0.1).mul(m.metal.mul(0.35)))
     .mul(REFLECTIONS);
+}
+
+/** A glass wall's mirror and body: a quarter of the scene face on (glass
+ *  seen against a dark inside shows its reflection, not its own colour),
+ *  all of it at a grazing view; its own colour, where the mirror does not
+ *  cover it, darkened to a tinted pane. */
+export const GLASS_MIRROR = {
+  base: 0.28,
+  body: 0.62,
+  roughness: 0.05,
+} as const;
+
+/** 1 on a glass wall (flag 4) but a shop window's pane, which keeps its
+ *  own calm sky (paneSky), never a mirror. */
+function facadeGlass(flags: F, wall: F): F {
+  return facadeMaterial(flags, wall).glass.mul(float(1).sub(shopPane(flags)));
+}
+
+/** A glass wall's frame (Pfosten und Riegel): mullions every `mullion`
+ *  metres along the wall, a transom at every storey, `width` wide, and how
+ *  much of the wall's clay they show (`strength`: a slender, pale frame,
+ *  the glass still read through its edge). */
+export const GLASS_FRAME = {
+  mullion: 1.5,
+  width: 0.035,
+  strength: 0.55,
+} as const;
+
+/**
+ * How much of the pixel a line of `width` every `period` along `x` (m)
+ * covers: a box filter over the pixel's footprint, so a line thinner than
+ * a pixel is a pixel wide at its share of it, never a hard pixel's step;
+ * where the lines come closer than a few pixels, their share of the wall
+ * (the mean tone).
+ */
+function frameLines(x: F, period: F | number, width: number): F {
+  const p = typeof period === "number" ? float(period) : period;
+  const fw = max(fwidth(x), 1e-4);
+  const off = abs(fract(x.div(p).add(0.5)).sub(0.5)).mul(p);
+  const wide = max(fw, width);
+  const line = clamp(wide.mul(0.5).sub(off).div(fw).add(0.5), 0, 1).mul(
+    float(width).div(wide)
+  );
+  const sharp = float(1).sub(smoothstep(p.mul(0.06), p.mul(0.16), fw));
+  return mix(float(width).div(p), line, sharp);
+}
+
+/** Where a glass wall is pane (1) and where frame (0): the flag's glass
+ *  (`facadeGlass`) less its mullions and transoms. The mullions are laid
+ *  along the facet from the world's origin — a wall's own rhythm, not a
+ *  measured one (photos read glass, not its frame). */
+function glassPane(flags: F, wall: F, h: F, storey: F, wn: V3): F {
+  const t = normalize(vec2(wn.z.negate(), wn.x).add(1e-5));
+  const s = positionWorld.x.mul(t.x).add(positionWorld.z.mul(t.y));
+  const frame = max(
+    frameLines(s, GLASS_FRAME.mullion, GLASS_FRAME.width),
+    frameLines(h, max(storey, 2.8), GLASS_FRAME.width)
+  );
+  return facadeGlass(flags, wall).mul(
+    float(1).sub(frame.mul(GLASS_FRAME.strength))
+  );
+}
+
+/** What of the clay's own colour a glass or metal wall keeps: it gives way
+ *  to the mirror as a pane's would, and on glass to the dark behind it. */
+function facadeBody(flags: F, wall: F, normal: V3, glass: F): F {
+  return float(1).sub(
+    min(
+      facadeMirror(flags, wall, normal, glass)
+        .mul(0.6)
+        .add(glass.mul(GLASS_MIRROR.body)),
+      0.94
+    )
+  );
 }
 
 /** Glass and metal cladding read a little smoother than the clay; a shop
@@ -719,8 +918,7 @@ function facadeRoughness(
 }
 
 /** 1 on a shop window's pane: glass (4) that wears its own colour (64) —
- *  the shopfronts' panes (lib/city/shopfronts.ts), the one exception to
- *  the glass veto. Its `rough` column is then a roughness, not a jitter. */
+ *  the shopfronts' panes (lib/city/shopfronts.ts). Its `rough` column is then a roughness, not a jitter. */
 function shopPane(flags: F): F {
   const f = floor(flags.add(0.5));
   return mod(floor(f.div(64)), 2).mul(mod(floor(f.div(4)), 2));
@@ -768,7 +966,7 @@ function osmColour(col: V3, build: V4, h: F, wall: F, flags: F): V3 {
 }
 
 /**
- * What the clay emits: Streiflicht (a squared Fresnel rim, warm, a tenth
+ * What the clay emits: Streiflicht (a squared Fresnel rim, warm, none
  * of it at night; on glass a pale sky sheen as well) and the night's light
  * on the walls (`nightLight`). A shop window's pane takes its own sky
  * (`paneSky`) in place of the rim and the glass sheen. The rim and the
@@ -777,13 +975,18 @@ function osmColour(col: V3, build: V4, h: F, wall: F, flags: F): V3 {
  */
 function clayGlow(
   d: ClayDetailUniforms,
-  build: V4,
-  h: F,
-  wall: F,
-  flags: F,
-  wn: V3,
-  sn: V3
+  at: {
+    build: V4;
+    h: F;
+    wall: F;
+    flags: F;
+    wn: V3;
+    sn: V3;
+    mirror: MirrorSeen;
+    glass: F;
+  }
 ): V3 {
+  const { build, h, wall, flags, wn, sn, mirror, glass } = at;
   const view = viewDirection().negate();
   const fres = float(1).sub(clamp(dot(view, sn), 0, 1));
   // a shop window has its own grazing light (paneSky), not the clay's rim
@@ -794,14 +997,15 @@ function clayGlow(
   // there) lit them into a dotted white line along every frame
   const own = mod(floor(floor(flags.add(0.5)).div(64)), 2);
   const rimOn = clayOnly.mul(float(1).sub(own.mul(float(1).sub(wall))));
-  // Streiflicht stands in for the sky's light on a grazing wall: at night
-  // there is none, and a full rim lit every grazing roof and wall pale
+  // Streiflicht stands in for the sky's light on a grazing wall, so a
+  // face turned from the sun keeps a share of it (SHADE_RIM) and after
+  // dark none: the night sky has none to give, and even a tenth of it
+  // lit every wall seen along a street and every roof from the air pale
+  // against the night (the street lamps and the windows light them now)
+  const sunward = smoothstep(-0.02, 0.06, dot(wn, d.uSun));
+  const shade = mix(SHADE_RIM, float(1), sunward);
   const rim = vec3(1, 0.95, 0.8).mul(
-    fres
-      .mul(fres)
-      .mul(RIM)
-      .mul(rimOn)
-      .mul(float(1).sub(d.uNight.mul(float(1).sub(NIGHT_RIM))))
+    fres.mul(fres).mul(RIM).mul(rimOn).mul(shade).mul(float(1).sub(d.uNight))
   );
   // Glas: the grazing angle catches a pale sky sheen, dimmed at night —
   // the stand-in for the reflection below full Spiegelung (REFLECTIONS is
@@ -814,15 +1018,23 @@ function clayGlow(
     .mul(float(1).sub(REFLECTIONS));
   // The asked building's light, in the accent's pale: faint by day, a
   // glow after dark.
-  const askedLight = vec3(...SELECTION_ACCENT.halo).mul(
+  const askedLight = ASKED_PALE.mul(
     askedFlag(flags).mul(d.uNight.mul(0.08).add(0.06))
   );
-  return rim
-    .add(nightLight(d, build, h, wall, flags, wn))
-    .add(vec3(0.55, 0.68, 0.85).mul(sheen.mul(0.5)))
-    .add(skyReflection(sn, 0.22).mul(facadeMirror(flags, wall, sn)))
-    .add(paneSky(d, h, fres).mul(paneShade(h, build.z)).mul(pane))
-    .add(askedLight);
+  return (
+    rim
+      .add(nightLight(d, build, h, wall, flags, wn))
+      .add(vec3(0.55, 0.68, 0.85).mul(sheen.mul(0.5)))
+      // a glass wall mirrors the street (city-mirror.ts), sharp; metal the
+      // same, blurred
+      .add(
+        mirror
+          .colour(mix(0.22, GLASS_MIRROR.roughness, glass))
+          .mul(facadeMirror(flags, wall, sn, glass))
+      )
+      .add(paneSky(d, h, fres).mul(paneShade(h, build.z)).mul(pane))
+      .add(askedLight)
+  );
 }
 
 /** A hash of a light's cell along the wall, 0…1 (`k` picks the stream). */
@@ -951,13 +1163,12 @@ function paneShade(h: F, top: F): F {
  *  its wall, and a stronger sky would wash it out to the wall's tone. */
 function paneSky(d: ClayDetailUniforms, h: F, fres: F): V3 {
   const upper = smoothstep(0.8, 2.6, h);
-  const f2 = fres.mul(fres);
-  const schlick = float(0.04).add(float(0.96).mul(f2.mul(f2).mul(fres)));
-  return vec3(0.55, 0.66, 0.8).mul(
+  const schlick = paneFresnel(fres);
+  return vec3(...PANE_SKY_RGB).mul(
     upper
       .mul(0.04)
       .add(schlick.mul(0.15))
-      .mul(float(1).sub(d.uNight.mul(0.85)))
+      .mul(float(1).sub(d.uNight.mul(PANE_SKY_NIGHT_DIM)))
   );
 }
 
@@ -970,8 +1181,9 @@ function askedFlag(flags: F): F {
  * The building someone asks about (flag 32, OBJECT_FLAG_ASKED — set in the
  * packed table at runtime by the inquiry probe, ADR 0042): lifted towards
  * the accent's pale (a faint light of its own in clayGlow, so it reads in
- * shade too), and drawn over with a hatch in the HUD's accent
- * (`SELECTION_ACCENT`, lib/city/outline.ts) — the selection is the
+ * shade too), and drawn over with a hatch in the accent — the HUD's
+ * (`SELECTION_ACCENT`, lib/city/outline.ts) in Pastell, else the picture
+ * style's lettering ink (`setAskedColours`): the selection is the
  * interface's, so it leaves the city's palette. Near, the
  * strokes lie on the building — every 0.9 m, along the wall and up it (so
  * they climb the facade at 45°), straight across the roof, fwidth-constant
@@ -998,8 +1210,8 @@ function askedColour(col: V3, h: F, wall: F, flags: F, wn: V3): V3 {
     min(abs(fract(s.sub(0.5)).sub(0.5)).mul(7 / 1.2), 1)
   );
   const ink = mix(paper.mul(0.55), line.mul(0.6), near).mul(asked);
-  const lifted = mix(col, vec3(...SELECTION_ACCENT.halo), asked.mul(0.4));
-  return mix(lifted, vec3(...SELECTION_ACCENT.ink), ink);
+  const lifted = mix(col, ASKED_PALE, asked.mul(0.4));
+  return mix(lifted, ASKED_INK, ink);
 }
 
 /**
@@ -1009,14 +1221,19 @@ function askedColour(col: V3, h: F, wall: F, flags: F, wn: V3): V3 {
  */
 export function createStyleResources(
   night: Live,
-  sun: UniformNode<"vec3", Vector3> = uniform(new Vector3(0, 1, 0))
+  sun: UniformNode<"vec3", Vector3> = uniform(new Vector3(0, 1, 0)),
+  niches = false
 ): StyleResources {
   return {
-    clayDetail: { uNight: night, uSun: sun },
+    clayDetail: { uNight: night, uSun: sun, niches },
     materials: new Set(),
     section: false,
   };
 }
+
+/** The clay's base colour (sRGB): what a building without a tint of its
+ *  own is, and the paper a mural's drawing is glazed on (mural-layer.ts). */
+export const CLAY_BASE = 0xec_e7_df;
 
 /** The clay graph per app (keyed by its live uniforms). */
 const clayGraphs = new WeakMap<ClayDetailUniforms, ClayGraph>();
@@ -1037,7 +1254,7 @@ export function createClayMaterial(
     clayGraphs.set(d, graph);
   }
   const clay = new MeshStandardNodeMaterial({
-    color: 0xec_e7_df,
+    color: CLAY_BASE,
     roughness: 1,
     metalness: 0,
   });
@@ -1058,7 +1275,9 @@ export function createClayMaterial(
   clay.userData.figure = true;
   applySides(clay, resources.section);
   resources.materials.add(clay);
-  clay.addEventListener("dispose", () => resources.materials.delete(clay));
+  clay.addEventListener("dispose", () => {
+    resources.materials.delete(clay);
+  });
   return clay;
 }
 
@@ -1078,6 +1297,23 @@ export function setClaySkyView(
 }
 
 /**
+ * Hands a tile's clay its horizon (the skyline its windows and glass
+ * mirror, city-mirror.ts), loaded after the tile shows: a texture and
+ * uniform swap, no rebuild. `origin` and `size` as `setClaySkyView`'s.
+ */
+export function setClayHorizon(
+  clay: MeshStandardNodeMaterial,
+  texture: Texture,
+  origin: [number, number],
+  size: [number, number]
+): void {
+  setSlots(clay, {
+    ...slotsOf(clay),
+    ...clayHorizonSlots(texture, origin, size),
+  });
+}
+
+/**
  * The clay's sides: the front only, or both while a Schnitt shows its
  * poché. The side is part of the built node graph, so a switch flags
  * needsUpdate — the two builds of the one graph (material-slots.ts).
@@ -1085,10 +1321,43 @@ export function setClaySkyView(
 function applySides(clay: MeshStandardNodeMaterial, section: boolean): void {
   const wasSide = clay.side;
   clay.side = section ? DoubleSide : FrontSide;
-  setGraph(clay, section ? "clay|double" : "clay");
+  setClayKey(clay);
   if (clay.side !== wasSide) {
     clay.needsUpdate = true;
   }
+}
+
+/** The shadow pass's mask of a clay that cuts: nothing (one node, so
+ *  every such clay shares its build). */
+const keepWalls = bool(true);
+
+/** The clay's shared build: by its sides and whether it cuts openings. */
+function setClayKey(clay: MeshStandardNodeMaterial): void {
+  const sides = clay.side === DoubleSide ? "clay|double" : "clay";
+  setGraph(clay, clay.maskNode ? `${sides}|niches` : sides);
+}
+
+/**
+ * A tile's clay cuts its windows' openings for the niches behind them or
+ * not (window-niche-layer.ts, only the tiles near the eye: a clay that
+ * cuts loses its early depth test). A second build of the clay's graph;
+ * the caller compiles it off the frame. The shadow pass draws the back
+ * faces and keeps every wall whole. False when nothing changed.
+ */
+export function setClayNicheCut(
+  resources: StyleResources,
+  clay: MeshStandardNodeMaterial,
+  on: boolean
+): boolean {
+  const mask = on ? clayGraphs.get(resources.clayDetail)?.mask : undefined;
+  if ((clay.maskNode ?? undefined) === mask) {
+    return false;
+  }
+  clay.maskNode = mask ?? null;
+  clay.maskShadowNode = mask ? keepWalls : null;
+  setClayKey(clay);
+  clay.needsUpdate = true;
+  return true;
 }
 
 /**

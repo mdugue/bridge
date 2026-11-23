@@ -19,7 +19,8 @@ import {
 } from "@/components/ui/dialog";
 import type { Viewpoint } from "@/lib/city/site";
 import { useSite } from "./site-context";
-import { describeOffsite, type Offsite } from "./locate-me";
+import { describeOffsite } from "./locate-me";
+import type { Offsite } from "./locate-me";
 
 /**
  * "Standort" found the player, but off the tiles. Rather than a line that
@@ -32,11 +33,12 @@ import { describeOffsite, type Offsite } from "./locate-me";
  *
  * When the fix lies in another city this deployment serves, that comes
  * first: one prominent link to its page, which puts the player where they
- * stand (`#at=lat,lng`, `arrivalHref` in lib/city/geolocation.ts: a
- * fragment, so the position never reaches the server; read after its first
- * frame, then dropped); the vantages here stay below as the other choice.
+ * stand (`?at=lat,lng`, `arrivalHref` in lib/city/geolocation.ts: a query,
+ * so the host's request log sees the position, as the privacy page says;
+ * read after its first frame, then dropped); the vantages here stay below
+ * as the other choice.
  */
-export function LocateOffsiteDialog({
+export const LocateOffsiteDialog = ({
   offsite,
   onClose,
   onShowMap,
@@ -47,7 +49,7 @@ export function LocateOffsiteDialog({
   /** opens the sidebar on the minimap */
   onShowMap: () => void;
   onTravel: (view: Viewpoint) => void;
-}) {
+}) => {
   const site = useSite();
   // The last placement is kept while the dialog animates out, so the text
   // doesn't blank mid-fade (state set during render, React's own pattern).
@@ -150,4 +152,4 @@ export function LocateOffsiteDialog({
       </DialogContent>
     </Dialog>
   );
-}
+};

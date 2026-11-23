@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { type Point2, samplePolyline, subdividePolyline } from "./polyline";
+import { samplePolyline, subdividePolyline } from "./polyline";
+import type { Point2 } from "./polyline";
 
 const L: Point2[] = [
   [0, 0],

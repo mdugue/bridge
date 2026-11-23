@@ -142,7 +142,7 @@ export function createResolutionScale(
   const stepDown = (now: number, interval: number): number | undefined => {
     calmSince = undefined;
     fits = 0;
-    slow++;
+    slow += 1;
     if (
       slow < SLOW_WINDOWS ||
       step >= targets.maxStep ||
@@ -159,7 +159,7 @@ export function createResolutionScale(
     return change(step + 1);
   };
 
-  const stepUp = (now: number, gpu: number | undefined) => {
+  const stepUp = (now: number, gpu: number | undefined): number | undefined => {
     if (probedAt !== undefined && now - probedAt >= 4 * WINDOW_MS) {
       // the last probe held: the next may come sooner again
       probedAt = undefined;
@@ -241,7 +241,7 @@ export function createResolutionScale(
         gpus.push(ms);
       }
     },
-    update: (now, still = false) => {
+    update: (now, still = false): number | undefined => {
       windowStart ??= now;
       if (now - windowStart < WINDOW_MS) {
         return undefined;

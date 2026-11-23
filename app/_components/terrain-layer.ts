@@ -3,27 +3,18 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
-  DataTexture,
-  FloatType,
-  type InterleavedBufferAttribute,
-  LinearFilter,
-  LinearMipmapLinearFilter,
-  Matrix4,
-  type Mesh,
   MeshStandardNodeMaterial,
-  NearestFilter,
-  NoColorSpace,
-  RedFormat,
-  RGBAFormat,
-  RGFormat,
   Sphere,
-  Texture,
-  UnsignedByteType,
   Vector2,
   Vector3,
   Vector4,
-  type UniformNode,
-  type WebGPURenderer,
+} from "three/webgpu";
+import type {
+  InterleavedBufferAttribute,
+  Mesh,
+  UniformNode,
+  Matrix4,
+  Texture,
 } from "three/webgpu";
 import {
   abs,
@@ -36,6 +27,7 @@ import {
   fract,
   Fn,
   fwidth,
+  If,
   length,
   materialColor,
   max,
@@ -50,34 +42,28 @@ import {
   smoothstep,
   step,
   texture,
-  uniform,
   vec2,
   vec3,
   vec4,
 } from "three/tsl";
-import {
-  sampleHeightfield,
-  type TerrainBounds,
-} from "@/lib/city/terrain-geometry";
+import { sampleHeightfield } from "@/lib/city/terrain-geometry";
+import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   ARABLE_CLASS,
   LANDCOVER_CLASSES,
   MEADOW_CLASS,
   ROAD_CLASS,
   srgbToLinear,
-  WATER_CLASS,
 } from "@/lib/city/landcover";
-import { type WaterMask, waterMaskOf } from "@/lib/city/water-mask";
+import type { ReachBox } from "@/lib/city/ground-reach";
+import type { WaterMask } from "@/lib/city/water-mask";
 import type {
   GroundPositions,
   GroundPrep,
   GroundPrepInput,
   SheetPrep,
 } from "@/lib/city/ground-prep";
-import { decodeGreyPng, type GreyRaster } from "@/lib/city/png-raster";
 import { colonyCropUv } from "@/lib/city/cultivated";
-import { type MarkingTable, packMarkingTable } from "@/lib/city/markings";
-import { packSportTable, type SportTable } from "@/lib/city/sport";
 import {
   planOf,
   planTriangles,
@@ -85,63 +71,52 @@ import {
   TinIndex,
 } from "@/lib/city/terrain-tin";
 import type { TerrainExtras } from "@/lib/city/tileset";
+import { groundUnderDesign } from "./design-site";
 import { colonyGarden } from "./cultivated-layer";
 import { prepareGroundOffThread } from "./ground-prep-client";
 import {
-  fetchOptionalJson,
-  isAbortError,
-  untilAborted,
-} from "./fetch-optional";
-import {
-  type GroundColour,
-  type GroundFields,
-  type GroundInputs,
+  bsplineSample,
   groundDetail,
   groundFields,
   groundNormal,
+  smoothPaths,
   urbanGreen,
 } from "./ground-detail";
-import {
-  type LandcoverSplat,
-  paintLandcoverSplat,
-  splatScaleFor,
-} from "./landcover-splat";
+import type { GroundColour, GroundFields, GroundInputs } from "./ground-detail";
 import { PAPER_HEX, paperGroundOn } from "./paper-scene";
-import {
-  dropDataOnUpload,
-  fetchRasterBytes,
-  inRasterTurn,
-  uploadNow,
-} from "./raster-upload";
 import { roadMarkings } from "./road-markings";
 import {
   dataXY,
-  type F,
+  gdNoise,
+  gdNoiseSlope,
   rasterUv,
-  type Tex,
-  type V2,
-  type V3,
+  texelSize,
 } from "./shader-chunks";
-import type { SharedRasters } from "./shared-rasters";
+import { splatSize } from "./splat-uv";
+import { streamTimings } from "./stream-timing";
+import type { F, Tex, V3 } from "./shader-chunks";
+import { RASTER_KINDS, REACH_KINDS } from "./tile-rasters";
+import type { IndexedRaster, RasterHold, SplatRasters } from "./tile-rasters";
 import {
-  type Slots,
   setGraph,
   setSlots,
+  slotsOf,
   slotTexture,
   slotUniform,
 } from "./material-slots";
-import { applyGroundLight, type GroundLight } from "./sky-light";
+import type { Slots } from "./material-slots";
+import { applyGroundLight } from "./sky-light";
+import type { GroundLight } from "./sky-light";
 import { sportGround } from "./sport-ground";
 import {
-  type AnyAttribute,
   detachShared,
   disposeGeometry,
   isSceneShared,
   markSceneShared,
-  textureBytes,
-  trackTexture,
 } from "./three-utils";
-import { createWaterLayer, type WaterLayer } from "./water-layer";
+import type { AnyAttribute } from "./three-utils";
+import { createWaterLayer } from "./water-layer";
+import type { WaterLayer } from "./water-layer";
 
 /**
  * One tile's terrain at one level: the baked glTF mesh (scripts/bake-tiles.ts,
@@ -153,10 +128,11 @@ export interface TerrainLayer {
   /** [minX, minY, maxX, maxY] in the projected CRS */
   bounds: TerrainBounds;
   /**
-   * The rasters this level reads, each once — what the tile cache weighs it
-   * by beyond its glTF (tile-stream.ts `calculateBytesUsed`, which weighs a
-   * raster both levels share half by each). The water sheets hang in the
-   * content: the renderer weighs them with it.
+   * The rasters this level owns itself, each once: only the water sheet's
+   * tint, which the tile cache weighs whole (tile-stream.ts
+   * `calculateBytesUsed`). What it holds of the site's is weighed by
+   * tile-rasters.ts. The water sheets hang in the content: the renderer
+   * weighs them with it.
    */
   rasters: Texture[];
   /** Frees the rasters (the tile's geometry and materials go with it). */
@@ -188,38 +164,51 @@ export interface TerrainLayer {
   /** the tile's baked light for what stands on this level (kerbs, fences,
    *  stairs, walls; sky-light.ts `applyGroundLight`), when it has any */
   light?: GroundLight;
+  /** the level's close-range rasters and their twins, where the content
+   *  names twins (the fine level) */
+  detail?: GroundDetail;
+}
+
+/**
+ * Which set of its close-range rasters (tile-rasters.ts `REACH_KINDS`) a
+ * level reads: the full ones near the camera, their twins beyond the
+ * detail's reach (lib/city/ground-reach.ts). The frame asks
+ * (ground-reach-follow.ts); a swap is a slot write, no shader build.
+ */
+export interface GroundDetail {
+  /** the level's ground in the scene's frame (Y up, recentered) */
+  box: ReachBox;
+  /** whether it reads the twins now */
+  far: () => boolean;
+  /**
+   * Loads the other set, on the GPU before it is read, hands it to the
+   * material and lets the old one go. Resolves true when the ground now
+   * draws other rasters; false when nothing changed (a swap under way, a
+   * load that failed, the level gone, a twin missing beside its full file).
+   */
+  setFar: (far: boolean) => Promise<boolean>;
 }
 
 export interface TerrainOptions {
-  /** resolves a file named in the tile's extras to its URL */
-  fileUrl: (file: string) => string;
   /** the scene fog's colour (height-fog.ts), the water's sky tint */
   fogColor: UniformNode<"color", Color>;
-  /** phones sample the ≤ 2048² class raster */
-  lowRasters: boolean;
-  /** the ground's light: the shadow frustum and the sun (uniform nodes,
+  /** the ground's light: the shadow rings' reach and the sun (uniform nodes,
    *  shared by every tile) */
   ground: GroundUniforms;
   /** recenter offset shared with the city layer */
   offset: { cx: number; cy: number };
-  /** paints the colour splat from the class raster (one GPU pass) */
-  renderer: WebGPURenderer;
-  /** aborts the level's raster loads — its own and its waits on the
-   *  shared ones — and rejects the dressing with the abort, everything it
-   *  took let go (its tile left, or the stream went) */
+  /** this level's hold on the site's rasters (tile-rasters.ts), let go when
+   *  its dressing fails or the layer is disposed */
+  rasters: RasterHold;
+  /** aborts the level's waits on its rasters and rejects the dressing with
+   *  the abort, everything it took let go (its tile left, or the stream
+   *  went) */
   signal?: AbortSignal;
-  /** the sky-view rasters, shared with the tile's buildings (tile-stream.ts) */
-  skyView?: SharedRasters<Texture>;
-  /** the horizon rasters, shared by a tile's two terrain levels (both name
-   *  the same file) */
-  horizon?: SharedRasters<Texture>;
-  /** the class rasters and their painted splats, the NDVI and the sports
-   *  grounds: shared by a tile's two levels wherever they name one file */
-  splats: SharedRasters<SplatRasters>;
-  ndvis: SharedRasters<Texture>;
-  sports: SharedRasters<SportRasters>;
   /** the grid level's index and water index, one copy for the site */
   grids?: GridShare;
+  /** whether the level starts on its close-range rasters' twins, given
+   *  where its ground lies (ground-reach.ts); without it, the full ones */
+  far?: (box: ReachBox) => boolean;
 }
 
 /**
@@ -230,465 +219,12 @@ export interface TerrainOptions {
  * in sky-light.ts).
  */
 export interface GroundUniforms {
-  /** the shadow frustum's centre (data frame x, y) and half-size (z), kept
+  /** the shadow rings' reach: its centre (data frame x, y) and half-size (z), kept
    *  by the sun rig: where the horizon's near band takes over (sky-light.ts) */
   shadowReach: UniformNode<"vec3", Vector3>;
   /** world (Y-up) sun direction, surface → sun, kept by the sun rig: the
    *  kerb's drawn shadow, the horizon, the water's Fresnel and glitter */
   sunDirection: UniformNode<"vec3", Vector3>;
-}
-
-/** A loaded raster and its size in texels. */
-interface LoadedRaster {
-  height: number;
-  texture: Texture;
-  width: number;
-  /** the decoded bytes, until the upload drops them (not a bitmap's) */
-  data?: Uint8Array;
-}
-
-/** Reads a raster's decoded bytes before its upload may drop them. */
-type RasterInspect = (data: Uint8Array, width: number, height: number) => void;
-
-/**
- * How a data raster is sampled: its channels (the bake interleaves them in
- * a greyscale PNG), NEAREST for ids and LINEAR for fields, a mip chain
- * where it is read from afar. Set before the upload: the format and the
- * mip chain are fixed by it.
- */
-interface RasterLook {
-  anisotropy?: number;
-  channels: 1 | 2 | 4;
-  filter: "linear" | "nearest";
-  mipmaps?: boolean;
-}
-
-/** Ids (class, paving, sports grounds, markings): exact texels. */
-const idLook = (channels: 1 | 4): RasterLook => ({
-  channels,
-  filter: "nearest",
-});
-
-/** Fields (edge distances, colonies): smooth, read near the camera. */
-const FIELD_LOOK: RasterLook = { channels: 2, filter: "linear" };
-
-/** The NDVI: smooth and mipmapped, read across the whole tile. */
-const NDVI_LOOK: RasterLook = {
-  channels: 1,
-  filter: "linear",
-  mipmaps: true,
-  anisotropy: 16,
-};
-
-/** Applies `look` and records the texture's GPU bytes (trackTexture). */
-function lookAs(raster: LoadedRaster, look: RasterLook): void {
-  const { texture } = raster;
-  const filter = look.filter === "nearest" ? NearestFilter : LinearFilter;
-  texture.magFilter = filter;
-  texture.minFilter = look.mipmaps ? LinearMipmapLinearFilter : filter;
-  texture.generateMipmaps = look.mipmaps === true;
-  if (look.anisotropy) {
-    texture.anisotropy = look.anisotropy;
-  }
-  texture.colorSpace = NoColorSpace;
-  trackTexture(
-    texture,
-    textureBytes(
-      raster.width,
-      raster.height,
-      look.channels,
-      look.mipmaps === true
-    )
-  );
-}
-
-/**
- * Loads a DATA raster as a texture holding exactly the baked bytes, set up
- * as `look` says and on the GPU when it resolves (raster-upload.ts: decoded
- * and uploaded in its turn, one raster at a time site-wide, its CPU bytes
- * dropped at the upload). The PNG is inflated and unfiltered here
- * (lib/city/png-raster.ts), not by the browser's image decoder: WebKit
- * colour-manages (and dithers) untagged greyscale even with
- * `colorSpaceConversion: "none"`, which on iPhones rewrote class ids into
- * speckles of the neighbouring classes' colours. The inflate is async and
- * the unfiltering yields every few hundred rows, so a 4096² raster does not
- * stall the frame it streams in with. A single-channel PNG the decoder does
- * not handle falls back to the browser (`loadBitmapTexture`). Rejects on a
- * network failure, a failed upload and an abort.
- */
-async function loadRasterTexture(
-  url: string,
-  look: RasterLook,
-  renderer?: WebGPURenderer,
-  signal?: AbortSignal,
-  inspect?: RasterInspect
-): Promise<LoadedRaster> {
-  const bytes = await fetchRasterBytes(url, signal);
-  return inRasterTurn(async () => {
-    const raster = await decodeRaster(bytes, look.channels, signal);
-    if (inspect && raster.data) {
-      inspect(raster.data, raster.width, raster.height);
-    }
-    lookAs(raster, look);
-    uploadNow(raster.texture, renderer);
-    return {
-      texture: raster.texture,
-      width: raster.width,
-      height: raster.height,
-    };
-  }, signal);
-}
-
-/** The raster's texture from its PNG bytes (see `loadRasterTexture`). */
-async function decodeRaster(
-  bytes: Uint8Array<ArrayBuffer>,
-  channels: 1 | 2 | 4,
-  signal?: AbortSignal
-): Promise<LoadedRaster> {
-  let raster: GreyRaster;
-  try {
-    raster = await decodeGreyPng(bytes);
-  } catch (err) {
-    // The browser's decoder cannot de-interleave a multi-channel raster.
-    if (channels > 1) {
-      throw err;
-    }
-    return loadBitmapTexture(new Blob([bytes]));
-  }
-  signal?.throwIfAborted();
-  // A two- or four-channel raster is baked as a greyscale PNG two or four
-  // times as wide, its bytes interleaved (R0 G0 B0 A0 R1 …) — exactly the
-  // RG8 / RGBA8 layout.
-  const width = raster.width / channels;
-  const { height } = raster;
-  const texture = new DataTexture(
-    raster.data,
-    width,
-    height,
-    channels === 4 ? RGBAFormat : channels === 2 ? RGFormat : RedFormat,
-    UnsignedByteType
-  );
-  // Row 0 is the PNG's first (northern) row, as with the bitmap upload
-  // (flipY = false; v grows southward).
-  texture.flipY = false;
-  texture.unpackAlignment = 1;
-  texture.needsUpdate = true;
-  // 16 MB of CPU bytes for a 4096² raster: dead weight once the GPU has
-  // them. Twelve resident copies took mobile Safari past its per-tab
-  // memory limit when these were bitmaps.
-  dropDataOnUpload(texture);
-  return { texture, width, height, data: raster.data };
-}
-
-/**
- * A raster that is a feature, not a requirement: absent, undecodable or
- * failed to upload → null (the ground goes without it). Rethrows an abort.
- */
-async function loadOptionalRaster(
-  url: string,
-  look: RasterLook,
-  renderer?: WebGPURenderer,
-  signal?: AbortSignal,
-  inspect?: RasterInspect
-): Promise<LoadedRaster | null> {
-  try {
-    return await loadRasterTexture(url, look, renderer, signal, inspect);
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err;
-    }
-    return null;
-  }
-}
-
-/**
- * The browser-decoded fallback for a raster the PNG decoder rejects:
- * `createImageBitmap` decodes in the browser's image workers, already in the
- * orientation three needs (`imageOrientation: "none"` = flipY false).
- */
-async function loadBitmapTexture(
-  blob: Blob
-): Promise<{ height: number; texture: Texture; width: number }> {
-  const bitmap = await createImageBitmap(blob, {
-    imageOrientation: "none",
-    premultiplyAlpha: "none",
-    colorSpaceConversion: "none",
-  });
-  const texture = new Texture(bitmap);
-  texture.flipY = false;
-  texture.format = RedFormat;
-  texture.needsUpdate = true;
-  // Not closed after the upload, unlike the data rasters' bytes: three may
-  // upload the image again (a re-created GPU texture reads `image`), and a
-  // closed bitmap uploads empty — the ground would turn to class 0. Freed
-  // with the texture instead. Rare: only a PNG our decoder rejects lands
-  // here.
-  texture.addEventListener("dispose", () => {
-    bitmap.close();
-  });
-  return { texture, width: bitmap.width, height: bitmap.height };
-}
-
-/**
- * The land-cover splatmap as a NEAREST-filtered data texture (class ids must
- * not be interpolated) in linear space (the red channel is a class id, not
- * a colour). Non-fatal: a failure just falls back to the flat sage ground.
- */
-function loadSplatTexture(
-  url: string,
-  renderer: WebGPURenderer,
-  signal?: AbortSignal,
-  inspect?: RasterInspect
-): Promise<LoadedRaster | null> {
-  return loadOptionalRaster(url, idLook(1), renderer, signal, inspect);
-}
-
-/** A class raster and the colour splat painted from it. */
-export interface SplatRasters {
-  height: number;
-  painted: LandcoverSplat;
-  texture: Texture;
-  width: number;
-  /**
-   * Where the raster has water (lib/city/water-mask.ts), read before its
-   * bytes go: null where it has none, undefined where it could not be read
-   * (a PNG the browser decoded) — the sheets then cover the whole tile.
-   */
-  water?: WaterMask | null;
-}
-
-/**
- * Loads a class raster and paints its colour splat, held by file
- * (tile-stream.ts `splats`): the coarse level reads its own 1024² one on
- * every tier, the fine level the 4096² one, or the 2048² on a phone. Null
- * when the raster is missing or undecodable.
- */
-export async function loadSplatRasters(
-  url: string,
-  renderer: WebGPURenderer,
-  signal?: AbortSignal
-): Promise<SplatRasters | null> {
-  let water: WaterMask | null | undefined;
-  const raster = await loadSplatTexture(url, renderer, signal, (data, w, h) => {
-    water = waterMaskOf(data, w, h, WATER_CLASS);
-  });
-  if (!raster) {
-    return null;
-  }
-  const { texture, width, height } = raster;
-  // every level that wanted it gone while it decoded: no splat painted (a
-  // mipmapped RGBA target, half the raster's size at 4096²) for nobody
-  if (signal?.aborted) {
-    texture.dispose();
-    signal.throwIfAborted();
-  }
-  return {
-    ...raster,
-    water,
-    painted: paintLandcoverSplat(
-      renderer,
-      texture,
-      width,
-      height,
-      splatScaleFor(width)
-    ),
-  };
-}
-
-export function freeSplatRasters(rasters: SplatRasters): void {
-  rasters.texture.dispose();
-  rasters.painted.dispose();
-}
-
-/** A tile's sports grounds: the row raster and the table. */
-export interface SportRasters {
-  raster: Texture;
-  table: DataTexture;
-}
-
-/** The key a tile's sports grounds are shared under: both files. */
-export const sportKey = (raster: string, table: string): string =>
-  `${raster}\n${table}`;
-
-/** Loads the sports grounds a `sportKey` names. */
-export function loadSportKey(
-  key: string,
-  renderer?: WebGPURenderer,
-  signal?: AbortSignal
-): Promise<SportRasters | null> {
-  const [raster = "", table = ""] = key.split("\n");
-  return loadSportGrounds(raster, table, renderer, signal);
-}
-
-export function freeSport(sport: SportRasters): void {
-  sport.raster.dispose();
-  sport.table.dispose();
-}
-
-/**
- * Loads the DOP NDVI raster (single-channel greenness) for the meadow tint.
- * LINEAR + mipmaps low-pass the ~2 m raster (the workflow's recommendation), so
- * the meadow colour reads as a smooth gradient. Data values, not colour → no
- * sRGB. Absent/404 → null and the meadow keeps its flat pastel sage.
- */
-export async function loadNdviTexture(
-  url: string,
-  renderer?: WebGPURenderer,
-  signal?: AbortSignal
-): Promise<Texture | null> {
-  const raster = await loadOptionalRaster(url, NDVI_LOOK, renderer, signal);
-  return raster?.texture ?? null;
-}
-
-/**
- * Loads the OSM paving raster (pipeline/bake/surface.py): R = the packed
- * road/walk surface ids and parking kind, G = the street bearing, BA = the
- * along-street offset, NEAREST. Absent or
- * undecodable → null and the ground falls back to the land-cover class's
- * pattern.
- */
-async function loadSurfaceTexture(
-  url: string,
-  renderer?: WebGPURenderer,
-  signal?: AbortSignal
-): Promise<Texture | null> {
-  const raster = await loadOptionalRaster(url, idLook(4), renderer, signal);
-  return raster?.texture ?? null;
-}
-
-/**
- * Loads the edge-distance raster (pipeline/bake/edges.py): R, G = the
- * signed distances to the road and the meadow edge, LINEAR so the isolines
- * are smooth (no mipmaps: it is only read near the camera). Absent → null
- * and the shader falls back to the class texels.
- */
-async function loadEdgesTexture(
-  url: string,
-  renderer?: WebGPURenderer,
-  signal?: AbortSignal
-): Promise<Texture | null> {
-  const raster = await loadOptionalRaster(url, FIELD_LOOK, renderer, signal);
-  return raster?.texture ?? null;
-}
-
-/** A 2-texel-high float table (sport.ts, markings.ts) as a NEAREST data
- *  texture; at least one texel wide (a table with no rows still binds). */
-function tableTexture(packed: {
-  data: Float32Array;
-  width: number;
-}): DataTexture {
-  const table = new DataTexture(
-    packed.width > 0 ? packed.data : new Float32Array(8),
-    Math.max(packed.width, 1),
-    2,
-    RGBAFormat,
-    FloatType
-  );
-  table.magFilter = NearestFilter;
-  table.minFilter = NearestFilter;
-  table.generateMipmaps = false;
-  table.needsUpdate = true;
-  return table;
-}
-
-/**
- * A raster read through its table (the sports grounds, the road markings):
- * the table is packed first, so nothing can fail once the raster is on the
- * GPU; without the raster the table goes again. Absent, empty or
- * undecodable → null. Rethrows an abort.
- */
-async function loadIndexedRaster(
-  rasterUrl: string,
-  packTable: () => { data: Float32Array; width: number },
-  renderer?: WebGPURenderer,
-  signal?: AbortSignal
-): Promise<{ raster: Texture; table: DataTexture } | null> {
-  let table: DataTexture;
-  try {
-    table = tableTexture(packTable());
-  } catch {
-    return null;
-  }
-  const raster = await loadOptionalRaster(
-    rasterUrl,
-    idLook(4),
-    renderer,
-    signal
-  ).catch((err: unknown) => {
-    table.dispose();
-    throw err;
-  });
-  if (!raster) {
-    table.dispose();
-    return null;
-  }
-  return { raster: raster.texture, table };
-}
-
-/**
- * Loads the sports grounds (pipeline/bake/sport.py): the index raster (R =
- * the row, G = the second row, B = the exact bit; NEAREST) and its table as a 2-texel-high float
- * texture (lib/city/sport.ts). Either absent, empty or undecodable → null
- * and the ground under a pitch stays its land-cover class.
- */
-async function loadSportGrounds(
-  rasterUrl: string,
-  tableUrl: string,
-  renderer?: WebGPURenderer,
-  signal?: AbortSignal
-): Promise<{ raster: Texture; table: DataTexture } | null> {
-  const doc = await fetchOptionalJson<SportTable>(tableUrl, signal);
-  if (!doc?.grounds?.length) {
-    return null;
-  }
-  return loadIndexedRaster(
-    rasterUrl,
-    () => packSportTable(doc),
-    renderer,
-    signal
-  );
-}
-
-/**
- * Loads the allotment-colony raster (pipeline/bake/cultivated.py, cropped
- * by prepare-data): R = the signed distance to the garden land's edge,
- * G = the colony's axis. LINEAR, so the edge is smooth (the shader fetches
- * the axis texel by texel); no mipmaps (the texture fades out before it
- * would need them). Absent → null and the colonies keep their class colour.
- */
-async function loadColonyTexture(
-  url: string,
-  renderer?: WebGPURenderer,
-  signal?: AbortSignal
-): Promise<Texture | null> {
-  const raster = await loadOptionalRaster(url, FIELD_LOOK, renderer, signal);
-  return raster?.texture ?? null;
-}
-
-/**
- * Loads the road markings (pipeline/bake/markings.py): the index raster
- * (RA = the row, G = lane bits, B = the centre offset; NEAREST) and its
- * table as a 2-texel-high float texture (lib/city/markings.ts). Either
- * absent or undecodable → null and the roads stay unpainted. A table with
- * no rows still binds a (1-texel) texture: the lane bits need the program,
- * the row lookups never run.
- */
-async function loadMarkings(
-  rasterUrl: string,
-  tableUrl: string,
-  renderer?: WebGPURenderer,
-  signal?: AbortSignal
-): Promise<{ raster: Texture; table: DataTexture } | null> {
-  const doc = await fetchOptionalJson<MarkingTable>(tableUrl, signal);
-  if (!doc?.markings) {
-    return null;
-  }
-  return loadIndexedRaster(
-    rasterUrl,
-    () => packMarkingTable(doc),
-    renderer,
-    signal
-  );
 }
 
 /** Land-cover splatmap aligned to the terrain, for per-surface tinting. */
@@ -721,26 +257,6 @@ export interface SplatLayer {
   texture: Texture;
 }
 
-/** The tile's size (m) in the data frame. */
-const splatSize = (splat: SplatLayer): [number, number] => {
-  const [minX, minY, maxX, maxY] = splat.bounds;
-  return [maxX - minX, maxY - minY];
-};
-
-/**
- * The splat uv at the fragment: from the data-frame XY and the tile bounds
- * (v grows southward) — the terrain geometry carries no uv attribute. The
- * tile's north-west corner is a uniform, so every tile builds the same
- * node code (water-layer.ts reads the splat the same way).
- */
-export function splatUv(splat: SplatLayer): V2 {
-  const [minX, , , maxY] = splat.bounds;
-  const origin = uniform(
-    new Vector2(minX - splat.offset.cx, maxY - splat.offset.cy)
-  );
-  return rasterUv(dataXY(), origin, splatSize(splat));
-}
-
 /**
  * What a terrain variant's shared graph reads (material-slots.ts): the
  * tile's rasters and corner as slots, the shared uniforms as they are
@@ -762,7 +278,8 @@ interface SplatNodes {
 
 /** The tile's corner (recentered, data frame): the uv's origin. */
 const splatOrigin = (splat: SplatLayer): Vector2 => {
-  const [minX, , , maxY] = splat.bounds;
+  const minX = splat.bounds[0];
+  const maxY = splat.bounds[3];
   return new Vector2(minX - splat.offset.cx, maxY - splat.offset.cy);
 };
 
@@ -858,22 +375,25 @@ const groundTilt = property("vec3", "terrainGroundTilt", vec3(0));
  * aliases/shimmers in the far field (the failure mode that got plain
  * foliage translucency rejected as "noise").
  */
-function grassMottle(inp: GroundInputs, colorTexture: Tex): GroundColour {
+function grassMottle(inp: GroundInputs, painted: V3): GroundColour {
   const { xy, cls, fw } = inp;
   const meadow = float(1)
     .sub(step(0.5, abs(cls.sub(MEADOW_CLASS))))
     .toVar();
-  const mottle = sin(xy.x.mul(0.85).add(1.3))
-    .mul(sin(xy.y.mul(0.78).sub(0.7)))
-    .mul(0.7)
-    .add(
-      sin(xy.x.mul(2.7).sub(0.5))
-        .mul(sin(xy.y.mul(2.3).add(1.1)))
-        .mul(0.3)
-    )
+  // value noise, two octaves (~8 m and ~2.5 m): the product of two sines
+  // it replaced is a chequerboard, which from afar is what it read as
+  const mottle = gdNoise(xy.mul(MOTTLE_BROAD))
+    .sub(0.5)
+    .mul(1.4)
+    .add(gdNoise(xy.mul(0.4).add(17.3)).sub(0.5).mul(0.6))
     .toVar();
+  const paths = smoothPaths(inp, painted);
   const col: GroundColour = {
-    baseCol: texture(colorTexture, inp.uv).rgb.toVar(),
+    baseCol: paths.col,
+    path: paths.path,
+    pathSide: paths.side,
+    pathNear: paths.near,
+    pathToward: paths.toward,
     meadow,
     detail: meadow.mul(float(1).sub(smoothstep(0.5, 2.5, fw))).toVar(),
     mottle,
@@ -888,6 +408,14 @@ function grassMottle(inp: GroundInputs, colorTexture: Tex): GroundColour {
  * heat map — fixed at what its slider stood at (plan 073).
  */
 const MEADOW_NDVI = float(0.6);
+
+/** The meadow mottle's broad octave (per m: ~8 m drifts), and how much
+ *  its slope tilts the grass normal (× the noise's gradient per cell). */
+const MOTTLE_BROAD = 0.125;
+const MOTTLE_SLOPE = 1.6;
+
+/** The NDVI's mip the meadows read smoothed (2: 8 m a texel). */
+const NDVI_LEVEL = 2;
 
 /**
  * Meadow NDVI tint (Wiesenfärbung): on class-1 farmland/meadow only, shift
@@ -980,8 +508,8 @@ function arableGround(
  * river surface) it read as dirty blotches across the whole middle distance.
  */
 function contourInk(elevation: F): F {
-  const set = (step: number, fade: [number, number]): F => {
-    const d = elevation.div(step);
+  const set = (spacing: number, fade: [number, number]): F => {
+    const d = elevation.div(spacing);
     const w = fwidth(d);
     // A flat quad lying exactly on a contour has fwidth 0: 0/0 there
     // striped it with NaN ink (and NaN survives the slope gate's
@@ -1006,10 +534,9 @@ function contourInk(elevation: F): F {
  * footprint. Under water the ink is gone too (the sheet is translucent, it
  * showed).
  */
-function contourGate(inp: GroundInputs, elevation: F, colorTexture: Tex): F {
+function contourGate(inp: GroundInputs, elevation: F, water: F): F {
   const run = max(length(fwidth(inp.xy)), 1e-4);
   const slope = fwidth(elevation).div(run);
-  const water = texture(colorTexture, inp.uv).a;
   return smoothstep(0.025, 0.09, slope).mul(
     float(1).sub(smoothstep(0.05, 0.4, water))
   );
@@ -1042,7 +569,9 @@ function splatColour(splat: SplatNodes): V3 {
       meadowColor: vec3(MEADOW_LINEAR[0], MEADOW_LINEAR[1], MEADOW_LINEAR[2]),
       roadColor: vec3(ROAD_LINEAR[0], ROAD_LINEAR[1], ROAD_LINEAR[2]),
     };
-    const col = grassMottle(inp, splat.colorTexture);
+    // the painted ground, read once: its colour, and in alpha the water
+    const painted = texture(splat.colorTexture, uv).toVar();
+    const col = grassMottle(inp, painted.rgb);
     const g = groundFields(
       inp,
       splat.surface,
@@ -1060,24 +589,39 @@ function splatColour(splat: SplatNodes): V3 {
     if (splat.markings) {
       roadMarkings(inp, col, g, splat.markings);
     }
-    // the NDVI from a coarser mip (a bias of 2.5), read once for the
-    // meadows and the crops: the 2 m raster carries every path, tree
-    // shadow and bare patch, which painted the meadows in dark flecks;
-    // averaged over ~10 m it is what it should be — broad lush and dry
-    // drifts
+    // the NDVI averaged over ~10 m: the 2 m raster carries every path,
+    // tree shadow and bare patch, which painted the meadows in dark
+    // flecks; what it should give is broad lush and dry drifts. Its mip 2
+    // (8 m) read through a cubic B-spline — the biased bilinear read it
+    // replaced drew those drifts as a chequerboard of ~10 m squares from
+    // afar — and only far out, where a square is under a few pixels, the
+    // plain mip as before.
     const coarseNdvi = splat.ndvi
       ? texture(splat.ndvi, inp.uv).bias(float(2.5)).r.toVar()
       : undefined;
+    if (splat.ndvi && coarseNdvi) {
+      const { ndvi } = splat;
+      // (explicit-level reads: safe in a branch; none past 16 m a pixel)
+      If(inp.fw.lessThan(16), () => {
+        coarseNdvi.assign(
+          mix(
+            bsplineSample(ndvi, uv, texelSize(ndvi, uv), NDVI_LEVEL).r,
+            coarseNdvi,
+            smoothstep(6, 16, inp.fw)
+          )
+        );
+      });
+    }
     if (coarseNdvi) {
       meadowNdvi(col, coarseNdvi, MEADOW_NDVI);
     }
     arableGround(inp, col, g, coarseNdvi);
-    const baseCol = paperGround(col, texture(splat.colorTexture, uv).a);
+    const baseCol = paperGround(col, painted.a);
     grassDetail.assign(col.detail);
     groundTilt.assign(g.tilt);
     const elevation = positionWorld.y;
     const ink = contourInk(elevation)
-      .mul(contourGate(inp, elevation, splat.colorTexture))
+      .mul(contourGate(inp, elevation, painted.a))
       .mul(contourKept);
     return mix(baseCol, INK, ink);
   })();
@@ -1116,8 +660,8 @@ function paperGround(col: GroundColour, waterCoverage: F): V3 {
     PLAN_PAINT_LINEAR,
     ink.mul(0.6)
   );
-  // Sin City (by day: its night is cut from the scene's own frame): the
-  // white card, the water black
+  // Sin City (always in its own afternoon light): the white card, the
+  // water black
   const inked = mix(vec3(1), vec3(0.015), step(0.5, water));
   return select(
     paperGroundOn.greaterThan(3.5),
@@ -1179,13 +723,12 @@ function terrainNormal(withDetail: boolean): V3 {
     if (!withDetail) {
       return calm;
     }
-    const xy = dataXY();
-    const ax = xy.x.mul(0.85).add(1.3);
-    const ay = xy.y.mul(0.78).sub(0.7);
-    const gx = cos(ax).mul(sin(ay)).mul(0.85);
-    const gy = sin(ax).mul(cos(ay)).mul(0.78);
+    // the slope of the mottle's broad octave (`grassMottle`), analytic
+    // (four hashes on every ground pixel): the light catches the same
+    // drifts the colour has
+    const g = gdNoiseSlope(dataXY().mul(MOTTLE_BROAD)).mul(MOTTLE_SLOPE / 2);
     const grass = normalize(
-      calm.add(vec3(gx, gy, 0).mul(grassDetail.mul(0.06)))
+      calm.add(vec3(g.x, g.y, 0).mul(grassDetail.mul(0.06)))
     );
     return groundNormal(grass, groundTilt);
   })();
@@ -1244,6 +787,8 @@ export function createTerrainMaterial(
     roughness: 1,
   });
   material.name = "terrain";
+  // pressed under a loaded design's floor where it stands (design-site.ts)
+  material.positionNode = groundUnderDesign;
   // The variant's graph, shared by every tile of it: a tile that arrives
   // builds no shader; its own rasters go into the slots.
   const graph = terrainGraph(splat);
@@ -1297,7 +842,7 @@ function tinHeightAt(
 }
 
 /** The level's ground prep from the ground worker (ground-prep-client.ts). */
-function groundOf(
+async function groundOf(
   mesh: Mesh,
   extras: TerrainExtras,
   toData: Matrix4,
@@ -1305,7 +850,7 @@ function groundOf(
   mask: WaterMask | null
 ): Promise<GroundPrep> {
   const level = mesh.geometry.getIndex();
-  return prepareGroundOffThread(
+  return await prepareGroundOffThread(
     groundPrepInput(mesh, extras, toData, opts.offset, mask),
     {
       // the site's grid index (GridShare) goes to the worker once
@@ -1353,9 +898,8 @@ function rawPositions(position: BufferAttribute | InterleavedBufferAttribute): {
   offset: number;
   stride: number;
 } {
-  const interleaved =
-    (position as InterleavedBufferAttribute).isInterleavedBufferAttribute ===
-    true;
+  const interleaved = (position as InterleavedBufferAttribute)
+    .isInterleavedBufferAttribute;
   return interleaved
     ? {
         array: (position as InterleavedBufferAttribute).data
@@ -1492,113 +1036,23 @@ function waterGeometryOf(
   return water;
 }
 
-interface DetailRasters {
-  edgesTexture: Texture | null;
-  markings: { raster: Texture; table: DataTexture } | null;
-  colonies: { rect: [number, number, number, number]; texture: Texture } | null;
-  horizon: Texture | null;
-  svf: Texture | null;
-  ndviTexture: Texture | null;
-  sport: { raster: Texture; table: DataTexture } | null;
-  surfaceTexture: Texture | null;
-}
-
-const NO_DETAIL: DetailRasters = {
-  ndviTexture: null,
-  surfaceTexture: null,
-  edgesTexture: null,
-  sport: null,
-  markings: null,
-  colonies: null,
-  horizon: null,
-  svf: null,
-};
-
-/** The loaded rasters as the splat's optional members (absent → unset). */
-function splatDetail(d: DetailRasters): Partial<SplatLayer> {
-  return {
-    ndviTexture: d.ndviTexture ?? undefined,
-    surfaceTexture: d.surfaceTexture ?? undefined,
-    edgesTexture: d.edgesTexture ?? undefined,
-    sport: d.sport ?? undefined,
-    markings: d.markings ?? undefined,
-    colonies: d.colonies ?? undefined,
-    svfTexture: d.svf ?? undefined,
-    horizonTexture: d.horizon ?? undefined,
-  };
-}
-
-/** Takes a reference to a shared raster, released with the terrain. */
-type Hold = <T>(
-  share: SharedRasters<T> | undefined,
-  key: string | undefined
-) => Promise<T | null>;
-
-/** What a terrain level's rasters are, and how it lets go of them. */
+/** What a terrain level reads; `class` null: the flat sage ground. */
 interface TerrainRasters {
-  detail: DetailRasters;
-  /** frees its own rasters, releases the shared ones */
-  free: () => void;
-  rasters: SplatRasters | null;
-}
-
-/**
- * The level's rasters. They are all asked for at once — each is a round
- * trip of its own, and a fine level names up to ten — while their decodes
- * and uploads still take turns site-wide (raster-upload.ts): several 4096²
- * rasters decoding at once is a peak mobile Safari kills the tab for, a
- * few compressed files waiting for their turn are not. Those a tile's two
- * levels share (tile-stream.ts) are held, not owned; on an abort or a
- * failure everything taken is let go again — on the GPU already, so let
- * go means freed there too.
- */
-async function loadTerrainRasters(
-  extras: TerrainExtras,
-  opts: TerrainOptions
-): Promise<TerrainRasters> {
-  const owned: Texture[] = [];
-  const holds: (() => void)[] = [];
-  const hold: Hold = (share, key) => {
-    if (!(share && key)) {
-      return Promise.resolve(null);
-    }
-    holds.push(() => share.release(key));
-    // an abort lets go at once (`free` below), not once the raster this
-    // waits for has decoded and uploaded: the last holder gone, its load
-    // stops too
-    return untilAborted(share.acquire(key), opts.signal);
-  };
-  const free = () => {
-    for (const texture of owned.splice(0)) {
-      texture.dispose();
-    }
-    for (const release of holds.splice(0)) {
-      release();
-    }
-  };
-  try {
-    const classFile = opts.lowRasters ? extras.landcoverLow : extras.landcover;
-    const [rasters, detail] = await settledAll([
-      hold(opts.splats, classFile ? opts.fileUrl(classFile) : undefined),
-      loadDetailRasters(extras, opts, hold, owned),
-    ]);
-    opts.signal?.throwIfAborted();
-    if (!rasters) {
-      // no class raster to paint the detail over: the flat sage ground
-      free();
-      return { rasters, detail: NO_DETAIL, free };
-    }
-    return { rasters, detail, free };
-  } catch (err) {
-    free();
-    throw err;
-  }
+  class: SplatRasters | null;
+  colonies?: Texture;
+  edges?: Texture;
+  horizon?: Texture;
+  markings?: IndexedRaster;
+  ndvi?: Texture;
+  sport?: IndexedRaster;
+  surface?: Texture;
+  svf?: Texture;
 }
 
 /**
  * Every promise settled, then their values — or the first rejection, once
- * none is still running: what the others brought is in `owned` / `holds`
- * by then, so the caller's `free` lets go of all of it.
+ * none is still running: what the others brought is on the hold by then,
+ * so the caller's release lets go of all of it.
  */
 async function settledAll<T extends readonly unknown[]>(promises: {
   [K in keyof T]: Promise<T[K]>;
@@ -1615,133 +1069,228 @@ async function settledAll<T extends readonly unknown[]>(promises: {
 }
 
 /**
- * Whether a terrain level reads its tile's sports grounds: the fine level
- * on a desktop only. The index raster is a 2048² RGBA — 16 MiB on the GPU
- * for a PNG of a few dozen kB (14 of Dresden's 15 tiles have grounds) —
- * and the lines it places are a pixel or less beyond the fine level's
- * reach. A phone draws its pitches in their land-cover class, without
- * lines (the goals and nets come from the table, sport-fixtures.ts): 16
- * MiB a fine tile against a 336 MiB cache. Without the slot a level builds
- * the variant every tile without grounds shares.
+ * The level's rasters (tile-rasters.ts). They are all asked for at once —
+ * each is a round trip of its own, and a fine level names up to ten — while
+ * their decodes and uploads still take turns site-wide (raster-upload.ts):
+ * several 4096² rasters decoding at once is a peak mobile Safari kills the
+ * tab for, a few compressed files waiting for their turn are not. On an
+ * abort everything taken is let go again — on the GPU already, so let go
+ * means freed there too. Without a class raster there is nothing to paint
+ * the detail over: all of it goes.
  */
-export function readsSportGrounds(level: 0 | 1, lowRasters: boolean): boolean {
-  return level === 0 && !lowRasters;
-}
-
-/** A raster the level owns, taken into `owned` as soon as it lands. */
-function owning<T extends Texture>(
-  owned: Texture[],
-  load: Promise<T | null> | null
-): Promise<T | null> {
-  return (load ?? Promise.resolve(null)).then((texture) => {
-    if (texture) {
-      owned.push(texture);
-    }
-    return texture;
-  });
-}
-
-/** The optional rasters over the class raster, all asked for at once (see
- *  loadTerrainRasters); each absent one is null. The level's own go into
- *  `owned` as they land. */
-async function loadDetailRasters(
+async function loadTerrainRasters(
   extras: TerrainExtras,
   opts: TerrainOptions,
-  hold: Hold,
-  owned: Texture[]
-): Promise<DetailRasters> {
-  const url = (file?: string) => (file ? opts.fileUrl(file) : undefined);
-  const { renderer, signal } = opts;
-  // The paving patterns are close-range: the build names the raster on the
-  // fine level only.
-  const surface = url(extras.surface);
-  const edges = url(extras.edges);
-  const sportRaster = readsSportGrounds(extras.level, opts.lowRasters)
-    ? url(extras.sport)
-    : undefined;
-  const sportTable = url(extras.sportTable);
-  // Road markings: close-range paint, the fine level only; phones read the
-  // 1024² twin (the same table).
-  const markingsRaster = url(
-    (opts.lowRasters ? extras.markingsLow : undefined) ?? extras.markings
-  );
-  const markingsTable = url(extras.markingsTable);
-  // Allotment colonies: the fine level only, phones the half-resolution
-  // twin of the same crop.
-  const colonies = url(
-    (opts.lowRasters ? extras.cultivatedLow : undefined) ?? extras.cultivated
-  );
-  const markingsLoad =
-    markingsRaster && markingsTable
-      ? loadMarkings(markingsRaster, markingsTable, renderer, signal).then(
-          (markings) => {
-            if (markings) {
-              owned.push(markings.raster, markings.table);
-            }
-            return markings;
-          }
-        )
-      : Promise.resolve(null);
-  const [
-    ndviTexture,
-    surfaceTexture,
-    edgesTexture,
-    sport,
-    markings,
-    colonyTexture,
-    horizon,
-    svf,
-  ] = await settledAll([
-    hold(opts.ndvis, url(extras.ndvi)),
-    owning(
-      owned,
-      surface ? loadSurfaceTexture(surface, renderer, signal) : null
-    ),
-    owning(owned, edges ? loadEdgesTexture(edges, renderer, signal) : null),
-    hold(
-      opts.sports,
-      sportRaster && sportTable ? sportKey(sportRaster, sportTable) : undefined
-    ),
-    markingsLoad,
-    owning(
-      owned,
-      colonies ? loadColonyTexture(colonies, renderer, signal) : null
-    ),
-    hold(opts.horizon, url(extras.horizon)),
-    hold(opts.skyView, url(extras.svf)),
-  ]);
-  signal?.throwIfAborted();
+  far: boolean
+): Promise<TerrainRasters> {
+  const { rasters: hold, signal } = opts;
+  const how = { far };
+  try {
+    const [
+      splats,
+      ndvi,
+      surface,
+      edges,
+      sport,
+      markings,
+      colonies,
+      horizon,
+      svf,
+    ] = await settledAll([
+      hold.acquire("class", extras, signal),
+      hold.acquire("ndvi", extras, signal),
+      hold.acquire("surface", extras, signal, how),
+      hold.acquire("edges", extras, signal, how),
+      hold.acquire("sport", extras, signal, how),
+      hold.acquire("markings", extras, signal, how),
+      hold.acquire("colonies", extras, signal, how),
+      hold.acquire("horizon", extras, signal),
+      hold.acquire("svf", extras, signal),
+    ]);
+    signal?.throwIfAborted();
+    if (!splats) {
+      hold.release();
+      return { class: null };
+    }
+    return {
+      class: splats,
+      ndvi: ndvi ?? undefined,
+      surface: surface ?? undefined,
+      edges: edges ?? undefined,
+      sport: sport ?? undefined,
+      markings: markings ?? undefined,
+      colonies: colonies ?? undefined,
+      horizon: horizon ?? undefined,
+      svf: svf ?? undefined,
+    };
+  } catch (error) {
+    hold.release();
+    throw error;
+  }
+}
+
+/** A level's ground in the scene's frame (Y up, recentered): its bounds,
+ *  and the heights its mesh spans. */
+function reachBoxOf(
+  mesh: Mesh,
+  extras: TerrainExtras,
+  toData: Matrix4,
+  offset: { cx: number; cy: number }
+): ReachBox {
+  const [minX, minY, maxX, maxY] = extras.bounds;
+  const { geometry } = mesh;
+  if (!geometry.boundingBox) {
+    geometry.computeBoundingBox();
+  }
+  // (the data frame is Z up: the mesh's box there has the heights)
+  const heights = geometry.boundingBox?.clone().applyMatrix4(toData);
+  const low = heights && Number.isFinite(heights.min.z) ? heights.min.z : 0;
+  const high = heights && Number.isFinite(heights.max.z) ? heights.max.z : low;
   return {
-    ndviTexture,
-    surfaceTexture,
-    edgesTexture,
-    sport,
-    markings,
-    colonies: colonyTexture
-      ? { texture: colonyTexture, rect: colonyCropUv(extras.cultivatedCrop) }
-      : null,
-    horizon,
-    svf,
+    min: [
+      minX - offset.cx,
+      Math.min(low, extras.minElevation),
+      -(maxY - offset.cy),
+    ],
+    max: [
+      maxX - offset.cx,
+      Math.max(high, extras.minElevation),
+      -(minY - offset.cy),
+    ],
   };
 }
 
-/** The rasters a splat reads, each once. */
-function splatRasters(splat: SplatLayer): Texture[] {
-  const textures = new Set<Texture | undefined>([
-    splat.texture,
-    splat.colorTexture,
-    splat.ndviTexture,
-    splat.surfaceTexture,
-    splat.edgesTexture,
-    splat.sport?.raster,
-    splat.sport?.table,
-    splat.markings?.raster,
-    splat.markings?.table,
-    splat.colonies?.texture,
-    splat.svfTexture,
-    splat.horizonTexture,
+/** Where a level's ground lies, and the set it starts on there. */
+function reachStart(
+  mesh: Mesh,
+  extras: TerrainExtras,
+  toData: Matrix4,
+  opts: TerrainOptions
+): { box: ReachBox; far: boolean } {
+  const box = reachBoxOf(mesh, extras, toData, opts.offset);
+  return { box, far: opts.far?.(box) ?? false };
+}
+
+/** Whether the content names a twin for any close-range raster. */
+function hasTwins(extras: TerrainExtras): boolean {
+  // reason: the extras name only some of the raster keys
+  const named = extras as unknown as Partial<Record<string, string>>;
+  return REACH_KINDS.some((kind) => {
+    const { far } = RASTER_KINDS[kind];
+    return far !== undefined && named[far] !== undefined;
+  });
+}
+
+/** The close-range rasters of a splat, by kind (as `acquire` gave them). */
+interface ReachSet {
+  colonies: Texture | undefined;
+  edges: Texture | undefined;
+  markings: SplatLayer["markings"];
+  sport: SplatLayer["sport"];
+  surface: Texture | undefined;
+}
+
+const reachSetOf = (splat: SplatLayer): ReachSet => ({
+  surface: splat.surfaceTexture,
+  edges: splat.edgesTexture,
+  sport: splat.sport,
+  markings: splat.markings,
+  colonies: splat.colonies?.texture,
+});
+
+/** The set a swap loaded, all of it or (one missing, the level gone)
+ *  nothing: a variant's graph reads the kinds it was built with. */
+async function loadReachSet(
+  d: GroundDetailInput,
+  far: boolean,
+  now: ReachSet
+): Promise<ReachSet | null> {
+  const how = { far, now: true };
+  const got = await settledAll([
+    d.hold.acquire("surface", d.extras, d.signal, how),
+    d.hold.acquire("edges", d.extras, d.signal, how),
+    d.hold.acquire("sport", d.extras, d.signal, how),
+    d.hold.acquire("markings", d.extras, d.signal, how),
+    d.hold.acquire("colonies", d.extras, d.signal, how),
   ]);
-  return [...textures].filter((t): t is Texture => t !== undefined);
+  const next: ReachSet = {
+    surface: got[0] ?? undefined,
+    edges: got[1] ?? undefined,
+    sport: got[2] ?? undefined,
+    markings: got[3] ?? undefined,
+    colonies: got[4] ?? undefined,
+  };
+  const whole = REACH_KINDS.every(
+    (kind) => (next[kind] === undefined) === (now[kind] === undefined)
+  );
+  if (whole && !d.signal.aborted) {
+    return next;
+  }
+  for (const kind of REACH_KINDS) {
+    d.hold.drop(next[kind]);
+  }
+  return null;
+}
+
+export interface GroundDetailInput {
+  box: ReachBox;
+  extras: TerrainExtras;
+  far: boolean;
+  hold: RasterHold;
+  mesh: Mesh;
+  signal: AbortSignal;
+  splat: SplatLayer | undefined;
+}
+
+/** A level's hold on its close-range rasters (`GroundDetail`). */
+export function groundDetailOf(d: GroundDetailInput): GroundDetail | undefined {
+  const { splat, mesh, hold } = d;
+  if (!(splat && hasTwins(d.extras))) {
+    return undefined;
+  }
+  let { far } = d;
+  let busy = false;
+  const swap = async (next: boolean): Promise<boolean> => {
+    const old = reachSetOf(splat);
+    const set = await loadReachSet(d, next, old);
+    if (!set) {
+      return false;
+    }
+    splat.surfaceTexture = set.surface;
+    splat.edgesTexture = set.edges;
+    splat.sport = set.sport;
+    splat.markings = set.markings;
+    if (splat.colonies && set.colonies) {
+      splat.colonies = { ...splat.colonies, texture: set.colonies };
+    }
+    // reason: the terrain's one material (createTerrainMaterial)
+    const material = mesh.material as MeshStandardNodeMaterial;
+    setSlots(material, { ...slotsOf(material), ...splatSlots(splat) });
+    for (const kind of REACH_KINDS) {
+      hold.drop(old[kind]);
+    }
+    far = next;
+    return true;
+  };
+  return {
+    box: d.box,
+    far: () => far,
+    setFar: async (next) => {
+      if (busy || next === far || d.signal.aborted) {
+        return false;
+      }
+      busy = true;
+      try {
+        return await swap(next);
+      } catch {
+        // (a raster that did not load: the level keeps what it reads, and
+        // the frame asks again)
+        return false;
+      } finally {
+        busy = false;
+      }
+    },
+  };
 }
 
 /** The terrain's draw order among the opaque (dressTerrain): after the
@@ -1756,7 +1305,8 @@ function groundLightOf(splat: SplatLayer): GroundLight | undefined {
   if (!(splat.svfTexture || splat.horizonTexture)) {
     return undefined;
   }
-  const [minX, , , maxY] = splat.bounds;
+  const minX = splat.bounds[0];
+  const maxY = splat.bounds[3];
   return {
     svf: splat.svfTexture,
     horizon: splat.horizonTexture,
@@ -1821,6 +1371,15 @@ function waterSheetsOf(
   return { water, mist };
 }
 
+/** A mesh's named attributes and its index (none: nothing). */
+const attributesOf = (mesh: Mesh | undefined, names: string[]) =>
+  mesh
+    ? [
+        ...names.map((name) => mesh.geometry.getAttribute(name)),
+        mesh.geometry.getIndex(),
+      ]
+    : [];
+
 /**
  * A dressed level's buffers that nothing reads on the CPU once its compile
  * has uploaded them (tile-stream.ts drops their CPU copies then: three.js
@@ -1840,13 +1399,6 @@ function waterSheetsOf(
  */
 export function cpuDroppable(layer: TerrainLayer): AnyAttribute[] {
   const ground = layer.mesh.geometry;
-  const of = (mesh: Mesh | undefined, names: string[]) =>
-    mesh
-      ? [
-          ...names.map((name) => mesh.geometry.getAttribute(name)),
-          mesh.geometry.getIndex(),
-        ]
-      : [];
   return [
     ground.getAttribute("position"),
     ground.getAttribute("normal"),
@@ -1855,10 +1407,10 @@ export function cpuDroppable(layer: TerrainLayer): AnyAttribute[] {
     layer.water && layer.water.mistMesh.geometry !== layer.water.mesh.geometry
       ? layer.water.mistMesh.geometry.getIndex()
       : null,
-    ...of(layer.stairs, ["position", "normal", "color"]),
-    ...of(layer.walls, ["position", "normal", "color"]),
-    ...of(layer.kerbs, ["position", "normal"]),
-    ...of(layer.fences, ["position", "uv"]),
+    ...attributesOf(layer.stairs, ["position", "normal", "color"]),
+    ...attributesOf(layer.walls, ["position", "normal", "color"]),
+    ...attributesOf(layer.kerbs, ["position", "normal"]),
+    ...attributesOf(layer.fences, ["position", "uv"]),
   ].filter((a): a is AnyAttribute => a !== null && a !== undefined);
 }
 
@@ -1887,16 +1439,27 @@ export async function dressTerrain(
   if (grids && index) {
     mesh.geometry.setIndex(grids.index(n, index));
   }
-  const { rasters, detail, free } = await loadTerrainRasters(extras, opts);
+  const { box, far: startsFar } = reachStart(mesh, extras, toData, opts);
+  const loaded = await streamTimings.timed(
+    "terrain:rasters",
+    async () => await loadTerrainRasters(extras, opts, startsFar),
+    extras.tileId
+  );
+  const free = opts.rasters.release;
+  const classes = loaded.class;
   // the class raster's water cells: none (null) where the tile has no
   // water, unknown (undefined) for a raster the browser decoded
-  const mask = rasters?.water;
+  const mask = classes?.water;
   let ground: GroundPrep;
   try {
-    ground = await groundOf(mesh, extras, toData, opts, mask ?? null);
-  } catch (err) {
+    ground = await streamTimings.timed(
+      "terrain:ground",
+      async () => await groundOf(mesh, extras, toData, opts, mask ?? null),
+      extras.tileId
+    );
+  } catch (error) {
     free();
-    throw err;
+    throw error;
   }
   const { elevations } = ground;
   const { heightAt, bytes: heightBytes } = elevations
@@ -1906,11 +1469,21 @@ export async function dressTerrain(
         bytes: elevations.byteLength,
       }
     : tinHeightAt(mesh, bounds, ground);
-  const splat: SplatLayer | undefined = rasters
+  const splat: SplatLayer | undefined = classes
     ? {
-        texture: rasters.texture,
-        colorTexture: rasters.painted.texture,
-        ...splatDetail(detail),
+        texture: classes.texture,
+        colorTexture: classes.painted.texture,
+        ndviTexture: loaded.ndvi,
+        surfaceTexture: loaded.surface,
+        edgesTexture: loaded.edges,
+        sport: loaded.sport,
+        markings: loaded.markings,
+        colonies: loaded.colonies && {
+          texture: loaded.colonies,
+          rect: colonyCropUv(extras.cultivatedCrop),
+        },
+        svfTexture: loaded.svf,
+        horizonTexture: loaded.horizon,
         ground: opts.ground,
         bounds,
         offset: opts.offset,
@@ -1941,7 +1514,7 @@ export async function dressTerrain(
   // Water re-uses the terrain geometry, masked to the water class: siblings
   // of the mesh with its (dequantising) transform, so they come and go with
   // the tile.
-  // With the class raster's water cells (`rasters.water`) each sheet keeps
+  // With the class raster's water cells (`classes.water`) each sheet keeps
   // only the triangles its coverage can reach (lib/city/water-mask.ts); a
   // tile without water hangs none.
   const sheets =
@@ -1965,12 +1538,20 @@ export async function dressTerrain(
     }
   }
 
+  const gone = new AbortController();
   return {
     mesh,
-    rasters: splat
-      ? [...splatRasters(splat), ...(water ? [water.tint] : [])]
-      : [],
+    rasters: water ? [water.tint] : [],
     light: splat ? groundLightOf(splat) : undefined,
+    detail: groundDetailOf({
+      box,
+      extras,
+      far: startsFar,
+      hold: opts.rasters,
+      mesh,
+      signal: gone.signal,
+      splat,
+    }),
     tile: extras.tileId,
     level: extras.level,
     tin: extras.tin !== undefined,
@@ -1981,17 +1562,23 @@ export async function dressTerrain(
     heightAt,
     heightBytes,
     dispose: () => {
-      // Shares the tile's positions; only its own index (and normals) go —
-      // not the site's (GridShare), which other tiles draw with.
-      detachShared(mesh.geometry);
-      if (sheets) {
-        disposeGeometry(sheets.water);
-        if (sheets.mist !== sheets.water) {
-          disposeGeometry(sheets.mist);
+      gone.abort();
+      try {
+        // Shares the tile's positions; only its own index (and normals) go —
+        // not the site's (GridShare), which other tiles draw with.
+        detachShared(mesh.geometry);
+        if (sheets) {
+          disposeGeometry(sheets.water);
+          if (sheets.mist !== sheets.water) {
+            disposeGeometry(sheets.mist);
+          }
         }
+        water?.dispose();
+      } finally {
+        // (the rasters and their shares whatever else failed: left held, they
+        // stay on the GPU and the tile's other level weighs half for good)
+        free();
       }
-      water?.dispose();
-      free();
     },
   };
 }

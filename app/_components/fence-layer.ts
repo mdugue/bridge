@@ -1,4 +1,5 @@
-import { Color, DoubleSide, type Mesh } from "three/webgpu";
+import { Color, DoubleSide } from "three/webgpu";
+import type { Mesh } from "three/webgpu";
 import {
   cameraViewMatrix,
   float,
@@ -13,8 +14,9 @@ import {
 } from "three/tsl";
 import { FENCE_CODE, FENCE_UV_CODES } from "@/lib/city/fences";
 import type { F, V3 } from "./shader-chunks";
-import { lampNight } from "./lamp-layer";
-import { type GroundLight, groundLitMaterial } from "./sky-light";
+import { sceneNight } from "./scene-environment";
+import { groundLitMaterial } from "./sky-light";
+import type { GroundLight } from "./sky-light";
 
 /*
  * A fence is one calm band (lib/city/fences.ts), in a single muted tone close
@@ -93,7 +95,7 @@ function fenceNodes() {
       normal: cameraViewMatrix.mul(vec4(0, 1, 0, 0)).xyz.normalize(),
       // Lifts the band a touch toward its tone (see LIFT; the material
       // colour is white, so the tone is the diffuse colour).
-      emissive: colour.mul(LIFT).mul(float(1).sub(lampNight)),
+      emissive: colour.mul(LIFT).mul(float(1).sub(sceneNight)),
     };
   }
   return shared;

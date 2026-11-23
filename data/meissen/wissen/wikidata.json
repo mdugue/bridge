@@ -1,0 +1,530 @@
+{
+ "attribution": "Wikidata (CC0)",
+ "retrieved": "2026-10-30",
+ "entities": {
+  "Q111739017": {
+   "label": "Kleinmarkt 10 (Meißen)",
+   "description": "Bürgerhaus der Renaissance in Meißen in Sachsen",
+   "wiki": "Kleinmarkt 10 (Meißen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11755880",
+      "v": "Wohngebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q112863404": {
+   "label": "Kornhaus",
+   "description": "Gebäude in Meißen, Sachsen",
+   "wiki": "Kornhaus (Meißen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q113119149": {
+   "label": "Elbstraße 7",
+   "description": "Bauwerk in Meißen (Sachsen)",
+   "wiki": "Elbstraße 7 (Meißen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q811979",
+      "v": "Bauwerk"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q113653733": {
+   "label": "Markt 10",
+   "description": "Bauwerk in Meißen",
+   "wiki": "Markt 10 (Meißen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q811979",
+      "v": "Bauwerk"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     },
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q113705717": {
+   "label": "St. Wolfgang",
+   "description": "Kirchengebäude in Meißen-Obermeisa, Landkreis Meißen, Sachsen",
+   "wiki": "St. Wolfgang (Obermeisa)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q114134048": {
+   "label": "Markt 6",
+   "description": "Bauwerk in Meißen",
+   "wiki": "Markt 6 (Meißen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q811979",
+      "v": "Bauwerk"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     },
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q114498997": {
+   "label": "Webergasse 1",
+   "description": "Bauwerk in Meißen",
+   "wiki": "Webergasse 1 (Meißen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q811979",
+      "v": "Bauwerk"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     },
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1347941": {
+   "label": "Hamburger Hof",
+   "description": "unter Denkmalschutz stehender Gebäudekomplex",
+   "wiki": "Hamburger Hof (Meißen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1451777": {
+   "label": "Frauenkirche (Meißen)",
+   "description": "Kirchengebäude in Meißen, Sachsen",
+   "wiki": "Frauenkirche (Meißen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q111377",
+      "v": "Christian Friedrich Arnold"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q176483",
+      "v": "Gotische Architektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1455"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Meißen"
+     }
+    ]
+   }
+  },
+  "Q15109544": {
+   "label": "Domherrenhof (Meißen)",
+   "description": "denkmalgeschütztes Gebäude in Meißen am Burgberg in der Altstadt",
+   "wiki": "Domherrenhof (Meißen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1647975": {
+   "label": "Kloster St. Afra",
+   "description": "ehemaliges Kloster in Meißen, Sachsen",
+   "wiki": "Kloster St. Afra (Meißen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q44613",
+      "v": "Kloster"
+     },
+     {
+      "id": "Q2742167",
+      "v": "religiöse Gemeinschaft"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1205"
+     }
+    ],
+    "P576": [
+     {
+      "v": "1539"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q18033836": {
+   "label": "St. Benno (Meißen)",
+   "description": "römisch-katholische Pfarrkirche in Meißen, Sachsen",
+   "wiki": "St. Benno (Meißen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q186363",
+      "v": "Neogotik"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q28919951": {
+   "label": "Nikolaikirche (Meißen)",
+   "description": "Kirchengebäude in Meißen, Landkreis Meißen, Sachsen",
+   "wiki": "Nikolaikirche (Meißen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q44269",
+      "v": "Nikolaus von Myra"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q322853": {
+   "label": "Domkirche St. Johannis und St. Donatus",
+   "description": "Dom in Meißen, Sachsen",
+   "wiki": "Meißner Dom",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2977",
+      "v": "Kathedrale"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q98192",
+      "v": "Arnold von Westfalen"
+     },
+     {
+      "id": "Q75964",
+      "v": "Carl Schäfer"
+     },
+     {
+      "id": "Q78279",
+      "v": "Cornelius Gurlitt"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q328804",
+      "v": "Johannes der Evangelist"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q176483",
+      "v": "Gotische Architektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1250"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "81 m"
+     }
+    ]
+   }
+  },
+  "Q59590915": {
+   "label": "Franziskanerkloster Meißen",
+   "description": "ehemaliges Kirchengebäude in Meißen, Sachsen",
+   "wiki": "Franziskanerkloster Meißen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     },
+     {
+      "id": "Q44613",
+      "v": "Kloster"
+     },
+     {
+      "id": "Q2742167",
+      "v": "religiöse Gemeinschaft"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q153043",
+      "v": "Peter und Paul"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q59689307": {
+   "label": "Martinskapelle (Meißen)",
+   "description": "Kirchengebäude in Meißen, Sachsen",
+   "wiki": "Martinskapelle (Meißen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q133704",
+      "v": "Martin von Tours"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q60773554": {
+   "label": "Rathaus Meißen",
+   "description": "Rathaus in Sachsen",
+   "wiki": "Rathaus Meißen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q543654",
+      "v": "Rathaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q61146031": {
+   "label": "Bischofsschloss Meißen",
+   "description": "Spätgotischer Bischofssitz in Meißen in Sachsen (Deutschland)",
+   "wiki": "Bischofsschloss Meißen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q751876",
+      "v": "Schloss"
+     }
+    ]
+   }
+  },
+  "Q61451657": {
+   "label": "Dompropstei Meißen",
+   "description": "Spätgotischer Sitz des Domkapitels des Meißener Doms",
+   "wiki": "Dompropstei Meißen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ]
+   }
+  },
+  "Q61754799": {
+   "label": "Brauhaus Meißen",
+   "description": "Kulturdenkmal in Meißen, Sachsen",
+   "wiki": "Brauhaus Meißen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3640372",
+      "v": "Brauhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q679009": {
+   "label": "Albrechtsburg",
+   "description": "Schloss in Meißen, ältestes Schloss in Deutschland",
+   "wiki": "Albrechtsburg",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q23413",
+      "v": "Burg"
+     },
+     {
+      "id": "Q751876",
+      "v": "Schloss"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q98192",
+      "v": "Arnold von Westfalen"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q176483",
+      "v": "Gotische Architektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "929"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  }
+ }
+}

@@ -17,21 +17,16 @@ import {
 import { ownsPoint, TERRAIN_LEVELS } from "../../lib/city/tileset";
 import { BAKE_ENTRIES } from "../bake-entries";
 import {
-  type Dgm,
   fineTin,
   gridHeightAt,
   readDgm,
   shapeGrid,
-  type TerrainFeatures,
   tinHeightAt,
 } from "../bake-tiles";
+import type { Dgm, TerrainFeatures } from "../bake-tiles";
 import { FINE_TIN_MAX_ERROR } from "../bake-terrain-tin";
-import {
-  type FineGround,
-  packGround,
-  readGroundHeader,
-  unpackGround,
-} from "../ground-pack";
+import { packGround, readGroundHeader, unpackGround } from "../ground-pack";
+import type { FineGround } from "../ground-pack";
 import {
   landcoverLegendFile,
   stairLines,
@@ -39,11 +34,8 @@ import {
   wallLines,
   waterMember,
 } from "../tile-sources";
-import {
-  decodeLift,
-  type WaterLift,
-  type WaterMember,
-} from "../../lib/city/water-bodies";
+import { decodeLift } from "../../lib/city/water-bodies";
+import type { WaterLift, WaterMember } from "../../lib/city/water-bodies";
 import { SITE, TILES, at, cacheKey, cachedFile, log, since } from "./context";
 import { bedsIn, passagesIn, shapedBy, underDeck } from "./lines";
 import { offset } from "./frame";
@@ -71,9 +63,9 @@ export async function tileDgm(
   const source = dgmSourceFiles(SITE, tile);
   const tfw = at(source.tfw);
   const buf = readFileSync(at(source.tif));
-  return readDgm(
+  return await readDgm(
     buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
-    existsSync(tfw) ? readFileSync(tfw, "utf8") : null,
+    existsSync(tfw) ? readFileSync(tfw, "utf-8") : null,
     size
   );
 }
@@ -88,14 +80,14 @@ export function waterOf(tile: string): WaterMember | null {
   return waterMembers.get(tile) ?? null;
 }
 const waterLifts = new Map<string, Promise<WaterLift | null>>();
-function waterLiftOf(tile: string): Promise<WaterLift | null> {
+async function waterLiftOf(tile: string): Promise<WaterLift | null> {
   let lift = waterLifts.get(tile);
   if (!lift) {
     const bounds = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
     lift = decodeLift(waterOf(tile), bounds);
     waterLifts.set(tile, lift);
   }
-  return lift;
+  return await lift;
 }
 
 /** What a tile's ground is shaped with besides its walls. */
@@ -139,7 +131,7 @@ async function bakeFineGround(tile: string): Promise<FineGround> {
  * reads the others' grounds instead of refining their TINs again.
  */
 const groundFiles = new Map<string, Promise<string>>();
-export function groundFile(tile: string): Promise<string> {
+export async function groundFile(tile: string): Promise<string> {
   let file = groundFiles.get(tile);
   if (!file) {
     file = cachedFile(
@@ -159,7 +151,7 @@ export function groundFile(tile: string): Promise<string> {
     );
     groundFiles.set(tile, file);
   }
-  return file;
+  return await file;
 }
 
 /** Each tile's fine ground height, read from the cache when first asked
@@ -208,7 +200,7 @@ export async function siteGround(): Promise<{
   return {
     heightAt: (x, y) => {
       const i = fine.findIndex((g) => ownsPoint(g.bounds, x, y));
-      return i < 0 ? null : heightOver(TILES[i], fine[i].path)(x, y);
+      return i === -1 ? null : heightOver(TILES[i], fine[i].path)(x, y);
     },
     tin: fine.every((g) => g.tin),
   };

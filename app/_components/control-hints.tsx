@@ -114,14 +114,14 @@ function rememberDismissed(key: string): void {
  * divider (the snackbar convention), and it is remembered. Nothing is lost
  * either way: the full table lives in the sidebar under Steuerung.
  */
-export function ControlHintBar({
+export const ControlHintBar = ({
   coarse,
   model = false,
 }: {
   coarse: boolean;
   /** Modell's hints (plan 055), dismissed on their own */
   model?: boolean;
-}) {
+}) => {
   const key = model ? MODEL_DISMISSED_KEY : DISMISSED_KEY;
   const [phase, setPhase] = useState<"gone" | "leaving" | "shown">(() =>
     wasDismissed(key) ? "gone" : "shown"
@@ -134,7 +134,9 @@ export function ControlHintBar({
   // Unmount once the fade has played, not before.
   useEffect(() => {
     if (phase !== "leaving") {
-      return;
+      return () => {
+        // nothing to clean up: no fade is running
+      };
     }
     const timer = setTimeout(() => setPhase("gone"), FADE_MS);
     return () => clearTimeout(timer);
@@ -175,4 +177,4 @@ export function ControlHintBar({
       </div>
     </div>
   );
-}
+};

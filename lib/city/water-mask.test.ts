@@ -1,18 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import {
-  dilate,
-  reach,
-  trianglesOver,
-  type WaterMask,
-  waterMaskOf,
-} from "./water-mask";
+import { dilate, reach, trianglesOver, waterMaskOf } from "./water-mask";
+import type { WaterMask } from "./water-mask";
 
 const WATER = 8;
 
 /** A `size`² class raster of meadow (3) with water in columns [x0, x1). */
 function river(size: number, x0: number, x1: number): Uint8Array {
   const data = new Uint8Array(size * size).fill(3);
-  for (let y = 0; y < size; y++) {
+  for (let y = 0; y < size; y += 1) {
     data.fill(WATER, y * size + x0, y * size + x1);
   }
   return data;
@@ -28,16 +23,20 @@ describe("water mask", () => {
   test("marks the cells a river runs through, row 0 north", () => {
     // 64 texels on 16 cells: columns 20–27 are cells 5 and 6
     const mask = waterMaskOf(river(64, 20, 28), 64, 64, WATER, 16);
-    expect(mask).not.toBeNull();
-    const row = [...(mask?.water.slice(0, 16) ?? [])];
+    if (!mask) {
+      throw new Error("expected a water mask");
+    }
+    const row = Array.from(mask.water.slice(0, 16));
     expect(row).toEqual([0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-    expect(setCells(mask as WaterMask)).toBe(32);
+    expect(setCells(mask)).toBe(32);
   });
 
   test("sees a ditch one texel wide on a large raster", () => {
     const mask = waterMaskOf(river(4096, 2002, 2003), 4096, 4096, WATER);
-    expect(mask).not.toBeNull();
-    expect(setCells(mask as WaterMask)).toBe(256);
+    if (!mask) {
+      throw new Error("expected a water mask");
+    }
+    expect(setCells(mask)).toBe(256);
   });
 
   test("widens every way by its reach", () => {
@@ -56,15 +55,15 @@ describe("triangles over water", () => {
   // A 4×4 vertex grid over 3×3 cells, two triangles a cell.
   const cellX: number[] = [];
   const cellY: number[] = [];
-  for (let y = 0; y < 4; y++) {
-    for (let x = 0; x < 4; x++) {
+  for (let y = 0; y < 4; y += 1) {
+    for (let x = 0; x < 4; x += 1) {
       cellX.push(Math.min(x, 2));
       cellY.push(Math.min(y, 2));
     }
   }
   const index: number[] = [];
-  for (let y = 0; y < 3; y++) {
-    for (let x = 0; x < 3; x++) {
+  for (let y = 0; y < 3; y += 1) {
+    for (let x = 0; x < 3; x += 1) {
       const a = y * 4 + x;
       index.push(a, a + 1, a + 4, a + 1, a + 5, a + 4);
     }

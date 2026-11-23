@@ -31,13 +31,13 @@ const BAR_MAX_PX = 150;
  * plane: the picture's horizontal in every view, and the whole plane in a
  * Lageplan, a Militärperspektive (the ground) and an Ansicht.
  */
-export function ScaleBar({
+export const ScaleBar = ({
   metresPerPixel,
   scale,
 }: {
   metresPerPixel: number;
   scale: number;
-}) {
+}) => {
   const bar = scaleBarFor(metresPerPixel, BAR_MAX_PX);
   const w = bar.px;
   const quarter = w / 4;
@@ -89,14 +89,14 @@ export function ScaleBar({
       </figcaption>
     </figure>
   );
-}
+};
 
 /**
  * Modell's instruments, bottom left where the joystick stands on foot: the
  * north arrow between the two rotate buttons (a click on it turns north
  * up), and the scale bar above them.
  */
-export function ModelInstruments({
+export const ModelInstruments = ({
   onNorth,
   onTurn,
   view,
@@ -104,7 +104,7 @@ export function ModelInstruments({
   onNorth: () => void;
   onTurn: (deg: number) => void;
   view: ModelHud;
-}) {
+}) => {
   const arrow = northArrowDeg(view);
   const button =
     "flex size-10 items-center justify-center rounded-full hover:bg-white/10";
@@ -165,4 +165,4 @@ export function ModelInstruments({
       </fieldset>
     </div>
   );
-}
+};

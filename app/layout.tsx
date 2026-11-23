@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "cn";
 
 // Every page is prerendered at build time and the site has no server of its
@@ -26,25 +25,23 @@ export const metadata: Metadata = {
   description: "Deutsche Städte als begehbare 3D-Modelle aus offenen Geodaten",
 };
 
-export default function RootLayout({
+const RootLayout = ({
   children,
 }: Readonly<{
   children: React.ReactNode;
-}>) {
-  return (
-    <html
-      className={cn(
-        "h-full",
-        "antialiased",
-        "font-sans",
-        inter.variable,
-        spaceGroteskHeading.variable
-      )}
-      lang="de"
-    >
-      <body className="flex min-h-full flex-col">
-        <TooltipProvider>{children}</TooltipProvider>
-      </body>
-    </html>
-  );
-}
+}>) => (
+  <html
+    className={cn(
+      "h-full",
+      "antialiased",
+      "font-sans",
+      inter.variable,
+      spaceGroteskHeading.variable
+    )}
+    lang="de"
+  >
+    <body className="flex min-h-full flex-col">{children}</body>
+  </html>
+);
+
+export default RootLayout;

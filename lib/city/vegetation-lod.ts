@@ -1,12 +1,14 @@
 /**
  * Which crown each vegetation chunk draws, decided over every loaded tile
  * together on the viewer's 10 Hz pose tick — at once when the tiles in view
- * or the crown switch change, or the eye jumps (`createLodSchedule`). No
- * THREE, no DOM.
+ * change or the eye jumps (`createLodSchedule`). No THREE, no DOM. The
+ * cadastre's own silhouettes are planned with the chunks (their cheap crown
+ * stands for both mid and far).
  *
  * Three tiers per 250 m chunk:
  * - `rich`: the multi-tuft crown (~1 440 triangles) — near the camera only,
- *   and only while the whole site's rich trees fit RICH_TREE_BUDGET. A forest
+ *   and only while the whole site's rich trees fit RICH_TREE_BUDGET (always
+ *   allowed: no look switch turns it off since 2026-11-06). A forest
  *   chunk holds up to ~1 300 trees (the canopy bake plants one per 7 m cell),
  *   so a distance rule alone put ~10 000 rich crowns on screen in the Dresdner
  *   Heide — tens of millions of triangles, paid again by the shadow pass, and
@@ -23,8 +25,6 @@
 export type CrownTier = "far" | "mid" | "rich";
 
 export interface ChunkLodState {
-  /** multi-tuft crowns enabled for this chunk's tile (the look toggle) */
-  allowRich: boolean;
   /** the tier currently shown */
   current: CrownTier;
   /** metres from the camera to the chunk's NEAREST tree (≥ 0) */
@@ -86,11 +86,11 @@ export function planCrownTiers(
   tiers.length = chunks.length;
   keys.length = chunks.length;
   order.length = 0;
-  for (let i = 0; i < chunks.length; i++) {
+  for (let i = 0; i < chunks.length; i += 1) {
     const c = chunks[i];
     tiers[i] = distanceTier(c);
     const wasRich = c.current === "rich";
-    if (c.allowRich && c.near < (wasRich ? RICH_OUT_M : RICH_IN_M)) {
+    if (c.near < (wasRich ? RICH_OUT_M : RICH_IN_M)) {
       keys[i] = c.near - (wasRich ? RICH_KEEP_BONUS_M : 0);
       order.push(i);
     }
@@ -131,8 +131,8 @@ export interface LodEye {
  */
 export interface LodSchedule {
   /**
-   * Something the tiers depend on changed (the tiles in view, the crown
-   * switch): the next frame picks them, not the next tick — a tile that
+   * Something the tiers depend on changed (the tiles in view): the next
+   * frame picks them, not the next tick — a tile that
    * lands is born on its mid crowns and would show them for up to a tick.
    */
   force: () => void;

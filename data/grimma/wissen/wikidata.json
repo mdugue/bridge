@@ -1,0 +1,290 @@
+{
+ "attribution": "Wikidata (CC0)",
+ "retrieved": "2026-10-30",
+ "entities": {
+  "Q107585173": {
+   "label": "Seume-Haus",
+   "description": "Gebäude in Grimma",
+   "wiki": "Seume-Haus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q811979",
+      "v": "Bauwerk"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q77451",
+      "v": "Johann Gottfried Seume"
+     }
+    ]
+   }
+  },
+  "Q113705636": {
+   "label": "St.-Nikolai-Kirche",
+   "description": "Kirchengebäude in Grimma",
+   "wiki": "Nicolaikirche Grimma",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ]
+   }
+  },
+  "Q113705710": {
+   "label": "St. Trinitatis (Grimma)",
+   "description": "Kirchengebäude in Grimma, Sachsen",
+   "wiki": "St. Trinitatis (Grimma)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1857"
+     },
+     {
+      "v": "18. Jahrhundert"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Nicolaistraße 1, 04668 Grimma"
+     }
+    ]
+   }
+  },
+  "Q14537082": {
+   "label": "Klosterkirche Grimma",
+   "description": "Kirchengebäude in Grimma, Sachsen",
+   "wiki": "Klosterkirche Grimma",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q15435206",
+      "v": "Hugo Nauck"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2120789": {
+   "label": "Pöppelmannbrücke (Grimma)",
+   "description": "Fußgänger- und Radverkehrsbrücke in Sachsen",
+   "wiki": "Pöppelmannbrücke (Grimma)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3397526",
+      "v": "Steinbrücke"
+     },
+     {
+      "id": "Q158438",
+      "v": "Bogenbrücke"
+     },
+     {
+      "id": "Q105501780",
+      "v": "Fuß- und Radwegbrücke"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1719"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Friedrich-Oettler-Straße -"
+     }
+    ]
+   }
+  },
+  "Q23856407": {
+   "label": "Frauenkirche Grimma",
+   "description": "Kirchengebäude in Sachsen",
+   "wiki": "Frauenkirche (Grimma)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q176483",
+      "v": "Gotische Architektur"
+     },
+     {
+      "id": "Q46261",
+      "v": "Romanische Architektur"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q49568182": {
+   "label": "Schloss Grimma",
+   "description": "Kulturdenkmal in Sachsen: Schlossanlage in Grimma (heute Amtsgericht), mit verschiedenen Gebäudeflügeln, mit spätgotischer Giebel, Einfriedung, Bogenbrücke und Amtsbrunnen; als ursprünglich markgräfliche Anlage von landesgeschichtlicher Bedeutung",
+   "wiki": "Schloss Grimma",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     },
+     {
+      "id": "Q751876",
+      "v": "Schloss"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1389"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Klosterstraße 9, 04668 Grimma"
+     }
+    ]
+   }
+  },
+  "Q56428240": {
+   "label": "Dorfkirche Döben",
+   "description": "ortsbildbeherrschender Bau, im Kern romanische Chorturmkirche, gotisch überformt, architektonische, künstlerische, personengeschichtliche und ortsgeschichtliche Bedeutung  Sonnenuhr an Südseite bezeichnet 1962 (Seltenheitswert), Grabmale: spätbar",
+   "wiki": "Dorfkirche Döben (Grimma)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     },
+     {
+      "id": "Q607241",
+      "v": "Pfarrhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Kirchberg -"
+     }
+    ]
+   }
+  },
+  "Q594042": {
+   "label": "Schloss Döben",
+   "description": "Schloss im Landkreis Leipzig, Sachsen - Deutschland",
+   "wiki": "Schloss Döben",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q751876",
+      "v": "Schloss"
+     },
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q69707006": {
+   "label": "Friedhofskirche Zum Heiligen Kreuz (Grimma)",
+   "description": "Kirchengebäude in Grimma, Landkreis Leipzig, Sachsen, Teil des Friedhof Grimma, Sachgesamtheit (Object-ID: 08967010)",
+   "wiki": "Friedhofskirche Zum Heiligen Kreuz (Grimma)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     },
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q380356",
+      "v": "Wahres Kreuz"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1556"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "August-Bebel-Straße 14, 04668 Grimma"
+     }
+    ]
+   }
+  }
+ }
+}

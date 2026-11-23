@@ -16,23 +16,22 @@
  * (lib/city/line-profile.ts, the feature's `lz`), indexed by the very
  * samples the layer takes (`subdividePolyline` at LEVEL_STEP).
  */
-import { type DeckPoly, decksAt } from "./decks";
+import { decksAt } from "./decks";
+import type { DeckPoly } from "./decks";
 import type { RailFeature } from "./features";
 import { epsgToWorld } from "./ground-clamp";
 import {
   encodeRuns,
   LEVEL_CUT_M,
-  LEVEL_GRADE,
   LEVEL_SPAN_M,
   LEVEL_STEP,
-  type Level,
-  type LevelLine,
-  type LevelRun,
-  type LevelSample,
+  lineGrade,
   lineLevels,
 } from "./levels";
+import type { Level, LevelLine, LevelRun, LevelSample } from "./levels";
 import { lineProfile, profileOptions } from "./line-profile";
-import { type Point2, subdividePolyline } from "./polyline";
+import { subdividePolyline } from "./polyline";
+import type { Point2 } from "./polyline";
 
 /** One piece of a line as a tile's file has it. */
 export interface LinePiece {
@@ -43,6 +42,9 @@ export interface LinePiece {
   /** the source puts the piece below the ground's level (OSM's negative
    *  `layer`, no tunnel): it cuts under a lid (lib/city/levels.ts) */
   below?: boolean;
+  /** a funicular's track: it climbs at `STEEP_GRADE` (lib/city/levels.ts),
+   *  and runs on only into steep pieces */
+  steep?: boolean;
 }
 
 /** What a line's height is read from. */
@@ -65,6 +67,17 @@ export function railPrefer(f: RailFeature): "deck" | "ground" | undefined {
     return undefined;
   }
   return bridge === 1 ? "deck" : "ground";
+}
+
+/** A funicular's track (`steep`, pipeline/bake/rail_osm.py). */
+export function railSteep(f: RailFeature): boolean {
+  return f.properties?.steep === 1;
+}
+
+/** A monorail's beam (`mono`): in the rails' file, but no track — no
+ *  level, no profile, no bed (lib/city/monorail.ts). */
+export function isMonorail(f: RailFeature): boolean {
+  return f.properties?.mono !== undefined;
 }
 
 /** The decks a line may ride: the heavy rails only rail decks (a road
@@ -135,41 +148,56 @@ interface Sampled {
   line: LevelLine;
   pts: Point2[];
   prefer?: "deck" | "ground";
+  steep: boolean;
+}
+
+/** A grid cell's key. */
+function cellKey(x: number, y: number): string {
+  return `${Math.floor(x / CELL_M)}:${Math.floor(y / CELL_M)}`;
 }
 
 /** Every sample of every piece by grid cell. */
 class SampleIndex {
-  private cells = new Map<string, { piece: number; i: number }[]>();
-  constructor(readonly pieces: readonly Sampled[]) {
-    pieces.forEach((p, piece) => {
-      p.pts.forEach((pt, i) => {
-        const k = this.key(pt[0], pt[1]);
+  private readonly cells = new Map<string, { piece: number; i: number }[]>();
+  readonly pieces: readonly Sampled[];
+  constructor(pieces: readonly Sampled[]) {
+    this.pieces = pieces;
+    for (let piece = 0; piece < pieces.length; piece += 1) {
+      const p = pieces[piece];
+      for (let i = 0; i < p.pts.length; i += 1) {
+        const pt = p.pts[i];
+        const k = cellKey(pt[0], pt[1]);
         let cell = this.cells.get(k);
         if (!cell) {
           cell = [];
           this.cells.set(k, cell);
         }
         cell.push({ piece, i });
-      });
-    });
+      }
+    }
   }
-  private key(x: number, y: number): string {
-    return `${Math.floor(x / CELL_M)}:${Math.floor(y / CELL_M)}`;
-  }
-  /** Samples of `line` (any line: null) within `r` of (x, y) on pieces
-   *  other than `not`. */
-  near(x: number, y: number, r: number, line: LevelLine | null, not: number) {
+  /** Samples of `line` (any line: null; steep or not as `steep` says,
+   *  either: undefined) within `r` of (x, y) on pieces other than `not`. */
+  near(
+    x: number,
+    y: number,
+    r: number,
+    line: LevelLine | null,
+    not: number,
+    steep?: boolean
+  ) {
     const out: { piece: number; i: number }[] = [];
     const cx = Math.floor(x / CELL_M);
     const cy = Math.floor(y / CELL_M);
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
         for (const s of this.cells.get(`${cx + dx}:${cy + dy}`) ?? []) {
           const p = this.pieces[s.piece];
           const pt = p.pts[s.i];
           if (
             s.piece !== not &&
             (line === null || p.line === line) &&
+            (steep === undefined || p.steep === steep) &&
             Math.hypot(pt[0] - x, pt[1] - y) <= r
           ) {
             out.push(s);
@@ -204,11 +232,11 @@ function runOn(
   dir: Point2,
   hops: number
 ): ContextPoint[] {
-  const line = index.pieces[from].line;
+  const { line, steep } = index.pieces[from];
   let best: { piece: number; step: 1 | -1; i: number; cos: number } | null =
     null;
-  for (const s of index.near(at[0], at[1], THROUGH_M, line, from)) {
-    const pts = index.pieces[s.piece].pts;
+  for (const s of index.near(at[0], at[1], THROUGH_M, line, from, steep)) {
+    const { pts } = index.pieces[s.piece];
     const a = pts[Math.max(s.i - 1, 0)];
     const b = pts[Math.min(s.i + 1, pts.length - 1)];
     const t = unit(a, b);
@@ -224,11 +252,11 @@ function runOn(
   if (!best) {
     return [];
   }
-  const pts = index.pieces[best.piece].pts;
+  const { pts } = index.pieces[best.piece];
   const out: ContextPoint[] = [];
   let run = 0;
   let last = at;
-  for (let i = best.i; i >= 0 && i < pts.length; i += best.step) {
+  for (let { i } = best; i >= 0 && i < pts.length; i += best.step) {
     const pt = pts[i];
     // only what lies ahead of the end
     if ((pt[0] - at[0]) * dir[0] + (pt[1] - at[1]) * dir[1] <= 0.5) {
@@ -255,7 +283,7 @@ function withContext(
   index: SampleIndex,
   piece: number
 ): { pts: ContextPoint[]; own: number } {
-  const pts = index.pieces[piece].pts;
+  const { pts } = index.pieces[piece];
   if (pts.length < 2) {
     return { pts: pts.map((pt) => ({ piece, pt })), own: 0 };
   }
@@ -296,6 +324,7 @@ export function solvePieces(
     pts: pieceSamples(p),
     prefer: p.prefer,
     below: p.below,
+    steep: p.steep === true,
   }));
   const index = new SampleIndex(sampled);
   const solved = sampled.map((p, piece) => {
@@ -324,20 +353,20 @@ export function solvePieces(
         below: sampled[c.piece].below,
       };
     });
-    const levels = lineLevels(samples, { grade: LEVEL_GRADE[p.line] });
+    const levels = lineLevels(samples, { grade: lineGrade(p.line, p.steep) });
     const end = own + p.pts.length;
     let from = own;
     while (from > 0 && dist[own] - dist[from - 1] <= PROFILE_CONTEXT_M) {
-      from--;
+      from -= 1;
     }
     let to = end;
     while (to < pts.length && dist[to] - dist[end - 1] <= PROFILE_CONTEXT_M) {
-      to++;
+      to += 1;
     }
     const profile = lineProfile(
       levels.slice(from, to),
       dist.slice(from, to),
-      profileOptions(p.line)
+      profileOptions(p.line, p.steep)
     );
     return {
       levels: levels.slice(own, end),
@@ -370,14 +399,14 @@ function inTunnel(
   }
   let a = i;
   while (a > 0 && levels[a - 1]?.mode === "cut") {
-    a--;
+    a -= 1;
   }
   let b = i;
   while (b + 1 < levels.length && levels[b + 1]?.mode === "cut") {
-    b++;
+    b += 1;
   }
   let run = 0;
-  for (let k = a; k < b; k++) {
+  for (let k = a; k < b; k += 1) {
     run += Math.hypot(pts[k + 1][0] - pts[k][0], pts[k + 1][1] - pts[k][1]);
   }
   return run > CROSS_TUNNEL_M;
@@ -395,7 +424,7 @@ function spansOver(
   piece: number
 ): (Level | null)[] {
   const { levels, profile, ground } = solved[piece];
-  const pts = index.pieces[piece].pts;
+  const { pts } = index.pieces[piece];
   return levels.map((level, k) => {
     const z = profile[k];
     const g = ground[k];

@@ -53,14 +53,44 @@ zur Regel passt.
   Dachfläche, baut der Viewer das Dach aus der Messung neu — schon bei einem
   Fünftel, wo die Oberfläche dort eben ist und das Dach des Modells sich
   neigt, wo die Oberfläche es nicht tut (ein flaches Walmdach, das über ein
-  Kaufhaus mit Flachdach gezeichnet ist). Eine Höhe über
-  dem Gebäudemodell wird nur ein Schornstein oder Turm, wo OpenStreetMap ihn
-  nennt.
+  Kaufhaus mit Flachdach gezeichnet ist). Seine Schrägen werden als
+  gewöhnliches Steildach gezeichnet: jedes Haus einer Zeile und jeder Knick
+  eines Flügels als eigene Ebene, Traufe und First waagrecht, von Gauben
+  und Schornsteinen nicht verbeult, First, Grat und Kehle dort, wo sich
+  zwei Ebenen schneiden, und die Umrisse entlang der Wände des Gebäudes,
+  mit Ecken statt Rundungen; nur ein Wahrzeichen behält die
+  gemessene Fläche selbst, und
+  eine Schräge, die zu keiner Dachform passt, bleibt flach. Eine große Höhe
+  über dem Gebäudemodell wird nur ein Schornstein oder Turm, wo
+  OpenStreetMap ihn nennt. Das Kleine auf dem Dach kommt allein aus dem
+  Oberflächenmodell: jede Erhebung über einem geneigten Dach ist eine
+  Gaube, gleich wie klein und wie dicht an der nächsten; eine kleine am
+  First oder auf einem Flachdach ist ein Hausschornstein — außer sie liegt
+  entlang eines Firsts oder einer Kehle, die das Gebäudemodell etwas
+  daneben gezeichnet hat, oder steht auf einem Flachdach in einer Reihe mit
+  anderen (Masten auf einem Bahnsteigdach). Liegt das ganze Gebäudemodell
+  gleichmäßig höher als die Messung (das Taschenbergpalais 1,2 m), wird
+  es vorher darauf gesetzt; ist ein Gebäudeteil mit steilen Dachflächen
+  im Grundriss verschoben (der Nordflügel des Palais um etwa einen Meter),
+  wird er ein zweites Mal auf die Messung gerückt gelesen. Eine steile Dachfläche, an deren Oberkante
+  ein flacheres Oberdach anschließt, ist eine Mansarde, auch wo das
+  Gebäudemodell sie nicht so nennt; ihre Gauben dürfen bis 80° steil
+  stehen. Gauben eines Hauses, die zur selben Seite in gleicher Höhe
+  stehen, bilden eine Reihe: gerade ausgerichtet, gleich groß und gleich
+  geformt, auf gleicher Höhe, in einem Raster gleicher Abstände über die
+  ganze Reihe — über den Fensterachsen darunter, wo die Straßenfotos sie
+  gemessen haben, sonst im Abstand, auf den sich die Gauben selbst am
+  besten einigen. Eine einzelne leere Stelle zwischen zwei Gauben bekommt
+  eine wie ihre Nachbarin, außer dort steht ein Schornstein. Ihre Höhe
+  nimmt jede Gaube zuletzt von der genauen Dachfläche des Gebäudemodells,
+  nicht vom 1-m-Raster, damit sie auf dem gezeichneten Dach sitzt.
 - **Brückentragwerk:** Was entlang der Brückenachse mindestens 3 m über dem
   Deck steht, auf mindestens 25 m Länge, wird ein Bogen oder ein Fachwerk.
 - **Zuordnungen:** Ein Laden aus OpenStreetMap gehört zu dem Gebäude, in
   dessen Umriss sein Punkt liegt, sonst zum nächsten in wenigen Metern; ein
   Wahrzeichen aus Wikidata zu den Gebäudeteilen, die sein Umriss deckt.
+  Eine Brücke ist kein Wahrzeichen (sie gehört zu den Brücken), es sei
+  denn, Wikidata führt sie zugleich als Gebäude.
 - **Fremde Erkennung:** Laternen, die Mapillary in Straßenfotos gefunden
   hat, sind dort von Mapillarys eigener Bilderkennung erkannt worden —
   trainierte Netze, deren Treffer der Viewer übernimmt.
@@ -90,18 +120,25 @@ Vegetationsindex nur mäßig überein (r ≈ 0,7), deshalb steht München in
 | Grün von Wiesen und Laub | Luftbild, Infrarot (München: sichtbare Farben) | `= berechnet` |
 | Grundriss, Höhe und Dachform der Gebäude | 3D-Gebäudemodell LoD2 | `❝ übernommen` |
 | Dächer, wo das Modell sie verfehlt | Oberflächenmodell DOM1 | `◎ erkannt` |
-| Schornsteine, Türme, jüngere Gebäude, Gauben | DOM1, bestätigt durch OpenStreetMap | `◎ erkannt` |
+| Schornsteine, Türme, jüngere Gebäude | DOM1, bestätigt durch OpenStreetMap | `◎ erkannt` |
+| Gauben und Hausschornsteine | DOM1 über dem Dach des Gebäudemodells | `◎ erkannt` |
 | Bahnsteigdächer, Carports, Unterstände | DOM1, bestätigt durch OpenStreetMap | `◎ erkannt` |
 | Schuppen und Lauben | Laserscan | `◎ erkannt` |
 | Dachfarbe | Luftbild | `= berechnet` |
 | Fassadenfarbe und Material, wo eingetragen | OpenStreetMap | `❝ übernommen` |
+| Glasfassaden, wo nichts eingetragen ist | Straßenfotos (Mapillary), von einem Bildmodell gelesen | `◎ erkannt` |
 | Backstein oder Putz, wo nichts eingetragen ist | OpenStreetMap, die Nachbarschaft | `≈ angenommen` |
 | Tönung je Gebäude, Geschossbänder | der Viewer | `≈ angenommen` |
 | Haustüren | OpenStreetMap, die Eingänge | `❝ übernommen` |
 | Durchgänge durch Gebäude, ihre Breite | OpenStreetMap, die Durchgänge (`tunnel=building_passage`) | `❝ übernommen` |
 | Höhe eines Durchgangs, wo keine eingetragen ist, seine rechteckige Öffnung | der Viewer, aus dem Erdgeschoss | `≈ angenommen` |
+| Das Bild eines Wandbilds | Wikimedia Commons, ein Foto, das das ganze Bild gerade von vorn zeigt | `❝ übernommen` |
+| Die Zeichnung eines Wandbilds: Federlinien, Lasur und Tinte | aus diesem Foto berechnet (sein Licht ausgeglichen, Linien, wo seine Helligkeit umschlägt, seine Farben in fünf Felder sortiert und ins Pastell gehoben) | `= berechnet` |
+| Größe eines Wandbilds und sein Platz an der Wand | OpenStreetMap (sonst Wikidata), an der nächsten Wand des Gebäudemodells | `= berechnet` |
+| Wie hoch ein Wandbild beginnt, wo OpenStreetMap es nicht sagt | der Viewer, ein Geschoss hoch | `≈ angenommen` |
 | Laden oder Gastronomie im Erdgeschoss | OpenStreetMap, dem Gebäude zugeordnet | `◎ erkannt` |
 | Wahrzeichen | Wikidata, den Gebäudeteilen zugeordnet | `◎ erkannt` |
+| Die Angaben unter dem Namen eines befragten Wahrzeichens in der Szene (Bauzeit, Architekt, Wiederaufbau, Höhe) | Wikidata | `❝ übernommen` |
 | Mehrere Gebäude des Stadtmodells als ein Bau (das Residenzschloss mit dem Hausmannsturm) | OpenStreetMap, ein benannter Gebäudeumriss über mehreren Gebäuden, auch über Kachelgrenzen | `◎ erkannt` |
 | Straßenbäume: Standort, Art, Maße | Baumkataster | `❝ übernommen` |
 | Bäume ohne Kataster: Standort | DOM1 oder Laserscan | `◎ erkannt` |
@@ -115,6 +152,7 @@ Vegetationsindex nur mäßig überein (r ≈ 0,7), deshalb steht München in
 | Brücken: Pfeiler | der Viewer, außerhalb der Fahrrinne | `≈ angenommen` |
 | Gleise und ihr Verlauf | Basis-DLM oder OpenStreetMap | `❝ übernommen` |
 | Auf welcher Ebene ein Gleis liegt (Boden, Deck, Einschnitt) | aus Gelände und Decks entlang der ganzen Linie | `◎ erkannt` |
+| Träger einer Einschienenbahn: Höhe und Stützen | aus dem Gelände entlang der ganzen Linie und dem Lichtraum eines Wagens; die Stützen vom Viewer | `= berechnet` `≈ angenommen` |
 | Lampen, Bänke, Stadtmöbel: Standort | OpenStreetMap | `❝ übernommen` |
 | Lampen aus Straßenfotos | Mapillary | `◎ erkannt` |
 | Ihre Form; wohin eine Bank ohne Angabe blickt | der Viewer | `≈ angenommen` |

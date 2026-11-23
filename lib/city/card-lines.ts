@@ -30,7 +30,12 @@ export interface InquiryCard {
   title: string;
 }
 
-const decimal = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
+/** A card's heading alone: what the strip of candidates shows. */
+export type CardHeading = Pick<InquiryCard, "kicker" | "title">;
+
+export const decimal = new Intl.NumberFormat("de-DE", {
+  maximumFractionDigits: 1,
+});
 export const whole = new Intl.NumberFormat("de-DE", {
   maximumFractionDigits: 0,
 });
@@ -47,7 +52,10 @@ export function squareMetres(value: number): string {
 
 /** Every ISO date in a text as a German date ("2024-11-30" → "30.11.2024"). */
 export function germanDates(text: string): string {
-  return text.replace(/(\d{4})-(\d{2})-(\d{2})/g, "$3.$2.$1");
+  return text.replaceAll(
+    /(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})/gu,
+    "$<day>.$<month>.$<year>"
+  );
 }
 
 /** A position as a key to copy: UTM easting and northing to the decimetre

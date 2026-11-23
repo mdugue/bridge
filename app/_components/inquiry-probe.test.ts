@@ -3,9 +3,9 @@ import {
   chooseSample,
   firstSolid,
   mergeCandidates,
-  type PickSample,
   ringOffsets,
 } from "./inquiry-probe";
+import type { PickSample } from "./inquiry-probe";
 
 const s = (
   key: string,

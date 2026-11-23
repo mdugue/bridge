@@ -9,9 +9,9 @@ import {
 import { TREE_GENERA } from "./tree-season";
 
 test("every named genus has a family; the generic index has none", () => {
-  TREE_GENERA.forEach((name, gn) => {
+  for (const [gn, name] of TREE_GENERA.entries()) {
     expect(familyOf(gn) === "generic").toBe(name === "");
-  });
+  }
 });
 
 test("an evergreen without a genus is a conifer, a deciduous one generic", () => {
@@ -22,8 +22,9 @@ test("an evergreen without a genus is a conifer, a deciduous one generic", () =>
   expect(familyOf(TREE_GENERA.indexOf("Tilia"), true)).toBe("lime");
 });
 
+const look = (g: string) => familyLook(TREE_GENERA.indexOf(g as never));
+
 test("families tell the common street trees apart", () => {
-  const look = (g: string) => familyLook(TREE_GENERA.indexOf(g as never));
   // a birch's bark paler than an oak's
   expect(look("Betula").bark).toBeGreaterThan(look("Quercus").bark);
   expect(look("Platanus").summer[2]).toBeGreaterThan(0);

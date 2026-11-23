@@ -6,7 +6,8 @@
  * only what stands inside it. World frame (Y-up) as lib/city/pose.ts. No
  * THREE, no DOM; the meshes are app/_components/model-cuts.ts.
  */
-import { groundAxes, type ModelView, modelFootprint } from "./model-view";
+import { groundAxes, modelFootprint } from "./model-view";
+import type { ModelView } from "./model-view";
 
 /** A point on the ground plane (world x, z). */
 export interface GroundPoint {
@@ -44,7 +45,7 @@ export function groundStrip(
   const positions: number[] = [];
   const index: number[] = [];
   let previous = -1;
-  for (let i = 0; i <= n; i++) {
+  for (let i = 0; i <= n; i += 1) {
     const t = i / n;
     const x = from.x + (to.x - from.x) * t;
     const z = from.z + (to.z - from.z) * t;
@@ -82,7 +83,7 @@ export function joinStrips(strips: readonly StripMesh[]): StripMesh {
   for (const s of strips) {
     positions.set(s.positions, pv);
     const offset = pv / 3;
-    for (let i = 0; i < s.index.length; i++) {
+    for (let i = 0; i < s.index.length; i += 1) {
       index[pi + i] = s.index[i] + offset;
     }
     pv += s.positions.length;
@@ -129,7 +130,7 @@ export const CUT_SHARE = 0.8;
 /** Is `p` inside the convex polygon `poly` (either winding)? */
 function insideConvex(poly: readonly GroundPoint[], p: GroundPoint): boolean {
   let sign = 0;
-  for (let i = 0; i < poly.length; i++) {
+  for (let i = 0; i < poly.length; i += 1) {
     const a = poly[i];
     const b = poly[(i + 1) % poly.length];
     const cross = (b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x);
@@ -174,7 +175,7 @@ export function cutOutFromView(
     ...footprint.map((p) => Math.hypot(p.x - c.x, p.z - c.z)),
     1
   );
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 40; i += 1) {
     const mid = (lo + hi) / 2;
     if (fits(mid)) {
       lo = mid;
@@ -215,6 +216,8 @@ export function cutOutCorners(cut: CutOut): GroundPoint[] {
   return [at(-1, -1), at(1, -1), at(1, 1), at(-1, 1)];
 }
 
+const neg = (p: GroundPoint): GroundPoint => ({ x: -p.x, z: -p.z });
+
 /**
  * The four vertical planes that keep the inside (three's convention: a
  * point is kept where normal · p + constant ≥ 0).
@@ -227,7 +230,6 @@ export function cutOutPlanes(
     normal: { x: n.x, y: 0, z: n.z },
     constant: half - (n.x * cut.centre.x + n.z * cut.centre.z),
   });
-  const neg = (p: GroundPoint): GroundPoint => ({ x: -p.x, z: -p.z });
   return [
     plane(right, cut.halfRight),
     plane(neg(right), cut.halfRight),

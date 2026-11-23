@@ -1,4 +1,10 @@
-import { AdditiveBlending, Color, type Scene, Vector4 } from "three/webgpu";
+import {
+  AdditiveBlending,
+  Color,
+  MultiplyBlending,
+  Vector4,
+} from "three/webgpu";
+import type { Scene, Node, NodeBuilder, UniformNode } from "three/webgpu";
 import { VALLEY_FALLOFF_MAX, VALLEY_NEAR_M } from "@/lib/city/valley-fog";
 import {
   clamp,
@@ -14,7 +20,6 @@ import {
   uniform,
   vec3,
 } from "three/tsl";
-import type { Node, NodeBuilder, UniformNode } from "three/webgpu";
 import type { F, V3 } from "./shader-chunks";
 
 /**
@@ -117,7 +122,7 @@ export function fogFactorAt(f: SceneFog, world: V3, view: V3): F {
     0,
     1
   );
-  const xz = world.xz;
+  const { xz } = world;
   const edgeD = min(xz.sub(f.siteRect.xy), f.siteRect.zw.sub(xz));
   const edge = float(1)
     .sub(smoothstep(0, SITE_EDGE_FADE_M, min(edgeD.x, edgeD.y)))
@@ -130,12 +135,21 @@ export function fogFactorAt(f: SceneFog, world: V3, view: V3): F {
  * the fog's, except for additive light (the lamp halos and pools), which
  * fades to black instead — mixed toward the fog colour, an additive
  * fragment would *add* fog-coloured light, and in the valley pool the
- * halos would glow grey rather than drown in the haze.
+ * halos would glow grey rather than drown in the haze — and for a glaze
+ * (MultiplyBlending: a mural's drawing on its wall, mural-layer.ts), which
+ * fades to white, the colour that multiplies nothing: the wall under it
+ * is fogged already. Not exact — the glaze then darkens the fog over it
+ * too, by the fog's share — but a mural shows on the near LoD2 only,
+ * where the haze is thin.
  */
 function fogColourFor(f: SceneFog): Node {
-  return Fn((builder: NodeBuilder) =>
-    builder.material?.blending === AdditiveBlending ? vec3(0) : f.color
-  )();
+  return Fn((builder: NodeBuilder) => {
+    const blending = builder.material?.blending;
+    if (blending === AdditiveBlending) {
+      return vec3(0);
+    }
+    return blending === MultiplyBlending ? vec3(1) : f.color;
+  })();
 }
 
 /** Hands the fog to the scene: every fogged material reads it. */

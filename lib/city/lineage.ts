@@ -21,24 +21,26 @@ import {
   OBJECT_SOURCE_SCAN,
   OBJECT_SOURCE_SHOPFRONT,
 } from "./city-mesh";
-import { type DrawnFacts, decodeDrawn } from "./drawn-facts";
+import { decodeDrawn } from "./drawn-facts";
+import type { DrawnFacts } from "./drawn-facts";
 import { FACADE_UNIT } from "./facade-reading";
 import { germanDates } from "./card-lines";
 import type { BuildingInquiry, Inquiry } from "./inquiry";
 import type {
   BridgeInquiry,
+  CanopyInquiry,
+  HedgeInquiry,
   MonumentInquiry,
+  MoreInquiry,
   TreeInquiry,
 } from "./inquiry-features";
-import type { CanopyInquiry, MoreInquiry } from "./inquiry-more";
 import type { BikeInquiry, TrafficInquiry } from "./inquiry-traffic";
-import { isMeasuredRoof, type ObjectFacts } from "./object-facts";
-import {
-  type OsmProduct,
-  parseLod2Stand,
-  type SiteProvenance,
-  type SourceKey,
-} from "./provenance";
+import { PLACED } from "./inquiry-design";
+import type { DesignInquiry } from "./inquiry-design";
+import { isMeasuredRoof } from "./object-facts";
+import type { ObjectFacts } from "./object-facts";
+import { parseLod2Stand } from "./provenance";
+import type { OsmProduct, SiteProvenance, SourceKey } from "./provenance";
 import type { Method, Stated } from "./methods";
 import type { Provider } from "./site";
 
@@ -115,11 +117,19 @@ const spoken = (used: Said, method: Method): Stated[] =>
 class Lineage {
   readonly entries: LineageEntry[] = [];
 
+  readonly provenance: SiteProvenance | null;
+  private readonly site: LineageSite;
+  private readonly tile: string;
+
   constructor(
-    readonly provenance: SiteProvenance | null,
-    private readonly site: LineageSite,
-    private readonly tile: string
-  ) {}
+    provenance: SiteProvenance | null,
+    site: LineageSite,
+    tile: string
+  ) {
+    this.provenance = provenance;
+    this.site = site;
+    this.tile = tile;
+  }
 
   /** A source of the site's provider or the manifest's, with its edition
    *  for the tile (or `stand` when given). A "dlm" source on a site whose
@@ -212,31 +222,52 @@ export function lineage(
     "tile" in inquiry ? inquiry.tile : ""
   );
   switch (inquiry.kind) {
-    case "building":
+    case "building": {
       buildingLineage(l, inquiry, site);
       break;
-    case "tree":
+    }
+    case "tree": {
       treeLineage(l, inquiry, site);
       break;
-    case "monument":
+    }
+    case "monument": {
       monumentLineage(l, inquiry);
       break;
-    case "bridge":
+    }
+    case "bridge": {
       bridgeLineage(l, inquiry, site);
       break;
-    case "traffic":
+    }
+    case "traffic": {
       trafficLineage(l, inquiry);
       break;
-    case "bikes":
+    }
+    case "bikes": {
       bikeLineage(l, inquiry);
       break;
-    case "canopy":
+    }
+    case "design": {
+      designLineage(l, inquiry);
+      break;
+    }
+    case "canopy": {
+      canopyLineage(l, inquiry, site);
+      break;
+    }
+    case "hedge": {
+      hedgeLineage(l, inquiry);
+      break;
+    }
     case "furniture":
-    case "hedge":
     case "lamp":
     case "landing":
-    case "stop":
-      moreLineage(l, inquiry, site);
+    case "stop": {
+      osmThingLineage(l, inquiry);
+      break;
+    }
+    default: {
+      break;
+    }
   }
   return l.entries;
 }
@@ -254,9 +285,20 @@ function buildingLineage(
 ): void {
   const all = b.tree.length > 0 ? b.tree : [b.picked];
   const facts = all.map((o) => o.facts);
-  const flags = all.reduce((sum, o) => sum | o.flags, 0);
-  const has = (bit: number) => hasObjectFlag(flags, bit);
-  const source = b.picked.source;
+  // (a flag any object of the tree carries)
+  const has = (bit: number) => all.some((o) => hasObjectFlag(o.flags, bit));
+  const drawn = all.map((o) => decodeDrawn(o.facts.drawn));
+  // a facade's glass or metal OSM names — not Wikidata's or the street
+  // photos' (photo-glass.ts), which have their own lines, and not a shop
+  // window's pane (its own glass object)
+  const osmMaterial = all.some(
+    (o, i) =>
+      o.source !== OBJECT_SOURCE_SHOPFRONT &&
+      (hasObjectFlag(o.flags, OBJECT_FLAG_GLASS) ||
+        hasObjectFlag(o.flags, OBJECT_FLAG_METAL)) &&
+      drawn[i]?.materialFrom === undefined
+  );
+  const { source } = b.picked;
   const lod2 = source !== OBJECT_SOURCE_SCAN && source !== OBJECT_SOURCE_GAP;
   if (source === OBJECT_SOURCE_SCAN) {
     // small_buildings.py: a box where the scan's surface stands 2–6.5 m up,
@@ -297,8 +339,7 @@ function buildingLineage(
   l.source(
     "osm",
     [
-      (has(OBJECT_FLAG_GLASS) || has(OBJECT_FLAG_METAL)) &&
-        "Glas oder Metall der Fassade",
+      osmMaterial && "Glas oder Metall der Fassade",
       // osm_buildings.py: a shop point inside the footprint, or snapped to
       // the nearest one within a few metres
       has(OBJECT_FLAG_SHOP) && ["Schaufenster im Erdgeschoss", "detected"],
@@ -309,7 +350,6 @@ function buildingLineage(
     { osm: "buildings" }
   );
   // landmarks.py: Wikidata's item matched to the LoD2 objects it covers
-  const drawn = all.map((o) => decodeDrawn(o.facts.drawn));
   l.source(
     "wikidata",
     [
@@ -318,6 +358,8 @@ function buildingLineage(
       (has(OBJECT_FLAG_LANDMARK) && all.every((o) => !o.facts.drawn))
         ? "eines der Wahrzeichen der Stadt"
         : "",
+      drawn.some((d) => d.materialFrom === "wikidata") &&
+        "das Material der Fassade",
     ],
     "detected"
   );
@@ -371,11 +413,11 @@ function photoUses(
       method: "assumed",
     });
   }
-  if (drawn.some((d) => d.storey === "photos")) {
-    uses.push({ text: "Geschosshöhe", method: "detected" });
-  }
   if (all.some((o) => o.source === OBJECT_SOURCE_SHOPFRONT)) {
     uses.push({ text: "Schaufenster", method: "detected" });
+  }
+  if (drawn.some((d) => d.materialFrom === "photos")) {
+    uses.push({ text: "Glasfassade", method: "detected" });
   }
   if (all.some((o) => o.flags >= FACADE_UNIT)) {
     uses.push({
@@ -566,6 +608,24 @@ function bikeLineage(l: Lineage, b: BikeInquiry): void {
   l.source("dgm", ["der Boden"], "taken");
 }
 
+/** A planner's design: their file alone, read on the device, and where
+ *  it was set. */
+function designLineage(l: Lineage, d: DesignInquiry): void {
+  l.other({
+    source: `${d.file} (deine Datei)`,
+    used: [
+      { text: "die Form, der Name und die Art des Bauteils", method: "taken" },
+      { text: "die Lage", method: PLACED[d.source][1] },
+    ],
+    stand: "",
+    credit: "",
+  });
+  l.viewer([
+    ["das Weiß des Modells oder die Farben der Datei", "taken"],
+    ["was der Entwurf an Häusern, Bäumen und Boden verdeckt", "computed"],
+  ]);
+}
+
 /** Where each OSM thing was read, and what the viewer gave it. */
 const OSM_THINGS: Record<
   Exclude<MoreInquiry["kind"], "canopy" | "hedge">,
@@ -577,6 +637,12 @@ const OSM_THINGS: Record<
   landing: ["der Umriss und die Art", "Steg, Ponton und Höhe am Wasser"],
 };
 
+/** The OSM extract a thing was read from: the furniture's own (baked
+ *  again on its own for the flagpoles), else the trees' and lamps'. */
+function productOf(m: MoreInquiry): OsmProduct {
+  return m.kind === "furniture" ? "furniture" : "trees";
+}
+
 /** Whether a thing was found by Mapillary in street photos, not read
  *  from OSM (pipeline/bake/mapillary.py). */
 function fromMapillary(m: MoreInquiry): boolean {
@@ -586,36 +652,26 @@ function fromMapillary(m: MoreInquiry): boolean {
   );
 }
 
-function moreLineage(l: Lineage, m: MoreInquiry, site: LineageSite): void {
-  switch (m.kind) {
-    case "canopy":
-      canopyLineage(l, m, site);
-      return;
-    case "hedge":
-      l.source("dlm", [m.source === "dlm" && "Verlauf"], "taken", {
-        standIn: "trees",
-      });
-      l.source(
-        "osm",
-        [m.source !== "dlm" && m.source !== "lsc" && "Verlauf"],
-        "taken",
-        { osm: "trees" }
-      );
-      l.source("lsc", [m.source === "lsc" && "Verlauf und Höhe"], "detected");
-      l.source("lsc", [m.source === "osm+lsc" && "Höhe"], "computed");
-      l.source("dom", [m.source === "osm+dom" && "Höhe"], "computed");
-      l.source("dgm", ["der Boden"], "taken");
-      l.viewer([
-        (m.source === "osm" || m.source === "dlm") && "Höhe und Breite",
-        m.source === "osm+dom" && "Breite",
-      ]);
-      return;
-    case "furniture":
-    case "lamp":
-    case "landing":
-    case "stop":
-      osmThingLineage(l, m);
-  }
+/** A hedge's lineage: its line from the Basis-DLM, OSM or the laser scan,
+ *  its height where the scan or the surface model measured it. */
+function hedgeLineage(l: Lineage, m: HedgeInquiry): void {
+  l.source("dlm", [m.source === "dlm" && "Verlauf"], "taken", {
+    standIn: "trees",
+  });
+  l.source(
+    "osm",
+    [m.source !== "dlm" && m.source !== "lsc" && "Verlauf"],
+    "taken",
+    { osm: "trees" }
+  );
+  l.source("lsc", [m.source === "lsc" && "Verlauf und Höhe"], "detected");
+  l.source("lsc", [m.source === "osm+lsc" && "Höhe"], "computed");
+  l.source("dom", [m.source === "osm+dom" && "Höhe"], "computed");
+  l.source("dgm", ["der Boden"], "taken");
+  l.viewer([
+    (m.source === "osm" || m.source === "dlm") && "Höhe und Breite",
+    m.source === "osm+dom" && "Breite",
+  ]);
 }
 
 /** A lamp's, a piece of furniture's, a landing's or a stop's lineage: OSM's
@@ -633,9 +689,11 @@ function osmThingLineage(
       credit: "Mapillary, CC BY-SA 4.0",
       url: MAPILLARY_URL,
     });
-    l.source("osm", lampFromOsm(m), "taken", { osm: "trees" });
+    l.source("osm", lampFromOsm(m), "taken", { osm: productOf(m) });
   } else {
-    l.source("osm", [read, ...lampFromOsm(m)], "taken", { osm: "trees" });
+    l.source("osm", [read, ...lampFromOsm(m)], "taken", {
+      osm: productOf(m),
+    });
   }
   if (m.kind === "lamp" && m.heightFrom) {
     // lamp_heights.py: the street's (or its kind's) median post height
@@ -653,7 +711,13 @@ function osmThingLineage(
     ],
     "taken"
   );
-  l.viewer([drawn]);
+  l.viewer([
+    drawn,
+    // a flag's wind and cloth are the viewer's (furniture.ts `flagYaw`)
+    m.kind === "furniture" &&
+      m.properties.k === "flag" &&
+      "der Wind, in den die Fahne weht, und ihr Tuch",
+  ]);
 }
 
 /** What a lamp's place took from OSM beyond its own point: the wall it

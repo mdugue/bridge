@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import { BERLIN } from "../../sites/berlin";
 import { DRESDEN } from "../../sites/dresden";
 import { HAMBURG } from "../../sites/hamburg";
@@ -9,15 +9,22 @@ import {
   isSiteProvenance,
   leadingDate,
   parseLod2Stand,
-  type ProvenanceRecord,
   siteProvenance,
 } from "./provenance";
+import type { ProvenanceRecord } from "./provenance";
 import { tileIds } from "./tile";
 
 const record = JSON.parse(
   readFileSync(
-    join(import.meta.dir, "..", "..", "data", "dresden", "provenance.json"),
-    "utf8"
+    path.join(
+      import.meta.dir,
+      "..",
+      "..",
+      "data",
+      "dresden",
+      "provenance.json"
+    ),
+    "utf-8"
   )
 ) as ProvenanceRecord;
 
@@ -29,19 +36,29 @@ test("every site tile has the editions its buildings and ground came from", () =
     const row = manifest.tiles[tile];
     // The file name in the message says which tile lost an edition.
     for (const key of ["lod2", "lsc", "dgm"] as const) {
-      expect(`${tile} ${key}: ${row?.[key]}`).toMatch(/: \d{4}/);
+      expect(`${tile} ${key}: ${row?.[key]}`).toMatch(/: \d{4}/u);
     }
   }
-  expect(manifest.sources.osm.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(manifest.sources.osm.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
   expect(manifest.sources.osm.credit).toContain("OpenStreetMap");
   expect(manifest.sources.lod2.credit).toBe("Quelle: GeoSN, dl-de/by-2-0");
   // every OSM product a card quotes has its own edition
-  for (const product of ["buildings", "bridges", "fountains", "trees"]) {
+  for (const product of [
+    "buildings",
+    "bridges",
+    "fountains",
+    "trees",
+    "furniture",
+  ]) {
     expect(
       `${product}: ${manifest.sources.osm.stands?.[product as "trees"]}`
-    ).toMatch(/: \d{4}-\d{2}-\d{2}$/);
+    ).toMatch(/: \d{4}-\d{2}-\d{2}$/u);
   }
-  expect(manifest.sources.wikidata.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  // the furniture baked again on its own (the flagpoles) quotes its own
+  const stands = manifest.sources.osm.stands ?? {};
+  expect(stands.furniture).toBeDefined();
+  expect(`${stands.furniture}` >= `${stands.trees}`).toBe(true);
+  expect(manifest.sources.wikidata.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
   expect(manifest.sources.trees.stand).toBe("2026-10-01");
 });
 
@@ -92,4 +109,16 @@ test("free-text dates yield their leading ISO date only", () => {
 test("a manifest of another version is not read", () => {
   expect(isSiteProvenance({ version: 2, sources: {}, tiles: {} })).toBe(false);
   expect(isSiteProvenance(null)).toBe(false);
+});
+
+test("Unna's OSM stand comes from its openstreetmap.fr extract", () => {
+  const unnaRecord = JSON.parse(
+    readFileSync(
+      path.join(import.meta.dir, "..", "..", "data", "unna", "provenance.json"),
+      "utf-8"
+    )
+  ) as ProvenanceRecord;
+  const unna = siteProvenance(unnaRecord, tileIds(UNNA), UNNA);
+  expect(unna.sources.osm.stand).toMatch(/^\d{4}-\d{2}-\d{2}$/u);
+  expect(unna.sources.osm.stands?.buildings).toBe(unna.sources.osm.stand);
 });

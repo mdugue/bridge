@@ -20,7 +20,10 @@ Kurz gesagt:
 - Damit Abstürze und langsame Geräte auffallen, schickt der Viewer Fehler- und
   Leistungsberichte – ohne Standort und ohne IP-Adresse. Du kannst sie
   [unten ausschalten](#fehlerberichte).
-- Dein Standort verlässt dein Gerät nie.
+- Dein Standort verlässt dein Gerät nur, wenn du einem Link folgst, der ihn
+  in seiner Adresse trägt (der Sprung in eine andere Stadt, ein kopierter
+  Ansichts-Link): dann steht er in Vercels Protokollen, wie jede
+  aufgerufene Adresse. [Mehr dazu unten](#standort).
 
 ## Verantwortlich
 
@@ -68,12 +71,12 @@ kann, schickt er Berichte:
 
 Ein Bericht enthält Browser, Betriebssystem und Gerätetyp (User-Agent),
 Bildschirmgröße und Pixeldichte, den ungefähren Arbeitsspeicher des Geräts,
-die Grafikschnittstelle (WebGPU oder WebGL2), wie weit der Viewer seine
+die Grafikschnittstelle (WebGPU), wie weit der Viewer seine
 Grafik auf diesem Gerät nach früheren Abstürzen zurückgenommen hat (die
 Sparstufe, siehe unten), die
 aufgerufene Seite ohne Parameter (etwa `/dresden`), den Verlauf des Besuchs
-(Ladeschritte, Fehlermeldungen, Bildrate, Rechenzeit je Bild auf Prozessor
-und Grafikkarte, gezeichnete Pixel, die höchste erreichte Bildwiederholrate
+(Ladeschritte, Fehlermeldungen – auch die der Grafikbibliothek three.js –,
+Bildrate, Rechenzeit je Bild auf Prozessor und Grafikkarte, gezeichnete Pixel, die höchste erreichte Bildwiederholrate
 (meist die des Bildschirms), Grafik- und Arbeitsspeicher, geladene und gerade
 ladende Kacheln, ob der Browser sich für online hält, wann die Seite im
 Hintergrund lag, Bildstil, Gehen oder Fliegen, Höhe der Kamera über dem
@@ -127,6 +130,8 @@ und liest es nur auf deinem Gerät:
   `crash-trail.previous`) und ob der vorige schon gemeldet wurde
   (`crash-trail.reported`; siehe [Fehlerberichte](#fehlerberichte)),
 - deine Wahl zu den Fehlerberichten (`crash-reports.declined`),
+- deinen Schlüssel für *Frag die Stadt*, wenn du einen eingibst
+  (`frag-die-stadt`; siehe [Frag die Stadt](#frag-die-stadt)),
 - wenn sich die Seite nach einem Grafikfehler selbst neu lädt, bis du den Tab
   schließt: die Stelle, an der du in der Stadt standest, und wann das war –
   damit sie dich dorthin zurückbringt und nicht endlos neu lädt
@@ -139,23 +144,59 @@ und liest es nur auf deinem Gerät:
   zählt.
   Die Stufe sinkt von selbst, alle drei Tage um eins; in der Seitenleiste
   unter *Erweitert › Qualität* siehst du sie und setzt sie auf 0 zurück.
+- nur wenn du die Seite mit `?inspect=1` öffnest (ein Prüfwerkzeug für die
+  Entwicklung): wie du das Messfenster von three.js angeordnet hast
+  (`threejs-inspector`).
 
 Rechtsgrundlage ist § 25 Abs. 2 Nr. 2 TDDDG: Diese Einträge sind für die
 Funktionen, die du nutzt, unbedingt erforderlich. Du kannst sie jederzeit in
 den Einstellungen deines Browsers löschen.
 
-## Standort und Kompass
+## Eigene Entwürfe
+
+Lädst du in der Seitenleiste einen eigenen Entwurf (*Entwurf*), liest der
+Viewer die Datei nur in deinem Browser. Sie wird nicht hochgeladen, nicht
+gespeichert und in keinem Fehlerbericht erwähnt; schließt du den Tab, ist
+sie aus dem Viewer verschwunden. Verweist eine `.gltf`-Datei auf weitere
+Dateien, liest der Viewer nur die, die du mit ausgewählt hast, und ruft
+keine Adresse ab, die in der Datei steht. Für eine IFC- oder
+Rhino-Datei und ein GeoPackage lädt der Viewer ein Leseprogramm
+(WebAssembly) nach, und zwar von dieser Seite selbst,
+nicht von einem fremden Server. *Lage sichern* legt die Lage des
+Entwurfs als Datei in deinen Downloads ab, nirgends sonst.
+
+<h2 id="standort">Standort und Kompass</h2>
 
 Die Werkzeuge *Standort* und *Live* fragen nach deinem Standort und der
 Ausrichtung deines Telefons – erst, wenn du sie antippst, und nur mit deiner
 Erlaubnis im Browser (Art. 6 Abs. 1 lit. a DSGVO, § 25 Abs. 1 TDDDG). Beides
-wird nur in deinem Browser verwendet, um dich in die Stadt zu setzen, und nie
-an mich oder Dritte gesendet; auch die Fehlerberichte enthalten es nicht.
+wird in deinem Browser verwendet, um dich in die Stadt zu setzen; die
+Fehlerberichte enthalten es nicht.
+
 Bietet das Standort-Fenster den Sprung in eine andere Stadt dieser Seite an,
-reist dein Standort dabei im Fragment der Adresse (hinter dem `#`) mit: den
-sieht nur dein Browser, nicht der Hoster, und die Seite entfernt ihn, sobald
-sie dich dort abgesetzt hat. Wie dein Browser den Standort bestimmt – manche fragen dafür einen Ortungsdienst
-ihres Herstellers –, liegt bei deinem Browser. Die Erlaubnis kannst du in
+trägt der Link deinen tatsächlichen Standort (mit sechs Nachkommastellen,
+auf Dezimeter genau) in den Parametern seiner Adresse, etwa
+`/leipzig?at=51.339300,12.372600`. Folgst du ihm, schickt dein Browser diese
+Adresse an Vercel, und sie steht wie jede aufgerufene Adresse in Vercels
+Protokollen (siehe oben, *Aufruf der Seite und Hosting*).
+Die Seite entfernt den Parameter, sobald sie dich dort abgesetzt hat.
+
+Ebenso legt *Link kopieren* (unter *Erweitert › Snapshot*) den Ort der
+Kamera – nach *Standort* oder *Live* also deinen eigenen –, die Zeit und den
+Look in die Parameter eines Links (`?snap=…`) in deine Zwischenablage; wem
+du ihn schickst, entscheidest du. Wer ihn öffnet, schickt die Adresse samt
+diesem Ort an Vercel, in dessen Protokolle; die Seite liest die Ansicht
+dann in seinem Browser und speichert sie nicht.
+
+Die Fehler- und Leistungsberichte nennen die aufgerufene Seite ohne diese
+Parameter, und der Verlauf eines Besuchs, den dein Browser für sie festhält,
+behält von der Adresse nur die Testschalter (wie `?scene=lite`), nie `at`
+oder `snap`. An andere Server als diese Seite schickt dein Browser nach
+seiner Voreinstellung als Referrer nur die Adresse der Seite ohne Pfad und
+Parameter.
+
+Wie dein Browser den Standort bestimmt – manche fragen dafür einen
+Ortungsdienst ihres Herstellers –, liegt bei deinem Browser. Die Erlaubnis kannst du in
 seinen Einstellungen jederzeit widerrufen.
 
 ## Live-Daten der Städte
@@ -171,11 +212,51 @@ Datenschutzhinweise der jeweiligen Stadt. Rechtsgrundlage ist mein
 berechtigtes Interesse, die Ebene, die du eingeschaltet hast, mit aktuellen
 Zahlen zu zeigen (Art. 6 Abs. 1 lit. f DSGVO).
 
+<h2 id="frag-die-stadt">Frag die Stadt</h2>
+
+*Frag die Stadt* beantwortet Fragen zur Stadt mit einem Sprachmodell –
+nur, wenn du es öffnest und einen eigenen Schlüssel eines KI-Anbieters
+eingibst (Anthropic, OpenAI, OpenRouter oder Vercel AI Gateway). Der
+Schlüssel bleibt in deinem Browser: für diesen Tab im Session Storage,
+und wenn du *Auf diesem Gerät merken* wählst, im lokalen Speicher
+(`frag-die-stadt`, mit Anbieter und Modell); *gespeicherten Schlüssel
+löschen* entfernt ihn.
+
+Mit jeder Frage schickt dein Browser an diese Seite (`/api/frag`): das
+bisherige Gespräch, den Schlüssel, Anbieter und Modell, welche Stadt du
+ansiehst und – wenn das Modell danach fragt – wo du in der Stadt stehst,
+wohin du schaust, die Uhrzeit der Szene, den Bildstil und die
+eingeschalteten Datenebenen. Die Seite reicht Gespräch und Schlüssel an
+den gewählten Anbieter weiter und schickt die Antwort zurück; sie
+speichert weder das Gespräch noch den Schlüssel und protokolliert beides
+nicht. Beim Prüfen eines neuen Schlüssels (`/api/schluessel`) fragt
+sie den Anbieter, ob er gilt, ohne etwas zu verarbeiten. Was der Anbieter
+mit deinen Fragen tut, regeln deine Vereinbarung mit ihm und seine
+Datenschutzhinweise – es ist dein Konto, und die Kosten trägst du.
+Schreib in deine Fragen nichts, was du dem Anbieter nicht anvertrauen
+willst.
+
+*Vorlesen* spricht die Antworten mit einer Stimme deines Geräts; der
+Text dafür verlässt dein Gerät nicht. Solange *Vorlesen* an ist, sagt
+jede Frage dem Anbieter des Sprachmodells, dass die Antwort vorgelesen
+wird, damit sie kurz und ohne Links ausfällt. *Sprechen* nutzt die Spracherkennung deines
+Browsers: Chrome und Safari schicken die Aufnahme dafür an Server von
+Google beziehungsweise Apple, und es gelten deren Datenschutzhinweise.
+Diese Seite erhält nur den erkannten Text, wie eine getippte Frage, und
+nie die Aufnahme. Das Mikrofon öffnet sich erst, wenn du *Sprechen*
+antippst und es im Browser erlaubst, und nur für eine Frage.
+
+Rechtsgrundlage ist die Erfüllung dessen, worum du mit deiner Frage
+bittest (Art. 6 Abs. 1 lit. b DSGVO); das Speichern des Schlüssels in
+deinem Browser ist dafür unbedingt erforderlich oder, wenn du ihn dir
+merken lässt, deine Wahl (§ 25 Abs. 2 Nr. 2 und Abs. 1 TDDDG).
+
 ## Schriften und Links
 
 Die Schriften liefert diese Seite selbst aus; es besteht keine Verbindung zu
 Google Fonts oder einem anderen Schriftdienst. Links zu anderen Angeboten –
-etwa *Unterstützen* (Ko-fi) oder GitHub – laden nichts, bevor du sie
+etwa *Unterstützen* (Ko-fi), GitHub oder die Quellen unter *Belege* in einem
+Spaziergang (Wikipedia und andere) – laden nichts, bevor du sie
 anklickst; danach gilt die Datenschutzerklärung des jeweiligen Anbieters.
 
 ## Deine Rechte

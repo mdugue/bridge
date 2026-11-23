@@ -1,6 +1,16 @@
 import { expect, test } from "bun:test";
 import { Matrix4, PerspectiveCamera } from "three";
-import { blurs, BLUR_JUMP_PX, type Motion, motionPixels } from "./motion-blur";
+import {
+  BLUR_HOLD_FRAMES,
+  BLUR_JUMP_PX,
+  blurs,
+  createBlurGate,
+  framePace,
+  motionPixels,
+  NOMINAL_FRAME_MS,
+  stepBlurGate,
+} from "./motion-blur";
+import type { Motion } from "./motion-blur";
 
 const W = 1000;
 const H = 600;
@@ -28,7 +38,7 @@ function moved(change: (camera: PerspectiveCamera) => void): Motion {
 }
 
 test("a still camera does not move", () => {
-  const m = moved(() => undefined);
+  const m = moved(() => {});
   expect(m.most).toBeCloseTo(0, 6);
   expect(blurs(m, false)).toBe(false);
 });
@@ -36,7 +46,9 @@ test("a still camera does not move", () => {
 test("a turn moves the picture by its angle in pixels, everywhere", () => {
   // 1° of yaw: the centre moves focal length × tan 1° (px),
   // the wide edges up to (1 + tan²) times more
-  const m = moved((c) => c.rotateY((1 * Math.PI) / 180));
+  const m = moved((c) => {
+    c.rotateY((1 * Math.PI) / 180);
+  });
   const focal = H / 2 / Math.tan((55 / 2) * (Math.PI / 180));
   expect(m.least).toBeGreaterThan(focal * Math.tan(Math.PI / 180) * 0.99);
   expect(m.most).toBeLessThan(focal * Math.tan(Math.PI / 180) * 1.8);
@@ -46,7 +58,9 @@ test("a turn moves the picture by its angle in pixels, everywhere", () => {
 
 test("a walk's step moves the near street, not the far city", () => {
   // 2.5 cm a frame: 1.5 m/s at 60 Hz
-  const m = moved((c) => c.translateZ(-0.025));
+  const m = moved((c) => {
+    c.translateZ(-0.025);
+  });
   expect(m.most).toBeGreaterThan(1);
   expect(m.most).toBeLessThan(20);
   expect(m.median).toBeLessThan(1);
@@ -56,11 +70,56 @@ test("a walk's step moves the near street, not the far city", () => {
 });
 
 test("a teleport is a jump, not motion", () => {
-  const m = moved((c) => c.position.set(500, 200, 300));
+  const m = moved((c) => {
+    c.position.set(500, 200, 300);
+  });
   expect(m.most).toBeGreaterThan(BLUR_JUMP_PX);
   expect(blurs(m, false)).toBe(false);
 });
 
 test("a point behind the last camera is a jump", () => {
-  expect(moved((c) => c.rotateY(Math.PI)).most).toBe(Infinity);
+  expect(
+    moved((c) => {
+      c.rotateY(Math.PI);
+    }).most
+  ).toBe(Infinity);
+});
+
+/** A motion every sample shares (px). */
+const at = (px: number): Motion => ({ least: px, median: px, most: px });
+
+test("the blur holds through a slowing walk, and stops once the camera has", () => {
+  const gate = createBlurGate();
+  expect(stepBlurGate(gate, at(1), false)).toBe(false);
+  expect(stepBlurGate(gate, at(3), false)).toBe(true);
+  // around the threshold, as an uneven frame rate measures it: held
+  for (const px of [1.5, 2.5, 1.2, 1.8, 1.1]) {
+    expect(stepBlurGate(gate, at(px), false)).toBe(true);
+  }
+  // a jump: one frame sharp, the state kept
+  expect(stepBlurGate(gate, at(BLUR_JUMP_PX), false)).toBe(false);
+  expect(stepBlurGate(gate, at(1.5), false)).toBe(true);
+  // still: off after the hold
+  const frames: boolean[] = [];
+  for (let i = 0; i < BLUR_HOLD_FRAMES + 2; i += 1) {
+    frames.push(stepBlurGate(gate, at(0), false));
+  }
+  expect(frames.indexOf(false)).toBe(BLUR_HOLD_FRAMES - 1);
+  expect(stepBlurGate(gate, at(1.5), false)).toBe(false);
+});
+
+test("where the blur stands in for the antialiasing it holds nothing", () => {
+  const gate = createBlurGate();
+  expect(stepBlurGate(gate, at(3), true)).toBe(true);
+  // under a pixel's smear the next frame is sharp at once
+  expect(stepBlurGate(gate, at(1.5), true)).toBe(false);
+  expect(gate.on).toBe(false);
+});
+
+test("a frame's way is scaled to a nominal frame's", () => {
+  expect(framePace(NOMINAL_FRAME_MS)).toBeCloseTo(1);
+  expect(framePace(NOMINAL_FRAME_MS * 2)).toBeCloseTo(0.5);
+  expect(framePace(1000)).toBe(0.25);
+  expect(framePace(1)).toBe(2);
+  expect(framePace(0)).toBe(1);
 });

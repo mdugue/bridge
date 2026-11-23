@@ -1,5 +1,7 @@
 import type { Mesh } from "three/webgpu";
-import { type GroundLight, groundLitMaterial } from "./sky-light";
+import { groundLitMaterial } from "./sky-light";
+import type { GroundLight } from "./sky-light";
+import { markThinCaster } from "./three-utils";
 
 const KERB_COLOR = 0xd9_d5_cc; // pale granite, a shade above the pavement
 
@@ -20,5 +22,6 @@ export function dressKerbs(mesh: Mesh, light?: GroundLight): void {
     true
   );
   mesh.castShadow = true;
+  markThinCaster(mesh);
   mesh.receiveShadow = true;
 }

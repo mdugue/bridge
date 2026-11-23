@@ -24,8 +24,9 @@ export interface DrawnFacts {
    *  model's: a building LoD2 lacks that the model was flown before
    *  (pipeline/bake/structures.py) */
   height?: "osm";
-  /** the material is Wikidata's (a landmark's), where OSM names none */
-  materialFrom?: "wikidata";
+  /** the material is Wikidata's (a landmark's) or the street photos'
+   *  (a glass front), where OSM names none */
+  materialFrom?: "photos" | "wikidata";
   /** why the facade is its own: its use (ALKIS), a hall's storeys (OSM),
    *  a listed public building whose storeys OSM does not count, or its
    *  building's, whose storey count does not fit the part */
@@ -34,10 +35,9 @@ export interface DrawnFacts {
   roof?: RoofColourSource;
   /** OSM's `roof:colour` as mapped */
   roofColour?: string;
-  /** where the storey height came from: OSM's count, the photos, the
-   *  storeys of the mapped buildings around it, or the estimate from the
-   *  height */
-  storey?: "height" | "neighbours" | "osm" | "photos";
+  /** where the storey height came from: OSM's count, the storeys of the
+   *  mapped buildings around it, or the estimate from the height */
+  storey?: "height" | "neighbours" | "osm";
   /** where the wall colour came from */
   wall?: WallColourSource;
   /** the Wikidata item of the landmark the object belongs to */

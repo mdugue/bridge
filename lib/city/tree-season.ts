@@ -103,7 +103,7 @@ const YELLOW: Phenology["hue"] = [0.15, 0.5, 0.63];
 const GOLDEN: Phenology["hue"] = [0.13, 0.62, 0.63];
 const ORANGE: Phenology["hue"] = [0.1, 0.6, 0.6];
 const ORANGE_RED: Phenology["hue"] = [0.045, 0.55, 0.55];
-const RED: Phenology["hue"] = [0.0, 0.55, 0.52];
+const RED: Phenology["hue"] = [0, 0.55, 0.52];
 const RUSSET: Phenology["hue"] = [0.07, 0.42, 0.47];
 const TAN: Phenology["hue"] = [0.09, 0.38, 0.55];
 const RUST: Phenology["hue"] = [0.05, 0.55, 0.49];
@@ -535,4 +535,30 @@ export function bloomAt(day: number, genus: number, jitter = 0): number {
   const mid = (a + z) / 2;
   const t = d < mid ? ramp([a, mid], d) : 1 - ramp([mid, z], d);
   return b.strength * t;
+}
+
+/** Leaf litter on the ground through Dresden's year (the table's days):
+ *  none before the leaves turn, all of it once most have fallen, a thin
+ *  rest raked or rotting into the winter, gone by early spring. */
+const LITTER_KNOTS: readonly (readonly [number, number])[] = [
+  [0, 0.3],
+  [75, 0],
+  [270, 0],
+  [305, 1],
+  [335, 1],
+  [YEAR, 0.3],
+];
+
+/** How much fallen leaf lies under the trees on `day` (0..1; a day of
+ *  Dresden's year, `climateDay`). */
+export function leafLitterAt(day: number): number {
+  const d = ((day % YEAR) + YEAR) % YEAR;
+  for (let i = 1; i < LITTER_KNOTS.length; i += 1) {
+    const [b, vb] = LITTER_KNOTS[i];
+    if (d <= b) {
+      const [a, va] = LITTER_KNOTS[i - 1];
+      return va + ((vb - va) * (d - a)) / (b - a);
+    }
+  }
+  return 0.3;
 }

@@ -2,8 +2,8 @@ import { clamp01 } from "./math";
 /**
  * The load pipeline as the HUD shows it: five named stages with a fixed share
  * of the bar each, declared ONCE. `create-app.ts` reports a fraction per stage
- * (see `CityWalkOptions.onStage`), the loading screen renders the stack and the
- * list from these states, and the streaming pill renders the same stages as
+ * (see `CityWalkOptions.onStage`), the loading screen renders its ring and the
+ * stage marks from these states, and the streaming pill renders the same stages as
  * segments — one model, two sizes.
  *
  * The order is the order the scene actually loads in, not a designed ideal: the
@@ -48,8 +48,8 @@ export interface LoadStageDef {
 
 /**
  * Where the scene becomes walkable: buildings + terrain + light are done, the
- * first frame is up. The divider in the loading list and the bar's "begehbar"
- * tick both sit here.
+ * first frame is up. The divider between the loading screen's stage marks and
+ * its dashed walkable circle both sit here.
  */
 export const WALKABLE_PERCENT = 52;
 

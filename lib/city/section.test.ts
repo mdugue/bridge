@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { modelFootprint, type ModelView, withPreset } from "./model-view";
+import { modelFootprint, withPreset } from "./model-view";
+import type { ModelView } from "./model-view";
 import {
   cutOutCorners,
   cutOutFromView,
   cutOutPlanes,
-  type CutOut,
-  type GroundPoint,
   groundStrip,
   joinStrips,
   sectionLine,
 } from "./section";
+import type { CutOut, GroundPoint } from "./section";
 
 /** Is a ground point inside the cut-out? The planes' oracle. */
 function insideCutOut(cut: CutOut, p: GroundPoint): boolean {

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { createTrail, type Trail } from "@/lib/city/crash-trail";
+import { createTrail } from "@/lib/city/crash-trail";
+import type { Trail } from "@/lib/city/crash-trail";
 import { TUNNEL_PATH } from "@/lib/city/crash-reports";
 
 /**
@@ -38,7 +39,9 @@ beforeEach(() => {
   g.localStorage = {
     getItem: (key: string) => map.get(key) ?? null,
     setItem: (key: string, value: string) => map.set(key, value),
-    removeItem: (key: string) => void map.delete(key),
+    removeItem: (key: string) => {
+      map.delete(key);
+    },
   };
   g.navigator = {
     sendBeacon: (url: string, body: string) => {
@@ -48,9 +51,9 @@ beforeEach(() => {
     userAgent: "test",
     onLine: true,
   };
-  g.fetch = () => {
+  g.fetch = async () => {
     fetched += 1;
-    return Promise.resolve(new Response(null, { status: 200 }));
+    return new Response(null, { status: 200 });
   };
   g.window = {};
   g.location = { origin: "https://example.test" };

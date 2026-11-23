@@ -19,7 +19,7 @@ test("gaps longer than a nominal span get evenly spaced virtual supports", () =>
   const s = wireStations(100, []);
   expect(s[0]).toBe(0);
   expect(s.at(-1)).toBe(100);
-  for (let i = 1; i < s.length; i++) {
+  for (let i = 1; i < s.length; i += 1) {
     expect(s[i] - s[i - 1]).toBeLessThanOrEqual(NOMINAL_SPAN_M + 1e-9);
   }
   expect(s).toHaveLength(5); // 4 spans of 25 m

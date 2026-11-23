@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  type ChunkLodState,
   createCrownPlanScratch,
   createLodSchedule,
   FAR_IN_M,
@@ -13,13 +12,13 @@ import {
   RICH_OUT_M,
   RICH_TREE_BUDGET,
 } from "./vegetation-lod";
+import type { ChunkLodState } from "./vegetation-lod";
 
 const chunk = (
   near: number,
   trees = 100,
-  current: ChunkLodState["current"] = "mid",
-  allowRich = true
-): ChunkLodState => ({ allowRich, current, near, trees });
+  current: ChunkLodState["current"] = "mid"
+): ChunkLodState => ({ current, near, trees });
 
 test("distance picks mid or far, with hysteresis", () => {
   expect(planCrownTiers([chunk(FAR_IN_M - 1)])).toEqual(["mid"]);
@@ -35,10 +34,6 @@ test("near chunks go rich, with hysteresis", () => {
   const between = (RICH_IN_M + RICH_OUT_M) / 2;
   expect(planCrownTiers([chunk(between, 100, "mid")])).toEqual(["mid"]);
   expect(planCrownTiers([chunk(between, 100, "rich")])).toEqual(["rich"]);
-});
-
-test("the rich crown stays off where the look disables it", () => {
-  expect(planCrownTiers([chunk(0, 100, "mid", false)])).toEqual(["mid"]);
 });
 
 test("rich crowns stay within the budget, nearest chunks first", () => {
@@ -81,7 +76,6 @@ test("the far tier thins dense chunks only", () => {
 
 test("planCrownTiers spends a phone's smaller budget on the nearest chunks", () => {
   const chunks = [100, 50, 150].map((near) => ({
-    allowRich: true,
     current: "mid" as const,
     near,
     trees: 500,
@@ -120,9 +114,9 @@ test("a tie in the budget's queue goes to the earlier chunk", () => {
   expect(planCrownTiers(tied, 2000)).toEqual(["rich", "mid"]);
 });
 
-describe("when the tiers are picked", () => {
-  const at = (x: number, y = 0, z = 0) => ({ x, y, z });
+const at = (x: number, y = 0, z = 0) => ({ x, y, z });
 
+describe("when the tiers are picked", () => {
   test("the first frame picks them, the frames before the next tick do not", () => {
     const schedule = createLodSchedule();
     expect(schedule.due(false, at(0))).toBe(true);

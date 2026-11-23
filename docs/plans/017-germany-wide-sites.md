@@ -37,7 +37,7 @@
 
 ## Progress, second round (plans 049 and 051)
 
-[Plan 049](./049-many-sites-one-env-var.md) and
+[Plan 049](./completed.md#049--many-sites-fetch-bake-build-a-route-per-site--done-2026-10-01) and
 [ADR 0037](../adr/0037-sites-providers-and-per-site-data.md) finished most
 of what is open below, in a different shape: a typed `Provider` per
 Land instead of `Site.ingest`; `bun run fetch <site>` with one adapter per

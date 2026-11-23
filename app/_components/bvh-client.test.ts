@@ -21,8 +21,8 @@ import "./collision";
  *  building tile's glTF stores them. */
 function field(n = 30): BufferGeometry {
   const raw = new Int16Array((n + 1) * (n + 1) * 4);
-  for (let r = 0; r <= n; r++) {
-    for (let c = 0; c <= n; c++) {
+  for (let r = 0; r <= n; r += 1) {
+    for (let c = 0; c <= n; c += 1) {
       const i = r * (n + 1) + c;
       raw[4 * i] = Math.round(((c / n) * 2 - 1) * 32_767);
       raw[4 * i + 1] = Math.round(Math.sin(r + c) * 8000);
@@ -30,8 +30,8 @@ function field(n = 30): BufferGeometry {
     }
   }
   const index: number[] = [];
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
+  for (let r = 0; r < n; r += 1) {
+    for (let c = 0; c < n; c += 1) {
       const a = r * (n + 1) + c;
       index.push(a, a + n + 1, a + 1, a + 1, a + n + 1, a + n + 2);
     }
@@ -76,7 +76,7 @@ test("while the worker builds, the geometry says so", async () => {
   const geometry = field(300);
   const done = buildBvhOffThread(geometry);
   // its turn comes after the builds before it, within a few microtasks
-  for (let i = 0; i < 10 && !bvhBuilding(geometry); i++) {
+  for (let i = 0; i < 10 && !bvhBuilding(geometry); i += 1) {
     await Promise.resolve();
   }
   expect(bvhBuilding(geometry)).toBe(true);
@@ -94,7 +94,7 @@ test("a tile that left before its turn is not built, one that left during it get
   const during = field(100);
   let there = true;
   const done = buildBvhOffThread(during, () => there);
-  for (let i = 0; i < 10 && !bvhBuilding(during); i++) {
+  for (let i = 0; i < 10 && !bvhBuilding(during); i += 1) {
     await Promise.resolve();
   }
   there = false;

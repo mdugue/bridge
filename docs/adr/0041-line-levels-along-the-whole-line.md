@@ -25,20 +25,26 @@ and dipped, and the terrain's triangles rose through the rails.
    the members. Wikidata's class overrides OSM's `bridge:structure`.
 3. **Everything across a deck is measured from its centreline**, and a
    bridge line takes the footprint it runs on.
-4. **A line's level is solved along the whole line** (`lib/city/levels.ts`):
-   ground, a deck, a span over a gap the DGM leaves, or a cut through fill,
-   chosen as the path the line can drive within its grade (rail 4 %, tram
-   8 %), with the line's context across tiles. A cut under a drawn deck
-   opens a passage in the terrain.
-5. **A line lies on a profile** within its grade and vertical-curve radius
-   (rail 2 000 m, tram 500 m), fitted by the build step and published with
-   the levels (`lv`, `lz`). The layers draw a baked line on its profile,
-   never on the ground.
+4. **A line's level is solved along the whole line**
+   (`lib/city/levels.ts`): ground, a deck, a span over a gap the DGM
+   leaves, or a cut through fill, chosen as the path the line can drive
+   within its grade (rail 4 %, tram 8 %, a funicular 100 %: its track
+   climbs its slope), with the line's context across tiles — a
+   funicular's only across funiculars. A cut under a drawn deck opens a
+   passage in the terrain.
+5. **A line lies on a profile** within its grade and vertical-curve
+   radius (rail 2 000 m, tram 500 m, funicular 100 m), fitted by the
+   build step and published with the levels (`lv`, `lz`). The layers
+   draw a baked line on its profile, never on the ground.
 6. **The ground is laid under the bed:** the terrain bake shapes the DGM
    to the profile under each bed and grades the sides at 1 : 1.5; under a
    deck it only lowers. The ballast drapes on the beds.
 7. **Platforms keep their edge distance from the tracks**, and a flat
    LoD2 top just over a track is lowered to its bed.
+8. **A monorail is a beam, not a track:** the bake lays its underside on
+   the upper hull of the ground plus a car's clearance along the whole
+   way (straight over a hollow, bent over a crest), and the rail layer
+   stands it on supports. It takes no level, no profile and no bed.
 
 ## Consequences
 

@@ -49,13 +49,14 @@ test("missing/garbage attributes fall back to the housing family, never throw", 
   ).toBe(true);
 });
 
+const blueBias = (c: number[]) => c[2] - c[0];
+
 test("public/special function reads cooler (more blue) than housing", () => {
   // Same id so only the family differs; civic stone should be bluer-than-red
   // relative to the warm housing swatch.
   const housing = buildingTint("same-id", { function: "31001_9998" });
   const civic = buildingTint("same-id", { function: "31001_3021" });
   const special = buildingTint("same-id", { function: "53001_1800" });
-  const blueBias = (c: number[]) => c[2] - c[0];
   expect(blueBias(civic)).toBeGreaterThan(blueBias(housing));
   expect(blueBias(special)).toBeGreaterThan(blueBias(housing));
 });
@@ -201,13 +202,14 @@ test("roughJitter: deterministic, in [-1,1]", () => {
   }
 });
 
+const redness = ([r, , b]: [number, number, number]) => r - b;
+
 test("a brick city paints its buildings in brick, structures keep their stone", () => {
-  const redness = ([r, , b]: [number, number, number]) => r - b;
   let brick = 0;
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 200; i += 1) {
     const t = buildingTint(`B${i}`, { function: "31001_9998" }, "brick");
     if (redness(t) > 0.15) {
-      brick++;
+      brick += 1;
     }
   }
   // four of the five brick swatches are brick red, one pale render

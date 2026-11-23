@@ -6,6 +6,14 @@ the table's comments state — a step moved above its prerequisite would read
 a missing or stale file and bake a poorer one without failing.
 """
 
+import importlib
+import pkgutil
+from types import SimpleNamespace
+
+import pytest
+
+import bake
+from bake import __main__ as runner
 from bake.__main__ import STEPS
 
 AFTER = {
@@ -17,7 +25,9 @@ AFTER = {
     "markings": ["surface", "edges"],
     "sport": ["ndvi"],
     "tram": ["landcover", "ndvi", "furniture", "rail"],
-    "roofs": ["ndvi"],
+    "landmarks": ["osm-buildings"],
+    "roofs": ["ndvi", "landmarks"],
+    "lamp-water": ["landcover", "islands", "lamps", "mapillary", "lamp-heights", "roofs"],
     "lowveg": ["canopy", "trees", "walls", "rail"],
     "cultivated": ["lowveg", "canopy", "trees"],
     "skyview": ["canopy", "trees", "lowveg", "roofs"],
@@ -46,3 +56,36 @@ def test_land_cover_comes_first():
 def test_every_constraint_names_a_step():
     named = set(AFTER) | {b for bs in AFTER.values() for b in bs}
     assert named <= set(STEPS)
+
+
+# the bake's commands, not steps: their `run` is not in the table
+COMMANDS = {"fetch", "coverage"}
+
+
+def test_every_steps_run_is_in_the_table_once():
+    listed = list(STEPS.values())
+    assert len({id(f) for f in listed}) == len(listed)
+    unlisted = []
+    for info in pkgutil.iter_modules(bake.__path__):
+        module = importlib.import_module(f"bake.{info.name}")
+        run = getattr(module, "run", None)
+        own = callable(run) and run.__module__ == module.__name__
+        if own and info.name not in COMMANDS and run not in listed:
+            unlisted.append(info.name)
+    assert unlisted == []
+
+
+@pytest.mark.parametrize("error", [ValueError, SystemExit])
+def test_a_failing_step_names_its_site_tile_and_step(tmp_path, monkeypatch, capsys, error):
+    """An error or a step's exit (osm.read_osm's `SystemExit`), which goes
+    on as it was raised."""
+
+    def broken(step, tile, site_tiles, research=False):
+        raise error("no DOM1")
+
+    monkeypatch.setattr(runner, "run_tile", broken)
+    spec = SimpleNamespace(site="dresden", raw=tmp_path, data=tmp_path, tiles=[])
+    tile = SimpleNamespace(id="33412_5656_2_sn")
+    with pytest.raises(error, match="no DOM1"):
+        runner.recorded_tile(spec, "dormers", tile, False, {}, save=False)
+    assert "dresden 33412_5656_2_sn dormers: no DOM1" in capsys.readouterr().err

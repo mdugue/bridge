@@ -63,14 +63,15 @@ from scipy.spatial import cKDTree
 from skimage.feature import peak_local_max
 
 from . import crown_form, landcover_osm, ways
+from .classes import COPSE, FOREST, PATH, RAILWAY, ROAD, WATER
 from .common import Tile, column, crs_member, feature, read_layer
 from .lowveg import lod2_rings
 from .osm import read_osm, tag
 
 MIN_H, MAX_H = 3.0, 45.0
-BLOCKED = (6, 8)  # path, water
-TRANSPORT = (5, 7)  # railway, road: the DLM's parcels, to their fences
-WOODED = (2, 3)  # forest, copse
+BLOCKED = (PATH, WATER)
+TRANSPORT = (RAILWAY, ROAD)  # the DLM's parcels, to their fences
+WOODED = (FOREST, COPSE)
 PARK = "OBJART_TXT='AX_SportFreizeitUndErholungsflaeche'"
 BRIDGE = "BWF='1800'"
 BRIDGE_REACH = 10.0  # no tree this close to a bridge's centreline or deck (m)

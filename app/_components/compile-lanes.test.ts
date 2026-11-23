@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { type Compiling, compileInLanes, compileInTurn } from "./compile-lanes";
+import { compileInLanes, compileInTurn } from "./compile-lanes";
+import type { Compiling } from "./compile-lanes";
 
 interface Item {
   id: string;
@@ -13,8 +14,8 @@ function heldSteps() {
     string,
     { finish: () => void; fail: (e: Error) => void }
   >();
-  const step = (item: Item) =>
-    new Promise<void>((resolve, reject) => {
+  const step = async (item: Item) =>
+    await new Promise<void>((resolve, reject) => {
       started.push(item.id);
       ends.set(item.id, { finish: resolve, fail: reject });
     });
@@ -23,20 +24,26 @@ function heldSteps() {
   return { started, step, end, fail };
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const settle = async () =>
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
 
 /** Whether `promise` has settled by now, and how. */
 function watch(promise: Promise<unknown>) {
   const state = { settled: false, error: undefined as unknown };
-  promise.then(
-    () => {
+  const record = async () => {
+    try {
+      await promise;
       state.settled = true;
-    },
-    (err: unknown) => {
+    } catch (error) {
       state.settled = true;
-      state.error = err;
+      state.error = error;
     }
-  );
+  };
+  record().catch(() => {
+    // `record` handles the rejection itself
+  });
   return state;
 }
 
@@ -100,9 +107,8 @@ test("a drawable left out (its tile left) gets no step", async () => {
       { id: "kept", material: "m" },
       { id: "gone", material: "m" },
     ],
-    (item) => {
+    async (item) => {
       ran.push(item.id);
-      return Promise.resolve();
     },
     done,
     { lanes: 4, skip: (item) => item.id === "gone" }
@@ -110,15 +116,22 @@ test("a drawable left out (its tile left) gets no step", async () => {
   expect(ran).toEqual(["kept"]);
 });
 
+const item = (id: string): Item => ({ id, material: "m" });
+
 test("the compiles on one renderer run in turn, each once the one before has settled, failed or not", async () => {
   const renderer = {};
   const { started, step, end, fail } = heldSteps();
-  const item = (id: string): Item => ({ id, material: "m" });
-  const first = watch(compileInTurn(renderer, () => step(item("a"))));
-  const second = watch(compileInTurn(renderer, () => step(item("b"))));
-  const third = watch(compileInTurn(renderer, () => step(item("c"))));
+  const first = watch(
+    compileInTurn(renderer, async () => await step(item("a")))
+  );
+  const second = watch(
+    compileInTurn(renderer, async () => await step(item("b")))
+  );
+  const third = watch(
+    compileInTurn(renderer, async () => await step(item("c")))
+  );
   // another renderer's (a second app's) compile does not wait for these
-  const other = watch(compileInTurn({}, () => step(item("other"))));
+  const other = watch(compileInTurn({}, async () => await step(item("other"))));
   await settle();
   expect(started).toEqual(["a", "other"]);
   const lost = new RangeError("Allocation failure.");

@@ -1,9 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
+import { cn } from "cn";
 import { notFound } from "next/navigation";
+import { preload } from "react-dom";
 import { siteTitle } from "@/lib/city/site";
-import { builtSite, builtSites } from "../_lib/built-sites";
+import { builtSite, builtSites, firstFetches } from "../_lib/built-sites";
 import { CityWalkClient } from "../_components/city-walk-client";
+import { NAMEPLATE_FONT_VARIABLES } from "./nameplate-fonts";
 
 interface Props {
   params: Promise<{ site: string }>;
@@ -15,7 +18,8 @@ export function generateStaticParams(): { site: string }[] {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const built = builtSite((await params).site);
+  const { site: siteId } = await params;
+  const built = builtSite(siteId);
   if (!built) {
     return {};
   }
@@ -39,22 +43,32 @@ export const viewport: Viewport = {
 
 // The site is read inside the boundary: a link prefetches one shell for
 // every city (partialPrefetching), the viewer itself comes on the click.
-export default function SitePage({ params }: Props) {
-  return (
-    <main className="h-dvh w-full">
-      <Suspense fallback={null}>
-        <Viewer params={params} />
-      </Suspense>
-    </main>
-  );
-}
+const SitePage = ({ params }: Props) => (
+  <main className={cn("h-dvh w-full", ...NAMEPLATE_FONT_VARIABLES)}>
+    <Suspense fallback={null}>
+      <Viewer params={params} />
+    </Suspense>
+  </main>
+);
 
-async function Viewer({ params }: Props) {
+export default SitePage;
+
+const Viewer = async ({ params }: Props) => {
   // A site this build did not prepare has no data to stream: 404 rather
   // than a viewer that fails to load.
-  const built = builtSite((await params).site);
+  const { site: siteId } = await params;
+  const built = builtSite(siteId);
   if (!built) {
     notFound();
+  }
+  // The manifest and the tileset it names, on their way with the HTML:
+  // the viewer's own fetches then find them (as its fetch asks: CORS mode,
+  // same-origin credentials). The tileset is fetched by the scene worker
+  // (ADR 0061), which does not see the page's preloads: it finds the file
+  // in the HTTP cache (content-hashed, immutable), so the browser's
+  // "preloaded but not used" warning for it is expected.
+  for (const href of firstFetches(built)) {
+    preload(href, { as: "fetch", crossOrigin: "anonymous" });
   }
   return (
     <CityWalkClient
@@ -62,4 +76,4 @@ async function Viewer({ params }: Props) {
       siteId={built.site.id}
     />
   );
-}
+};

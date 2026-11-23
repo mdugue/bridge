@@ -70,7 +70,16 @@ describe("bakeLimits", () => {
     expect(Math.floor(memory / PROCESS_PEAK)).toBeGreaterThanOrEqual(4);
   });
 
-  test("on Vercel's 4-core, 8.6 GB builder one cold site bakes at a time, beside a cached site's run", () => {
+  test("on Vercel's 4-core, 8.6 GB builder three tile warmers bake at once", () => {
+    const { memory } = bakeLimits({ cores: 4, memory: 8.6e9 });
+    expect(Math.floor(memory / TILE_PEAK)).toBe(3);
+    // the heaviest tile's cold peak (München 32690_5334, 1.26 GiB on
+    // 2026-11-11, three others beside it) fits its count with Vercel's
+    // Bun's 15 % more, and a quarter to spare
+    expect(1.25 * 1.15 * 1.26 * 2 ** 30).toBeLessThanOrEqual(TILE_PEAK);
+  });
+
+  test("without the warmers, Vercel's builder bakes one cold site at a time, beside a cached site's run", () => {
     const { memory } = bakeLimits({ cores: 4, memory: 8.6e9 });
     expect(Math.floor(memory / SITE_PEAK)).toBe(1);
     expect(SITE_PEAK + PROCESS_PEAK).toBeLessThanOrEqual(memory);
@@ -78,8 +87,9 @@ describe("bakeLimits", () => {
     expect(4.42 * 2 ** 30).toBeLessThanOrEqual(SITE_PEAK);
   });
 
-  test("on CI's 4-core, 16.8 GB runner two cold sites bake at once", () => {
-    const { memory } = bakeLimits({ cores: 4, memory: 16.8e9 });
+  test("on CI's 4-core, 16.8 GB runner four tile warmers bake at once, two cold sites without them", () => {
+    const { jobs, memory } = bakeLimits({ cores: 4, memory: 16.8e9 });
+    expect(Math.min(jobs, Math.floor(memory / TILE_PEAK))).toBe(4);
     expect(Math.floor(memory / SITE_PEAK)).toBe(2);
   });
 
@@ -108,38 +118,43 @@ describe("bakeLimits", () => {
 });
 
 describe("warmersOn", () => {
-  test("off unless PREPARE_WARMERS=1, and a stray value fails", () => {
-    expect(warmersOn({})).toBe(false);
-    expect(warmersOn({ PREPARE_WARMERS: "" })).toBe(false);
-    expect(warmersOn({ PREPARE_WARMERS: "0" })).toBe(false);
+  test("on unless PREPARE_WARMERS=0, and a stray value fails", () => {
+    expect(warmersOn({})).toBe(true);
+    expect(warmersOn({ PREPARE_WARMERS: "" })).toBe(true);
     expect(warmersOn({ PREPARE_WARMERS: "1" })).toBe(true);
+    expect(warmersOn({ PREPARE_WARMERS: "0" })).toBe(false);
     expect(() => warmersOn({ PREPARE_WARMERS: "yes" })).toThrow(
       "PREPARE_WARMERS"
     );
   });
 });
 
+function harness(limits: { jobs: number; memory: number }) {
+  const slots = createSlots(limits);
+  const started: string[] = [];
+  const releases = new Map<string, () => void>();
+  const runs: Promise<void>[] = [];
+  const task = (name: string, priority: number, peak: number) => {
+    runs.push(
+      slots.run(priority, peak, async () => {
+        started.push(name);
+        await new Promise<void>((resolve) => {
+          releases.set(name, resolve);
+        });
+      })
+    );
+  };
+  const finish = async (name: string) => {
+    releases.get(name)?.();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  };
+  return { finish, runs, started, task };
+}
+
 describe("createSlots", () => {
   /** Tasks that run until released; what started, in order. */
-  function harness(limits: { jobs: number; memory: number }) {
-    const slots = createSlots(limits);
-    const started: string[] = [];
-    const releases = new Map<string, () => void>();
-    const runs: Promise<void>[] = [];
-    const task = (name: string, priority: number, peak: number) => {
-      runs.push(
-        slots.run(priority, peak, async () => {
-          started.push(name);
-          await new Promise<void>((done) => releases.set(name, done));
-        })
-      );
-    };
-    const finish = async (name: string) => {
-      releases.get(name)?.();
-      await new Promise((settle) => setTimeout(settle, 0));
-    };
-    return { finish, runs, started, task };
-  }
 
   test("at most `jobs` at once, a lower priority first among the waiting", async () => {
     const { finish, runs, started, task } = harness({ jobs: 2, memory: 10 });

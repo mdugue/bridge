@@ -8,24 +8,26 @@ import {
   Vector3,
 } from "three";
 import {
-  type GroundPrepInput,
   groundPrepTransfer,
   indexBox,
   localReader,
   prepareGround,
 } from "./ground-prep";
+import type { GroundPrepInput } from "./ground-prep";
 import { planTriangles, TinIndex } from "./terrain-tin";
 import {
   MIST_REACH_M,
   reach,
   trianglesOver,
   WATER_REACH_M,
-  type WaterMask,
 } from "./water-mask";
+import type { WaterMask } from "./water-mask";
 
 const BOUNDS = [1000, 5000, 1200, 5200] as const;
 const ORIGIN = { cx: 1100, cy: 5100 };
 const N = 21;
+
+const q = (v: number) => Math.round(v * 32_767);
 
 /**
  * An N×N grid over BOUNDS as a quantised glTF level stores it: normalized
@@ -36,9 +38,8 @@ const N = 21;
 function level() {
   const count = N * N + 2;
   const raw = new Int16Array(count * 4);
-  const q = (v: number) => Math.round(v * 32_767);
-  for (let r = 0; r < N; r++) {
-    for (let c = 0; c < N; c++) {
+  for (let r = 0; r < N; r += 1) {
+    for (let c = 0; c < N; c += 1) {
       const i = r * N + c;
       // local x east, y up, z south, all in [-1, 1]
       raw[4 * i] = q((c / (N - 1)) * 2 - 1);
@@ -50,8 +51,8 @@ function level() {
   raw.set([q(-1), q(-1), q(-1), 0], 4 * N * N);
   raw.set([q(-1), q(-1), q(-1 + 2 / (N - 1)), 0], 4 * (N * N + 1));
   const tris: number[] = [];
-  for (let r = 0; r + 1 < N; r++) {
-    for (let c = 0; c + 1 < N; c++) {
+  for (let r = 0; r + 1 < N; r += 1) {
+    for (let c = 0; c + 1 < N; c += 1) {
       const a = r * N + c;
       tris.push(a, a + N, a + 1, a + 1, a + N, a + N + 1);
     }
@@ -72,7 +73,7 @@ function level() {
 /** Water in the cells of the tile's eastern half. */
 function eastWater(cells: number): WaterMask {
   const water = new Uint8Array(cells * cells);
-  for (let y = 0; y < cells; y++) {
+  for (let y = 0; y < cells; y += 1) {
     water.fill(1, y * cells + cells / 2 + cells / 8, (y + 1) * cells);
   }
   return { cells, water };
@@ -109,7 +110,7 @@ function reference(mask: WaterMask) {
   const cx = new Uint16Array(count);
   const cy = new Uint16Array(count);
   const [minX, minY, maxX, maxY] = BOUNDS;
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < count; i += 1) {
     v.fromBufferAttribute(position, i).applyMatrix4(toData);
     data.push(v.clone());
     const x = Math.floor(
@@ -127,12 +128,12 @@ function reference(mask: WaterMask) {
     const lo = [Infinity, Infinity, Infinity];
     const hi = [-Infinity, -Infinity, -Infinity];
     const idx = new BufferAttribute(kept, 1);
-    for (let i = 0; i < idx.count; i++) {
+    for (let i = 0; i < idx.count; i += 1) {
       v.fromBufferAttribute(position, idx.getX(i));
-      v.toArray().forEach((c, k) => {
+      for (const [k, c] of v.toArray().entries()) {
         lo[k] = Math.min(lo[k], c);
         hi[k] = Math.max(hi[k], c);
-      });
+      }
     }
     return { index: kept, box: [...lo, ...hi] };
   };
@@ -151,7 +152,7 @@ describe("ground prep", () => {
     const read = localReader(input(null, null));
     const local = new Float64Array(3);
     const v = new Vector3();
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count; i += 1) {
       v.fromBufferAttribute(position, i);
       read(i, local);
       expect([...local]).toEqual(v.toArray());
@@ -163,37 +164,37 @@ describe("ground prep", () => {
     const prep = prepareGround(input(null, null));
     const ref = reference(mask);
     expect(prep.elevations).toBeUndefined();
-    ref.data.forEach((d, i) => {
+    for (const [i, d] of ref.data.entries()) {
       expect(prep.xy?.[2 * i]).toBe(d.x + ORIGIN.cx);
       expect(prep.xy?.[2 * i + 1]).toBe(d.y + ORIGIN.cy);
       expect(prep.z?.[i]).toBe(Math.fround(d.z));
-    });
+    }
   });
 
   test("a TIN's height index from its buckets answers as one built here", () => {
-    const level = input(null, null);
-    const prep = prepareGround(level);
+    const tinInput = input(null, null);
+    const prep = prepareGround(tinInput);
     const { xy, z, tin } = prep;
-    if (!(xy && z && tin && level.index)) {
+    if (!(xy && z && tin && tinInput.index)) {
       throw new Error("no TIN index");
     }
     const surface = {
       bounds: [...BOUNDS] as [number, number, number, number],
       xy,
       z,
-      triangles: level.index,
+      triangles: tinInput.index,
     };
     const here = new TinIndex(surface);
     const there = TinIndex.fromBuckets(surface, tin);
     const [minX, minY, maxX, maxY] = BOUNDS;
-    for (let k = 0; k <= 40; k++) {
+    for (let k = 0; k <= 40; k += 1) {
       const x = minX + ((maxX - minX) * k) / 40;
       const y = minY + ((maxY - minY) * ((k * 7) % 41)) / 40;
       expect(there.heightAt(x, y)).toBe(here.heightAt(x, y));
     }
     expect(there.bytes).toBe(here.bytes);
     // buckets of another surface are refused
-    const fewer = { ...surface, triangles: level.index.subarray(3) };
+    const fewer = { ...surface, triangles: tinInput.index.subarray(3) };
     expect(() => TinIndex.fromBuckets(fewer, tin)).toThrow();
     // a grid level has none
     expect(prepareGround(input(null, N)).tin).toBeUndefined();
@@ -204,7 +205,7 @@ describe("ground prep", () => {
     const ref = reference(eastWater(16));
     expect(prep.elevations?.length).toBe(N * N);
     expect(prep.xy).toBeUndefined();
-    for (let i = 0; i < N * N; i++) {
+    for (let i = 0; i < N * N; i += 1) {
       expect(prep.elevations?.[i]).toBe(Math.fround(ref.data[i].z));
     }
   });
@@ -232,7 +233,7 @@ describe("ground prep", () => {
   });
 
   test("an empty sheet has an empty box", () => {
-    const box = indexBox(new Uint16Array(0), () => undefined);
+    const box = indexBox(new Uint16Array(0), () => {});
     expect(box[0]).toBe(Number.POSITIVE_INFINITY);
     expect(box[3]).toBe(Number.NEGATIVE_INFINITY);
   });

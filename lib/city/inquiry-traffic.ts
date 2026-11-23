@@ -7,15 +7,10 @@
  * hour's estimate is labelled as one (the typical day's curve, not a
  * count). No THREE, no DOM.
  */
-import { type BikeDirection, SITE_ZONE } from "./bike-counts";
-import {
-  factLines,
-  firstText,
-  type InquiryCard,
-  positionKey,
-  stated,
-  whole,
-} from "./card-lines";
+import { SITE_ZONE } from "./bike-counts";
+import type { BikeDirection } from "./bike-counts";
+import { factLines, firstText, positionKey, stated, whole } from "./card-lines";
+import type { CardHeading, InquiryCard } from "./card-lines";
 import type { TrafficFeature, TrafficMethod } from "./features";
 import type { TrafficDayKind, TrafficHourStatus } from "./traffic-hours";
 
@@ -131,6 +126,14 @@ function directionLines(p: TrafficProps, bearing: number): [string, string][] {
   return lines;
 }
 
+/** A counted section's heading: its street. */
+export function trafficHeading(t: TrafficInquiry): CardHeading {
+  return {
+    kicker: t.properties.br === 1 ? "Kfz-Verkehr · Brücke" : "Kfz-Verkehr",
+    title: firstText(t.properties.n, "Straßenabschnitt"),
+  };
+}
+
 /** The counted section's card. */
 export function trafficCard(t: TrafficInquiry): InquiryCard {
   const p = t.properties;
@@ -164,8 +167,7 @@ export function trafficCard(t: TrafficInquiry): InquiryCard {
     ),
   ];
   return {
-    kicker: p.br === 1 ? "Kfz-Verkehr · Brücke" : "Kfz-Verkehr",
-    title: firstText(p.n, "Straßenabschnitt"),
+    ...trafficHeading(t),
     address: "",
     facts,
     id: positionKey(t.position),
@@ -182,6 +184,11 @@ const clock = new Intl.DateTimeFormat("de-DE", {
   month: "2-digit",
   timeZone: SITE_ZONE,
 });
+
+/** A bicycle counter's heading: its name. */
+export function bikeHeading(b: BikeInquiry): CardHeading {
+  return { kicker: "Radzählstelle · live", title: b.name || "Radzählstelle" };
+}
 
 /** The live counter's card. */
 export function bikeCard(b: BikeInquiry): InquiryCard {
@@ -201,8 +208,7 @@ export function bikeCard(b: BikeInquiry): InquiryCard {
     ],
   ]);
   return {
-    kicker: "Radzählstelle · live",
-    title: b.name || "Radzählstelle",
+    ...bikeHeading(b),
     address: b.where,
     facts,
     id: b.id || positionKey(b.position),

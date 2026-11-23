@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { BikeCounter } from "@/lib/city/bike-counts";
 import type { GroundContext } from "@/lib/city/ground-clamp";
 import { createBikeFeed, createBikeLayer } from "./bike-layer";
+import { feedPageView } from "./page-view";
 import type { Instances } from "./instancing";
 
 const counter = (
@@ -76,9 +77,9 @@ function stubFetch(body: unknown): {
   const real = globalThis.fetch;
   let calls = 0;
   // reason: the stub takes the URL only; the helpers pass a string
-  globalThis.fetch = (() => {
-    calls++;
-    return Promise.resolve(new Response(JSON.stringify(body)));
+  globalThis.fetch = (async () => {
+    calls += 1;
+    return Response.json(body);
   }) as unknown as typeof fetch;
   return {
     calls: () => calls,
@@ -88,12 +89,17 @@ function stubFetch(body: unknown): {
   };
 }
 
-const settle = () => new Promise((r) => setTimeout(r, 5));
+const settle = async () =>
+  await new Promise((resolve) => {
+    setTimeout(resolve, 5);
+  });
 
 test("an answer the feed cannot parse is no crash: the last counts stay", async () => {
   const stub = stubFetch({ features: [] });
   const rejections: unknown[] = [];
-  const onRejection = (reason: unknown) => rejections.push(reason);
+  const onRejection = (reason: unknown) => {
+    rejections.push(reason);
+  };
   process.on("unhandledRejection", onRejection);
   const heard: BikeCounter[][] = [];
   let parsed = 0;
@@ -103,11 +109,13 @@ test("an answer the feed cannot parse is no crash: the last counts stay", async 
     feed: {
       url: () => "/bikes",
       parse: () => {
-        parsed++;
+        parsed += 1;
         throw new TypeError("Cannot read properties of null");
       },
     },
-    onCounts: (c) => heard.push(c),
+    onCounts: (c) => {
+      heard.push(c);
+    },
   });
   try {
     feed.start();
@@ -124,29 +132,25 @@ test("an answer the feed cannot parse is no crash: the last counts stay", async 
   }
 });
 
+/** The tests run without a document: the page view is the one a worker's
+ *  page feeds (page-view.ts). */
+const show = (hidden: boolean) =>
+  feedPageView(
+    { hidden, href: "https://example.test/", onLine: true },
+    { type: "visibilitychange" }
+  );
+
 test("the counters are read only while the page is in view", async () => {
   const stub = stubFetch({ features: [] });
-  const listeners = new Set<() => void>();
-  const page = {
-    hidden: true,
-    addEventListener: (_: string, fn: () => void) => listeners.add(fn),
-    removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
-  };
-  const g = globalThis as { document?: unknown };
-  const real = g.document;
-  g.document = page;
-  const show = (hidden: boolean) => {
-    page.hidden = hidden;
-    for (const fn of listeners) {
-      fn();
-    }
-  };
+  show(true);
   let heard = 0;
   const feed = createBikeFeed({
     bounds: [0, 0, 1, 1],
     epsg: 25_833,
     feed: { url: () => "/bikes", parse: () => [] },
-    onCounts: () => heard++,
+    onCounts: () => {
+      heard += 1;
+    },
   });
   try {
     feed.start();
@@ -163,11 +167,9 @@ test("the counters are read only while the page is in view", async () => {
     show(false);
     await settle();
     expect(stub.calls()).toBe(1);
-    feed.stop();
-    expect(listeners.size).toBe(0);
   } finally {
     feed.stop();
-    g.document = real;
+    show(false);
     stub.restore();
   }
 });

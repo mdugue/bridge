@@ -5,7 +5,9 @@
  * prepare-data.ts into public/data/<site>/, the folder its route /<site>
  * streams from. Then the index, public/data/sites.json
  * (lib/city/site-index.ts), which the start page lists and the route
- * prerenders from; folders of sites no longer built are pruned.
+ * prerenders from; folders of sites no longer built are pruned. With
+ * `PREPARE_SITES=dresden bun dev` only those sites are prepared and the
+ * others stay served as they were built last (site-choice.ts).
  *
  * A site is served exactly when its data is on disk at build time: in a
  * fresh clone that is every site whose folder is committed (ADR 0037 — all
@@ -17,35 +19,41 @@ import { spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
+  copyFileSync,
   readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { availableParallelism, totalmem } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import { createInterface } from "node:readline";
 import {
   SITE_INDEX_FILE,
   SITE_MAP_FILE,
-  type SiteIndex,
   siteDataBase,
 } from "../lib/city/site-index";
+import type { SiteIndex } from "../lib/city/site-index";
 import { siteReport } from "../lib/city/site-report";
-import { type DataManifest, MANIFEST_FILE, tileIds } from "../lib/city/tile";
-import { type SiteId, SITES, siteById } from "../sites";
+import { SERVER_WISSEN_DIR, STADTWISSEN_FILE } from "../lib/city/stadtwissen";
+import type { StadtwissenIndex } from "../lib/city/stadtwissen";
+import { MANIFEST_FILE, tileIds } from "../lib/city/tile";
+import type { DataManifest } from "../lib/city/tile";
+import { TILESET_FILE } from "../lib/city/tileset";
+import { SITES } from "../sites";
+import type { SiteId } from "../sites";
+import { chosenSites } from "./site-choice";
 import {
   bakeLimits,
   createSlots,
   IF_CACHED_RUN,
   NOT_CACHED,
   SITE_PEAK,
-  WARM_ABOVE,
   warmersOn,
   warmSteps,
 } from "./warmers";
 
-const OUT_DIR = join(process.cwd(), "public/data");
+const OUT_DIR = path.join(process.cwd(), "public/data");
 
 function log(message: string): void {
   process.stdout.write(`prepare-sites: ${message}\n`);
@@ -65,7 +73,7 @@ function isReady(id: SiteId): boolean {
  *  line it prints under the site's id (the bakes run side by side);
  *  resolves with its exit code. It runs on this process's own Bun, not
  *  whichever `bun` comes first on the PATH. */
-function prepare(id: SiteId, args: string[]): Promise<number | null> {
+async function prepare(id: SiteId, args: string[]): Promise<number | null> {
   const child = spawn(
     process.execPath,
     ["scripts/prepare-data.ts", id, ...args],
@@ -81,7 +89,7 @@ function prepare(id: SiteId, args: string[]): Promise<number | null> {
       to.write(`[${id}] ${line}\n`);
     });
   }
-  return new Promise((resolve) => {
+  return await new Promise((resolve) => {
     child.on("close", resolve);
   });
 }
@@ -97,14 +105,13 @@ function machineMemory(): number {
  * Bakes the sites, every bake a process of its own, several at a time
  * (`bakeLimits`: as many as the cores, their peaks within the memory): a
  * bake is single-threaded, so one after the other a cold build waited for
- * every site in turn. Each site is one process: first asked whether it is
- * cached (`--if-cached`, a small peak; a warm site publishes there), and
- * only when it is not baked, counted at `SITE_PEAK` — largest first so it
- * never starts last. With `warm`, a site with more
- * tiles than `WARM_ABOVE` is baked by warmers (warmers.ts), one tile each,
- * which fill every slot the smaller sites leave: those go first, largest
- * first, since each is one process that cannot be split — started late, it
- * would be the build's tail.
+ * every site in turn. Each site is first asked whether it is cached
+ * (`--if-cached`, a small peak; a warm site publishes there). One that is
+ * not is baked by warmers (warmers.ts), one tile each, so the tiles of
+ * every site share the slots — largest site first, its first warmer
+ * started ahead of the smaller sites waiting. With `warm` off
+ * (`PREPARE_WARMERS=0`) a cold site is one process, counted at
+ * `SITE_PEAK`.
  */
 async function prepareAll(
   ids: readonly SiteId[],
@@ -115,16 +122,20 @@ async function prepareAll(
   const failed: SiteId[] = [];
   const bakeSite = async (id: SiteId): Promise<boolean> => {
     const tiles = tileIds(SITES[id]);
-    if (!warm || tiles.length <= WARM_ABOVE) {
+    if (!warm || tiles.length === 0) {
       // a cached site publishes at a small peak; only a cold one is
       // counted at a whole site's (warmers.ts SITE_PEAK)
-      const probe = await slots.run(0, IF_CACHED_RUN.peak, () =>
-        prepare(id, IF_CACHED_RUN.args)
+      const probe = await slots.run(
+        0,
+        IF_CACHED_RUN.peak,
+        async () => await prepare(id, IF_CACHED_RUN.args)
       );
       if (probe !== NOT_CACHED) {
         return probe === 0;
       }
-      return (await slots.run(0, SITE_PEAK, () => prepare(id, []))) === 0;
+      return (
+        (await slots.run(0, SITE_PEAK, async () => await prepare(id, []))) === 0
+      );
     }
     const [[first], ...later] = warmSteps(tiles);
     // Step 0, then step 1 in its slot: the first warmer starts at once,
@@ -140,8 +151,9 @@ async function prepareAll(
     }
     for (const step of later) {
       const codes = await Promise.all(
-        step.map(({ args, peak }) =>
-          slots.run(1, peak, () => prepare(id, args))
+        step.map(
+          async ({ args, peak }) =>
+            await slots.run(1, peak, async () => await prepare(id, args))
         )
       );
       if (codes.some((code) => code !== 0)) {
@@ -163,23 +175,31 @@ async function prepareAll(
   return failed;
 }
 
-const named = process.argv.slice(2);
-for (const id of named) {
-  if (!siteById(id)) {
-    fail(`unknown site "${id}"; known: ${Object.keys(SITES).join(", ")}`);
-  }
+const chosen = chosenSites({
+  env: process.env.PREPARE_SITES,
+  known: Object.keys(SITES),
+  named: process.argv.slice(2),
+  ready: (id) => isReady(id as SiteId),
+  built: (id) => existsSync(path.join(OUT_DIR, id, MANIFEST_FILE)),
+});
+if (chosen.unknown !== undefined) {
+  fail(
+    `unknown site "${chosen.unknown}"; known: ${Object.keys(SITES).join(", ")}`
+  );
 }
-const ids = (
-  named.length > 0
-    ? named
-    : Object.keys(SITES).filter((id) => isReady(id as SiteId))
+const ids = chosen.prepare as SiteId[];
+/** prepared now, or left as built last (`PREPARE_SITES`): all served */
+const served = Object.keys(SITES).filter(
+  (id) => chosen.prepare.includes(id) || chosen.keep.includes(id)
 ) as SiteId[];
 if (ids.length === 0) {
   fail("no site has its data on disk — run `bun run site --all`");
 }
-const skipped = Object.keys(SITES).filter((id) => !ids.includes(id as SiteId));
+const skipped = Object.keys(SITES).filter(
+  (id) => !served.includes(id as SiteId)
+);
 log(
-  `building ${ids.join(", ")}${skipped.length > 0 ? ` (not ready or not named: ${skipped.join(", ")})` : ""}`
+  `building ${ids.join(", ")}${chosen.keep.length > 0 ? ` (left as built last: ${chosen.keep.join(", ")})` : ""}${skipped.length > 0 ? ` (not ready or not named: ${skipped.join(", ")})` : ""}`
 );
 
 const { limits, warm } = (() => {
@@ -196,7 +216,7 @@ const { limits, warm } = (() => {
       }),
     };
   } catch (error) {
-    fail((error as Error).message);
+    return fail((error as Error).message);
   }
 })();
 // a slow deploy shows why
@@ -216,35 +236,68 @@ if (failed.length > 0) {
   fail(`${failed.join(", ")} failed`);
 }
 const index: SiteIndex = { version: 1, sites: [] };
-for (const id of ids) {
+for (const id of served) {
   const manifest = JSON.parse(
-    readFileSync(join(OUT_DIR, id, MANIFEST_FILE), "utf8")
+    readFileSync(path.join(OUT_DIR, id, MANIFEST_FILE), "utf-8")
   ) as DataManifest;
   const map = manifest.files[SITE_MAP_FILE];
-  const statsPath = join(OUT_DIR, id, SITE_STATS_FILE);
+  const tileset = manifest.files[TILESET_FILE];
+  const statsPath = path.join(OUT_DIR, id, SITE_STATS_FILE);
   const stats = existsSync(statsPath)
-    ? parseSiteStats(JSON.parse(readFileSync(statsPath, "utf8")))
+    ? parseSiteStats(JSON.parse(readFileSync(statsPath, "utf-8")))
     : undefined;
   index.sites.push({
     id,
     ...(map ? { map: `${siteDataBase(id)}/${map}` } : {}),
+    ...(tileset ? { tileset: `${siteDataBase(id)}/${tileset}` } : {}),
     ...(stats ? { stats } : {}),
   });
 }
 
 writeFileSync(
-  join(OUT_DIR, SITE_INDEX_FILE),
+  path.join(OUT_DIR, SITE_INDEX_FILE),
   `${JSON.stringify(index, null, 2)}\n`
 );
+publishServerWissen(served);
 // Anything else at the top of public/data is a site no longer built, or the
 // single-site layout that came before (its files sat there directly).
 let pruned = 0;
 for (const entry of readdirSync(OUT_DIR)) {
-  if (entry !== SITE_INDEX_FILE && !ids.includes(entry as SiteId)) {
-    rmSync(join(OUT_DIR, entry), { recursive: true });
-    pruned++;
+  if (entry !== SITE_INDEX_FILE && !served.includes(entry as SiteId)) {
+    rmSync(path.join(OUT_DIR, entry), { recursive: true });
+    pruned += 1;
   }
 }
 log(
-  `${ids.length} site(s) in public/data${pruned > 0 ? `, ${pruned} stale entries pruned` : ""}`
+  `${served.length} site(s) in public/data${pruned > 0 ? `, ${pruned} stale entries pruned` : ""}`
 );
+
+/**
+ * The Stadtwissen again, outside public/, for the chat's server tools
+ * (ADR 0056; next.config.ts traces this folder into the chat's function
+ * and no other): the index and each tile's directory under its published
+ * name. Rewritten whole, so a site no longer built leaves nothing.
+ */
+function publishServerWissen(siteIds: readonly SiteId[]): void {
+  const root = path.join(process.cwd(), SERVER_WISSEN_DIR);
+  rmSync(root, { recursive: true, force: true });
+  for (const id of siteIds) {
+    const from = path.join(OUT_DIR, id);
+    const manifest = JSON.parse(
+      readFileSync(path.join(from, MANIFEST_FILE), "utf-8")
+    ) as DataManifest;
+    const indexFile = manifest.files[STADTWISSEN_FILE];
+    if (!indexFile) {
+      continue;
+    }
+    const to = path.join(root, id);
+    mkdirSync(to, { recursive: true });
+    copyFileSync(path.join(from, indexFile), path.join(to, STADTWISSEN_FILE));
+    const wissen = JSON.parse(
+      readFileSync(path.join(from, indexFile), "utf-8")
+    ) as StadtwissenIndex;
+    for (const tile of wissen.tiles) {
+      copyFileSync(path.join(from, tile.file), path.join(to, tile.file));
+    }
+  }
+}

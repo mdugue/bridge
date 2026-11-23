@@ -19,7 +19,8 @@
  */
 import Delatin from "delatin";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
-import { type TerrainTin, tinFromMesher } from "../lib/city/terrain-tin";
+import { tinFromMesher } from "../lib/city/terrain-tin";
+import type { TerrainTin } from "../lib/city/terrain-tin";
 
 /**
  * Delatin tolerance (m) of the fine level. The fine level is what the walker
@@ -97,13 +98,16 @@ class ScaledDelatin extends Delatin {
     const z0 = this.heightAt(p0x, p0y) / a;
     const z1 = this.heightAt(p1x, p1y) / a;
     const z2 = this.heightAt(p2x, p2y) / a;
-    const width = this.width;
+    const { width } = this;
     // during Delatin's constructor `this.scale` is not set yet
-    const scale = this.scale ?? (ScaledDelatin.pending as ArrayLike<number>);
+    const scale = this.scale ?? ScaledDelatin.pending;
+    if (!scale) {
+      throw new Error("ScaledDelatin: no scale");
+    }
     let maxError = 0;
     let mx = 0;
     let my = 0;
-    for (let y = minY; y <= maxY; y++) {
+    for (let y = minY; y <= maxY; y += 1) {
       const dx = Math.max(
         rowStart(w00, a12),
         rowStart(w01, a20),
@@ -113,7 +117,7 @@ class ScaledDelatin extends Delatin {
       let w1 = w01 + a20 * dx;
       let w2 = w02 + a01 * dx;
       let wasInside = false;
-      for (let x = minX + dx; x <= maxX; x++) {
+      for (let x = minX + dx; x <= maxX; x += 1) {
         if (w0 >= 0 && w1 >= 0 && w2 >= 0) {
           wasInside = true;
           const z = z0 * w0 + z1 * w1 + z2 * w2;
@@ -154,14 +158,14 @@ class ScaledDelatin extends Delatin {
  * so such a tile keeps the regular grid (bake-tiles.ts falls back).
  */
 export function tinFromGrid(
-  grid: ArrayLike<number>,
+  grid: ArrayLike<number> & Iterable<number>,
   n: number,
   bounds: TerrainBounds,
   maxError: number,
   scale?: ArrayLike<number>
 ): TerrainTin {
-  for (let i = 0; i < grid.length; i++) {
-    if (!Number.isFinite(grid[i])) {
+  for (const v of grid) {
+    if (!Number.isFinite(v)) {
       throw new Error("terrain TIN: the source grid has NoData");
     }
   }

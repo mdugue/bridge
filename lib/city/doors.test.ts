@@ -3,10 +3,16 @@ import {
   DOOR_SURROUND,
   doorMesh,
   eaveAlong,
+  rayHit,
+  KNOT_OFF_M,
+  KNOT_SUNK_M,
+  thinned,
+  trianglesOnRays,
   wallShift,
   wallShiftAlong,
   wallShiftKnots,
 } from "./doors";
+import type { V3 } from "./doors";
 import type { DoorFeature } from "./features";
 
 const door = (nx: number, ny: number): DoorFeature => ({
@@ -45,6 +51,8 @@ const faceNormals = (tris: number[]) => {
   return out;
 };
 
+const xs = (tris: number[]) => tris.filter((_, i) => i % 3 === 0);
+
 describe("doorMesh", () => {
   test("its fronts face out of the wall, none faces into it", () => {
     const { leaf, surround } = doorMesh(door(1, 0), offset);
@@ -54,7 +62,6 @@ describe("doorMesh", () => {
   });
 
   test("a shift lays it out along the normal", () => {
-    const xs = (tris: number[]) => tris.filter((_, i) => i % 3 === 0);
     const at = Math.max(...xs(doorMesh(door(1, 0), offset).surround));
     const moved = Math.max(...xs(doorMesh(door(1, 0), offset, 0.2).surround));
     expect(at).toBeCloseTo(100 + DOOR_SURROUND.proud, 6);
@@ -122,21 +129,22 @@ describe("wallShiftAlong", () => {
   });
 });
 
+const roof = (z: (x: number, y: number) => number): number[] => {
+  const q = [
+    [100, 190],
+    [100, 210],
+    [94, 210],
+    [94, 190],
+  ].map(([x, y]) => [x, y, z(x, y)]);
+  return [...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3]];
+};
+
 describe("eaveAlong", () => {
   const run = [
     [100, 195],
     [100, 205],
   ] as const;
   /** A roof face over x 94..100 (y 190..210), its height at (x, y). */
-  const roof = (z: (x: number, y: number) => number): number[] => {
-    const q = [
-      [100, 190],
-      [100, 210],
-      [94, 210],
-      [94, 190],
-    ].map(([x, y]) => [x, y, z(x, y)]);
-    return [...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3]];
-  };
 
   test("reads where a roof falling to the wall meets it", () => {
     const pitched = roof((x) => 12 + (100 - x));
@@ -184,8 +192,107 @@ test("wallShiftKnots follows a wall that bends, where one line would cut it", ()
     bent,
     [0, 3, 6, 9]
   );
-  expect(f).toHaveLength(21);
-  expect(s[10]).toBeCloseTo(0.2, 6);
+  // read each metre, kept at the ends and the bend alone
+  expect(f).toEqual([0, 0.5, 1]);
+  expect(s[1]).toBeCloseTo(0.2, 6);
   expect(s[0]).toBeCloseTo(0.05 + 0.015 * 0.1, 6);
-  expect(s[5]).toBeCloseTo(0.125, 6);
+  expect(s[2]).toBeCloseTo(0.05 + 0.015 * 0.1, 6);
+});
+
+describe("thinned", () => {
+  const f = [0, 0.25, 0.5, 0.75, 1];
+
+  test("a flat wall keeps its ends", () => {
+    expect(thinned({ f, s: [0.1, 0.1, 0.1, 0.1, 0.1] })).toEqual({
+      f: [0, 1],
+      s: [0.1, 0.1],
+    });
+    // and a wall that runs askew to its line
+    expect(thinned({ f, s: [0, 0.05, 0.1, 0.15, 0.2] }).f).toEqual([0, 1]);
+  });
+
+  test("a bulge the band would sink into keeps its knot", () => {
+    const bulged = thinned({ f, s: [0, 0, KNOT_SUNK_M + 0.005, 0, 0] });
+    expect(bulged.f).toEqual([0, 0.5, 1]);
+    // one within what a band may sink does not
+    expect(thinned({ f, s: [0, 0, KNOT_SUNK_M - 0.002, 0, 0] }).f).toEqual([
+      0, 1,
+    ]);
+  });
+
+  test("a hollow the band would stand off keeps its knot past the tolerance", () => {
+    expect(thinned({ f, s: [0, 0, -KNOT_OFF_M + 0.005, 0, 0] }).f).toEqual([
+      0, 1,
+    ]);
+    expect(thinned({ f, s: [0, 0, -KNOT_OFF_M - 0.005, 0, 0] }).f).toContain(
+      0.5
+    );
+  });
+
+  test("no knot kept leaves the wall further than the tolerances", () => {
+    let seed = 5;
+    const rand = () => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return seed / 2_147_483_648;
+    };
+    const fs = Array.from({ length: 41 }, (_, i) => i / 40);
+    const ss = fs.map((x) => 0.1 * Math.sin(6 * x) + 0.02 * rand());
+    const k = thinned({ f: fs, s: ss });
+    expect(k.f.length).toBeLessThan(fs.length);
+    expect(k.f[0]).toBe(0);
+    expect(k.f.at(-1)).toBe(1);
+    for (let i = 0; i < fs.length; i += 1) {
+      const j = k.f.findIndex((x) => x >= fs[i]);
+      const [f0, f1] = [k.f[Math.max(j - 1, 0)], k.f[j]];
+      const [s0, s1] = [k.s[Math.max(j - 1, 0)], k.s[j]];
+      const line = f1 === f0 ? s1 : s0 + ((s1 - s0) * (fs[i] - f0)) / (f1 - f0);
+      expect(line - ss[i]).toBeLessThanOrEqual(KNOT_OFF_M + 1e-9);
+      expect(line - ss[i]).toBeGreaterThanOrEqual(-KNOT_SUNK_M - 1e-9);
+    }
+  });
+});
+
+test("trianglesOnRays keeps every triangle a ray meets within its reach, in order", () => {
+  let seed = 11;
+  const rand = () => {
+    seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+    return seed / 2_147_483_648;
+  };
+  // 400 small triangles scattered over a 20 m box, most of them walls
+  const positions = new Float32Array(9 * 400);
+  for (let t = 0; t < 400; t += 1) {
+    const [x, y, z] = [rand() * 20, rand() * 20, rand() * 10];
+    const a = rand() * 2 * Math.PI;
+    const [dx, dy] = [Math.cos(a), Math.sin(a)];
+    positions.set(
+      [x, y, z, x + 2 * dx, y + 2 * dy, z, x + 2 * dx, y + 2 * dy, z + 3],
+      9 * t
+    );
+  }
+  const triangles = Array.from({ length: 400 }, (_, t) => 3 * t);
+  let met = 0;
+  for (let trial = 0; trial < 200; trial += 1) {
+    const a = rand() * 2 * Math.PI;
+    const n: V3 = [Math.cos(a), Math.sin(a), 0];
+    const origins: V3[] = [0, 1, 2].map(() => [
+      rand() * 20,
+      rand() * 20,
+      rand() * 10,
+    ]);
+    const reach = 3;
+    const near = trianglesOnRays(origins, n, reach, positions, triangles);
+    // in the triangles' own order
+    expect(near).toEqual([...near].sort((p, q) => p - q));
+    for (const o of origins) {
+      for (const t of triangles) {
+        const hit = rayHit(o, n, positions, t);
+        if (hit !== undefined && hit <= reach) {
+          met += 1;
+          expect(near).toContain(t);
+        }
+      }
+    }
+  }
+  // the rays did meet walls: the test tested something
+  expect(met).toBeGreaterThan(20);
 });

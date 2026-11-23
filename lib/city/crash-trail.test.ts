@@ -83,10 +83,10 @@ test("the time away is the wall clock's too: a phone locked for an hour resumes"
 
 test("events and beats keep only the newest entries", () => {
   const trail = createTrail(setup);
-  for (let i = 0; i < TRAIL_EVENTS + 5; i++) {
+  for (let i = 0; i < TRAIL_EVENTS + 5; i += 1) {
     pushEvent(trail, { t: i, kind: `e${i}` });
   }
-  for (let i = 0; i < TRAIL_BEATS + 3; i++) {
+  for (let i = 0; i < TRAIL_BEATS + 3; i += 1) {
     pushBeat(trail, beat(i));
   }
   expect(trail.events).toHaveLength(TRAIL_EVENTS);
@@ -215,7 +215,7 @@ test("a beat the pace held down counts its memory, not its frame rate", () => {
 test("the boot's milestones outlive the event ring", () => {
   const trail = createTrail(setup);
   pushEvent(trail, { t: 3.5, kind: "first frame" });
-  for (let i = 0; i < TRAIL_EVENTS; i++) {
+  for (let i = 0; i < TRAIL_EVENTS; i += 1) {
     pushEvent(trail, { t: 4 + i, kind: "style" });
   }
   expect(trail.events.some((e) => e.kind === "first frame")).toBe(false);
@@ -240,13 +240,15 @@ test("the phase says how far the page got", () => {
   expect(trailPhase(trail)).toBe("running");
 });
 
-describe("which previous record is offered as a crash", () => {
-  const died = (...kinds: string[]) => {
-    const trail = createTrail(setup);
-    kinds.forEach((kind, i) => pushEvent(trail, { t: i, kind }));
-    return trail;
-  };
+const died = (...kinds: string[]) => {
+  const trail = createTrail(setup);
+  for (const [i, kind] of kinds.entries()) {
+    pushEvent(trail, { t: i, kind });
+  }
+  return trail;
+};
 
+describe("which previous record is offered as a crash", () => {
   test("a page that died in use", () => {
     expect(offerAsCrash(died("renderer", "first frame"), false)).toBe(true);
   });
@@ -262,7 +264,7 @@ describe("which previous record is offered as a crash", () => {
 
   test("a recovered page that drew long ago and then died is offered", () => {
     const trail = died("renderer", "first frame");
-    for (let i = 0; i < TRAIL_EVENTS; i++) {
+    for (let i = 0; i < TRAIL_EVENTS; i += 1) {
       pushEvent(trail, { t: 2 + i, kind: "dressings" });
     }
     expect(trail.events.some((e) => e.kind === "first frame")).toBe(false);

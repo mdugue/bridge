@@ -3,10 +3,9 @@
 *Deutsch: [Bedienung](../de/using-the-viewer.md)*
 
 The interface is in German. This page walks through it label by label. You
-need a browser with **WebGPU** (the newer graphics interface most current
-browsers offer) or, where that is missing, **WebGL2** (every current
-desktop and mobile browser has it; the picture is the same, but the view
-may stutter briefly while new areas appear), and, for a smooth picture, a
+need a browser with **WebGPU** (the newer graphics interface: Chrome,
+Edge, and Safari from iOS and macOS 26 offer it) and, for a smooth
+picture, a
 reasonably recent graphics card. Phones are supported: they automatically
 get a lighter render budget.
 
@@ -33,9 +32,12 @@ landmarks, the largest area.
 
 ## Loading
 
-The loading screen lists five stages and a bar. The first three
-(buildings, terrain, light) end at the mark labelled *begehbar*
-("walkable"): from that moment the overlay dissolves and you can move,
+The loading screen is a sheet of clay drawn in contour lines: a magenta
+ring in the middle widens as the city loads, the clay inside it takes on
+colour, and a dashed line marks where the scene becomes walkable. Below
+it are five stages (three on a phone). The first three
+(buildings, terrain, light) end at a thin magenta divider, the point
+where the scene becomes walkable (*begehbar*): from that moment the overlay dissolves and you can move,
 while the remaining two (the surroundings in view, then trees, lamps,
 rails and walls) stream in behind a small pill at the top of the screen.
 *Alles geladen* means everything in your view is in – not the whole city.
@@ -43,6 +45,13 @@ After that the viewer keeps loading as you move: the city is streamed tile
 by tile, detailed near you and coarse further away. When that takes a
 moment, on a long flight for instance, a small *Umgebung lädt* ("loading
 surroundings") hint shows at the top of the screen (see [how a visit unfolds](./how-it-works.md#how-a-visit-unfolds)).
+
+The picture shows the same thing: while the city is still filling in, it
+colours in outward from where you stand. What is complete keeps its
+colours; beyond a slowly breathing magenta line the city lies as unfired
+clay, grey and lined with contours, until the line has reached it. When
+nothing is left to come, the line runs out to the horizon and the colours
+follow.
 
 The side panel is there from the start, over the loading screen. While
 the city loads you can already pick a place, click a spot on the map or
@@ -119,10 +128,10 @@ says how far and offers where to go instead: one of the vantage points, a
 spot you pick on the map, or staying where you are. If you stand in
 another city this site also shows, the window says so first and offers to
 jump there: its viewer opens with you standing where you are (the
-position travels in the link's fragment, which never reaches the server).
-Browsers ask for permission first
-(iPhones for the compass too); the location never leaves the device — not
-even in a crash report (see *When it crashes*).
+position travels in the link's query, `?at=`, so the host's request log
+records it when you follow the link). Browsers ask for permission first
+(iPhones for the compass too); otherwise the location never leaves the
+device — not even in a crash report (see *When it crashes*).
 
 *Live* appears as soon as your phone reports compass readings (an iPhone
 asks for permission on the first tap; a computer without a compass never
@@ -220,13 +229,29 @@ the frame as you see it, with the credits.
 
 ## Asking a building
 
-The city itself carries no text. Ask it instead: with a mouse, a
+The city carries no labels until you ask. Ask it: with a mouse, a
 **click** on a building; on a touch screen, a **long press** (hold a
 finger still for half a second); `I` asks what stands under the
 mouse pointer (in immersive mode, which hides the pointer, what stands at
 the centre; only there a dot marks it). The building gets a fine hatch and a line round its outline,
-both in the controls' pink accent, and a card opens; a
-click on nothing closes it again. You need not hit a small house exactly:
+both in the controls' pink accent (in the other picture styles in that
+style's lettering colour), and a card opens; a
+click on nothing closes it again. Beside the building its **name** now
+stands in the city itself, as long as the question does: a landmark's
+large, with when it was built and by whom, when it was rebuilt and how
+tall it is (from Wikidata, listed on the card too) underneath; a named building with its
+address; an ordinary house just its address, small; a tree, a lamp or a
+bench what it is. The letters are built: a little deep, lit by the sun
+and casting a shadow wherever the sun reaches, down to the ground below. From the street they stand on the building's roof
+(a church's on its nave),
+turned to the facade you see best, or beside it;
+looking steeply down from the air they lie on the ground beside it (from
+a flatter angle they stand up, so they stay readable); close up they
+stand before its facade like an inscription; from far off only the name.
+A long name breaks over a few lines. It moves aside when another building would hide it or a panel covers it, but only once the new place has stayed better for a moment, shows as a pale outline where the city still
+covers it, and is set in each picture style's own type — in Comic in a
+yellow caption box that stays clear of the building, in Schwarzplan, seen from above, on the ground
+like a plan's lettering. You need not hit a small house exactly:
 when nothing stands right under your finger, the building most of the
 ground around it belongs to answers. On a phone the card is a sheet at
 the bottom: folded it says what the building is and where; swipe it up
@@ -258,7 +283,7 @@ storeys simply has no storey line.
 Under **Daten** ("data", folded at the end of the card) the card says how
 the viewer draws the building, value by value: storeys, the facade's
 material and base colour, the windows, plinth and cornices, front doors,
-passages, shopfronts, dormers, the roof colour, the light at dusk and whether it is
+passages, shopfronts, dormers and chimneys, the roof colour, the light at dusk and whether it is
 a landmark. Each value names its source (say *Material Glas —
 OpenStreetMap · building:material*), carries the badge of how the viewer
 came by it, and links, where it can, to the place: the OpenStreetMap
@@ -272,7 +297,8 @@ measured them. For a building of several parts it describes the part you
 clicked.
 
 Trees, monuments and fountains, and bridges answer the same way.
-Whatever you asked is framed by a soft pink line on a pale fringe —
+Whatever you asked is framed by a soft line on a pale fringe (pink, or
+the picture style's lettering colour) —
 along its outline as you see it now, the same width on screen near or
 far. The fringe flashes briefly when you ask. A **street tree**
 says its species (German and botanical), its street and number in the
@@ -365,7 +391,62 @@ The button in the corner opens a panel with three tabs.
     many are out.
 
   From the air the flows, columns and trails widen and thicken so they
-  stay legible.
+  stay legible. Each picture style draws them its own way: *Pastell* as
+  glass, *Comic* in printing inks (blue, yellow, red by the amount) with a
+  black contour, *Film noir* as light trails of a long exposure, *Sin
+  City* red, *Papier* as coloured tissue paper (lit from inside at night),
+  *Strich* in plan colours with a pen's edge (a warm light at night), the
+  *Schwarzplan* as a band outlined in black.
+- **Spaziergänge** ("walks") — guided walks through the city, written by
+  Claude, an AI, and marked as such on every stop (in German). Dresden
+  has four: *Augusts Bühne* (the old town as a stage of power), *Narben
+  und Nähte* (how the city lives with its wounds), *Gold, Milch und
+  Eigensinn* (the Neustadt) and *Wunder am Elbhang* (upriver to
+  Loschwitz); Leipzig, Hamburg, Munich, Meißen, Grimma and Unna have
+  one each: *Messe, Musik und Montag*
+  (Leipzig), *Backstein und Wasser* (Hamburg), *Teufel, Tanz und Löwen*
+  (Munich), *Schloss, Dom und Porzellan* (Meißen), *Grimma an der Mulde*
+  and *Licht unter der Stadt* (Unna). A walk opens a card over the
+  scene: each stop glides slowly to its view, sets today's date at the
+  hour the stop is best seen (a facade in evening light, a square at
+  night) and, where the stop asks, a picture style; a walk leaves Modell
+  once, since it tells what you see. The card tells the stop already
+  during the glide there; you can look around during the glide, it still
+  lands at the stop, and the light moves with it to the next stop's hour.
+  It adds what is special about today or this season and names one detail
+  to find in the picture. What the model does not show — a statue, a
+  relief, an inscription, an interior — a Wikimedia Commons photo in the
+  card shows, with its author and licence: a landscape one across the top,
+  a portrait one beside the text (above it on a phone); a click shows it
+  whole. It is served by this site, not by Wikimedia. *Belege* ("sources") folds out every claim the stop makes
+  with the source it comes from — Wikipedia, an institution's page, the
+  city model's own data; legends are told as legends. *Weiter* and
+  *Zurück* move between the stops, × ends the walk and gives the picture
+  style and the time back. On a phone the card is a sheet at the bottom
+  that starts folded: tap or pull up its handle to open it, pull it down
+  to fold it again; the joystick and the toolbar step aside while the
+  walk runs. How they are written: [walks.md](../../walks.md).
+- **Frag die Stadt** (ask the city) — questions about the city in your
+  own words ("Who built the Frauenkirche?", "What is in front of me?",
+  "What does this look like in the evening?"). A language model searches
+  what the city model knows — the buildings' names, addresses, use and
+  height, the landmarks with what Wikidata says of them —, flies the view
+  to the place, sets the time, picture style or a data layer where it
+  helps, and answers in a few sentences with its source. Under each
+  answer it lists what it looked up and did; every answer is marked *KI*
+  (AI). It runs on your own key from a provider (Anthropic, OpenAI,
+  OpenRouter or the Vercel AI Gateway) and at your cost, mostly under a
+  cent per question; the key stays in your browser
+  ([privacy](/datenschutz#frag-die-stadt)). Also from *Fragen* in the
+  toolbar. As a **voice guide**: *Sprechen* takes a question by
+  microphone (where the browser recognises speech), *Vorlesen* reads the
+  answers aloud (switched on, the last one at once), and the *Hörmodus*
+  softly darkens the edges and lets the scene rest — for walking with
+  the phone in your pocket, together with *Live* in the toolbar; ending
+  it ends the reading it switched on. Stopping an answer halts it, and
+  the view stays where it is. "What is that up ahead?" asks the city model
+  what stands at the centre of the view (in Modell: where it is aligned)
+  and opens its card.
 - **Steuerung** ("controls") — the full controls table, folded until you
   open it (the bar over the scene shows the first few).
 
@@ -382,12 +463,15 @@ The button in the corner opens a panel with three tabs.
   current view at all twelve instants and saves them as one sheet — a row
   per date, a column per hour — with the legend under it (in Modell with
   scale bar and north arrow). The hours are your device's local time.
+  In *Sin City* and the *Schwarzplan* the date, the time and the study
+  rest (they draw in their own light); a note says so, and switching the
+  style back brings the time set back.
 - **Darstellung** ("look") — the **Bildstil** (picture style) on top,
-  then the one slider left, *Nebel* (the distance haze, a percentage),
-  and the *Multi-Tuft-Kronen (nah)* switch (rich multi-tuft crowns near
-  the camera; off = the cheap crown everywhere). *Zurücksetzen* ("reset")
-  returns both to their start values and leaves the picture style as it
-  is. The rest of the look is fixed (below).
+  then the one slider left, *Nebel* (the distance haze, a percentage).
+  *Zurücksetzen* ("reset") returns it to its start value and leaves the
+  picture style as it is. The rest of the look is fixed (below), the
+  trees too: near the camera they always wear their rich multi-tuft
+  crown, as far as the city's budget goes.
 
 A picture style draws the same city another way; switch it at any time,
 with a click or with `V`. The browser remembers the last style for your
@@ -396,12 +480,12 @@ next visit:
 | Style | What it looks like |
 |---|---|
 | *Pastell* | the default: a clay model on paper, soft light, no outlines |
-| *Comic* | pop art as if printed: a few loud colours (paper white, red, yellow, blue, green, black) without gradients, bold even black outlines; whatever lies in shade gets a dot screen that sits on the surfaces and does not crawl in flight; red roofs red, others slate blue, the Elbe blue, meadows and trees green (an autumn tree yellow, a bare or blossoming one white); the trees become round cartoon clouds of three balls, printed flat; the sky one blue, dotted lighter towards the horizon; at night a navy city with yellow pools of lamplight and windows |
+| *Comic* | pop art as if printed: a few loud colours (paper white, red, yellow, blue, green, black) without gradients, bold even black outlines; whatever lies in shade gets a dot screen that sits on the surfaces and does not crawl in flight; red roofs red, others slate blue, the Elbe blue, meadows and trees green (an autumn tree yellow, a bare or blossoming one white); the trees become round cartoon clouds of three balls, printed flat; the sky one blue, dotted lighter towards the horizon; at night (once the lamps come on) a navy city with yellow pools of lamplight and windows |
 | *Film noir* | black and white with a hard curve, a smoky distance, a sky that darkens towards the top, running film grain and a dark frame edge; a soft light cone under every street lamp — only hinted at by day, full at dusk; as it gets dark the camera opens up instead of letting everything go black |
-| *Sin City* | hard black-and-white areas: white where the sun reaches, black in shade, so cast shadows fall as sharp black shapes; crowns and the Elbe deep black, the distance dissolving into white haze; rain falls in front of the scene; only the red tiled roofs keep their colour |
-| *Papier* | the city as a white paper model: every surface a slightly broken white, real sunlight and real (blue-grey) shadows, fine drawn graphite outlines; the trees become folded card polyhedra; road markings and sports lines stay as a faint grey, water as a cooler, deeper paper; lights and mist sheets drop out |
-| *Strich* ("line") | a line drawing as on a plan: the white model with every edge in one even line, in the distance too; the shade hatched as with a technical pen, the ground in plan colours (pale green, pale blue water, near-white streets), the trees as folded card that holds still in the wind, so the hatch on it does not crawl |
-| *Schwarzplan* ("figure-ground plan") | the buildings black, everything else white, the street-tree register's trees as crown circles with a stem dot (measured, so only those) — no shadows, only a fine white line where one building stands in front of another; made for the *Lageplan*, usable everywhere |
+| *Sin City* | hard black-and-white areas: white where the sun reaches, black in shade, so cast shadows fall as sharp black shapes; crowns and the Elbe deep black, the distance dissolving into white haze; rain falls in front of the scene; only the red tiled roofs keep their colour. Sin City always draws in the same hard afternoon light (15 September, 16:30): the date and time rest while it is on |
+| *Papier* | the city as a white paper model: every surface a slightly broken white, real sunlight and real (blue-grey) shadows, fine drawn graphite outlines; the trees become folded card polyhedra; road markings and sports lines stay as a faint grey, water as a cooler, deeper paper; lights and mist sheets drop out. At night the model stands on dark blue card: its windows glow warm through the card, lamplight lies warm on streets and walls, drawn with a white pencil |
+| *Strich* ("line") | a line drawing as on a plan: the white model with every edge in one even line, in the distance too; the shade hatched as with a technical pen, the ground in plan colours (pale green, pale blue water, near-white streets), the trees as folded card that holds still in the wind, so the hatch on it does not crawl. At night an etching: the dark hatched (crossed on walls and roofs), the sky ruled with level lines, only what lamps and windows light left white under a yellow wash |
+| *Schwarzplan* ("figure-ground plan") | the buildings black, everything else white, the street-tree register's trees as crown circles with a stem dot (measured, so only those) — no shadows, only a fine white line where one building stands in front of another; made for the *Lageplan*, usable everywhere. It knows no time of day: the date and time rest while it is on |
 
 In the graphic styles *Comic*, *Sin City*, *Strich* and *Schwarzplan* the
 depth of field rests (a blurred background under crisp lines reads as a
@@ -419,21 +503,19 @@ knowledge base use for them:
 | | *Laterne* | after dark you carry a small warm light on foot that brightens the ground, benches and house fronts a few metres around you; on a computer it casts shadows, on a phone it does not; from the air and in Modell it goes out |
 | Gebäude | *Boden-Verlauf* | darkening of walls towards the ground |
 | | *Höhenlinien* | faint storey bands, spaced from the measured height |
-| | *Streiflicht* | rim light on edges facing away from the sun |
+| | *Streiflicht* | rim light on walls seen at a grazing angle, a quarter of it on faces turned from the sun |
 | | *Farbvariation* | per-building wall tint from function and height |
 | | *Dachfarbe* | how strongly the real (or synthesised) roof colour shows |
 | | *Dachsättigung* | lifts the saturation of the aerial-photo roof colours without shifting their hue; 0 = raw photo |
 | | *Traufkante* | a soft line where wall meets roof |
 | | *Gliederung* | what a house shows at eye level, painted: a darker shop zone where a shop is mapped. The plinth, the ledge over the ground floor and the eave cornice are modelled, run on from house to house and are always there |
-| | *Fenster* | rows of windows on every house, drawn into the wall: an opening you look into, its reveals in the wall's plaster, its back darker and cooler, a slim sill with its shadow — no glass, no panes, no mullions. Spacing and size where street photos measured the house (Dresden), else the nearest measured house's of the same kind, else its type's; one row per storey, the windows as tall as the storey allows, the ground floor's above the plinth, the top floor's under the eave cornice; a town house's ground floor a little raised, its windows with a surround. None on party walls, beside doors, over shop fronts, on churches, palaces and halls. From a distance they fade into the facade's tone |
+| | *Fenster* | rows of windows on every house, drawn into the wall: an opening you look into, its reveals in the wall's plaster, its back darker and cooler, a slim sill with its shadow, its back mirroring a little sky at a grazing view — no panes, no mullions. Spacing and size where street photos measured the house (Dresden), else the nearest measured house's of the same kind, else its type's; one row per storey, the windows as tall as the storey allows, the ground floor's above the plinth, the top floor's under the eave cornice; a town house's ground floor a little raised, its windows with a surround. None on party walls, beside doors, over shop fronts, on churches, palaces and halls. From a distance they fade into the facade's tone |
 | | *Fassadenbild* | what street photos (Mapillary) say about a facade, abstracted: a fine relief where it is busy, a ledge at every storey of a busy period front, a slightly darker or lighter tone, a shop plinth where a shop sign hangs; where panoramas show the front (every city but Unna, which has none) |
 | | *Abendlicht* | after dark: a quarter of the windows glow warm, shops and public buildings are lit by cones of light at the foot of their facades, some of the landmarks by uneven floodlights up to the eave — the walls themselves never glow |
 | | *Materialstreuung* | matte-to-silky variation between buildings |
 | Vegetation | *Bodendetail* | kerbs, lawn edges, parking bays, road markings (crossings, stop, cycle and centre lines), the gardens of allotment colonies and the paving underfoot (asphalt, slabs, cobbles from OpenStreetMap), the mown stripes and grain of sports grounds, visible up close |
 | | *Stadtgrün* | paints green courtyards, front gardens and parks inside built-up areas, and the railway's green embankments, like meadow, from the infrared aerial photo |
 | | *Wiesenfärbung* | tints meadows lush-to-dry from the infrared aerial photo |
-| | *Gegenlicht-Schimmer* | backlight shimmer on crowns between you and the sun |
-| | *Blattdurchscheinen* | translucency of nearby, large crowns (shadow-dependent) |
 | Rendering | *Kontaktschatten* | ambient-occlusion contact shadows in corners and under eaves |
 | | *Himmelslicht* | narrow courtyards and street canyons get less skylight than open meadows — precomputed from the terrain and the building model |
 | | *Ferne Schatten* | shadows beyond the ordinary shadow range: the long shadows of distant buildings and slopes at a low sun, and in the distance the shadows of the buildings next door too |
@@ -441,17 +523,24 @@ knowledge base use for them:
 | | *Papierkorn* | the paper grain over the whole image (running film grain in *Film noir* and *Sin City*) |
 | | *Tuschelinien* | how strong the outlines are in *Comic*, *Film noir*, *Sin City*, *Papier* and *Strich* |
 
-Three more effects belong to the fixed look. The mist over the river
-drifts over the water from about 120 m ahead, denser only far off. The photographic
-depth of field blurs only what lies behind the focus (the foreground stays
-sharp), and the focus is always what lies at the centre of the view. While
-the camera moves, the blur is switched off (the eye cannot resolve it in
-motion) and comes back when you stop. Phones draw without it: the blur
-needs more graphics memory than a phone can spare for a hint a small
-screen barely shows. And while you walk, turn or fly in the pastel look,
-the picture is smeared slightly along the camera's movement, as a camera
-with a short exposure would show it; on phones too, at no extra memory.
-The other picture styles and Modell keep their sharp lines.
+Three more effects belong to the fixed look. The mist over the river drifts
+over the water from about 120 m ahead, denser only far off. The photographic
+depth of field blurs what lies behind the focus and what stands before it (a
+tree at the edge of the view, a lamp close by, the street at your feet), as
+a real lens does, and the focus is always what lies at the centre of the
+view, a tree as much as a facade. It blurs as much as a real camera with
+this view's angle and the opening of a 50 mm lens at f/1.8 would: focused on
+a facade down the street, the city behind it stays all but sharp while a
+tree a few steps away goes soft; focused on a lamp post close by, the
+background goes soft. When nothing lies at the centre (the sky), the lens
+focuses far. While the camera moves, the blur is switched off (the eye
+cannot resolve it in motion); when you stop, it grows back in over most of a
+second, as a lens pulls focus. Phones draw without it: the blur needs more
+graphics memory than a phone can spare for a hint a small screen barely
+shows. And while you walk, turn or fly in the pastel look, the picture is
+smeared slightly along the camera's movement, as a camera with a short
+exposure would show it; on phones too, at no extra memory. The other picture
+styles and Modell keep their sharp lines.
 
 ### Erweitert ("Advanced")
 
@@ -460,11 +549,66 @@ The other picture styles and Modell keep their sharp lines.
   not undoable. *Bild speichern* saves the view as a PNG with its sources
   (see [Modell](#modell-the-city-as-a-planner-draws-it)). *Immersiver Modus* locks the mouse pointer
   for a first-person feel; `Esc` leaves it.
+- **Entwurf** ("design") — loads a design of your own into the city: a
+  glTF file (`.glb`, or a `.gltf` picked together with its `.bin` and
+  textures) as SketchUp, Rhino, Revit, Archicad, Vectorworks or Blender
+  export it, an IFC model (`.ifc`), an OBJ (`.obj`, with its `.mtl` and
+  textures picked together; read as metres with Y up) or a Rhino file
+  (`.3dm`, saved with its render meshes); dropping it on the panel works
+  too. A Rhino file whose earth anchor is set stands at its place (on the
+  ground, where the anchor gives no height or Rhino's default 0).
+  Landscape plans load the same way: an ASCII DXF, a Shapefile (pick the
+  `.shp` with its `.dbf`, `.prj` and `.cpg`), a GeoPackage (`.gpkg`) or
+  LandXML (`.xml`). Their hatches and areas become lawn, beds, paving,
+  paths, water, sand or gravel by their layer's or attributes' names
+  (German or English, e.g. "Rasen", "Pflaster", "Staudenbeet"; an
+  attribute such as *Nutzung*, *Art* or *Belag* first, a name or address
+  last, so a "Kamenzer Straße" park stays lawn), drawn in
+  the city's colours on the ground; tree symbols become trees of the
+  drawn crown size, a TIN a planned ground. A layer whose name says
+  nothing stays grey, and the panel names it. A plan in UTM coordinates
+  lies at its place on the ground already loaded there.
+  An IFC that carries its place (`IfcMapConversion` in ETRS89/UTM) stands
+  there by itself; one with only the site's latitude and longitude stands
+  roughly there, and the panel asks you to check it. A design whose file
+  puts it more than 2 km beyond the city's tiles, or in another place's
+  coordinates, is set down in front of you, and the panel says why. The file is read in your
+  browser only and uploaded nowhere. Where it carries the Land's
+  coordinates (UTM, with or without the zone in front), the design stands
+  at its place straight away, at its NHN heights where they agree with the
+  ground; otherwise it is set on the ground in front of you — at its
+  origin (±0) where it has a basement below that. *Hierher
+  holen* (bring here), *Aufs Gelände* (onto the ground), *Ost*, *Nord*,
+  *Höhe* and *Drehung* (east, north, height, turn) move, set and turn it;
+  *Maßstab* (scale) reads the file in another unit (m, cm, mm, inch,
+  foot) and times a factor — for an OBJ, which has no unit, or a model at
+  1:100; a design under 4 m or over 3 km gets the panel's suggestion
+  (landscape plans have none: their coordinates say it).
+  *Lage sichern* saves the placement, with its scale, as a small file (`….lage.json`) to
+  load with the design next time. Buildings whose footprint the design
+  covers for more than half step aside (*Bestand im Umriss ausblenden*);
+  flat plates at the design's lowest point do not count. The design is
+  model-maker's white, or in the file's own colours (*Farben der Datei*);
+  it casts shadows, you cannot walk through it, and Modell and the shading
+  study show it. On a phone it may have at most 250,000 triangles and
+  40 MB (3 million and 400 MB on a computer); textures that do not fit
+  are left out. With the buildings, the trees, hedges, lamps and street
+  furniture in the design's plan (its ground plate included) go too, and
+  the ground, walls, kerbs, stairs, tracks, platforms and water there lie
+  under its floor (a line on a bridge above it stays). A click on the
+  design asks it like a building: the card names the part — an IFC
+  element with its type and GlobalId, a plan's surface by its class, a
+  glTF's or OBJ's object by its name — and where the design stands.
 - **Snapshot** — *Kopieren* copies your exact position, the date and time,
-  the picture style, *Nebel*, the crown switch and the data layers as a
+  the picture style, *Nebel* and the data layers as a
   small JSON text; paste such a text into the box and press *Anwenden* to
-  restore it. This is how a specific view is shared or reproduced for a
-  screenshot. A snapshot from before the look was fixed still loads; the
+  restore it. *Link kopieren* copies a link to this page that opens at the
+  same view (the snapshot rides in the address's query, `?snap=`, so the
+  host's request log records it whenever the link is opened; crash reports
+  leave it out); it carries the camera's place, after *Standort* or *Live*
+  your own. This is how a
+  specific view is shared or reproduced for a screenshot. A snapshot from
+  before the look was fixed still loads; the
   sliders it names are ignored. A malformed snapshot is rejected with a
   message instead of breaking the scene.
 - **Qualität** ("quality") — the step the viewer draws at on your device

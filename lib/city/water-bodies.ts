@@ -14,7 +14,8 @@
  */
 
 import { decodeGreyPng } from "./png-raster";
-import { isInvalidElevation, type TerrainBounds } from "./terrain-geometry";
+import { isInvalidElevation } from "./terrain-geometry";
+import type { TerrainBounds } from "./terrain-geometry";
 
 /** A side of a tile. */
 export type EdgeSide = "n" | "s" | "w" | "e";
@@ -78,7 +79,7 @@ export interface WaterLook {
 
 /** Base64 → its bytes (the lifts' PNG, the tint grid's cells). */
 export const fromBase64 = (s: string): Uint8Array =>
-  Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  Uint8Array.from(atob(s), (c) => c.codePointAt(0) ?? 0);
 
 /** Foam lines a tile carries at most (water.py FOAM_MAX; the sheet's
  *  uniform array). */
@@ -129,12 +130,12 @@ export function raiseWater(input: WaterRaiseInput): Float32Array {
   const dy = (maxY - minY) / n;
   const sx = lift.n / (lx1 - lx0);
   const sy = lift.n / (ly1 - ly0);
-  for (let row = 0; row < n; row++) {
+  for (let row = 0; row < n; row += 1) {
     const lr = Math.floor((ly1 - (maxY - (row + 0.5) * dy)) * sy);
     if (lr < 0 || lr >= lift.n) {
       continue;
     }
-    for (let col = 0; col < n; col++) {
+    for (let col = 0; col < n; col += 1) {
       const lc = Math.floor((minX + (col + 0.5) * dx - lx0) * sx);
       const k = lc >= 0 && lc < lift.n ? lift.index[lr * lift.n + lc] : 0;
       const idx = row * n + col;
@@ -168,7 +169,7 @@ const TINT_DARK: [number, number] = [12, 20];
 const TINT_HUE: [number, number] = [15, 35];
 
 type Lab = [number, number, number];
-const WHITE = [0.950_47, 1, 1.088_83];
+const WHITE = [0.95047, 1, 1.08883];
 
 const smooth = (lo: number, hi: number, x: number): number => {
   const t = Math.min(Math.max((x - lo) / (hi - lo), 0), 1);
@@ -179,7 +180,7 @@ const smooth = (lo: number, hi: number, x: number): number => {
 export function labOf(rgb: number): Lab {
   const lin = [(rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255].map((v) => {
     const c = v / 255;
-    return c <= 0.040_45 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   });
   const xyz = [
     0.4124 * lin[0] + 0.3576 * lin[1] + 0.1805 * lin[2],
@@ -188,7 +189,7 @@ export function labOf(rgb: number): Lab {
   ];
   const f = xyz.map((v, i) => {
     const t = v / WHITE[i];
-    return t > 0.008_856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+    return t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
   });
   return [116 * f[1] - 16, 500 * (f[0] - f[1]), 200 * (f[1] - f[2])];
 }
@@ -198,7 +199,7 @@ export function rgbOf(lab: Lab): number {
   const fy = (lab[0] + 16) / 116;
   const f = [fy + lab[1] / 500, fy, fy - lab[2] / 200];
   const [x, y, z] = f.map(
-    (v, i) => (v > 0.206_893 ? v ** 3 : (v - 16 / 116) / 7.787) * WHITE[i]
+    (v, i) => (v > 0.206893 ? v ** 3 : (v - 16 / 116) / 7.787) * WHITE[i]
   );
   const lin = [
     3.2406 * x - 1.5372 * y - 0.4986 * z,
@@ -207,7 +208,7 @@ export function rgbOf(lab: Lab): number {
   ];
   const [r, g, b] = lin.map((v) => {
     const c = Math.min(Math.max(v, 0), 1);
-    const s = c <= 0.003_130_8 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+    const s = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
     return Math.round(s * 255);
   });
   return (r << 16) | (g << 8) | b;
@@ -285,12 +286,20 @@ function sharedSides(
 ): [EdgeSide, EdgeSide][] {
   const out: [EdgeSide, EdgeSide][] = [];
   if (near(a[1], b[1]) && near(a[3], b[3])) {
-    if (near(a[2], b[0])) out.push(["e", "w"]);
-    if (near(a[0], b[2])) out.push(["w", "e"]);
+    if (near(a[2], b[0])) {
+      out.push(["e", "w"]);
+    }
+    if (near(a[0], b[2])) {
+      out.push(["w", "e"]);
+    }
   }
   if (near(a[0], b[0]) && near(a[2], b[2])) {
-    if (near(a[1], b[3])) out.push(["s", "n"]);
-    if (near(a[3], b[1])) out.push(["n", "s"]);
+    if (near(a[1], b[3])) {
+      out.push(["s", "n"]);
+    }
+    if (near(a[3], b[1])) {
+      out.push(["n", "s"]);
+    }
   }
   return out;
 }
@@ -315,22 +324,25 @@ function joinedBodies(tiles: TileWater[]): {
     }
     return r;
   };
-  tiles.forEach((a, i) => {
-    tiles.forEach((b, j) => {
+  for (let i = 0; i < tiles.length; i += 1) {
+    const a = tiles[i];
+    for (let j = 0; j < tiles.length; j += 1) {
+      const b = tiles[j];
       if (j <= i || !a.member || !b.member) {
-        return;
+        continue;
       }
       for (const [sa, sb] of sharedSides(a.bounds, b.bounds)) {
-        a.member.bodies.forEach((ra, ka) => {
-          b.member?.bodies.forEach((rb, kb) => {
+        for (let ka = 0; ka < a.member.bodies.length; ka += 1) {
+          const ra = a.member.bodies[ka];
+          for (const [kb, rb] of b.member?.bodies.entries() ?? []) {
             if (overlaps(ra.edges?.[sa], rb.edges?.[sb])) {
               parent[root(base[i] + ka)] = root(base[j] + kb);
             }
-          });
-        });
+          }
+        }
       }
-    });
-  });
+    }
+  }
   return { base, root };
 }
 
@@ -343,10 +355,11 @@ function joinedBodies(tiles: TileWater[]): {
 export function siteWaterTints(tiles: TileWater[]): Map<string, number[]> {
   const { base, root } = joinedBodies(tiles);
   const pools = new Map<number, { lab: Lab; seen: number }>();
-  tiles.forEach((t, i) => {
-    t.member?.bodies.forEach((row, k) => {
+  for (let i = 0; i < tiles.length; i += 1) {
+    const t = tiles[i];
+    for (const [k, row] of t.member?.bodies.entries() ?? []) {
       if (!row.lab || !row.core) {
-        return;
+        continue;
       }
       const r = root(base[i] + k);
       const pool = pools.get(r) ?? { lab: [0, 0, 0], seen: 0 };
@@ -355,10 +368,11 @@ export function siteWaterTints(tiles: TileWater[]): Map<string, number[]> {
       ) as Lab;
       pool.seen += row.core;
       pools.set(r, pool);
-    });
-  });
+    }
+  }
   const out = new Map<string, number[]>();
-  tiles.forEach((t, i) => {
+  for (let i = 0; i < tiles.length; i += 1) {
+    const t = tiles[i];
     out.set(
       t.id,
       (t.member?.bodies ?? []).map((_, k) => {
@@ -368,9 +382,11 @@ export function siteWaterTints(tiles: TileWater[]): Map<string, number[]> {
           : WATER_SHEET;
       })
     );
-  });
+  }
   return out;
 }
+
+const r = (v: number) => Math.round(v * 10) / 10;
 
 /**
  * What a tile's water sheet reads (TerrainExtras.water): the tint grid
@@ -390,7 +406,6 @@ export function waterLook(
   }
   const lines = foam ? (member?.foam ?? []) : [];
   if (lines.length > 0) {
-    const r = (v: number) => Math.round(v * 10) / 10;
     look.foam = lines
       .slice(0, FOAM_LINES)
       .map(({ line: [[x0, y0], [x1, y1]], drop, down }) => [

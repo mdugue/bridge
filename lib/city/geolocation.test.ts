@@ -164,17 +164,20 @@ describe("another city of the deployment", () => {
     expect(siteHolding({ lat: 52.52, lng: 13.405 }, others)).toBeUndefined();
   });
 
-  test("the fix travels to the other page and back out of its fragment", () => {
+  test("the fix travels to the other page and back out of its query", () => {
     const href = arrivalHref("leipzig", { lat: 51.3393, lng: 12.3726 });
-    expect(href).toBe("/leipzig#at=51.339300,12.372600");
-    expect(arrivalOf(href.slice(href.indexOf("#")))).toEqual({
+    expect(href).toBe("/leipzig?at=51.339300,12.372600");
+    expect(arrivalOf(new URL(href, "https://x.test").search)).toEqual({
       lat: 51.3393,
       lng: 12.3726,
     });
-    // A query is no longer read: the fix travels in the fragment alone.
-    expect(arrivalOf("?at=51.3,12.3")).toBeNull();
-    expect(arrivalOf("#at=91,0")).toBeNull();
-    expect(arrivalOf("#at=nowhere")).toBeNull();
+    // beside a QA knob
+    expect(arrivalOf("?scene=lite&at=51.3,12.3")).toEqual({
+      lat: 51.3,
+      lng: 12.3,
+    });
+    expect(arrivalOf("?at=91,0")).toBeNull();
+    expect(arrivalOf("?at=nowhere")).toBeNull();
     expect(arrivalOf("")).toBeNull();
   });
 });

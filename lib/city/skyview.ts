@@ -9,15 +9,14 @@
  * No THREE, no DOM.
  */
 
-/** Raster edges (px) over a tile: ≈ 2 m sky view, ≈ 8 m horizon. */
-export const SVF_PX = 1024;
+/** The horizon raster's edge (px) over a tile: ≈ 8 m. */
 export const HORIZON_PX = 256;
 /** Horizon azimuths, clockwise from north, evenly spaced. */
 export const HORIZON_AZIMUTHS = 16;
 /** Four azimuths per RGBA texel: one band's layers (planes). */
 export const HORIZON_LAYERS = HORIZON_AZIMUTHS / 4;
 /** The far band's planes, then the near band's: the texture's layers. */
-export const HORIZON_BANDS = 2;
+const HORIZON_BANDS = 2;
 export const HORIZON_TEXTURE_LAYERS = HORIZON_LAYERS * HORIZON_BANDS;
 /** The far band's horizon angle (°) of the byte 255. */
 export const HORIZON_MAX_DEG = 45;
@@ -26,10 +25,10 @@ export const HORIZON_MAX_DEG = 45;
 export const HORIZON_NEAR_M = 80;
 export const HORIZON_FAR_M = 1500;
 /** The near band: occluders 8–80 m away, 0–90° (beside a wall the skyline
- *  is steep). Inside the shadow frustum they are the shadow map's. */
+ *  is steep). Inside the shadow rings' reach they are the shadow map's. */
 export const NEAR_BAND_M = 8;
 export const NEAR_MAX_DEG = 90;
-/** The near band fades in from this fraction of the shadow frustum's
+/** The near band fades in from this fraction of the shadow rings' reach's
  *  half-size to its edge, so the hand-over shows no seam. */
 export const NEAR_BAND_FADE_FROM = 0.8;
 /** Soft band (°) either side of the horizon angle the sun fades across —

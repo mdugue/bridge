@@ -128,3 +128,34 @@ def test_nrws_crown_tops_in_class_1_are_read_as_non_ground(tmp_path):
     a = scan(tmp_path / "a.laz", np.arange(n) + 0.5, [0.5] * n, [100.0] * n, cls, [1000] * n)
     las = laspy.read(lsc.merge_laz([a], tmp_path / "m.laz", classes=lambda _: nw.LSC_CLASSES))
     assert list(las.classification) == [2, 20, 20, 20, 30]
+
+
+def test_a_scan_without_return_numbers_reads_its_echo_class_as_multi_echo(tmp_path):
+    # NRW republished some 1 km files without return numbers (0 everywhere,
+    # no point counted by return): its class 1 holds only non-last echoes,
+    # so there it is read as multi-echo; a file that records its returns
+    # keeps its own.
+    from bake.providers import nw
+
+    cls = [2, 1, 20]
+    xs, ys, zs = [0.1, 0.2, 0.3], [0.1, 0.1, 0.1], [100.0, 112.0, 108.0]
+    bare = scan(tmp_path / "bare.laz", xs, ys, zs, cls, [1000] * 3, returns=[0, 0, 0])
+    las = laspy.read(bare)
+    las.return_number = np.zeros(3, np.uint8)
+    las.write(bare)
+    assert lsc.echoless(laspy.read(bare).header)
+    kept = scan(tmp_path / "kept.laz", xs, ys, zs, cls, [1000] * 3, returns=[1, 1, 2])
+    assert not lsc.echoless(laspy.read(kept).header)
+    # a header that forgot its counts over points that carry their returns
+    counted = scan(tmp_path / "counted.laz", xs, ys, zs, cls, [1000] * 3, returns=[1, 1, 2])
+    las = laspy.read(counted)
+    las.header.number_of_points_by_return = np.zeros(15, np.uint64)
+    las.write(counted, do_compress=True)
+    for src, multi in ((bare, [0, 2, 0]), (kept, [1, 1, 2]), (counted, [1, 1, 2])):
+        out = lsc.merge_laz(
+            [src],
+            tmp_path / f"m_{src.stem}.laz",
+            classes=lambda _: nw.LSC_CLASSES,
+            echo_classes=nw.ECHO_CLASSES,
+        )
+        assert list(laspy.read(out).number_of_returns) == multi

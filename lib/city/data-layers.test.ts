@@ -1,11 +1,7 @@
 import { expect, test } from "bun:test";
 import { SITES } from "@/sites";
-import {
-  DATA_LAYERS,
-  type DataLayerKey,
-  dataLayersOf,
-  siteDataLayers,
-} from "./data-layers";
+import { DATA_LAYERS, dataLayersOf, siteDataLayers } from "./data-layers";
+import type { DataLayerKey } from "./data-layers";
 
 const keys = (id: keyof typeof SITES) =>
   siteDataLayers(SITES[id].dataLayers).map((r) => r.key);

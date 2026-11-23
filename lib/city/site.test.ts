@@ -45,9 +45,9 @@ test("a command names its site first, and a wrong name stops it", () => {
   expect(site.id).toBe("leipzig");
   expect(rest).toEqual(["33316_5690_2_sn", "--step", "rail"]);
   expect(() => siteFromArgs(["33412_5656_2_sn"])).toThrow(
-    /name the site first/
+    /name the site first/u
   );
-  expect(() => siteFromArgs([])).toThrow(/known: .*dresden/);
+  expect(() => siteFromArgs([])).toThrow(/known: .*dresden/u);
 });
 
 test.each(sites)(

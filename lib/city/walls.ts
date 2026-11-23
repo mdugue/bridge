@@ -17,18 +17,21 @@
  * Each wall is toned by its material (`WALL_TONES`, the mesh's vertex
  * colours).
  */
-import { epsgToWorld, type RecenterOffset } from "./ground-clamp";
-import { type Point2, subdividePolyline } from "./polyline";
+import { epsgToWorld } from "./ground-clamp";
+import type { RecenterOffset } from "./ground-clamp";
+import { subdividePolyline } from "./polyline";
+import type { Point2 } from "./polyline";
 import {
   EDGE_TOLERANCE_M,
   farthestNear,
-  type JoinPoint,
   joinsAlong,
   lowestGround,
   reachLevel,
   SINK,
 } from "./ground-join";
-import { type StepSnap, smoothSnaps, snapToStep } from "./wall-snap";
+import type { JoinPoint } from "./ground-join";
+import { smoothSnaps, snapToStep } from "./wall-snap";
+import type { StepSnap } from "./wall-snap";
 
 export interface WallRibbon {
   /** EPSG coordinates (NOT recentered) */
@@ -73,10 +76,12 @@ export const WALL_TONES: Readonly<Record<Masonry, number>> = {
   wood: 0xa8_90_74,
 };
 
+/** One sRGB channel (0–1) as linear. */
+const lin = (c: number) =>
+  c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+
 /** sRGB hex → linear RGB, as the mesh's COLOR_0 carries it. */
 export function linearTone(hex: number): [number, number, number] {
-  const lin = (c: number) =>
-    c <= 0.040_45 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   return [16, 8, 0].map((shift) => lin(((hex >> shift) & 0xff) / 255)) as [
     number,
     number,
@@ -90,7 +95,8 @@ export function wallColors(
 ): Float32Array<ArrayBuffer> {
   const linear = MASONRY.map((m) => linearTone(WALL_TONES[m]));
   const out = new Float32Array(tones.length * 3);
-  for (const [i, t] of tones.entries()) {
+  for (let i = 0; i < tones.length; i += 1) {
+    const t = tones[i];
     out.set(linear[t] ?? linear[MASONRY.indexOf("stone")], i * 3);
   }
   return out;
@@ -303,12 +309,13 @@ const SAME_LEVEL_M = 1;
  */
 function stepRuns(steps: readonly (StepSnap | null)[]): number[] {
   const runs: number[] = [];
-  steps.forEach((s, i) => {
+  for (let i = 0; i < steps.length; i += 1) {
+    const s = steps[i];
     const prev = steps[i - 1];
     const same =
       s && prev && s.up === prev.up && Math.abs(s.hi - prev.hi) <= SAME_LEVEL_M;
     runs.push(i === 0 ? 0 : runs[i - 1] + (same ? 0 : 1));
-  });
+  }
   return runs;
 }
 
@@ -457,7 +464,7 @@ function pushQuad(pos: number[], nrm: number[], a: WallCol, b: WallCol): void {
     a.top,
     a.wz
   );
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 6; i += 1) {
     nrm.push(nx, 0, nz);
   }
 }
@@ -586,7 +593,7 @@ export function wallGeometry(
     const cols = columnsOf(wall, heightAt, offset, opts);
     const first = positions.length / 3;
 
-    for (let i = 0; i < cols.length - 1; i++) {
+    for (let i = 0; i < cols.length - 1; i += 1) {
       const c0 = cols[i];
       const c1 = cols[i + 1];
       if (!(c0 && c1) || (c0.run ?? c1.run) !== (c1.run ?? c0.run)) {
@@ -601,7 +608,7 @@ export function wallGeometry(
       joins.push(...wallJoins(c0, c1));
     }
     const tone = MASONRY.indexOf(wall.mat ?? "stone");
-    for (let v = first; v < positions.length / 3; v++) {
+    for (let v = first; v < positions.length / 3; v += 1) {
       tones.push(tone);
     }
   }

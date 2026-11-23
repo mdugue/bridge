@@ -27,6 +27,11 @@ const nextConfig: NextConfig = {
   // folders would ride along in every server function — seven sites are
   // ~340 MB, past a host's function size limit (Vercel: 250 MB).
   outputFileTracingExcludes: { "/**": ["public/data/*/**/*"] },
+  // ...except a copy of each site's Stadtwissen, which the chat's server
+  // tools read (ADR 0056; scripts/prepare-sites.ts writes it): a few MB a
+  // site, in that one function (the key is matched as a substring: no
+  // other route's path may contain it).
+  outputFileTracingIncludes: { "/api/frag": ["./.stadtwissen/**/*"] },
   reactCompiler: true,
   experimental: {
     // The React Compiler's Rust port, run natively inside Turbopack in place
@@ -40,36 +45,34 @@ const nextConfig: NextConfig = {
   // (prepare-sites.ts) are the files that must always revalidate.
   // (Next's default for public/ is max-age=0, i.e. one revalidation round
   // trip per file per visit — 60 of them here.)
-  headers: () =>
-    Promise.resolve([
-      {
-        source: "/data/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
-      {
-        source: "/data/:site/manifest.json",
-        headers: [{ key: "Cache-Control", value: "public, no-cache" }],
-      },
-      {
-        source: "/data/sites.json",
-        headers: [{ key: "Cache-Control", value: "public, no-cache" }],
-      },
-    ]),
+  headers: async () => [
+    {
+      source: "/data/:path*",
+      headers: [
+        {
+          key: "Cache-Control",
+          value: "public, max-age=31536000, immutable",
+        },
+      ],
+    },
+    {
+      source: "/data/:site/manifest.json",
+      headers: [{ key: "Cache-Control", value: "public, no-cache" }],
+    },
+    {
+      source: "/data/sites.json",
+      headers: [{ key: "Cache-Control", value: "public, no-cache" }],
+    },
+  ],
   // The reports go to the site's own origin and on from here to the
   // tracker (none without a DSN): a blocker that drops requests to the
   // tracker's host lets them through.
-  rewrites: () => Promise.resolve(tunnelRewrites(reports.dsn)),
-  redirects: () =>
-    Promise.resolve([
-      // The viewer lived at /city, then at the root route; the root is the
-      // start page now and every city has its own route (/dresden).
-      { source: "/city", destination: "/dresden", permanent: false },
-    ]),
+  rewrites: async () => tunnelRewrites(reports.dsn),
+  redirects: async () => [
+    // The viewer lived at /city, then at the root route; the root is the
+    // start page now and every city has its own route (/dresden).
+    { source: "/city", destination: "/dresden", permanent: false },
+  ],
 };
 
 export default createMDX()(nextConfig);

@@ -33,10 +33,11 @@ test("ribRuns finds each stretch a rib stands on", () => {
   expect(ribRuns([0, 0])).toEqual([]);
 });
 
+// the Blaues Wunder's shape: rise to a pylon, sag, rise, fall
+const tent = (i: number, at: number) =>
+  Math.max(0, 24 - Math.abs(i - at) * 0.6);
+
 test("ribPeaks: a truss sagging between two pylons has two", () => {
-  // the Blaues Wunder's shape: rise to a pylon, sag, rise, fall
-  const tent = (i: number, at: number) =>
-    Math.max(0, 24 - Math.abs(i - at) * 0.6);
   const rise = Array.from({ length: 160 }, (_, i) =>
     Math.max(tent(i, 35), tent(i, 105), 2)
   );
@@ -84,13 +85,13 @@ test("pierStations keep the fairway clear", () => {
   expect(opened).toContain(90);
   expect(opened).toContain(170);
   // piers stay apart
-  for (let i = 1; i < opened.length; i++) {
+  for (let i = 1; i < opened.length; i += 1) {
     expect(opened[i] - opened[i - 1]).toBeGreaterThan(PIER_SPACING / 2);
   }
   expect(pierStations(20)).toEqual([]);
   // no span over PIER_SPACING; a short deck spans its gap alone
   const piers = [0, ...pierStations(200), 200];
-  for (let i = 1; i < piers.length; i++) {
+  for (let i = 1; i < piers.length; i += 1) {
     expect(piers[i] - piers[i - 1]).toBeLessThanOrEqual(PIER_SPACING);
   }
   expect(pierStations(38)).toEqual([]);
@@ -122,7 +123,7 @@ test("a long rail deck over land stands on paired columns, over water on piers",
   const viaduct = beamSupports(688, { kind: "rail" });
   expect(viaduct.every((p) => p.edge)).toBe(true);
   const at = [0, ...viaduct.map((p) => p.s), 688];
-  for (let i = 1; i < at.length; i++) {
+  for (let i = 1; i < at.length; i += 1) {
     expect(at[i] - at[i - 1]).toBeLessThanOrEqual(VIADUCT_BAY_M);
     expect(at[i] - at[i - 1]).toBeGreaterThan(12);
   }
@@ -133,7 +134,7 @@ test("a long rail deck over land stands on paired columns, over water on piers",
   expect(wet.length).toBeGreaterThan(0);
   expect(wet.every((p) => !p.edge)).toBe(true);
   const all = [0, ...crossing.map((p) => p.s), 300];
-  for (let i = 1; i < all.length; i++) {
+  for (let i = 1; i < all.length; i += 1) {
     expect(all[i] - all[i - 1]).toBeLessThanOrEqual(PIER_SPACING);
   }
   // a fairway it crosses stays open between two piers on the axis
@@ -167,9 +168,10 @@ test("a masonry bridge keeps its ashlar parapet, every other an open railing", (
   }
 });
 
+const arch = (s: number) => 132 - 0.004 * (s - 200) ** 2;
+
 test("the ribs of one arch share the tightest rib's curve", () => {
   const line = Array.from({ length: 201 }, () => 120);
-  const arch = (s: number) => 132 - 0.004 * (s - 200) ** 2;
   const clean = line.map((deck, i) =>
     Math.max(0, arch(i * BRIDGE_STEP) - deck)
   );
@@ -270,16 +272,17 @@ test("ribProfile: straight chords to the towers, a sag between, nothing hanging"
   const sagLow = Math.min(...out.slice(towers[0], towers[1]));
   expect(sagLow).toBeCloseTo(2.6, 1);
   // no waves: the side arm rises steadily to its tower
-  for (let i = 11; i <= towers[0]; i++) {
+  for (let i = 11; i <= towers[0]; i += 1) {
     expect(out[i]).toBeGreaterThan(out[i - 1]);
   }
   // no towers: a level girder
   expect(new Set(ribProfile([0, 6, 7, 6.5, 6, 0]).slice(1, 5)).size).toBe(1);
 });
 
+const ground = (s: number) => (s < 40 || s > 220 ? 118 : 100);
+
 test("masonryArches: arches between real piers, not at the banks", () => {
   // 260 m: banks at 118 m for 40 m each end, the river at 100 m between
-  const ground = (s: number) => (s < 40 || s > 220 ? 118 : 100);
   const { spans, piers } = masonryArches(260, ground, () => 118);
   // ten bays of 26 m, the four touching a bank too low for an arch
   expect(spans).toHaveLength(6);

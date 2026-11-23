@@ -44,9 +44,12 @@ shader tints the parking lane faintly and draws no line. A lot is painted
 unless `markings=no` or its surface is gravel or grass.
 
 `walk` on the paths (class 6) that OSM gives no surface: the Basis-DLM's
-`BEF`, else asphalt inside the settlement and unpaved outside it
-(`path_defaults`). A street's tagged `sidewalk:*:surface` reaches from the
-kerb to the nearest OSM building within 8 m (`band_depths`), else 3 m.
+`BEF`, else a tagged way's own kind carried on along the path up to
+`WAY_REACH_PX` texels past its buffer (`along_paths`: the class raster's
+path is often wider than the way's buffer), else asphalt inside the
+settlement and unpaved outside it (`path_defaults`). A street's tagged
+`sidewalk:*:surface` reaches from the kerb to the nearest OSM building
+within 8 m (`band_depths`), else 3 m.
 
 The PNG is 8-bit greyscale, four times as wide as the raster, the four
 bytes of a texel side by side (R0 G0 B0 A0 R1 …). The viewer inflates it itself
@@ -65,14 +68,14 @@ with `SURFACE_KINDS` in lib/city/landcover.ts.
 from __future__ import annotations
 
 import json
-import re
 
 import numpy as np
 import shapely
 from rasterio.features import rasterize
 
+from .classes import PATH
 from .common import OSM_ATTRIBUTION, Tile, column, dlm_complete, read_layer, save_grey_png
-from .osm import has_extract, read_osm, read_ways, tag
+from .osm import has_extract, osm_width, read_osm, read_ways, surface_id, tag
 
 # id → key; 0 = unknown (the shader keeps the class default).
 SURFACES = {
@@ -180,22 +183,11 @@ SIDEWALK_BAND = 3.0  # how far a `sidewalk:*:surface` band reaches past the kerb
 WALK_AREAS = {"footway", "pedestrian", "traffic_island", "path", "cycleway"}
 
 
-def surface_id(value: str | None) -> int:
-    """The id of an OSM surface value (`;`-lists take the first), else 0."""
-    if not value:
-        return 0
-    return SURFACE_OF.get(value.split(";")[0].strip().lower(), 0)
-
-
 def parse_width(value: str | None) -> float | None:
-    """A `width` tag in metres (`5`, `5.5 m`, `5,5`), else None."""
-    if not value:
-        return None
-    m = re.match(r"\s*(\d+(?:[.,]\d+)?)\s*(m|meter|metres?)?\s*$", value)
-    if not m:
-        return None
-    width = float(m.group(1).replace(",", "."))
-    return width if 0 < width < 60 else None
+    """A `width` tag in metres (`5`, `5.5 m`, `5,5`, `ca. 4 m`: the OSM
+    length parser, `osm.osm_metres`) within 0–60 m, else None
+    (`osm.osm_width`)."""
+    return osm_width(value)
 
 
 def _highway_kind(highway: str | None) -> str | None:
@@ -262,11 +254,11 @@ def sidewalk_bands(
     (`half`) to the nearest building (`band_depths`, given the buildings),
     else to `half + SIDEWALK_BAND`."""
     both = surface_id(
-        tag(other_tags, "sidewalk:both:surface") or tag(other_tags, "sidewalk:surface")
+        tag(other_tags, "sidewalk:both:surface") or tag(other_tags, "sidewalk:surface"), SURFACE_OF
     )
     sides = {
-        1.0: surface_id(tag(other_tags, "sidewalk:left:surface")) or both,
-        -1.0: surface_id(tag(other_tags, "sidewalk:right:surface")) or both,
+        1.0: surface_id(tag(other_tags, "sidewalk:left:surface"), SURFACE_OF) or both,
+        -1.0: surface_id(tag(other_tags, "sidewalk:right:surface"), SURFACE_OF) or both,
     }
     out = []
     for sign, sid in sides.items():
@@ -288,13 +280,30 @@ def classify_lines(
 ) -> tuple[list[tuple[shapely.Geometry, int]], list[tuple[shapely.Geometry, int]]]:
     """(road shapes, walk shapes), each as (geometry, surface id) in burn
     order; a tagged sidewalk reaches to the `buildings` (`sidewalk_bands`)."""
+    roads, bands, walks, _ = line_shapes(geoms, highways, other_tags, buildings)
+    return roads, bands + walks
+
+
+def line_shapes(
+    geoms, highways, other_tags, buildings: shapely.STRtree | None = None
+) -> tuple[
+    list[tuple[shapely.Geometry, int]],
+    list[tuple[shapely.Geometry, int]],
+    list[tuple[shapely.Geometry, int]],
+    list[tuple[shapely.Geometry, int]],
+]:
+    """`classify_lines`'s road shapes, and its walk shapes as the roads'
+    sidewalk bands and the walkways' own buffers apart; and of those the
+    ones a path's kind is carried from (`along_paths`): no sidewalk, which
+    runs beside a road, not along a path."""
     roads: list[tuple[int, shapely.Geometry, int]] = []
     bands: list[tuple[shapely.Geometry, int]] = []
     walks: list[tuple[shapely.Geometry, int]] = []
+    seeds: list[tuple[shapely.Geometry, int]] = []
     for g, hw, tags in zip(geoms, highways, other_tags, strict=True):
         kind = _highway_kind(hw)
         width = parse_width(tag(tags, "width"))
-        sid = surface_id(tag(tags, "surface"))
+        sid = surface_id(tag(tags, "surface"), SURFACE_OF)
         if kind in ROAD_HALF_WIDTH:
             half = width / 2 if width else ROAD_HALF_WIDTH[kind]
             if sid:
@@ -304,11 +313,13 @@ def classify_lines(
             sidewalk = kind == "footway" and tag(tags, "footway") == "sidewalk"
             default = SIDEWALK_HALF_WIDTH if sidewalk else WALK_HALF_WIDTH[kind]
             half = width / 2 if width else default
-            wid = sid or surface_id(tag(tags, "footway:surface"))
+            wid = sid or surface_id(tag(tags, "footway:surface"), SURFACE_OF)
             if wid:
                 walks.append((shapely.buffer(g, half), wid))
+                if not sidewalk:
+                    seeds.append(walks[-1])
     roads.sort(key=lambda r: r[0])
-    return [(g, s) for _, g, s in roads], bands + walks
+    return [(g, s) for _, g, s in roads], bands, walks, seeds
 
 
 # The along-street coordinate is stored modulo this period (m; the viewer's
@@ -502,7 +513,7 @@ def lot_code(amenity: str | None, other_tags: str | None) -> int:
     markings = tag(other_tags, "markings") or tag(other_tags, "parking:markings")
     if tag(other_tags, "parking") in STREET_LOTS:
         return parking_code(3, 0, markings not in (None, "no"))
-    unpaved = surface_id(tag(other_tags, "surface")) in UNPAVED_LOT
+    unpaved = surface_id(tag(other_tags, "surface"), SURFACE_OF) in UNPAVED_LOT
     return parking_code(3, 0, markings != "no" and not unpaved)
 
 
@@ -582,7 +593,7 @@ def classify_areas(
     as nearly all of them are)."""
     roads, walks = [], []
     for g, amenity, tags in zip(geoms, amenities, other_tags, strict=True):
-        sid = surface_id(tag(tags, "surface"))
+        sid = surface_id(tag(tags, "surface"), SURFACE_OF)
         if not sid and is_car_park(amenity, tags):
             sid = SURFACE_OF["asphalt"]
         if not sid:
@@ -603,7 +614,6 @@ def classify_areas(
 # settlement is the DLM's built land (or OSM's built landuse), not its
 # parks, sports grounds, allotments or cemeteries. Read where the class
 # raster says path (class 6: the DLM's `ver02_l`, or OSM's paths).
-PATH_CLASS = 6
 BUILT_LAND = (
     "AX_Wohnbauflaeche",
     "AX_IndustrieUndGewerbeflaeche",
@@ -647,22 +657,61 @@ def dlm_path_surfaces(tile: Tile) -> list[tuple[shapely.Geometry, int]]:
     ]
 
 
-def path_defaults(tile: Tile, px: int) -> np.ndarray | None:
+def path_defaults(
+    tile: Tile, px: int, ways: np.ndarray | None = None, walk: np.ndarray | None = None
+) -> np.ndarray | None:
     """The walk kind of every path texel (class 6 on most of the class
-    raster under it): the DLM's `BEF`, else asphalt in the settlement and
-    unpaved outside; 0 elsewhere. None without a class raster."""
+    raster under it): the DLM's `BEF`, else a tagged way's kind carried on
+    along the path (`along_paths`, given the way buffers `ways` and the
+    burnt `walk`), else asphalt in the settlement and unpaved outside; 0
+    elsewhere. None without a class raster."""
     cls = tile.classes()
     if cls is None or cls.shape[0] % px:
         return None
     k = cls.shape[0] // px
-    path = (cls == PATH_CLASS).reshape(px, k, px, k).mean(axis=(1, 3)) >= 0.5
+    path = (cls == PATH).reshape(px, k, px, k).mean(axis=(1, 3)) >= 0.5
     if not path.any():
         return np.zeros((px, px), np.uint8)
     town = burn([(g, 1) for g in settlement(tile)], tile, px) > 0
     kind = np.where(town, SURFACE_OF["asphalt"], SURFACE_OF["unpaved"]).astype(np.uint8)
+    if ways is not None:
+        carried = along_paths(ways, ways if walk is None else walk, path)
+        kind = np.where(carried > 0, carried, kind)
     bef = burn(dlm_path_surfaces(tile), tile, px)
     kind = np.where(bef > 0, bef, kind)
     return np.where(path, kind, 0).astype(np.uint8)
+
+
+WAY_REACH_PX = 4  # how far (texels, ≈ m) a tagged way's kind runs on along its path
+
+
+def along_paths(
+    ways: np.ndarray, walk: np.ndarray, path: np.ndarray, reach: int = WAY_REACH_PX
+) -> np.ndarray:
+    """The tagged ways' walk kinds (`ways`: the walk lines' buffers alone,
+    never an area, a sidewalk band or a sidewalk way, `line_shapes`'
+    seeds) carried on into the path texels round
+    them that nothing reached (`path & walk == 0`, the texels
+    `path_defaults` fills), step by step along the path only (four
+    neighbours, `reach` steps): a sand path wider than its tagged way's
+    buffer stays sand instead of turning to the town's asphalt beside it.
+    0 where no way is within reach."""
+    kind = np.where(ways > 0, ways, 0).astype(np.uint8)
+    open_ = path & (walk == 0)
+    for _ in range(reach):
+        grown = kind.copy()
+        for axis, shift in ((0, 1), (0, -1), (1, 1), (1, -1)):
+            near = np.roll(kind, shift, axis=axis)
+            # no wrap-around across the raster's edge
+            edge = [slice(None)] * 2
+            edge[axis] = 0 if shift == 1 else -1
+            near[tuple(edge)] = 0
+            take = open_ & (grown == 0) & (near > 0)
+            grown[take] = near[take]
+        if np.array_equal(grown, kind):
+            break
+        kind = grown
+    return np.where(open_, kind, 0).astype(np.uint8)
 
 
 def burn(shapes: list[tuple[shapely.Geometry, int]], tile: Tile, px: int) -> np.ndarray:
@@ -715,9 +764,10 @@ def run(tile: Tile, px: int = 2048) -> None:
     built = np.array([b is not None for b in column(afields, "building", areas)], dtype=bool)
     buildings = shapely.STRtree(areas[built]) if built.any() else None
     areas, afields = areas[~built], {k: v[~built] for k, v in afields.items()}
-    road_lines, walk_lines = classify_lines(
+    road_lines, bands, ways, seeds = line_shapes(
         lines, column(lfields, "highway", lines), column(lfields, "other_tags", lines), buildings
     )
+    walk_lines = bands + ways
     road_areas, walk_areas = classify_areas(
         areas, column(afields, "amenity", areas), column(afields, "other_tags", areas)
     )
@@ -725,7 +775,7 @@ def run(tile: Tile, px: int = 2048) -> None:
     amenities, area_tags = column(afields, "amenity", areas), column(afields, "other_tags", areas)
     road = burn(road_lines + road_areas, tile, px)
     walk = burn(walk_areas + walk_lines, tile, px)
-    defaults = path_defaults(tile, px)
+    defaults = path_defaults(tile, px, burn(seeds, tile, px), walk)
     if defaults is not None:
         walk = np.where(walk == 0, defaults, walk)
     park = burn(parking_shapes(lines, highways, line_tags, areas, amenities, area_tags), tile, px)

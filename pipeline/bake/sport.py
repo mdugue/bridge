@@ -59,7 +59,6 @@ mapped inner edge, into the texels the pitch inside it claims.
 
 from __future__ import annotations
 
-import json
 import math
 from collections.abc import Callable, Sequence
 
@@ -72,8 +71,8 @@ from rasterio.features import geometry_mask, rasterize
 from rasterio.windows import from_bounds
 
 from . import dop_balance
-from .common import OSM_ATTRIBUTION, Tile, column, save_grey_png
-from .osm import has_extract, read_osm, tag
+from .common import OSM_ATTRIBUTION, Tile, column, save_grey_png, table_json
+from .osm import has_extract, read_osm, surface_id, tag
 
 # id → key; keep in step with `SPORT_SURFACES` in lib/city/sport.ts. 0 keeps
 # the ground as it is (lines only).
@@ -191,13 +190,6 @@ REACH_ALT = 4.0  # m for the second row
 NOT_OUTSIDE = {"indoor", "roof", "underground"}
 
 
-def surface_id(value: str | None) -> int:
-    """The id of an OSM surface value (`;`-lists take the first), else 0."""
-    if not value:
-        return 0
-    return SURFACE_OF.get(value.split(";")[0].strip().lower(), 0)
-
-
 def first_sport(value: str | None) -> str | None:
     if not value:
         return None
@@ -210,7 +202,7 @@ def classify(
     """(surface id, marking id) of a ground, or None when nothing would show:
     a pitch of an unknown sport only with a tagged surface. `seen` is the
     surface the photo shows, which an untagged ground takes."""
-    tagged = surface_id(surface)
+    tagged = surface_id(surface, SURFACE_OF)
     first = first_sport(sport)
     if leisure == "track":
         return (tagged or seen or 3, LANES)
@@ -388,7 +380,11 @@ def grounds(
             return
         seen = None
         # not a track: its band is narrow, its area often maps the infield
-        if photo is not None and leisure != "track" and not surface_id(tag(tags, "surface")):
+        if (
+            photo is not None
+            and leisure != "track"
+            and not surface_id(tag(tags, "surface"), SURFACE_OF)
+        ):
             seen = photo(g, first_sport(sport))
         kind = classify(leisure, sport, tag(tags, "surface"), seen)
         if kind is None:
@@ -487,14 +483,6 @@ def table_row(tile: Tile, surface: int, marking: int, shape: int, params: list[f
     ]
 
 
-def table_json(table: dict, rows: list[list]) -> str:
-    """The table with one ground per line (diffable, still plain JSON)."""
-    head = json.dumps(table, indent=2)[:-2]
-    body = ",\n".join(f"    {json.dumps(r)}" for r in rows)
-    grounds = f"[\n{body}\n  ]" if rows else "[]"
-    return f'{head},\n  "grounds": {grounds}\n}}\n'
-
-
 def run(tile: Tile, site: Sequence[Tile] = (), px: int = 2048) -> None:
     """Writes the tile's sports grounds; an untagged surface is read off
     the orthophoto, balanced by the cast of `site` (the site's tiles; the
@@ -544,7 +532,7 @@ def run(tile: Tile, site: Sequence[Tile] = (), px: int = 2048) -> None:
         "attribution": OSM_ATTRIBUTION,
     }
     rows = [table_row(tile, s, m, sh, p) for _, s, m, sh, p in found]
-    tile.out("dlm", f"sport_{tile.id}.json").write_text(table_json(table, rows))
+    tile.out("dlm", f"sport_{tile.id}.json").write_text(table_json(table, "grounds", rows))
     counts = {MARKINGS[m]: 0 for m in MARKINGS}
     for _, _, m, _, _ in found:
         counts[MARKINGS[m]] += 1

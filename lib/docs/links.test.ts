@@ -14,7 +14,7 @@ const ROOT = path.join(import.meta.dir, "../..");
 
 function isRelative(target: string): boolean {
   return !(
-    /^[a-z][a-z0-9+.-]*:/i.test(target) ||
+    /^[a-z][a-z0-9+.-]*:/iu.test(target) ||
     target.startsWith("#") ||
     target.startsWith("/")
   );
@@ -22,12 +22,14 @@ function isRelative(target: string): boolean {
 
 /** Code is not prose: `STEPS[step](tile)` is not a link. */
 function withoutCode(markdown: string): string {
-  return markdown.replace(/```[\s\S]*?```/g, "").replace(/`[^`\n]*`/g, "");
+  return markdown
+    .replaceAll(/```[\s\S]*?```/gu, "")
+    .replaceAll(/`[^`\n]*`/gu, "");
 }
 
 /** The relative link targets of one file that resolve to nothing. */
 function brokenLinks(file: string): string[] {
-  const markdown = withoutCode(readFileSync(path.join(ROOT, file), "utf8"));
+  const markdown = withoutCode(readFileSync(path.join(ROOT, file), "utf-8"));
   const dir = path.dirname(path.join(ROOT, file));
   return linkTargets(markdown)
     .filter(isRelative)

@@ -9,7 +9,8 @@
  */
 import sharp from "sharp";
 import { landcoverSrgb } from "../lib/city/landcover";
-import { TILE_KM, type TileCell } from "../lib/city/site";
+import { TILE_KM } from "../lib/city/site";
+import type { TileCell } from "../lib/city/site";
 
 /** Where each cell sits in the block: easting grows east, northing north. */
 function gridOf(cells: readonly TileCell[]) {
@@ -37,7 +38,7 @@ async function paint(classRaster: string) {
   // Byte by byte, not `rgb.set(landcoverSrgb(id), …)` per pixel: same
   // bytes, and Dresden's map bakes in 1.1 s instead of 6.4 s.
   const rgb = new Uint8Array(info.width * info.height * 3);
-  for (let i = 0, o = 0; i < data.length; i++, o += 3) {
+  for (let i = 0, o = 0; i < data.length; i += 1, o += 3) {
     const c = data[i] * 3;
     rgb[o] = PALETTE[c];
     rgb[o + 1] = PALETTE[c + 1];
@@ -49,30 +50,30 @@ async function paint(classRaster: string) {
 }
 
 /**
- * The block as a WebP `size` px wide: `rasters[i]` is the class raster of
- * `cells[i]` (any edge; each is scaled to its cell).
+ * The block's land cover in the palette, about `size` px wide, as raw RGB:
+ * `rasters[i]` is the class raster of `cells[i]` (any edge; each is scaled
+ * to its cell).
  */
-export async function bakeWissenHero(
+export async function landcoverBlock(
   cells: readonly TileCell[],
   rasters: readonly string[],
   size: number
-): Promise<Buffer> {
+): Promise<{ data: Buffer; height: number; width: number }> {
   const grid = gridOf(cells);
   const cols = Math.max(...grid.map((g) => g.col)) + 1;
   const rows = Math.max(...grid.map((g) => g.row)) + 1;
   const cell = Math.round(size / cols);
   const layers = await Promise.all(
     grid.map(async ({ col, row }, i) => {
-      const input = await (
-        await paint(rasters[i])
-      )
+      const painted = await paint(rasters[i]);
+      const input = await painted
         .resize(cell, cell, { kernel: "lanczos3", fit: "fill" })
         .png()
         .toBuffer();
       return { input, left: col * cell, top: row * cell };
     })
   );
-  return sharp({
+  const { data, info } = await sharp({
     create: {
       width: cell * cols,
       height: cell * rows,
@@ -81,6 +82,21 @@ export async function bakeWissenHero(
     },
   })
     .composite(layers)
+    // three bytes a pixel, whatever the layers brought
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  return { data, height: info.height, width: info.width };
+}
+
+/** The block as a WebP `size` px wide (`landcoverBlock`). */
+export async function bakeWissenHero(
+  cells: readonly TileCell[],
+  rasters: readonly string[],
+  size: number
+): Promise<Buffer> {
+  const { data, height, width } = await landcoverBlock(cells, rasters, size);
+  return await sharp(data, { raw: { width, height, channels: 3 } })
     .webp({ quality: 80, effort: 5 })
     .toBuffer();
 }

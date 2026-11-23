@@ -33,17 +33,28 @@ Deep reference: the `city-walker` skill, "Node materials" and "Tiles".
 5. **Lifecycle:** build in `processTileModel`, compile before it shows
    (`PostStack.compile`), free in `disposeTile`. Add its bytes to
    `calculateBytesUsed`; add CPU arrays nothing reads later to the
-   CPU-drop lists.
+   CPU-drop lists. A part built after its tile (on demand, or from a file
+   of its own) is a `LatePart` adapter (`late-parts.ts`, beside
+   `dressingPart` and `muralsPart`): the module builds, weighs, compiles,
+   hangs and frees it; choose `hangAt` — `"wait"` only for what a level's
+   hand-over waits on (the dressing), `"compile"` for everything else.
 6. **Shadows:** casts only if static; call `invalidateShadows()` when it
    lands; sway casts through a rigid `castShadowPositionNode`.
 7. **Ground:** feet and edges from `ground-join.ts`, joins tested
    (`JOIN_PARTS` or `checkJoins`); its doc comment says what happens where
    the ground beside it is higher and where it is lower.
-8. **Night:** emissive or additive terms scale by the night factor.
+8. **Night:** emissive or additive terms scale by `sceneNight`
+   (`scene-environment.ts`); a part drawn only after dark wears
+   `drawnAtNight` on its scene-wide material; a part whose instances
+   follow the date `follow`s the environment at birth
+   (`followEnvironment`) and lets go in `disposeDressing`.
 9. **Styles:** tag what a picture style may dress (`userData.styleCrown`,
    `userData.styleLampHeads`); never read the style.
-10. **Asking:** if a visitor may click it, a ray target from its data and
-    card lines in `lib/city/inquiry-features.ts` (ADR 0042).
+10. **Asking:** if a visitor may click it, a ray target from its data
+    (`lib/city/ask-items.ts`), card lines and a heading in
+    `lib/city/inquiry-features.ts`, a row in the kind table
+    (`lib/city/inquiry.ts`), an arm in `lineage.ts` and a fixture in
+    `inquiry-kinds.test.ts` (ADR 0042).
 11. **Phone:** measure its bytes on the phone tier; the total must not grow
     (offset it elsewhere).
 12. **Tests:** a unit test of the node setup and geometry; a scene-census

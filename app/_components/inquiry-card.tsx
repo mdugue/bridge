@@ -1,64 +1,34 @@
 "use client";
 
 import { CheckIcon, CopyIcon, XIcon } from "lucide-react";
-import {
-  type ElementType,
-  type ReactNode,
-  type RefObject,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ElementType, ReactNode, RefObject } from "react";
 import {
   Drawer,
   DrawerClose,
   DrawerContent,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import {
-  type Inquiry,
-  type InquiryCard as InquiryCardModel,
-  inquiryCard,
+import { inquiryCard } from "@/lib/city/inquiry";
+import type {
+  Inquiry,
+  InquiryCard as InquiryCardModel,
 } from "@/lib/city/inquiry";
-import type { TreeFactsFile } from "@/lib/city/features";
-import { type TreeFacts, treeFactsAt } from "@/lib/city/inquiry-features";
-import { isSiteProvenance, type SiteProvenance } from "@/lib/city/provenance";
+import type { LandmarkFactsIndex } from "@/lib/city/landmark-facts";
+import { treeFactsAt } from "@/lib/city/inquiry-features";
+import type { TreeFacts } from "@/lib/city/inquiry-features";
+import { isSiteProvenance } from "@/lib/city/provenance";
+import type { SiteProvenance } from "@/lib/city/provenance";
 import type { Drawer as DrawerPrimitive } from "@base-ui/react/drawer";
 import { cardCredits } from "@/lib/city/card-lines";
+import { cachedFetch, isTreeFacts, treeFactsFetches } from "./card-fetch";
 import { InquiryData } from "./inquiry-data";
 import { isTextEntry } from "./keyboard-controls";
+import { loadLandmarkFacts } from "./landmark-facts-load";
 import { MethodMark } from "./method-badge";
 import { useSite } from "./site-context";
 
 type DrawerSnapPoint = DrawerPrimitive.Root.SnapPoint;
-
-/**
- * One fetch per URL for the page's life (the files are content-hashed and
- * immutable, ADR 0024); a failed one is not kept, so the next card tries
- * again.
- */
-function cachedFetch<T>(
-  cache: Map<string, Promise<T | null>>,
-  url: string,
-  accept: (json: unknown) => json is T
-): Promise<T | null> {
-  let pending = cache.get(url);
-  if (!pending) {
-    pending = fetch(url)
-      .then((res) => (res.ok ? (res.json() as Promise<unknown>) : null))
-      .then((json) => (accept(json) ? json : null))
-      .catch(() => null)
-      .then((value) => {
-        if (!value) {
-          cache.delete(url);
-        }
-        return value;
-      });
-    cache.set(url, pending);
-  }
-  return pending;
-}
 
 /** A file fetched when a card first needs it, never at boot. */
 function useFetched<T>(
@@ -70,15 +40,15 @@ function useFetched<T>(
     null
   );
   useEffect(() => {
-    if (!url) {
-      return;
-    }
     let live = true;
-    void cachedFetch(cache, url, accept).then((value) => {
-      if (live) {
-        setLoaded({ url, value });
-      }
-    });
+    if (url) {
+      void cachedFetch(cache, url, accept).then((value) => {
+        if (live) {
+          setLoaded({ url, value });
+        }
+        return null;
+      });
+    }
     return () => {
       live = false;
     };
@@ -87,13 +57,35 @@ function useFetched<T>(
 }
 
 const provenanceFetches = new Map<string, Promise<SiteProvenance | null>>();
-const treeFactsFetches = new Map<string, Promise<TreeFactsFile | null>>();
 
-const isTreeFacts = (json: unknown): json is TreeFactsFile =>
-  typeof json === "object" &&
-  json !== null &&
-  Array.isArray((json as Partial<TreeFactsFile>).known) &&
-  Array.isArray((json as Partial<TreeFactsFile>).names);
+/** The site's landmark facts (loaded with the first landmark asked, the
+ *  same index the nameplate reads), or null until they have arrived. */
+function useLandmarkFacts(inquiry: Inquiry): LandmarkFactsIndex | null {
+  const url =
+    inquiry.kind === "building" ? inquiry.landmarkFactsUrl : undefined;
+  const [loaded, setLoaded] = useState<{
+    index: LandmarkFactsIndex | null;
+    url: string;
+  } | null>(null);
+  useEffect(() => {
+    let live = true;
+    // `inquiry` is read so that each question reruns this
+    if (url && inquiry) {
+      void loadLandmarkFacts(url).then((index) => {
+        if (live) {
+          setLoaded({ url, index });
+        }
+        return null;
+      });
+    }
+    return () => {
+      live = false;
+    };
+    // each question asks again (a failed load is not kept): the plate
+    // retries on the next landmark, and so does the card
+  }, [url, inquiry]);
+  return url && loaded?.url === url ? loaded.index : null;
+}
 
 /**
  * The provenance manifest, fetched when the first card opens and kept for
@@ -114,15 +106,16 @@ function useTreeFacts(inquiry: Inquiry): TreeFacts | null {
 
 /**
  * The card of the "Befragen" mode (ADR 0042): what the data says
- * about the building someone asked, on demand only — the scene itself
- * carries no text (plan 032's lettering was removed for that reason). A
+ * about the building someone asked, on demand only — the scene carries
+ * no text unasked, only the asked thing's nameplate (nameplate-layer.ts),
+ * which says nothing the card does not. A
  * non-modal landmark, not a dialog: the city stays live behind it, and the
  * next click asks the next building. Esc or the × closes it and clears
  * the mark in the scene (the hatch, the outline). It looks like the HUD's other cards (the
  * shadcn Card's surface, ring and a shadow): sober, so the scene keeps the
  * colour.
  */
-export function InquiryCard({
+export const InquiryCard = ({
   inquiry,
   onClose,
   provenanceUrl,
@@ -133,14 +126,15 @@ export function InquiryCard({
   provenanceUrl: string | null;
   /** a bottom sheet (touch screens) instead of the card top left */
   sheet?: boolean;
-}) {
+}) => {
   const provenance = useProvenance(provenanceUrl);
   const treeFacts = useTreeFacts(inquiry);
+  const landmarks = useLandmarkFacts(inquiry);
   const site = useSite();
   const credits = useMemo(() => cardCredits(site), [site]);
   const card = useMemo(
-    () => inquiryCard(inquiry, provenance, credits, treeFacts),
-    [inquiry, provenance, credits, treeFacts]
+    () => inquiryCard(inquiry, provenance, credits, treeFacts, landmarks),
+    [inquiry, provenance, credits, treeFacts, landmarks]
   );
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -170,6 +164,7 @@ export function InquiryCard({
     <aside
       aria-labelledby="inquiry-title"
       className="pointer-events-auto flex min-h-0 shrink flex-col rounded-lg bg-card text-card-foreground shadow-lg ring-1 ring-foreground/10 select-text"
+      data-scene-cover=""
       data-testid="inquiry-card"
       data-variant="card"
     >
@@ -186,7 +181,7 @@ export function InquiryCard({
       </div>
     </aside>
   );
-}
+};
 
 /** Each question its own key (an Inquiry is a new object per ask). */
 const inquiryKeys = new WeakMap<Inquiry, number>();
@@ -194,7 +189,8 @@ let nextInquiryKey = 0;
 function inquiryKey(inquiry: Inquiry): number {
   let key = inquiryKeys.get(inquiry);
   if (key === undefined) {
-    key = nextInquiryKey++;
+    key = nextInquiryKey;
+    nextInquiryKey += 1;
     inquiryKeys.set(inquiry, key);
   }
   return key;
@@ -218,24 +214,31 @@ const SHEET_ENTRANCE_FRAMES = 30;
 function useSheetEntrance(): [RefObject<HTMLDivElement | null>, boolean] {
   const ref = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
-  useEffect(() => {
-    let frames = 0;
-    let measured = false;
-    let id = requestAnimationFrame(function wait() {
-      frames++;
-      if (measured || frames >= SHEET_ENTRANCE_FRAMES) {
-        setReady(true);
-        return;
-      }
-      const offset = ref.current?.style.getPropertyValue(
-        "--drawer-snap-point-offset"
-      );
-      measured = Number.parseFloat(offset ?? "") > 0;
-      id = requestAnimationFrame(wait);
-    });
-    return () => cancelAnimationFrame(id);
-  }, []);
+  useEffect(() => whenSheetMeasured(ref, () => setReady(true)), []);
   return [ref, ready];
+}
+
+/** Calls `ready` a frame after the fold's offset is set, or after
+ *  SHEET_ENTRANCE_FRAMES; returns the cancel. */
+function whenSheetMeasured(
+  sheet: RefObject<HTMLDivElement | null>,
+  ready: () => void
+): () => void {
+  let frames = 0;
+  let measured = false;
+  let id = requestAnimationFrame(function wait() {
+    frames += 1;
+    if (measured || frames >= SHEET_ENTRANCE_FRAMES) {
+      ready();
+      return;
+    }
+    const offset = sheet.current?.style.getPropertyValue(
+      "--drawer-snap-point-offset"
+    );
+    measured = Number.parseFloat(offset ?? "") > 0;
+    id = requestAnimationFrame(wait);
+  });
+  return () => cancelAnimationFrame(id);
 }
 
 /**
@@ -247,7 +250,7 @@ function useSheetEntrance(): [RefObject<HTMLDivElement | null>, boolean] {
  * closes it from the fold. The scene's joystick and toolbar step aside
  * while it is open (city-walk.tsx).
  */
-function InquirySheet({
+const InquirySheet = ({
   card,
   inquiry,
   onClose,
@@ -257,7 +260,7 @@ function InquirySheet({
   inquiry: Inquiry;
   onClose: () => void;
   provenance: SiteProvenance | null;
-}) {
+}) => {
   const [open, setOpen] = useState(true);
   const [snap, setSnap] = useState<DrawerSnapPoint | null>(
     SHEET_SNAP_POINTS[0]
@@ -283,6 +286,7 @@ function InquirySheet({
       <DrawerContent
         // closed, unanimated, until the fold is measured (useSheetEntrance)
         className="not-data-[sheet-entered]:transform-(--closed-transform) not-data-[sheet-entered]:duration-0"
+        data-scene-cover=""
         data-sheet-entered={entered ? "" : undefined}
         data-testid="inquiry-card"
         data-variant="sheet"
@@ -313,23 +317,21 @@ function InquirySheet({
       </DrawerContent>
     </Drawer>
   );
-}
+};
 
 /** The sheet's ×: the drawer's own close, so it slides away first. */
-function SheetClose() {
-  return (
-    <DrawerClose
-      aria-label="Karte schließen"
-      className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-      title="Schließen"
-    >
-      <XIcon className="size-4" />
-    </DrawerClose>
-  );
-}
+const SheetClose = () => (
+  <DrawerClose
+    aria-label="Karte schließen"
+    className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+    title="Schließen"
+  >
+    <XIcon className="size-4" />
+  </DrawerClose>
+);
 
 /** What the thing is: the kicker, the title, the address, and ×. */
-function CardHeader({
+const CardHeader = ({
   card,
   closeSlot,
   onClose,
@@ -341,44 +343,40 @@ function CardHeader({
   onClose?: () => void;
   /** the title element (the drawer's own title in the sheet) */
   titleAs?: ElementType;
-}) {
-  return (
-    <div className="flex items-start gap-2">
-      <div className="min-w-0 flex-1">
-        {/* the accent the outline is drawn in: card and object are one */}
-        <p className="text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
-          {card.kicker}
-        </p>
-        <Title
-          aria-live="polite"
-          className="font-heading text-lg leading-tight font-normal text-balance text-foreground"
-          id="inquiry-title"
-        >
-          {card.title}
-        </Title>
-        {card.address && (
-          <p className="mt-0.5 text-[13px] text-foreground/80">
-            {card.address}
-          </p>
-        )}
-      </div>
-      {closeSlot ?? (
-        <button
-          aria-label="Karte schließen"
-          className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          onClick={onClose}
-          title="Schließen (Esc)"
-          type="button"
-        >
-          <XIcon className="size-4" />
-        </button>
+}) => (
+  <div className="flex items-start gap-2">
+    <div className="min-w-0 flex-1">
+      {/* the accent the outline is drawn in: card and object are one */}
+      <p className="text-[10px] font-medium tracking-[0.14em] text-primary uppercase">
+        {card.kicker}
+      </p>
+      <Title
+        aria-live="polite"
+        className="font-heading text-lg leading-tight font-normal text-balance text-foreground"
+        id="inquiry-title"
+      >
+        {card.title}
+      </Title>
+      {card.address && (
+        <p className="mt-0.5 text-[13px] text-foreground/80">{card.address}</p>
       )}
     </div>
-  );
-}
+    {closeSlot ?? (
+      <button
+        aria-label="Karte schließen"
+        className="-mt-1 -mr-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+        onClick={onClose}
+        title="Schließen (Esc)"
+        type="button"
+      >
+        <XIcon className="size-4" />
+      </button>
+    )}
+  </div>
+);
 
 /** The facts, the id to copy and, folded, the data behind them. */
-function CardDetails({
+const CardDetails = ({
   card,
   inquiry,
   provenance,
@@ -386,15 +384,20 @@ function CardDetails({
   card: InquiryCardModel;
   inquiry: Inquiry;
   provenance: SiteProvenance | null;
-}) {
+}) => {
   // Which id was copied: a new building's card starts uncopied.
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const copied = copiedId === card.id;
-  const copy = () => {
-    navigator.clipboard?.writeText(card.id).then(
-      () => setCopiedId(card.id),
-      () => undefined
-    );
+  const copy = async () => {
+    if (!navigator.clipboard) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(card.id);
+      setCopiedId(card.id);
+    } catch {
+      // a refused clipboard leaves the id uncopied
+    }
   };
   return (
     <>
@@ -420,7 +423,9 @@ function CardDetails({
         <button
           aria-label={`${card.idLabel} kopieren`}
           className="rounded p-1 hover:bg-muted hover:text-foreground"
-          onClick={copy}
+          onClick={() => {
+            void copy();
+          }}
           title={`${card.idLabel} kopieren`}
           type="button"
         >
@@ -439,4 +444,4 @@ function CardDetails({
       />
     </>
   );
-}
+};

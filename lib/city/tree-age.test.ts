@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 import {
-  type AgeLook,
   ageLook,
   OLD_YEARS,
   STAKED_YEARS,
   treeAge,
   YOUNG_YEARS,
 } from "./tree-age";
+import type { AgeLook } from "./tree-age";
 
 test("a tree's age runs from its planting year; unknown stays unknown", () => {
   expect(treeAge(1979, 2026)).toBe(47);

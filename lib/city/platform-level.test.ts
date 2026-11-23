@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { platformTops, TrackIndex, type TrackSample } from "./platform-level";
+import { platformTops, TrackIndex } from "./platform-level";
+import type { TrackSample } from "./platform-level";
 
 /** A platform 4 m wide beside a track along x at z 0, its edge at z 1.7. */
 const ring = [

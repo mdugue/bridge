@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { GpuLoss } from "./gpu-safety";
-import {
-  createPageLifecycle,
-  type LifecycleEffect,
-  type LifecycleSignal,
-} from "./page-lifecycle";
+import { createPageLifecycle } from "./page-lifecycle";
+import type { LifecycleEffect, LifecycleSignal } from "./page-lifecycle";
 
 const GAP = 5000;
 const HOLD = 120_000;

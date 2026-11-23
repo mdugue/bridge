@@ -2,9 +2,13 @@
 LoD2 wall, reduced to profiles and a few ratios that do not change when
 the image is moved along the wall (facades.py rectifies it, 20 px a metre).
 
-The poses of two drives past the same wall differ by about 0.6 m, so where
-a single window lies on the wall is not reproducible; a period, a share, a
-regularity or a proportion is (docs/transformations.md, *Facade traits*).
+One image's pose is off along the wall by ~0.2 m and two drives' by up
+to a metre, so where a window lies is read only from images registered
+onto each other (window_axes.py, by `jx`; the drives' errors averaged
+where several saw the wall, one drive's kept where it alone did); a
+period, a share,
+a regularity or a proportion one image gives alone (docs/transformations.md,
+*Windows on every house*).
 The fetch therefore caches, per image and wall, profiles in `STEP_M` bins
 and a handful of scalars (`traits`); the features are computed from them
 in the bake (windows.py), so a feature can be redefined without fetching
@@ -17,6 +21,16 @@ under the eave):
     plaster (0 plaster … 1 black) and the openings' share
     (`facade_measure._holes`), ‰, −1 where less than `MIN_SEEN` is seen;
   - `rd` / `rh`: the same per row bin, bottom row (at GROUND_M) first;
+  - `op`: the window-sized openings seen whole, each its place, size and
+    how full its head's corners are (`openings`): the rows of windows a
+    wall holds, their size and their head (rectangular, a segmental or a
+    round arch — the head is not drawn yet: two drives agree on it at ρ
+    0.67, but of five Dresden walls it read as round, two had round arches
+    and three straight windows behind half-drawn blinds, 2026-11-06);
+  - `jx`: the upper wall's vertical edges (the windows' jambs, the
+    pilasters, the downpipes) per `JX_M` column, as `dark_map` packs its
+    cells (`jamb_profile`, `decode_profile`): what windows.py registers
+    one drive's strip of the wall against another's by;
   - `ev` / `eh`: the plaster's vertical edges per column bin (lisenen,
     pilasters) and horizontal edges per row bin (sill bands, cornices,
     panel joints), mean gradient ‰ — on the plaster only, the openings
@@ -55,6 +69,8 @@ from .facade_measure import (
 
 STEP_M = 0.1  # a profile's bin
 MAP_M = 0.2  # a cell of the darkness map
+JX_M = 0.05  # a column of the jamb profile (one pixel)
+JX_SCALE = 800  # its mean gradient (lum a pixel / 8) to 0–254
 MIN_SEEN = 0.3  # a bin's share that must be seen
 EDGE_CLEAR_M = 0.15  # the edges are read this far clear of an opening
 RING_M = (0.05, 0.2)  # a window's surround (a Fasche: 10–20 cm)
@@ -98,6 +114,28 @@ def dark_map(dark: np.ndarray, seen: np.ndarray) -> dict:
     return {"w": w, "h": h, "d": base64.b64encode(cells.astype(np.uint8).tobytes()).decode()}
 
 
+def jamb_profile(grad: np.ndarray, seen: np.ndarray) -> str:
+    """Per JX_M column the mean vertical-edge gradient over the seen pixels,
+    base64 bytes 0–254, 255 where less than MIN_SEEN of the column is
+    seen (decode: `decode_profile`)."""
+    k = max(1, int(round(JX_M * PX)))
+    w = grad.shape[1] // k
+    g = grad[:, : w * k].reshape(grad.shape[0], w, k)
+    s = seen[:, : w * k].reshape(seen.shape[0], w, k).astype(float)
+    n = s.sum((0, 2))
+    mean = (g * s).sum((0, 2)) / np.maximum(n, 1)
+    cells = np.where(
+        n >= MIN_SEEN * grad.shape[0] * k, np.round(np.clip(mean * JX_SCALE, 0, 254)), 255
+    )
+    return base64.b64encode(cells.astype(np.uint8).tobytes()).decode()
+
+
+def decode_profile(b64: str) -> np.ndarray:
+    """A `jamb_profile` back to gradients, NaN where unseen."""
+    a = np.frombuffer(base64.b64decode(b64), np.uint8).astype(float)
+    return np.where(a == 255, np.nan, a / JX_SCALE)
+
+
 def decode_map(m: dict) -> np.ndarray:
     """A `dark_map` as darkness in [0, 1], NaN where unseen; row 0 at the
     eave's end of the band."""
@@ -109,6 +147,60 @@ def decode_map(m: dict) -> np.ndarray:
 def _rows_up(profile: list[int]) -> list[int]:
     """A row profile read from the eave down, bottom row first."""
     return profile[::-1]
+
+
+def openings(holes: np.ndarray, valid: np.ndarray, a: int, b: int) -> list[list[int]]:
+    """The window-sized openings of the upper band (rows `a`–`b` of the
+    rectified wall, the eave's row 0), each whole — clear of the band's
+    ends and of what the image does not see —, as `[x, top, w, h, arch,
+    seg]`: its left edge along the image's strip and its top under the
+    eave (cm), its width and height (cm), and how much of its head's
+    corners is open (‰): outside a half circle the opening's width across
+    (`arch`, a Rundbogen leaves them closed) and outside a segment rising
+    a fifth of it (`seg`, a Stichbogen). A rectangular opening fills
+    both (~1000); the shape is read from many openings (windows.py)."""
+    labels, _ = ndi.label(holes)
+    seen = ndi.binary_erosion(valid, np.ones((3, 3)), iterations=2)
+    out = []
+    for i, sl in enumerate(ndi.find_objects(labels), start=1):
+        if sl is None:
+            continue
+        r0, r1, c0, c1 = sl[0].start, sl[0].stop, sl[1].start, sl[1].stop
+        h, w = (r1 - r0) / PX, (c1 - c0) / PX
+        if not (WINDOW_W_M[0] <= w <= WINDOW_W_M[1] and WINDOW_H_M[0] <= h <= WINDOW_H_M[1]):
+            continue
+        if r0 <= a + 1 or r1 >= b - 1 or c0 <= 1 or c1 >= holes.shape[1] - 1:
+            continue
+        box = (slice(max(r0 - 3, 0), r1 + 3), slice(max(c0 - 3, 0), c1 + 3))
+        if not seen[box].all():
+            continue
+        mine = labels[r0:r1, c0:c1] == i
+        cols = np.arange(c1 - c0) + 0.5
+        rows = np.arange(r1 - r0)[:, None] + 0.5
+        half = (c1 - c0) / 2
+        # the head's corners: outside a half circle on the opening's width,
+        # and outside an arc rising a fifth of it
+        arch = (rows < half) & (np.hypot(cols - half, rows - half) > half)
+        rise = (c1 - c0) / 5
+        radius = (half * half + rise * rise) / (2 * rise)
+        seg = (rows < rise) & (np.hypot(cols - half, rows - radius) > radius)
+
+        out.append(
+            [
+                round(100 * c0 / PX),
+                round(100 * r0 / PX),
+                round(100 * w),
+                round(100 * h),
+                _filled(mine, arch),
+                _filled(mine, seg),
+            ]
+        )
+    return out
+
+
+def _filled(mine: np.ndarray, m: np.ndarray) -> int:
+    """The opening's share (‰) of the mask `m`, or −1 for an empty mask."""
+    return round(1000 * float(mine[m].mean())) if m.any() else -1
 
 
 def _surround(lum: np.ndarray, holes: np.ndarray, valid: np.ndarray, plaster: np.ndarray):
@@ -183,11 +275,13 @@ def traits_of(rgb: np.ndarray, valid: np.ndarray, eave: float) -> dict:
     up_plain = plain.copy()
     up_plain[:a] = False
     up_plain[b:] = False
+    out["jx"] = jamb_profile(gs[a:b], band)
     out["ev"] = _bins(gs[a:b], up_plain[a:b], 1)
     out["eh"] = _rows_up(_bins(gz[a:b], up_plain[a:b], 0))
     if up_plain.sum() > PX * PX:
         fine = np.abs(lum - ndi.gaussian_filter(lum, 2.0))
         out["tx"] = round(1000 * float(fine[up_plain].mean()))
+    out["op"] = openings(holes & upper, valid, a, b)
     if (s := _surround(lum, holes & upper, valid, plaster)) is not None:
         out["fr"], out["fa"], out["nw"] = s
     # the ground floor's plaster against the upper's

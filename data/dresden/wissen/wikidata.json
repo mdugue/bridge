@@ -1,0 +1,7047 @@
+{
+ "attribution": "Wikidata (CC0)",
+ "retrieved": "2026-10-29",
+ "entities": {
+  "Q1000519": {
+   "label": "Kunstgewerbeschule und Kunstgewerbemuseum Dresden",
+   "description": "Gebäudekomplex in Dresden",
+   "wiki": "Kunstgewerbeschule Dresden (Gebäude)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1497364",
+      "v": "Gebäudekomplex"
+     },
+     {
+      "id": "Q19844914",
+      "v": "Universitätsgebäude"
+     },
+     {
+      "id": "Q392376",
+      "v": "Kunstgewerbeschule"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q23785314",
+      "v": "Kunstgewerbeschule Dresden"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q104533952": {
+   "label": "Wohn- und Geschäftshaus Oschatzer Straße 15",
+   "description": "Gebäude in Dresden-Pieschen",
+   "wiki": "Wohn- und Geschäftshaus Oschatzer Straße 15",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18760306",
+      "v": "Wohn- und Geschäftshaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ]
+   }
+  },
+  "Q104649231": {
+   "label": "Zionskirche",
+   "description": "evangelisch-lutherische Kirche in Dresden (1981–)",
+   "wiki": "Zionskirche (Dresden, 1982)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "5.6.1981"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "31.10.1982"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Bayreuther Straße 28, 01187 Dresden"
+     }
+    ]
+   }
+  },
+  "Q104979034": {
+   "label": "Bahnbetriebswerk Dresden-Altstadt",
+   "description": "ehemaliges Bahnbetriebswerk in Dresden, heute überwiegend als Eisenbahnmuseum genutzt",
+   "wiki": "Bahnbetriebswerk Dresden-Altstadt",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q10283556",
+      "v": "Bahnbetriebswerk"
+     },
+     {
+      "id": "Q18704634",
+      "v": "Eisenbahnmuseum"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q104979066": {
+   "label": "Bautzner Landstraße 7",
+   "description": "Bauwerk in Dresden",
+   "wiki": "Parkhotel Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q63099748",
+      "v": "Hotelgebäude"
+     },
+     {
+      "id": "Q18674739",
+      "v": "Veranstaltungsort"
+     },
+     {
+      "id": "Q655686",
+      "v": "Geschäftshaus"
+     },
+     {
+      "id": "Q17501774",
+      "v": "Eckhaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q104144263",
+      "v": "Johannes Kraaz"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q104979107": {
+   "label": "Villa Rosenhof Loschwitz",
+   "description": "Bauwerk in Dresden",
+   "wiki": "Villa Rosenhof (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q104979282": {
+   "label": "Königliche Villa, Wachwitz",
+   "description": "Bauwerk im Königlichen Weinberg, Dresden-Wachwitz, Sachsen",
+   "wiki": "Königliche Villa Wachwitz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1893"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q104979292": {
+   "label": "Winzerhaus Körnerweg 8 (Dresden)",
+   "description": "Bauwerk in Dresden-Loschwitz, Sachsen",
+   "wiki": "Winzerhaus Körnerweg 8 (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11755880",
+      "v": "Wohngebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q105199154": {
+   "label": "Villa Montana",
+   "description": "Bauwerk in Dresden",
+   "wiki": "Villa Montana (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q105319641": {
+   "label": "Bergstraße 60",
+   "description": "Bauwerk in Dresden",
+   "wiki": "Bergstraße 60",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ]
+   }
+  },
+  "Q1054366": {
+   "label": "Centrum-Galerie",
+   "description": "Einkaufszentrum in Dresden",
+   "wiki": "Centrum-Galerie",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11315",
+      "v": "Einkaufszentrum"
+     }
+    ],
+    "P571": [
+     {
+      "v": "17.9.2009"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "17.9.2009"
+     }
+    ]
+   }
+  },
+  "Q106035279": {
+   "label": "Fabrice-Kaserne",
+   "description": "Bauwerk in Dresden",
+   "wiki": "Fabrice-Kaserne",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18760306",
+      "v": "Wohn- und Geschäftshaus"
+     },
+     {
+      "id": "Q131263",
+      "v": "Kaserne"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q106035338": {
+   "label": "Pillnitzer Landstraße 63",
+   "description": "Bauwerk in Dresden",
+   "wiki": "Grahlsches Haus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     },
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q106434617": {
+   "label": "Villa Artushof",
+   "description": "Gebäude in Dresden",
+   "wiki": "Villa Artushof",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q106434631": {
+   "label": "Villa Urvasi",
+   "description": "Bauwerk in Dresden",
+   "wiki": "Villa Urvasi",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     },
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     },
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q109905902": {
+   "label": "Kirche Weißer Hirsch",
+   "description": "Kirchengebäude in Dresden, Sachsen",
+   "wiki": "Kirche Weißer Hirsch",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q26341837",
+      "v": "Bruno Seitler"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1889"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q111354142": {
+   "label": "Königsbrücker Straße 84",
+   "description": "Gebäude in Dresden",
+   "wiki": "Goethe-Institut Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q157033",
+      "v": "Goethe-Institut"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q111521889": {
+   "label": "Villa Haenel",
+   "description": "Villa in Dresden, Sachsen",
+   "wiki": "Villa Haenel in Blasewitz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P170": [
+     {
+      "id": "Q102436",
+      "v": "Karl Emil Scherz"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q111678276": {
+   "label": "Goetheallee 37",
+   "description": "Bauwerk in Dresden",
+   "wiki": "Haus Carl Bergmann",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     },
+     {
+      "id": "Q59913255",
+      "v": "Bauende"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     },
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q111893490": {
+   "label": "Villa Thode",
+   "description": "Villa in Dresden-Loschwitz",
+   "wiki": "Villa Thode",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11755880",
+      "v": "Wohngebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q111893507": {
+   "label": "Villa Ural",
+   "description": "Villa in Dresden",
+   "wiki": "Villa Ural",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q21416004",
+      "v": "Gottfried Schmiedel"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     },
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1135999": {
+   "label": "Coselpalais",
+   "description": "Gebäude in Dresden",
+   "wiki": "Coselpalais",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q15848826",
+      "v": "Stadtpalais"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "An der Frauenkirche 12, 01067 Dresden"
+     }
+    ]
+   }
+  },
+  "Q113623404": {
+   "label": "Zionskirche",
+   "description": "evangelisch-methodistisches Kirchengebäude in Dresden-Striesen, Sachsen",
+   "wiki": "Zionskirche (Dresden-Striesen)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "6.8.1950"
+     }
+    ]
+   }
+  },
+  "Q115620293": {
+   "label": "Poncetsches Herrenhaus",
+   "description": "Bauwerk in Dresden",
+   "wiki": "Poncetsches Herrenhaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q879050",
+      "v": "Gutshaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q115807787": {
+   "label": "Synagoge Neustadt",
+   "description": "Synagoge in Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24398318",
+      "v": "religiöses Gebäude"
+     },
+     {
+      "id": "Q34627",
+      "v": "Synagoge"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q1755128",
+      "v": "Rundbogenstil"
+     }
+    ]
+   }
+  },
+  "Q116477924": {
+   "label": "Bauchsches Haus",
+   "description": "Wohn- und Atelierhaus in Dresden-Loschwitz, Pillnitzer Landstraße 29",
+   "wiki": "Bauchsches Haus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11755880",
+      "v": "Wohngebäude"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q1503992",
+      "v": "Georg Curt Bauch"
+     },
+     {
+      "id": "Q1238531",
+      "v": "Wilhelm Landgraf"
+     }
+    ]
+   }
+  },
+  "Q119192": {
+   "label": "Palais Brühl-Marcolini",
+   "description": "Palast in Deutschland",
+   "wiki": "Palais Brühl-Marcolini",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16560",
+      "v": "Palast"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q105972",
+      "v": "Katharina von Altenbockum"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q567374",
+      "v": "Ernst Hähnel"
+     },
+     {
+      "id": "Q1511",
+      "v": "Richard Wagner"
+     },
+     {
+      "id": "Q1737313",
+      "v": "Krankenhaus Dresden-Friedrichstadt"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q106087771",
+      "v": "Treffen zwischen Napoleon und Metternich"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1240339": {
+   "label": "Mietshaus Nürnberger Straße 32",
+   "description": "denkmalgeschütztes Gebäude in Dresden, Sachsen, Deutschland",
+   "wiki": "Mietshaus Nürnberger Straße 32",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1242964": {
+   "label": "Doppelhaus Krenkelstraße 13 und 15",
+   "description": "Wohnhaus in Dresden-Striesen, Sachsen",
+   "wiki": "Doppelhaus Krenkelstraße 13 und 15",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1242979": {
+   "label": "Doppelhaus Nürnberger Straße 47 / Hübnerstraße 15",
+   "description": "Bauwerk in Dresden, Sachsen",
+   "wiki": "Doppelhaus Nürnberger Straße 47 / Hübnerstraße 15",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1246509": {
+   "label": "Ehemalige Sozialversicherungsanstalt",
+   "description": "denkmalgeschütztes Gebäude in Dresden-Johannstadt",
+   "wiki": "Ehemalige Sozialversicherungsanstalt (Dresden-Johannstadt)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1250019": {
+   "label": "Theaterruine St. Pauli",
+   "description": "Kirchenruine im Dresdner Wohngebiet Hechtviertel, die als Sommertheater und zu kirchlichen Veranstaltungen genutzt wird",
+   "wiki": "St.-Pauli-Kirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q19899465",
+      "v": "ehemalige Kirche"
+     },
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     },
+     {
+      "id": "Q109607",
+      "v": "Ruine"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q125845954",
+      "v": "Christian Schramm"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1997"
+     }
+    ]
+   }
+  },
+  "Q1251813": {
+   "label": "Pernwaldhaus",
+   "description": "denkmalgeschützte Villa im Landhausstil",
+   "wiki": "Pernwaldhaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1892"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1257935": {
+   "label": "Dreikönigskirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Dreikönigskirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q66169",
+      "v": "George Bähr"
+     },
+     {
+      "id": "Q114916",
+      "v": "Johann Christoph Knöffel"
+     },
+     {
+      "id": "Q1694027",
+      "v": "Johann George Schmidt"
+     },
+     {
+      "id": "Q1694091",
+      "v": "Johann Gottfried Fehre"
+     },
+     {
+      "id": "Q1732407",
+      "v": "Karl Moritz Haenel"
+     },
+     {
+      "id": "Q62637",
+      "v": "Matthäus Daniel Pöppelmann"
+     },
+     {
+      "id": "Q1582123",
+      "v": "Woldemar Hermann"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q51671",
+      "v": "Heilige Drei Könige"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q37853",
+      "v": "Barock"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1258469": {
+   "label": "Dresdener Mühle",
+   "description": "Mühlengebäude, Silo mit Turmanbau (Silo- bzw. Wasserturm), Maschinen- und Kesselhaus (Gebäudeteile erhalten) und Verladehalle; von den Bienerts errichtet, Fassadengliederung durch einfache Kolossalordnung, markante Dachgestaltungen, Akzentsetzung",
+   "wiki": "Dresdener Mühle",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q4830453",
+      "v": "Gewerbebetrieb"
+     },
+     {
+      "id": "Q44494",
+      "v": "Mühle"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1913"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "63 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Friedrichstadt"
+     }
+    ]
+   }
+  },
+  "Q127097": {
+   "label": "Semperoper",
+   "description": "Opernhaus in Dresden, benannt nach seinem Architekten Gottfried Semper",
+   "wiki": "Semperoper",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q153562",
+      "v": "Opernhaus"
+     },
+     {
+      "id": "Q1060829",
+      "v": "Konzerthaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q61342",
+      "v": "Gottfried Semper"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q61342",
+      "v": "Gottfried Semper"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q13085",
+      "v": "Sandstein"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q118144636",
+      "v": "Semperoper"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q168983",
+      "v": "Brand"
+     },
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1878"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Theaterplatz 2, 01067 Dresden"
+     }
+    ]
+   }
+  },
+  "Q1277818": {
+   "label": "Villa Ilgen",
+   "description": "denkmalgeschütztes Gebäude in Blasewitz, Dresden",
+   "wiki": "Villa Ilgen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1280046": {
+   "label": "Grützner-Villa",
+   "description": "denkmalgeschützte Villa in der Äußeren Neustadt in Dresden",
+   "wiki": "Grützner-Villa",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1295168": {
+   "label": "Wohnhaus Katharinenstraße 5",
+   "description": "denkmalgeschütztes Jugendstilgebäude in der Äußeren Neustadt Dresdens",
+   "wiki": "Wohnhaus Katharinenstraße 5",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1299427": {
+   "label": "United AG Zigarettenmaschinenfabrik",
+   "description": "Unternehmen zur Herstellung von Zigarettenmaschinen in Dresden mit denkmalgeschützten Fabrikgebäude",
+   "wiki": "United AG Zigarettenmaschinenfabrik",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1913"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Striesen-Süd"
+     }
+    ]
+   }
+  },
+  "Q1301522": {
+   "label": "Studentenwohnheim Güntzstraße Dresden",
+   "description": "Studentenwohnheim in Dresden",
+   "wiki": "Studentenwohnheim Güntzstraße 28/28a",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3661265",
+      "v": "Studentenwohnheim"
+     },
+     {
+      "id": "Q264542",
+      "v": "Studierende"
+     },
+     {
+      "id": "Q483453",
+      "v": "Zierbrunnen"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1955"
+     }
+    ]
+   }
+  },
+  "Q1325337": {
+   "label": "Mietvilla Krenkelstraße 19",
+   "description": "Wohnhaus in Dresden",
+   "wiki": "Mietvilla Krenkelstraße 19",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1331000": {
+   "label": "Haus Bautzner Straße 125",
+   "description": "Gebäude im Preußischen Viertel in Dresden",
+   "wiki": "Tudor-Villa",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1343765": {
+   "label": "Trinitatiskirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Trinitatiskirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q37090",
+      "v": "Dreifaltigkeit"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1893"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1352684": {
+   "label": "Erich Kästner Museum",
+   "description": "Museum in Dresden",
+   "wiki": "Erich Kästner Museum",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q33506",
+      "v": "Museum"
+     },
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q76546",
+      "v": "Erich Kästner"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1999"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1356168": {
+   "label": "Ernemann-Werke",
+   "description": "Fabrikgebäude mit Turmbau an der Ecke Schandauer und Junghansstraße in Dresden",
+   "wiki": "Ernemann-Werke",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q83405",
+      "v": "Fabrik"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q880853",
+      "v": "Ernemann"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1916"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Striesen-Süd"
+     }
+    ]
+   }
+  },
+  "Q1389146": {
+   "label": "Mietvilla Krenkelstraße 7",
+   "description": "denkmalgeschützte Mietvilla in Dresden-Striesen",
+   "wiki": "Mietvilla Krenkelstraße 7",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q1295040",
+      "v": "Jugendstilarchitektur"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1395020": {
+   "label": "Nordbad",
+   "description": "Schwimmbad im Dresdner",
+   "wiki": "Nordbad (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q200023",
+      "v": "Schwimmbad"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     },
+     {
+      "id": "Q1441983",
+      "v": "Umnutzung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1895"
+     }
+    ]
+   }
+  },
+  "Q1398905": {
+   "label": "Jazzclub Tonne",
+   "description": "Club in Dresden",
+   "wiki": "Jazzclub Tonne",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1684522",
+      "v": "Jazzclub"
+     }
+    ]
+   }
+  },
+  "Q1403864": {
+   "label": "Martin-Luther-Kirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Martin-Luther-Kirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q59193192",
+      "v": "Paul Weidner"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q9554",
+      "v": "Martin Luther"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1887"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "81 m"
+     }
+    ]
+   }
+  },
+  "Q140490624": {
+   "label": "Landesfunkhaus Sachsen",
+   "description": "Funkhaus der Dreiländeranstalt MDR in Dresden, Sachsen",
+   "wiki": "Landesfunkhaus Sachsen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1474414",
+      "v": "Funkhaus"
+     }
+    ]
+   }
+  },
+  "Q1409780": {
+   "label": "Feuerwache Striesen",
+   "description": "denkmalgeschütztes Gebäude in Dresden-Striesen",
+   "wiki": "Feuerwache Striesen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1195942",
+      "v": "Feuerwehrhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ]
+   }
+  },
+  "Q1411405": {
+   "label": "Mietvilla Reinickstraße 11",
+   "description": "denkmalgeschütztes freistehendes Mehrfamilienwohnhaus in Dresden",
+   "wiki": "Mietvilla Reinickstraße 11",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q12020836",
+      "v": "Fachwerkhaus"
+     },
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1417958": {
+   "label": "Mietvilla Krenkelstraße 5",
+   "description": "großbürgerliches, freistehendes Wohnhaus in Dresden",
+   "wiki": "Mietvilla Krenkelstraße 5",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1427904": {
+   "label": "Betriebszentrale des Konsumvereins Vorwärts Dresden",
+   "description": "Industriebau in der Architektur der Neuen Sachlichkeit in Dresden.",
+   "wiki": "Fleischverarbeitungsbetrieb der Konsumgenossenschaft „Vorwärts“ (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1927"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Löbtau-Süd"
+     }
+    ]
+   }
+  },
+  "Q1435692": {
+   "label": "Sparkassenhaus Dresden",
+   "description": "denkmalgeschütztes Gebäude in Dresden",
+   "wiki": "Sparkassenhaus Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18761864",
+      "v": "Bankgebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1438054": {
+   "label": "Sternwarte „Manfred von Ardenne“",
+   "description": "Sternwarte mit technischer Ausstattung; von großer technikgeschichtlicher und ortsgeschichtlicher Bedeutung, Refraktor mit Seltenheitswert",
+   "wiki": "Forschungsinstitut Manfred von Ardenne – Sternwarte",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1254933",
+      "v": "Sternwarte"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q70999",
+      "v": "Manfred von Ardenne"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1956"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Loschwitz"
+     }
+    ]
+   }
+  },
+  "Q14520116": {
+   "label": "Comödie Dresden",
+   "description": "Theater in Dresden",
+   "wiki": "Comödie Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q40831",
+      "v": "Komödie"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "2011"
+     }
+    ]
+   }
+  },
+  "Q1454500": {
+   "label": "Freilichtbühne Großer Garten",
+   "description": "Bühne im Großen Garten in Dresden",
+   "wiki": "Freilichtbühne Großer Garten",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11183017",
+      "v": "Freilichttheater"
+     },
+     {
+      "id": "Q336514",
+      "v": "Naturbühne"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q27136782",
+      "v": "Baubeginn"
+     },
+     {
+      "id": "Q59913255",
+      "v": "Bauende"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1955"
+     }
+    ]
+   }
+  },
+  "Q14545380": {
+   "label": "Kunstakademie",
+   "description": "Hochschul- und Ausstellungsgebäude in Dresden",
+   "wiki": "Kunstakademie (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     },
+     {
+      "id": "Q383092",
+      "v": "Kunstakademie"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q96786",
+      "v": "Constantin Lipsius"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Brühlsche Terrasse 1, 01067 Dresden"
+     }
+    ]
+   }
+  },
+  "Q14548130": {
+   "label": "Rathaus Blasewitz",
+   "description": "Rathaus in Dresden, Sachsen",
+   "wiki": "Rathaus Blasewitz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q543654",
+      "v": "Rathaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q14549041": {
+   "label": "Straßenbahnhof Mickten",
+   "description": "früher Straßenbahnhof, heute Einkaufszentrum in Dresden",
+   "wiki": "Straßenbahnhof Mickten",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1191753",
+      "v": "Busdepot"
+     },
+     {
+      "id": "Q11315",
+      "v": "Einkaufszentrum"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1897"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1456772": {
+   "label": "Friedenskirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Friedenskirche (Dresden-Löbtau)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     },
+     {
+      "id": "Q809470",
+      "v": "Bartning-Notkirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q62322",
+      "v": "Otto Bartning"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q454",
+      "v": "Frieden"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1949"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Wernerstraße 32, 01159 Dresden/Löbtau, Sachsen, Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1456957": {
+   "label": "Albertbrücke",
+   "description": "Elbbrücke in der sächsischen Landeshauptstadt Dresden, Deutschland",
+   "wiki": "Albertbrücke",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3397526",
+      "v": "Steinbrücke"
+     },
+     {
+      "id": "Q537127",
+      "v": "Straßenbrücke"
+     },
+     {
+      "id": "Q158438",
+      "v": "Bogenbrücke"
+     },
+     {
+      "id": "Q79007",
+      "v": "Innerortsstraße"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q168657",
+      "v": "Albert von Sachsen"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1462191": {
+   "label": "Kurländer Palais",
+   "description": "wieder aufgebautes historisches Gebäude in Dresden",
+   "wiki": "Kurländer Palais",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q114916",
+      "v": "Johann Christoph Knöffel"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q122960",
+      "v": "Rokoko"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q14943716": {
+   "label": "Hans-Erlwein-Gymnasium",
+   "description": "Gymnasium in Dresden",
+   "wiki": "Hans-Erlwein-Gymnasium Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1542966",
+      "v": "Gymnasium in Deutschland"
+     },
+     {
+      "id": "Q1244442",
+      "v": "Schulgebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q1579381",
+      "v": "Hans Erlwein"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1914"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Eibenstocker Str. 30"
+     }
+    ]
+   }
+  },
+  "Q1496356": {
+   "label": "Kulturzentrum Scheune",
+   "description": "Kulturzentrum in Dresden",
+   "wiki": "Scheune (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2190251",
+      "v": "Kunstzentrum"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q168569",
+      "v": "Martin Andersen Nexø"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1951"
+     }
+    ]
+   }
+  },
+  "Q1497529": {
+   "label": "Gedenkstätte Sophienkirche Dresden",
+   "description": "Gedenkstätte für die zerstörte Sophienkirche in Dresden",
+   "wiki": "Gedenkstätte Sophienkirche Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q5003624",
+      "v": "Gedenkstätte"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q1017650",
+      "v": "Busmannkapelle"
+     }
+    ]
+   }
+  },
+  "Q1507805": {
+   "label": "Mietvilla Anton-Graff-Straße 28",
+   "description": "denkmalgeschützte Jugendstil-Wohnhaus im Dresdner Stadtteil Striesen",
+   "wiki": "Mietvilla Anton-Graff-Straße 28",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1508741": {
+   "label": "Georgentor",
+   "description": "Gebäude in Dresden",
+   "wiki": "Georgentor (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ]
+   }
+  },
+  "Q15117935": {
+   "label": "Künstlerhaus Dresden-Loschwitz",
+   "description": "Gebäude im Dresdener Stadtteil Loschwitz",
+   "wiki": "Künstlerhaus Dresden-Loschwitz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1797122",
+      "v": "Künstlerhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ]
+   }
+  },
+  "Q15130613": {
+   "label": "Straßenbahnhof Blasewitz",
+   "description": "Bauwerk in Deutschland",
+   "wiki": "Straßenbahnhof Blasewitz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q27028153",
+      "v": "Straßenbahndepot"
+     },
+     {
+      "id": "Q1295201",
+      "v": "Lebensmittelgeschäft"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "26.9.1872"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Tolkewitzer Straße 38, 01277 Dresden"
+     }
+    ]
+   }
+  },
+  "Q1515945": {
+   "label": "Nossener Brücke",
+   "description": "Straßenbrücke in Dresden",
+   "wiki": "Nossener Brücke",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q537127",
+      "v": "Straßenbrücke"
+     },
+     {
+      "id": "Q79007",
+      "v": "Innerortsstraße"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q8751",
+      "v": "Nossen"
+     }
+    ],
+    "P571": [
+     {
+      "v": "28.6.1964"
+     }
+    ]
+   }
+  },
+  "Q1520328": {
+   "label": "Straßenbahnhof Waltherstraße",
+   "description": "Bauwerk in Dresden",
+   "wiki": "Straßenbahnhof Waltherstraße",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q27028153",
+      "v": "Straßenbahndepot"
+     },
+     {
+      "id": "Q1191753",
+      "v": "Busdepot"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1926"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Friedrichstadt"
+     }
+    ]
+   }
+  },
+  "Q1520340": {
+   "label": "Gewandhaus",
+   "description": "barockes Gebäude im Stadtzentrum von Dresden. Errichtet zwischen 1768 und 1770 als Gewandhaus, dient es seit 1967 als Hotel.",
+   "wiki": "Gewandhaus (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q63099748",
+      "v": "Hotelgebäude"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q37853",
+      "v": "Barock"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q111388158",
+      "v": "Gewandhaus Dresden, Autograph Collection"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1525093": {
+   "label": "Haus Schubert",
+   "description": "denkmalgeschütztes Wohn- und Geschäftshaus in Dresden-Blasewitz",
+   "wiki": "Haus Schubert",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18760306",
+      "v": "Wohn- und Geschäftshaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1525354": {
+   "label": "Villa Stock",
+   "description": "großbürgerliches Wohnhaus in Dresden-Blasewitz",
+   "wiki": "Villa Stock (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1526368": {
+   "label": "Kreuzschule",
+   "description": "Gymnasium in Dresden",
+   "wiki": "Kreuzschule",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3914",
+      "v": "Schule"
+     },
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q564918",
+      "v": "Dresdner Kreuzchor"
+     }
+    ],
+    "P571": [
+     {
+      "v": "13. Jahrhundert"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Dornblüthstraße 4"
+     }
+    ]
+   }
+  },
+  "Q1531732": {
+   "label": "Wohn- und Geschäftshaus Borsbergstraße 21",
+   "description": "denkmalgeschütztes Gebäude in Dresden-Striesen",
+   "wiki": "Wohn- und Geschäftshaus Borsbergstraße 21",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18760306",
+      "v": "Wohn- und Geschäftshaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1532479": {
+   "label": "Haus Antonstraße 8",
+   "description": "denkmalgeschütztes Haus in Dresden",
+   "wiki": "Haus Antonstraße 8 (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1533940": {
+   "label": "Schloss Wachwitz",
+   "description": "Schloss in Dresden",
+   "wiki": "Schloss Wachwitz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q751876",
+      "v": "Schloss"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q811972",
+      "v": "Bauzeit"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1536904": {
+   "label": "Mehrfamilienwohnhaus Spenerstraße 25, 25b / Wormser Straße 42–48",
+   "description": "Mehrfamilienwohnhaus in Dresden-Striesen",
+   "wiki": "Mehrfamilienwohnhaus Spenerstraße 25, 25b / Wormser Straße 42–48",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ]
+   }
+  },
+  "Q1543902": {
+   "label": "Neustädter Markthalle",
+   "description": "Markthalle in Dresden",
+   "wiki": "Neustädter Markthalle",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11315",
+      "v": "Einkaufszentrum"
+     },
+     {
+      "id": "Q2080521",
+      "v": "Markthalle"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q155107": {
+   "label": "Zwinger",
+   "description": "barocker Profanbau in Dresden, Sachsen",
+   "wiki": "Zwinger (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16560",
+      "v": "Palast"
+     },
+     {
+      "id": "Q360418",
+      "v": "Baustelle"
+     },
+     {
+      "id": "Q109607",
+      "v": "Ruine"
+     },
+     {
+      "id": "Q360418",
+      "v": "Baustelle"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q62637",
+      "v": "Matthäus Daniel Pöppelmann"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q53437",
+      "v": "August der Starke"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q10561522",
+      "v": "Zwinger"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1711"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Sophienstraße, 01067 Dresden"
+     }
+    ]
+   }
+  },
+  "Q15532691": {
+   "label": "Chinesischer Pavillon (Dresden-Weißer Hirsch)",
+   "description": "Bauwerk in Dresden, Sachsen",
+   "wiki": "Chinesischer Pavillon (Dresden-Weißer Hirsch)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q276173",
+      "v": "Pavillon"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     },
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1563238": {
+   "label": "Markuskirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Markuskirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q125845954",
+      "v": "Christian Schramm"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q31966",
+      "v": "Markus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q186363",
+      "v": "Neogotik"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q15634861": {
+   "label": "Grumbtsche Villa",
+   "description": "Villa in Dresden, Sachsen",
+   "wiki": "Grumbtsche Villa",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q1358373",
+      "v": "Ernst Grumbt"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q15694577": {
+   "label": "Micktner Windmühle",
+   "description": "Turmholländer; technikgeschichtlich von Bedeutung, eine der letzten Windmühlen auf dem Stadtgebiet des heutigen Dresden",
+   "wiki": "Micktner Windmühle",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q38720",
+      "v": "Windmühle"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Mickten"
+     }
+    ]
+   }
+  },
+  "Q157229": {
+   "label": "Frauenkirche",
+   "description": "barocker Sakralbau in Dresden, Sachsen",
+   "wiki": "Frauenkirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q66169",
+      "v": "George Bähr"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q1731",
+      "v": "Dresden"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q345",
+      "v": "Maria"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q176354",
+      "v": "Postaer Sandstein"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1726"
+     }
+    ],
+    "P576": [
+     {
+      "v": "15.2.1945"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q18752057",
+      "v": "Grundsteinlegung"
+     },
+     {
+      "id": "Q1762010",
+      "v": "Einweihung"
+     },
+     {
+      "id": "Q1370468",
+      "v": "bauliche Rekonstruktion"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     },
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "91.24 m"
+     }
+    ]
+   }
+  },
+  "Q1581348": {
+   "label": "Rathaus Pieschen",
+   "description": "Rathaus in Dresden, Deutschland",
+   "wiki": "Rathaus Pieschen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q543654",
+      "v": "Rathaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1589581": {
+   "label": "Hauptpostamt Dresden 6",
+   "description": "Postamt in Dresden",
+   "wiki": "Hauptpostamt Dresden 6",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q157645",
+      "v": "DHL AG"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1589939": {
+   "label": "Haus Bautzner Straße 82 (Dresden)",
+   "description": "Gebäude in Dresden",
+   "wiki": "Turmhaus Bautzner Straße 82",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ]
+   }
+  },
+  "Q1590050": {
+   "label": "Haus Dr. Geyer",
+   "description": "Wohnhaus von 1934/1935 in Dresden",
+   "wiki": "Haus Dr. Geyer",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11755880",
+      "v": "Wohngebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1930er"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1935"
+     }
+    ]
+   }
+  },
+  "Q1590057": {
+   "label": "Ebertplatz 10",
+   "description": "Mehrfamilienhaus in Dresden-Löbtau",
+   "wiki": "Haus Ebertplatz 10 (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1556810",
+      "v": "Paul Wolf"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1590287": {
+   "label": "Haus Krieger",
+   "description": "denkmalgeschütztes Wohnhaus in Dresden",
+   "wiki": "Haus Krieger",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11755880",
+      "v": "Wohngebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q15906707": {
+   "label": "Hartwig & Vogel",
+   "description": "Süßwaren-Unternehmen in Dresden",
+   "wiki": "Hartwig & Vogel",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q83405",
+      "v": "Fabrik"
+     },
+     {
+      "id": "Q4830453",
+      "v": "Gewerbebetrieb"
+     }
+    ]
+   }
+  },
+  "Q1594861": {
+   "label": "Heilig-Geist-Kirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Heilig-Geist-Kirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q102436",
+      "v": "Karl Emil Scherz"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q37302",
+      "v": "Heiliger Geist"
+     }
+    ],
+    "P571": [
+     {
+      "v": "15.10.1893"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1068633",
+      "v": "Spatenstich"
+     },
+     {
+      "id": "Q18752057",
+      "v": "Grundsteinlegung"
+     },
+     {
+      "id": "Q1075723",
+      "v": "Richtfest"
+     },
+     {
+      "id": "Q3010369",
+      "v": "Einweihungsfeier"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1601490": {
+   "label": "Heizkraftwerk Nossener Brücke",
+   "description": "Kraftwerk in Dresden",
+   "wiki": "Heizkraftwerk Nossener Brücke",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1601458",
+      "v": "Heizkraftwerk"
+     },
+     {
+      "id": "Q200297",
+      "v": "Wärmekraftwerk"
+     }
+    ],
+    "P571": [
+     {
+      "v": "15.9.1993"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q18752057",
+      "v": "Grundsteinlegung"
+     },
+     {
+      "id": "Q29933828",
+      "v": "Inbetriebnahme"
+     }
+    ]
+   }
+  },
+  "Q16065608": {
+   "label": "Universelle-Werke Dresden",
+   "description": "ehemaliger Maschinenhersteller in Dresden. Sachsen",
+   "wiki": "Universelle-Werke Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q4830453",
+      "v": "Gewerbebetrieb"
+     },
+     {
+      "id": "Q811979",
+      "v": "Bauwerk"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1898"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Südvorstadt-West"
+     }
+    ]
+   }
+  },
+  "Q1614950": {
+   "label": "Herz-Jesu-Kirche, Dresden",
+   "description": "Kirchengebäude in Sachsen",
+   "wiki": "Herz-Jesu-Kirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q102376",
+      "v": "August Menken"
+     },
+     {
+      "id": "Q1298740",
+      "v": "Egon Körner"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q186363",
+      "v": "Neogotik"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1615061": {
+   "label": "Lukaskirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Lukaskirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1506339",
+      "v": "Georg Weidenbach"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q128538",
+      "v": "Lukas der Evangelist"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1903"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1618988": {
+   "label": "Sächsischer Landtag",
+   "description": "Gebäude am Bernhard-von-Lindenau-Platz in Dresden, das dem Landesparlament des Freistaats Sachsen als Sitz dient.",
+   "wiki": "Sächsischer Landtag (Gebäude)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q7138926",
+      "v": "Parlamentsgebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1228499",
+      "v": "Peter Kulka"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1990er"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1621856": {
+   "label": "Hochhaus Pirnaischer Platz",
+   "description": "Hochhaus in Dresden",
+   "wiki": "Hochhaus Grunaer Straße 5",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18142",
+      "v": "Hochhaus"
+     }
+    ]
+   }
+  },
+  "Q1621860": {
+   "label": "Hochhaus am Albertplatz",
+   "description": "Hochhaus in Dresden",
+   "wiki": "Hochhaus am Albertplatz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q655686",
+      "v": "Geschäftshaus"
+     },
+     {
+      "id": "Q18142",
+      "v": "Hochhaus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q245188",
+      "v": "Moderne"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1929"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1623058": {
+   "label": "Hoffnungskirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Hoffnungskirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1599925",
+      "v": "Rudolf Kolbe"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1630350": {
+   "label": "Landhaus",
+   "description": "barocker Profanbau in Dresden, Sachsen",
+   "wiki": "Landhaus (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q357375",
+      "v": "Profanbau"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1079893",
+      "v": "Christian Gottfried Hahmann"
+     },
+     {
+      "id": "Q111198",
+      "v": "Friedrich August Krubsacius"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q37853",
+      "v": "Barock"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q2327655",
+      "v": "Stadtmuseum Dresden"
+     },
+     {
+      "id": "Q830042",
+      "v": "Städtische Galerie Dresden"
+     },
+     {
+      "id": "Q35906273",
+      "v": "Dresdner Geschichtsverein"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1770"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1648281": {
+   "label": "Landhaus Glasewaldtstraße 8",
+   "description": "denkmalgeschütztes Gebäude in Dresden-Striesen",
+   "wiki": "Landhaus Glasewaldtstraße 8",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q102436",
+      "v": "Karl Emil Scherz"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1888"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1651640": {
+   "label": "Universitätsklinikum Carl Gustav Carus",
+   "description": "Universitätskrankenhaus in Dresden",
+   "wiki": "Universitätsklinikum Carl Gustav Carus Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1059324",
+      "v": "Universitätsklinikum"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q61987",
+      "v": "Carl Gustav Carus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1999"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1660476": {
+   "label": "Villa Thorwald",
+   "description": "denkmalgeschützte Villa im Dresdner Stadtteil Loschwitz",
+   "wiki": "Villa Thorwald",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1672147": {
+   "label": "Borsbergstraße 7 (Dresden)",
+   "description": "dreigeschossiges Eckhaus in Dresden",
+   "wiki": "Mietvilla Borsbergstraße 7",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     },
+     {
+      "id": "Q17501774",
+      "v": "Eckhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q167314": {
+   "label": "Residenzschloss Dresden",
+   "description": "Schloss in der sächsischen Landeshauptstadt Dresden",
+   "wiki": "Residenzschloss Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q751876",
+      "v": "Schloss"
+     },
+     {
+      "id": "Q16560",
+      "v": "Palast"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q114916",
+      "v": "Johann Christoph Knöffel"
+     },
+     {
+      "id": "Q100566",
+      "v": "Wolf Caspar von Klengel"
+     },
+     {
+      "id": "Q1526236",
+      "v": "Giovanni Maria Nosseni"
+     },
+     {
+      "id": "Q62637",
+      "v": "Matthäus Daniel Pöppelmann"
+     },
+     {
+      "id": "Q1079579",
+      "v": "Christian Friedrich Exner"
+     },
+     {
+      "id": "Q1712680",
+      "v": "Julius Heinrich Schwarze"
+     },
+     {
+      "id": "Q1693964",
+      "v": "Johann Georg Starcke"
+     },
+     {
+      "id": "Q1048058",
+      "v": "Caspar Voigt von Wierandt"
+     },
+     {
+      "id": "Q1583370",
+      "v": "Hans von Dehn-Rothfelser"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q435016",
+      "v": "August von Sachsen"
+     },
+     {
+      "id": "Q366652",
+      "v": "Johann Georg I."
+     },
+     {
+      "id": "Q454483",
+      "v": "Johann Georg III."
+     },
+     {
+      "id": "Q53444",
+      "v": "Friedrich August I."
+     },
+     {
+      "id": "Q53437",
+      "v": "August der Starke"
+     },
+     {
+      "id": "Q505548",
+      "v": "Johann Georg II."
+     },
+     {
+      "id": "Q317710",
+      "v": "Moritz von Sachsen"
+     },
+     {
+      "id": "Q705358",
+      "v": "Christian I."
+     },
+     {
+      "id": "Q63605",
+      "v": "Franz Xaver von Sachsen"
+     },
+     {
+      "id": "Q57986",
+      "v": "Friedrich August II."
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q236122",
+      "v": "Architektur der Renaissance"
+     },
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     },
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q570620",
+      "v": "Kupferstichkabinett Dresden"
+     },
+     {
+      "id": "Q324263",
+      "v": "Münzkabinett"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q191360",
+      "v": "Gründung"
+     },
+     {
+      "id": "Q2478058",
+      "v": "Rekonstruktion"
+     },
+     {
+      "id": "Q2478058",
+      "v": "Rekonstruktion"
+     },
+     {
+      "id": "Q168983",
+      "v": "Brand"
+     },
+     {
+      "id": "Q17781833",
+      "v": "Zerstörung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Taschenberg 2, 01067 Dresden"
+     }
+    ]
+   }
+  },
+  "Q1673862": {
+   "label": "Wohnhaus Katharinenstraße 1",
+   "description": "denkmalgeschütztes Jugendstilgebäude in der Äußeren Neustadt Dresdens",
+   "wiki": "Wohnhaus Katharinenstraße 1",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1674291": {
+   "label": "Sächsisches Ständehaus",
+   "description": "Bürogebäude in Dresden",
+   "wiki": "Sächsisches Ständehaus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q77357",
+      "v": "Paul Wallot"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1675160": {
+   "label": "Italienisches Dörfchen",
+   "description": "Gebäude in Dresden",
+   "wiki": "Italienisches Dörfchen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q62602544",
+      "v": "Gaststätte"
+     },
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q16774456": {
+   "label": "Ballsaal Lindengarten",
+   "description": "denkmalgeschützter Konferenz- und Veranstaltungsraum in Dresden",
+   "wiki": "Ballsaal Lindengarten",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q131734",
+      "v": "Brauerei"
+     },
+     {
+      "id": "Q805353",
+      "v": "Ballsaal"
+     },
+     {
+      "id": "Q18674739",
+      "v": "Veranstaltungsort"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1684388": {
+   "label": "Wasserwerk Saloppe",
+   "description": "Kulturdenkmal",
+   "wiki": "Wasserwerk Saloppe",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q10373565",
+      "v": "Wasserwerk"
+     },
+     {
+      "id": "Q1516537",
+      "v": "technisches Denkmal"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1871"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Radeberger Vorstadt"
+     }
+    ]
+   }
+  },
+  "Q1698886": {
+   "label": "Johanneum (Dresden)",
+   "description": "Gebäude in Dresden",
+   "wiki": "Johanneum (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q214252",
+      "v": "Stall"
+     },
+     {
+      "id": "Q24699794",
+      "v": "Museumsgebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q57538",
+      "v": "Johann"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1708437": {
+   "label": "St. Josef (Dresden)",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "St. Josef (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     },
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q104216664",
+      "v": "Hubert Paul"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q744373",
+      "v": "Neuromanik"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q17155757": {
+   "label": "Ernst Kaps Klavierfabrik",
+   "description": "deutsches Unternehmen",
+   "wiki": "Ernst Kaps",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q4830453",
+      "v": "Gewerbebetrieb"
+     },
+     {
+      "id": "Q83405",
+      "v": "Fabrik"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q830091",
+      "v": "Ernst Kaps"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1858"
+     }
+    ]
+   }
+  },
+  "Q1716531": {
+   "label": "Societaetstheater",
+   "description": "Theater in Deutschland",
+   "wiki": "Societaetstheater",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1999"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "19.2.1999"
+     }
+    ]
+   }
+  },
+  "Q1734918": {
+   "label": "Kaserne Übigau",
+   "description": "Kaserne im Dresdner Stadtteil Übigau",
+   "wiki": "Kaserne Übigau",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q131263",
+      "v": "Kaserne"
+     }
+    ]
+   }
+  },
+  "Q1737855": {
+   "label": "Käthe-Kollwitz-Ufer 21/22",
+   "description": "Wohnhaus im Dresdner Stadtteil Johannstadt",
+   "wiki": "Käthe-Kollwitz-Ufer 21/22",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11755880",
+      "v": "Wohngebäude"
+     }
+    ]
+   }
+  },
+  "Q1739877": {
+   "label": "Leibniz-Institut für Polymerforschung Dresden",
+   "description": "Forschungseinrichtung in Dresden",
+   "wiki": "Leibniz-Institut für Polymerforschung Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q31855",
+      "v": "Forschungseinrichtung"
+     },
+     {
+      "id": "Q76130167",
+      "v": "Forschungsgebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1992"
+     }
+    ]
+   }
+  },
+  "Q1741829": {
+   "label": "Kinderklinik",
+   "description": "ehemaliges Krankenhaus in Dresden",
+   "wiki": "Kinderklinik (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16917",
+      "v": "Krankenhaus"
+     },
+     {
+      "id": "Q64578911",
+      "v": "ehemaliges Krankenhaus"
+     }
+    ]
+   }
+  },
+  "Q1746253": {
+   "label": "Kügelgenhaus – Museum der Dresdner Romantik",
+   "description": "Museum in Deutschland",
+   "wiki": "Kügelgenhaus – Museum der Dresdner Romantik",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q33506",
+      "v": "Museum"
+     },
+     {
+      "id": "Q11755880",
+      "v": "Wohngebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1746740": {
+   "label": "Schillerhäuschen Dresden",
+   "description": "Museum in Deutschland",
+   "wiki": "Schillerhäuschen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q33506",
+      "v": "Museum"
+     },
+     {
+      "id": "Q5783893",
+      "v": "Sommerhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Schillerstraße 19"
+     }
+    ]
+   }
+  },
+  "Q1747472": {
+   "label": "Schauburg",
+   "description": "Kino in Dresden",
+   "wiki": "Schauburg (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41253",
+      "v": "Kino"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Königsbrücker Straße 55, 01099 Dresden"
+     }
+    ]
+   }
+  },
+  "Q1747754": {
+   "label": "Villa Zietz",
+   "description": "denkmalgeschütztes Gebäude in Dresden-Weißer Hirsch, Sachsen",
+   "wiki": "Villa Zietz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1753064": {
+   "label": "Thomaskirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Thomaskirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q125845954",
+      "v": "Christian Schramm"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q43669",
+      "v": "Thomas"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q744373",
+      "v": "Neuromanik"
+     }
+    ],
+    "P571": [
+     {
+      "v": "31.8.1892"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Bodenbacher Straße 10, 01277 Dresden"
+     }
+    ]
+   }
+  },
+  "Q1760775": {
+   "label": "Villa Eschebach",
+   "description": "denkmalgeschütztes Wohnhaus in Dresden-Weißer Hirsch",
+   "wiki": "Villa Eschebach (Dresden-Weißer Hirsch)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q12020836",
+      "v": "Fachwerkhaus"
+     },
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1791798": {
+   "label": "Kulturpalast Dresden",
+   "description": "Konzerthaus in Dresden",
+   "wiki": "Kulturpalast (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q5061188",
+      "v": "Kulturhaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1354865",
+      "v": "Leopold Wiel"
+     },
+     {
+      "id": "Q2590050",
+      "v": "Wolfgang Hänsch"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q162324",
+      "v": "Internationaler Stil"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1960er"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "2.10.1969"
+     }
+    ]
+   }
+  },
+  "Q1796157": {
+   "label": "Schillergarten",
+   "description": "eine der ältesten Gastwirtschaften in Blasewitz, Dresden",
+   "wiki": "Schillergarten",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q12020836",
+      "v": "Fachwerkhaus"
+     },
+     {
+      "id": "Q256020",
+      "v": "Gasthof"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ]
+   }
+  },
+  "Q1799819": {
+   "label": "Rathaus Cotta",
+   "description": "Gebäude im Dresdner Stadtteil Cotta",
+   "wiki": "Rathaus Cotta",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q543654",
+      "v": "Rathaus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "24.4.1901"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1802966": {
+   "label": "Landhaus Bautzner Straße 99",
+   "description": "Bauwerk in Deutschland",
+   "wiki": "Landhaus Bautzner Straße 99",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16884952",
+      "v": "Landhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1826549": {
+   "label": "Lingnerschloss",
+   "description": "Schloss in Deutschland",
+   "wiki": "Lingnerschloss",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q751876",
+      "v": "Schloss"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q125103",
+      "v": "Karl August Lingner"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1870615": {
+   "label": "Loschwitzer Kirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Loschwitzer Kirche",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q66169",
+      "v": "George Bähr"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1708"
+     }
+    ],
+    "P576": [
+     {
+      "v": "15.2.1945"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1876706": {
+   "label": "Luisenhof",
+   "description": "Restaurant in Dresden",
+   "wiki": "Luisenhof (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q256020",
+      "v": "Gasthof"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1932271": {
+   "label": "Mietshaus Niederwaldstraße 37",
+   "description": "denkmalgeschütztes Gebäude in Dresden-Striesen",
+   "wiki": "Mietshaus Niederwaldstraße 37",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1577547",
+      "v": "Mietshaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1932274": {
+   "label": "Mietshaus Wägnerstraße 18 (Dresden)",
+   "description": "Wohnhaus in Dresden",
+   "wiki": "Mietshaus Wägnerstraße 18 (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1904725",
+      "v": "Martin Pietzsch"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ]
+   }
+  },
+  "Q1932277": {
+   "label": "Mietshaus Wittenberger Straße 72",
+   "description": "denkmalgeschütztes Mietshaus in Dresden-Striesen",
+   "wiki": "Mietshaus Wittenberger Straße 72",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     },
+     {
+      "id": "Q17501774",
+      "v": "Eckhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ]
+   }
+  },
+  "Q1932280": {
+   "label": "Mietshäuser Bundschuhstraße 5 und 7",
+   "description": "denkmalgeschützte Jugendstilgebäude im Dresdner Stadtteil Johannstadt",
+   "wiki": "Mietshäuser Bundschuhstraße 5 und 7",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1932295": {
+   "label": "Mietvilla Anton-Graff-Straße 22",
+   "description": "denkmalgeschütztes Jugendstil-Wohnhaus im Dresdner Stadtteil Striesen",
+   "wiki": "Mietvilla Anton-Graff-Straße 22",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1932299": {
+   "label": "Mietvilla Anton-Graff-Straße 26",
+   "description": "denkmalgeschützte Mietvilla in Dresden",
+   "wiki": "Mietvilla Anton-Graff-Straße 26",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q1295040",
+      "v": "Jugendstilarchitektur"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q1932303": {
+   "label": "Mietvilla Borsbergstraße 11",
+   "description": "dreigeschossiges Eckhaus in Dresden",
+   "wiki": "Mietvilla Borsbergstraße 11",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1577547",
+      "v": "Mietshaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1932321": {
+   "label": "Mietvilla Reinickstraße 13",
+   "description": "denkmalgeschütztes freistehendes Mehrfamilienwohnhaus in Dresden-Johannstadt",
+   "wiki": "Mietvilla Reinickstraße 13",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     },
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1932327": {
+   "label": "Mietvilla Reinickstraße 9",
+   "description": "denkmalgeschütztes freistehendes Mehrfamilienwohnhaus",
+   "wiki": "Mietvilla Reinickstraße 9",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q1934541": {
+   "label": "Mildred-Scheel-Haus",
+   "description": "Gebäude im Universitätsklinikum Carl Gustav Carus Dresden",
+   "wiki": "Mildred-Scheel-Haus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q39364723",
+      "v": "Krankenhausgebäude"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q66805",
+      "v": "Mildred Scheel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "2002"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "11.11.2002"
+     }
+    ]
+   }
+  },
+  "Q1980363": {
+   "label": "Neues Rathaus",
+   "description": "Rathaus in Dresden",
+   "wiki": "Neues Rathaus (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q543654",
+      "v": "Rathaus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1.10.1910"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "100.3 m"
+     }
+    ]
+   }
+  },
+  "Q2015896": {
+   "label": "Offizierschule des Heeres",
+   "description": "zentrale Ausbildungsstätte für die Offiziere des Heeres und der Streitkräftebasis",
+   "wiki": "Offizierschule des Heeres",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q42058516",
+      "v": "Ausbildungseinrichtung des Heeres"
+     },
+     {
+      "id": "Q12622609",
+      "v": "Offizierschule"
+     },
+     {
+      "id": "Q917182",
+      "v": "Militärakademie"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1956"
+     }
+    ]
+   }
+  },
+  "Q2047292": {
+   "label": "Palais im Großen Garten",
+   "description": "Schloss in Dresden",
+   "wiki": "Palais im Großen Garten",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1436181",
+      "v": "Lustschloss"
+     },
+     {
+      "id": "Q1371789",
+      "v": "Ferienhaus"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1693964",
+      "v": "Johann Georg Starcke"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q61093",
+      "v": "Johann Georg IV."
+     },
+     {
+      "id": "Q454483",
+      "v": "Johann Georg III."
+     },
+     {
+      "id": "Q505548",
+      "v": "Johann Georg II."
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1679"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Hauptallee 10, 01219 Dresden"
+     }
+    ]
+   }
+  },
+  "Q205395": {
+   "label": "Zionskirche",
+   "description": "evangelisch-lutherische Kirchengebäude in Dresden; 1912 eingeweiht, 1945 zerstört",
+   "wiki": "Zionskirche (Dresden, 1912)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     },
+     {
+      "id": "Q57644089",
+      "v": "zerstörte Kirche"
+     },
+     {
+      "id": "Q24699794",
+      "v": "Museumsgebäude"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q110693164",
+      "v": "Lapidarium Dresden"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2084468": {
+   "label": "Pfunds Molkerei",
+   "description": "Sehenswürdigkeit in Dresden",
+   "wiki": "Pfunds Molkerei",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1750272",
+      "v": "Milchbar"
+     },
+     {
+      "id": "Q1068824",
+      "v": "Boutique"
+     },
+     {
+      "id": "Q213441",
+      "v": "Laden"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2139409": {
+   "label": "Reichsbank (Dresden)",
+   "description": "Gebäude in Dresden",
+   "wiki": "Reichsbank (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1930er"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q2171969": {
+   "label": "Ruderzentrum Blasewitz",
+   "description": "Bauwerk in Deutschland",
+   "wiki": "Ruderzentrum Blasewitz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1076486",
+      "v": "Sportstätte"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1571656",
+      "v": "Ulrich Müther"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q880140",
+      "v": "SC Einheit Dresden"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1972"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q2176263": {
+   "label": "Rundkino Dresden",
+   "description": "Kino in Dresden",
+   "wiki": "Rundkino Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41253",
+      "v": "Kino"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q20769422",
+      "v": "Winfried Sziegoleit"
+     },
+     {
+      "id": "Q1512026",
+      "v": "Gerhard Landgraf"
+     }
+    ],
+    "P571": [
+     {
+      "v": "22.10.1969"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "7.10.1972"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Prager Straße 6, 01069 Dresden"
+     }
+    ]
+   }
+  },
+  "Q21996873": {
+   "label": "Lahmann-Sanatorium",
+   "description": "ehemaliges Krankenhaus in Deutschland",
+   "wiki": "Lahmann-Sanatorium",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q46124",
+      "v": "Sanatorium"
+     },
+     {
+      "id": "Q64578911",
+      "v": "ehemaliges Krankenhaus"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q85010",
+      "v": "Heinrich Lahmann"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2210566": {
+   "label": "Sachsenbad Dresden",
+   "description": "ehemalige Schwimmhalle in Dresden",
+   "wiki": "Sachsenbad",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q357380",
+      "v": "Hallenbad"
+     },
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1556810",
+      "v": "Paul Wolf"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q11784483",
+      "v": "Neues Bauen"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1928"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Wurzener Straße 18, 01127 Dresden"
+     }
+    ]
+   }
+  },
+  "Q2240727": {
+   "label": "Schloss Eckberg",
+   "description": "Schloss in Dresden",
+   "wiki": "Schloss Eckberg",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q751876",
+      "v": "Schloss"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q111388179",
+      "v": "Hotel Schloss Eckberg"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2244368": {
+   "label": "Schloss Übigau",
+   "description": "Schloss in Dresden, Sachsen",
+   "wiki": "Schloss Übigau",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q751876",
+      "v": "Schloss"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2253067": {
+   "label": "Schwanenhaus",
+   "description": "klassizistischer Bau im Stadtteil Innere Neustadt in Dresden, heute ein Altenzentrum",
+   "wiki": "Schwanenhaus (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11755880",
+      "v": "Wohngebäude"
+     }
+    ]
+   }
+  },
+  "Q2257224": {
+   "label": "Schwerter-Haus",
+   "description": "Gebäude in Dresden-Plauen, Sachsen",
+   "wiki": "Schwerter-Haus",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1915"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Plauen"
+     }
+    ]
+   }
+  },
+  "Q2257405": {
+   "label": "Schwesternwohnheim Tittmannstraße",
+   "description": "Bauwerk in Deutschland",
+   "wiki": "Schwesternwohnheim Tittmannstraße",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     },
+     {
+      "id": "Q847950",
+      "v": "Dormitorium"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1955"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q22916490": {
+   "label": "Leipziger Straße 27",
+   "description": "Wohnhaus in Dresden, ursprünglich Bürogebäude",
+   "wiki": "Villa Leipziger Straße 27",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2316672": {
+   "label": "St.-Petri-Kirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "St.-Petri-Kirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1469367",
+      "v": "Julius Zeißig"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q33923",
+      "v": "Petrus"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q186363",
+      "v": "Neogotik"
+     }
+    ],
+    "P571": [
+     {
+      "v": "5.11.1890"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q1068633",
+      "v": "Spatenstich"
+     },
+     {
+      "id": "Q25640113",
+      "v": "Kirchweihe"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Großenhainer Platz 5, 01097 Dresden"
+     }
+    ]
+   }
+  },
+  "Q2325084": {
+   "label": "Staatsministerium für Wissenschaft und Kunst des Freistaates Sachsen (Gebäude)",
+   "description": "Gebäude im Regierungsviertel in der Inneren Neustadt in Dresden",
+   "wiki": "Gebäude des Sächsischen Staatsministeriums für Wissenschaft und Kunst",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1220959",
+      "v": "Dienstgebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q825442",
+      "v": "Bernhard Klemm"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q1134824",
+      "v": "Sozialistischer Klassizismus"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q2378820",
+      "v": "Sächsisches Staatsministerium für Wissenschaft, Kultur und Tourismus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Wigardstraße 17"
+     }
+    ]
+   }
+  },
+  "Q2358374": {
+   "label": "Studentenwohnheim der Medizinischen Akademie (Dresden-Johannstadt)",
+   "description": "denkmalgeschütztes Studentenwohnheim in Dresden",
+   "wiki": "Studentenwohnheim der Medizinischen Akademie",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3661265",
+      "v": "Studentenwohnheim"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2375422": {
+   "label": "Synagoge Fiedlerstraße 3 (Dresden)",
+   "description": "denkmalgeschütztes Gebäude in Dresden",
+   "wiki": "Synagoge Fiedlerstraße 3 (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q34627",
+      "v": "Synagoge"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q1755128",
+      "v": "Rundbogenstil"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1875"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q23900411": {
+   "label": "Goehle-Werk",
+   "description": "ehemalige Rüstungsfabrik in Dresden-Pieschen",
+   "wiki": "Goehle-Werk",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q83405",
+      "v": "Fabrik"
+     },
+     {
+      "id": "Q123223157",
+      "v": "ehemalige Fabrik"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1938"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Pieschen-Nord"
+     }
+    ]
+   }
+  },
+  "Q2408843": {
+   "label": "Thalia",
+   "description": "Kino in Dresden",
+   "wiki": "Thalia (Kino, Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q27921531",
+      "v": "Programmkino"
+     },
+     {
+      "id": "Q41253",
+      "v": "Kino"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q108019",
+      "v": "Thalia"
+     }
+    ],
+    "P1083": [
+     {
+      "v": "75"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Görlitzer Straße 6, 01099 Dresden"
+     }
+    ]
+   }
+  },
+  "Q2450629": {
+   "label": "Travestie-Revue-Theater Carte Blanche",
+   "description": "Travestietheater im Dresdner Stadtteil Äußere Neustadt",
+   "wiki": "Travestie-Revue-Theater Carte Blanche",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "28.11.2003"
+     }
+    ]
+   }
+  },
+  "Q2518489": {
+   "label": "Versöhnungskirche (Dresden)",
+   "description": "Kirchengebäude in Deutschland",
+   "wiki": "Versöhnungskirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1555590",
+      "v": "Gustav Adolph Rumpel"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q245188",
+      "v": "Moderne"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1909"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2525053": {
+   "label": "Villa Eschebach",
+   "description": "zweigeschossiger Bau des Neobarock in Dresden",
+   "wiki": "Villa Eschebach",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2525130": {
+   "label": "Villa Friedrichsruh",
+   "description": "großbürgerliche Villa in Dresden-Löbtau",
+   "wiki": "Villa Friedrichsruh",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2525360": {
+   "label": "Villa Käthe-Kollwitz-Ufer 92",
+   "description": "denkmalgeschütztes Gebäude im Dresdner Stadtteil Blasewitz",
+   "wiki": "Villa Käthe-Kollwitz-Ufer 92",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2525401": {
+   "label": "Villa Maria (Dresden)",
+   "description": "denkmalgeschütztes Gebäude in Dresden",
+   "wiki": "Villa Maria (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q2525404": {
+   "label": "Villa Marie (Dresden)",
+   "description": "Gebäude in Dresden, Sachsen, Deutschland",
+   "wiki": "Villa Marie (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q12020836",
+      "v": "Fachwerkhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2525407": {
+   "label": "Villa Marienlust (Dresden)",
+   "description": "denkmalgeschütztes Gebäude im Dresdner Stadtteil Blasewitz",
+   "wiki": "Villa Marienlust (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2525408": {
+   "label": "Villa Martha",
+   "description": "Gebäude der Neorenaissance in Dresden",
+   "wiki": "Villa Martha (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2525449": {
+   "label": "Villa Meßmacher",
+   "description": "denkmalgeschütztes Gebäude in Dresden-Loschwitz",
+   "wiki": "Villa Meßmacher",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2525501": {
+   "label": "Villa Niederwaldstraße 2",
+   "description": "denkmalgeschütztes Gebäude in Dresden-Striesen",
+   "wiki": "Villa Niederwaldstraße 2",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q2792951",
+      "v": "Paul Koettig"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ]
+   }
+  },
+  "Q2525535": {
+   "label": "Villa Orlando",
+   "description": "Villa in Loschwitz, Dresden",
+   "wiki": "Villa Orlando",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2525730": {
+   "label": "Villa San Remo",
+   "description": "Villa in Dresden-Loschwitz",
+   "wiki": "Villa San Remo",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q257015",
+      "v": "Luise von Österreich-Toskana"
+     },
+     {
+      "id": "Q1063478",
+      "v": "Charles A. Noble"
+     },
+     {
+      "id": "Q84476",
+      "v": "John H. Noble"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2525749": {
+   "label": "Villa Schau ins Land",
+   "description": "denkmalgeschütztes Gebäude in Dresden-Loschwitz",
+   "wiki": "Villa Schau ins Land",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2525833": {
+   "label": "Villa Tiberius",
+   "description": "denkmalgeschützte Doppelvilla in Dresden-Loschwitz",
+   "wiki": "Villa Tiberius",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1733313",
+      "v": "Karl Weichardt"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1905"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q2525864": {
+   "label": "Villa Vogesenweg 4 (Dresden)",
+   "description": "denkmalgeschütztes Gebäude in Dresden- Blasewitz",
+   "wiki": "Villa Vogesenweg 4 (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2525936": {
+   "label": "Villa Würzburger",
+   "description": "Villa in Dresden",
+   "wiki": "Villa Würzburger",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ]
+   }
+  },
+  "Q2541853": {
+   "label": "Waldschlößchen-Brauerei",
+   "description": "Bierbrauerei in Dresden",
+   "wiki": "Waldschlößchen-Brauerei",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q167270",
+      "v": "Markenzeichen"
+     },
+     {
+      "id": "Q4830453",
+      "v": "Gewerbebetrieb"
+     },
+     {
+      "id": "Q131734",
+      "v": "Brauerei"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q58200006",
+      "v": "Waldschlösschen"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1868"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Am Brauhaus 3"
+     }
+    ]
+   }
+  },
+  "Q2587896": {
+   "label": "Wohn- und Geschäftshaus Borsbergstraße 19",
+   "description": "denkmalgeschütztes viergeschossiges Eckhaus in Dresden-Striesen",
+   "wiki": "Wohn- und Geschäftshaus Borsbergstraße 19",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18760306",
+      "v": "Wohn- und Geschäftshaus"
+     },
+     {
+      "id": "Q17501774",
+      "v": "Eckhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2587898": {
+   "label": "Wohn- und Geschäftshaus Borsbergstraße 19 b",
+   "description": "denkmalgeschütztes Gebäude in Dresden",
+   "wiki": "Wohn- und Geschäftshaus Borsbergstraße 19 b",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18760306",
+      "v": "Wohn- und Geschäftshaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     },
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q2587997": {
+   "label": "Wohnhaus Katharinenstraße 3",
+   "description": "denkmalgeschütztes Jugendstilgebäude in der Äußeren Neustadt Dresdens",
+   "wiki": "Wohnhaus Katharinenstraße 3",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q26086588": {
+   "label": "Villa Rothermundt",
+   "description": "denkmalgeschützte Villa im Dresdner Stadtteil Blasewitz",
+   "wiki": "Villa Rothermundt (Blasewitz)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Mendelssohnallee 34"
+     }
+    ]
+   }
+  },
+  "Q267390": {
+   "label": "Taschenbergpalais",
+   "description": "Luxushotel in Dresden",
+   "wiki": "Taschenbergpalais",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q455403",
+      "v": "Grand Hotel"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q62637",
+      "v": "Matthäus Daniel Pöppelmann"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q1258486",
+      "v": "Dresdner Barock"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1995"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1995"
+     }
+    ]
+   }
+  },
+  "Q27116741": {
+   "label": "Straßenbahnhof Tolkewitz",
+   "description": "ehemaliges Straßenbahndepot im Dresdner Stadtteil Tolkewitz",
+   "wiki": "Straßenbahnhof Tolkewitz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q27028153",
+      "v": "Straßenbahndepot"
+     },
+     {
+      "id": "Q19860854",
+      "v": "zerstörtes Gebäude oder Bauwerk"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q28960663": {
+   "label": "Mietshaus Krenkelstraße 20",
+   "description": "Wohngebäude in Dresden",
+   "wiki": "Mietshaus Krenkelstraße 20",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1498804",
+      "v": "Mehrfamilienwohnhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q295930": {
+   "label": "AOK-Verwaltungsgebäude",
+   "description": "Bürogebäude in Dresden",
+   "wiki": "AOK-Verwaltungsgebäude (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1912"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q301607": {
+   "label": "Kreuzkirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Kreuzkirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1694027",
+      "v": "Johann George Schmidt"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q380356",
+      "v": "Wahres Kreuz"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1170"
+     }
+    ],
+    "P576": [
+     {
+      "v": "15.2.1945"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "94 m"
+     }
+    ]
+   }
+  },
+  "Q317361": {
+   "label": "Max-Planck-Institut für molekulare Zellbiologie und Genetik",
+   "description": "Forschungseinrichtung der Max-Planck-Gesellschaft",
+   "wiki": "Max-Planck-Institut für molekulare Zellbiologie und Genetik",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q6019423",
+      "v": "Max-Planck-Institut"
+     },
+     {
+      "id": "Q31855",
+      "v": "Forschungseinrichtung"
+     },
+     {
+      "id": "Q76130167",
+      "v": "Forschungsgebäude"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1998"
+     }
+    ]
+   }
+  },
+  "Q327868": {
+   "label": "Garnisonkirche St. Martin",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Garnisonkirche St. Martin",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1110255",
+      "v": "Hermann Viehweger"
+     },
+     {
+      "id": "Q2579753",
+      "v": "William Lossow"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q133704",
+      "v": "Martin von Tours"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q744373",
+      "v": "Neuromanik"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1900"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "90 m"
+     }
+    ]
+   }
+  },
+  "Q34072544": {
+   "label": "Astoria-Lichtspiele",
+   "description": "ehemaliges Kino in Dresden, Sachsen",
+   "wiki": "Astoria (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41253",
+      "v": "Kino"
+     },
+     {
+      "id": "Q15893266",
+      "v": "ehemalige Entität"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Leipziger Straße 58, 01127 Dresden"
+     }
+    ]
+   }
+  },
+  "Q343261": {
+   "label": "Actien-Bierbrauerei zu Reisewitz",
+   "description": "Gestalterisch markantes, rechteckiges Brauereigebäude mit Lisenenarchitektur, Walmdach und weithin sichtbaren Essen sowie ausgedehnten Kelleranlagen; neben Waldschlößchen- und Felsenkeller-Brauerei eines der letzten baulichen Zeugnisse der Brauind",
+   "wiki": "Actien-Bierbrauerei zu Reisewitz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q167270",
+      "v": "Markenzeichen"
+     },
+     {
+      "id": "Q131734",
+      "v": "Brauerei"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1868"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q435579": {
+   "label": "Alte Feuerwache Loschwitz",
+   "description": "Bauwerk in Deutschland",
+   "wiki": "Alte Feuerwache Loschwitz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1329623",
+      "v": "Kulturzentrum"
+     },
+     {
+      "id": "Q1007870",
+      "v": "Kunstgalerie"
+     },
+     {
+      "id": "Q1195942",
+      "v": "Feuerwehrhaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q438163": {
+   "label": "Alter Schlachthof (Dresden)",
+   "description": "Direktionsgebäude (Gothaer Straße 9), Kleinvieh-Schlachthaus (Gothaer Straße 12), Rinder und Schweineschlachthaus (Gothaer Straße 16), Verkaufshalle für Rinder (Flst. 1160/26, seit 1998 Konzerthalle), Verkaufshalle für Schweine (Flst. 1160/25)",
+   "wiki": "Alter Schlachthof (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3947",
+      "v": "Haus"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1870"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Leipziger Vorstadt"
+     }
+    ]
+   }
+  },
+  "Q442719": {
+   "label": "Altmarkt-Galerie",
+   "description": "Einkaufszentrum in der Inneren Altstadt Dresdens",
+   "wiki": "Altmarkt-Galerie",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q11315",
+      "v": "Einkaufszentrum"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q56511854",
+      "v": "Manfred Schomers"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "18.9.2002"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Webergasse 1, 01067 Dresden"
+     }
+    ]
+   }
+  },
+  "Q445838": {
+   "label": "Altstädtische Hauptwache",
+   "description": "Gebäude in der Dresdner Innenstadt",
+   "wiki": "Altstädtische Hauptwache",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q98094534",
+      "v": "Wachgebäude"
+     },
+     {
+      "id": "Q655686",
+      "v": "Geschäftshaus"
+     },
+     {
+      "id": "Q861951",
+      "v": "Polizeidienststelle"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q151759",
+      "v": "Karl Friedrich Schinkel"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q54111",
+      "v": "klassizistische Architektur"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ]
+   }
+  },
+  "Q468137": {
+   "label": "Japanisches Palais",
+   "description": "Bauwerk in der Inneren Neustadt von Dresden",
+   "wiki": "Japanisches Palais",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16560",
+      "v": "Palast"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q114916",
+      "v": "Johann Christoph Knöffel"
+     },
+     {
+      "id": "Q139515",
+      "v": "Zacharias Longuelune"
+     },
+     {
+      "id": "Q62637",
+      "v": "Matthäus Daniel Pöppelmann"
+     },
+     {
+      "id": "Q102284",
+      "v": "Jean de Bodt"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q53437",
+      "v": "August der Starke"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Palaisplatz 11, 01097 Dresden"
+     }
+    ]
+   }
+  },
+  "Q472706": {
+   "label": "Galerie Neue Meister",
+   "description": "Kunstmuseum in Dresden",
+   "wiki": "Galerie Neue Meister",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1843"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1843"
+     }
+    ]
+   }
+  },
+  "Q475708": {
+   "label": "Kristallpalast",
+   "description": "Kinogebäude in Dresden",
+   "wiki": "Cineplex Kristallpalast Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41253",
+      "v": "Kino"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q867205",
+      "v": "Coop Himmelb(l)au"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q238255",
+      "v": "Dekonstruktivismus"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q22657",
+      "v": "Beton"
+     },
+     {
+      "id": "Q11469",
+      "v": "Glas"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1998"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "26.3.1998"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "St. Petersburger Straße 24a, 01069 Dresden"
+     }
+    ]
+   }
+  },
+  "Q481179": {
+   "label": "Amtsgericht am Sachsenplatz",
+   "description": "Gerichtsgebäude in Dresden",
+   "wiki": "Amtsgericht am Sachsenplatz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1137809",
+      "v": "Gerichtsgebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q98519",
+      "v": "Arwed Roßbach"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q2210653",
+      "v": "Sachsenplatz"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q502163",
+      "v": "Neorenaissance"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q1671632",
+      "v": "Landgericht Dresden"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1888"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q385378",
+      "v": "Bauausführung"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     },
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q48370777": {
+   "label": "Villa zur Lippe",
+   "description": "Gebäude in Dresden-Blasewitz",
+   "wiki": "Villa zur Lippe",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3950",
+      "v": "Villa"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q24788963",
+      "v": "Julius Ernst zur Lippe-Biesterfeld"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q4890": {
+   "label": "Gemäldegalerie Alte Meister Dresden",
+   "description": "Gemäldesammlung in Dresden",
+   "wiki": "Gemäldegalerie Alte Meister",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q61342",
+      "v": "Gottfried Semper"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1560"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Theaterplatz 1"
+     }
+    ]
+   }
+  },
+  "Q49457582": {
+   "label": "Prießnitztalviadukt",
+   "description": "Viadukt über die Prießnitz in der Albertstadt, Dresden, Sachsen",
+   "wiki": "Prießnitztalviadukt",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q537127",
+      "v": "Straßenbrücke"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1874"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "23 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Albertstadt"
+     }
+    ]
+   }
+  },
+  "Q50350948": {
+   "label": "Verwaltungsgebäude der Landesbauernschaft Sachsen, später Rechsbahndirektion Dresden",
+   "description": "Gebäude in Dresden, Sachsen",
+   "wiki": "Ehemaliges Verwaltungsgebäude der Landesbauernschaft Sachsen",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q315009",
+      "v": "Reichsnährstand"
+     },
+     {
+      "id": "Q700563",
+      "v": "Deutsche Reichsbahn (1945–1993)"
+     },
+     {
+      "id": "Q9322",
+      "v": "Deutsche Bahn"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1930er"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Ammonstraße 8, 01069 Dresden"
+     }
+    ]
+   }
+  },
+  "Q50540625": {
+   "label": "Hotel Ibis, Dresden",
+   "description": "Hotel- und Gaststättenkomplex in Dresden",
+   "wiki": "Hotels Bastei, Königstein und Lilienstein",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18142",
+      "v": "Hochhaus"
+     }
+    ]
+   }
+  },
+  "Q512953": {
+   "label": "Yenidze",
+   "description": "Bürogebäude, ehemals Fabrik und Verwaltungsgebäude der Zigarettenfabrik Yenidze in Dresden-Friedrichstadt",
+   "wiki": "Yenidze",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q83405",
+      "v": "Fabrik"
+     },
+     {
+      "id": "Q27686",
+      "v": "Hotel"
+     },
+     {
+      "id": "Q1516079",
+      "v": "Denkmalensemble"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1903961",
+      "v": "Martin Hammitzsch"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q74156",
+      "v": "Orientalisierende Architektur"
+     },
+     {
+      "id": "Q1477476",
+      "v": "Industriearchitektur"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q184190",
+      "v": "Stahlbeton"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q87668591",
+      "v": "Orientalische Tabak- und Zigarettenfabrik Yenidze"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1907"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1909"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "62 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Friedrichstadt"
+     }
+    ]
+   }
+  },
+  "Q516226": {
+   "label": "Gläserne Manufaktur",
+   "description": "Produktionsstätte der Volkswagen Sachsen GmbH",
+   "wiki": "Gläserne Manufaktur",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q47509284",
+      "v": "Montagewerk"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q91407",
+      "v": "Gunter Henn"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q245188",
+      "v": "Moderne"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q139997730",
+      "v": "VGRDD"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q18752057",
+      "v": "Grundsteinlegung"
+     },
+     {
+      "id": "Q3875186",
+      "v": "Bau"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "19.3.2002"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Lennéstraße 1, 01069 Dresden"
+     }
+    ]
+   }
+  },
+  "Q56243273": {
+   "label": "Schulcampus Tolkewitz",
+   "description": "Schulkomplex für bis zu 1.800 Schüler im Stadtteil Tolkewitz in Dresden",
+   "wiki": "Schulcampus Tolkewitz",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q3914",
+      "v": "Schule"
+     },
+     {
+      "id": "Q55043",
+      "v": "Gymnasium"
+     },
+     {
+      "id": "Q1940366",
+      "v": "Oberschule"
+     },
+     {
+      "id": "Q1244442",
+      "v": "Schulgebäude"
+     },
+     {
+      "id": "Q19691007",
+      "v": "institutioneller Komplex"
+     }
+    ]
+   }
+  },
+  "Q567518": {
+   "label": "Blaues Wunder",
+   "description": "Loschwitzer Elbbrücke in Dresden",
+   "wiki": "Blaues Wunder (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1429218",
+      "v": "Gerberträgerbrücke"
+     },
+     {
+      "id": "Q12042110",
+      "v": "Stahlbrücke"
+     },
+     {
+      "id": "Q537127",
+      "v": "Straßenbrücke"
+     },
+     {
+      "id": "Q12570",
+      "v": "Hängebrücke"
+     },
+     {
+      "id": "Q2319498",
+      "v": "Wahrzeichen"
+     },
+     {
+      "id": "Q79007",
+      "v": "Innerortsstraße"
+     },
+     {
+      "id": "Q10513727",
+      "v": "Kettenbrücke"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q8939",
+      "v": "Loschwitz"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q11427",
+      "v": "Stahl"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1891"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P1449": [
+     {
+      "v": "Blaues Wunder"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "15.7.1893"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "24 m"
+     }
+    ]
+   }
+  },
+  "Q571593": {
+   "label": "Russisch-Orthodoxe Kirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Russisch-Orthodoxe Kirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q114785346",
+      "v": "Russisch-orthodoxe Kirche"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q75465",
+      "v": "Harald Julius von Bosse"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q310987",
+      "v": "Symeon Stylites der Ältere"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q2026876",
+      "v": "Neorussische Architektur"
+     }
+    ],
+    "P186": [
+     {
+      "id": "Q8063",
+      "v": "Gestein"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1872"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "6.6.1874"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Fritz-Löffler-Str. 19"
+     }
+    ]
+   }
+  },
+  "Q571773": {
+   "label": "Rüstkammer",
+   "description": "Museum in Dresden, Deutschland",
+   "wiki": "Rüstkammer (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q33506",
+      "v": "Museum"
+     },
+     {
+      "id": "Q79119969",
+      "v": "Rüstkammer"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1932"
+     }
+    ]
+   }
+  },
+  "Q63346245": {
+   "label": "Pestalozzi-Gymnasium Dresden",
+   "description": "Schule in Dresden, Sachsen",
+   "wiki": "Pestalozzi-Gymnasium Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1244442",
+      "v": "Schulgebäude"
+     },
+     {
+      "id": "Q55043",
+      "v": "Gymnasium"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q65244896": {
+   "label": "Schweizerei",
+   "description": "ehemalige Gaststätte in Dresden",
+   "wiki": "Schweizerei (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q5526694",
+      "v": "Gasthaus"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q666935": {
+   "label": "Katholische Hofkirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Katholische Hofkirche",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2977",
+      "v": "Kathedrale"
+     },
+     {
+      "id": "Q61726887",
+      "v": "Hofkirche"
+     },
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q882194",
+      "v": "Gaetano Chiaveri"
+     }
+    ],
+    "P88": [
+     {
+      "id": "Q53438",
+      "v": "August III."
+     },
+     {
+      "id": "Q84276",
+      "v": "Maria Josepha von Österreich"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q37090",
+      "v": "Dreifaltigkeit"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q840829",
+      "v": "Barockarchitektur"
+     }
+    ],
+    "P571": [
+     {
+      "v": "18. Jahrhundert"
+     }
+    ],
+    "P793": [
+     {
+      "id": "Q385378",
+      "v": "Bauausführung"
+     },
+     {
+      "id": "Q25640113",
+      "v": "Kirchweihe"
+     },
+     {
+      "id": "Q17781833",
+      "v": "Zerstörung"
+     },
+     {
+      "id": "Q3422086",
+      "v": "Wiederaufbaus nach dem Krieg"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P2048": [
+     {
+      "v": "86 m"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Schloßplatz 24, 01067 Dresden"
+     },
+     {
+      "v": "Schloßstraße 24, 01067 Dresden"
+     }
+    ]
+   }
+  },
+  "Q670209": {
+   "label": "Neue Synagoge",
+   "description": "Synagoge in Dresden",
+   "wiki": "Neue Synagoge (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q34627",
+      "v": "Synagoge"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1351265",
+      "v": "Wandel Lorch Götze Wach"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q245188",
+      "v": "Moderne"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1997"
+     }
+    ]
+   }
+  },
+  "Q699780": {
+   "label": "Albertinum",
+   "description": "Kunstmuseum in Dresden",
+   "wiki": "Albertinum (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q168657",
+      "v": "Albert von Sachsen"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q4692",
+      "v": "Renaissance"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1887"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1563"
+     }
+    ]
+   }
+  },
+  "Q704354": {
+   "label": "Dresden Hauptbahnhof",
+   "description": "größter Personenbahnhof der sächsischen Landeshauptstadt Dresden",
+   "wiki": "Dresden Hauptbahnhof",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q2451577",
+      "v": "Trennungsbahnhof"
+     },
+     {
+      "id": "Q55492",
+      "v": "Inselbahnhof"
+     },
+     {
+      "id": "Q18543139",
+      "v": "Hauptbahnhof"
+     },
+     {
+      "id": "Q11670533",
+      "v": "Hochbahnhof"
+     },
+     {
+      "id": "Q55488",
+      "v": "Bahnhof"
+     },
+     {
+      "id": "Q22808404",
+      "v": "oberirdische Haltestelle"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q91616",
+      "v": "Ernst Giese"
+     },
+     {
+      "id": "Q98519",
+      "v": "Arwed Roßbach"
+     },
+     {
+      "id": "Q104898",
+      "v": "Norman Foster"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q277466",
+      "v": "Historismus"
+     },
+     {
+      "id": "Q245188",
+      "v": "Moderne"
+     }
+    ],
+    "P571": [
+     {
+      "v": "16.4.1898"
+     },
+     {
+      "v": "1893"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "23.4.1898"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Seevorstadt-Ost/Großer Garten"
+     }
+    ]
+   }
+  },
+  "Q805254": {
+   "label": "Ballhaus Watzke",
+   "description": "Restaurant mit einem Ballsaal im Obergeschoss und einer hauseigenen Bierbrauerei in Dresden",
+   "wiki": "Ballhaus Watzke",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q131734",
+      "v": "Brauerei"
+     },
+     {
+      "id": "Q256020",
+      "v": "Gasthof"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q27229620",
+      "v": "Benno Hübel"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1898"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q828334": {
+   "label": "Kunsthalle im Lipsius-Bau",
+   "description": "Ausstellungsort der Staatlichen Kunstsammlungen Dresden",
+   "wiki": "Kunsthalle im Lipsius-Bau",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q33506",
+      "v": "Museum"
+     },
+     {
+      "id": "Q1475403",
+      "v": "Kunsthalle"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q96786",
+      "v": "Constantin Lipsius"
+     }
+    ]
+   }
+  },
+  "Q830042": {
+   "label": "Städtische Galerie Dresden",
+   "description": "Kunstmuseum in Deutschland",
+   "wiki": "Städtische Galerie Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     }
+    ],
+    "P571": [
+     {
+      "v": "2005"
+     }
+    ]
+   }
+  },
+  "Q831344": {
+   "label": "Bethlehemkirche",
+   "description": "Kirchengebäude in Dresden",
+   "wiki": "Bethlehemkirche (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q16970",
+      "v": "Kirchengebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1346800",
+      "v": "Wolfgang Rauda"
+     },
+     {
+      "id": "Q1468511",
+      "v": "Fritz Steudtner"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1951"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "16.12.1951"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Marienberger Straße 65, 01279 Dresden"
+     }
+    ]
+   }
+  },
+  "Q835605": {
+   "label": "Kraszewski-Museum",
+   "description": "Museum in Dresden, Sachsen",
+   "wiki": "Kraszewski-Museum",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1865249",
+      "v": "Literaturmuseum"
+     }
+    ],
+    "P138": [
+     {
+      "id": "Q254524",
+      "v": "Józef Ignacy Kraszewski"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1960"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1960"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Nordstraße 28, 01099 Dresden"
+     }
+    ]
+   }
+  },
+  "Q870330": {
+   "label": "Staatsschauspiel Dresden",
+   "description": "Theatergebäude in Deutschland",
+   "wiki": "Staatsschauspiel Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q24354",
+      "v": "Theatergebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q1912641",
+      "v": "Max Hans Kühne"
+     },
+     {
+      "id": "Q2579753",
+      "v": "William Lossow"
+     },
+     {
+      "id": "Q113678136",
+      "v": "Emil Leibold"
+     }
+    ],
+    "P466": [
+     {
+      "id": "Q113045495",
+      "v": "Staatsschauspiel Dresden"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1911"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P1619": [
+     {
+      "v": "1913"
+     },
+     {
+      "v": "13.9.1913"
+     }
+    ]
+   }
+  },
+  "Q878784": {
+   "label": "Sempergalerie",
+   "description": "Museumsbau im Stadtzentrum von Dresden",
+   "wiki": "Sempergalerie",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q207694",
+      "v": "Kunstmuseum"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q61342",
+      "v": "Gottfried Semper"
+     }
+    ],
+    "P149": [
+     {
+      "id": "Q4692",
+      "v": "Renaissance"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q11691318",
+      "v": "Kulturdenkmal in Deutschland"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Theaterplatz 1"
+     }
+    ]
+   }
+  },
+  "Q882139": {
+   "label": "Schloss Albrechtsberg",
+   "description": "Schloss in Deutschland",
+   "wiki": "Schloss Albrechtsberg (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q751876",
+      "v": "Schloss"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q88980068": {
+   "label": "Fritz-Foerster-Platz 2",
+   "description": "Wohn- und Geschäftshaus in Dresden",
+   "wiki": "Fritz-Foerster-Platz 2",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q18760306",
+      "v": "Wohn- und Geschäftshaus"
+     }
+    ]
+   }
+  },
+  "Q90909168": {
+   "label": "Café Toscana",
+   "description": "Dresdner Traditionscafé",
+   "wiki": "Café Toscana",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P84": [
+     {
+      "id": "Q102436",
+      "v": "Karl Emil Scherz"
+     }
+    ],
+    "P571": [
+     {
+      "v": "1898"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ]
+   }
+  },
+  "Q912948": {
+   "label": "Orpheum Dresden",
+   "description": "Veranstaltungssaal und der älteste erhaltene Ballsaal im Dresdner Stadtteil Äußere Neustadt",
+   "wiki": "Orpheum Dresden",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q805353",
+      "v": "Ballsaal"
+     },
+     {
+      "id": "Q41176",
+      "v": "Gebäude"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q19413851",
+      "v": "Kulturdenkmal in Sachsen"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Kamenzer Straße 19"
+     }
+    ]
+   }
+  },
+  "Q972763": {
+   "label": "St. Hubertus",
+   "description": "Kirchengebäude in Dresden-Weißer Hirsch",
+   "wiki": "St. Hubertus (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q317557",
+      "v": "Pfarrkirche"
+     }
+    ],
+    "P1435": [
+     {
+      "id": "Q811165",
+      "v": "Baudenkmal"
+     }
+    ]
+   }
+  },
+  "Q98417616": {
+   "label": "Siemenshaus",
+   "description": "Gebäude in der Dresdner Seevorstadt Sidonienstraße 18",
+   "wiki": "Siemenshaus (Dresden)",
+   "claims": {
+    "P31": [
+     {
+      "id": "Q1021645",
+      "v": "Bürogebäude"
+     }
+    ],
+    "P6375": [
+     {
+      "v": "Sidonienstraße 18"
+     }
+    ]
+   }
+  }
+ }
+}

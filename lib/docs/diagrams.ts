@@ -15,16 +15,16 @@ export const DIAGRAM_DIR = "docs/diagrams";
  */
 export const RENDER_VERSION = 3;
 
-const FENCE = /^```mermaid[^\S\n]*\n([\s\S]*?)\n```[^\S\n]*$/gmu;
+const FENCE = /^```mermaid[^\S\n]*\n(?<body>[\s\S]*?)\n```[^\S\n]*$/gmu;
 
 /** Every Mermaid block of a Markdown file, in order, as written. */
 export function mermaidBlocks(markdown: string): string[] {
-  return [...markdown.matchAll(FENCE)].map((m) => m[1] ?? "");
+  return [...markdown.matchAll(FENCE)].map((m) => m.groups?.body ?? "");
 }
 
 /** The file a diagram's SVG is stored under: its source, hashed. */
 export function diagramKey(source: string): string {
-  const normalised = source.replace(/[^\S\n]+$/gmu, "").trim();
+  const normalised = source.replaceAll(/[^\S\n]+$/gmu, "").trim();
   return createHash("sha256")
     .update(`${RENDER_VERSION}\n${normalised}`)
     .digest("hex")
@@ -55,7 +55,7 @@ export type DiagramColor = keyof typeof DIAGRAM_COLORS;
 
 /** The CSS custom property each sentinel becomes. */
 export const diagramVar = (name: DiagramColor): string =>
-  `--diagram-${name.replace(/[A-Z]/gu, (c) => `-${c.toLowerCase()}`)}`;
+  `--diagram-${name.replaceAll(/[A-Z]/gu, (c) => `-${c.toLowerCase()}`)}`;
 
 /** Mermaid's `themeVariables`, every one it reads pinned to a sentinel. */
 export function mermaidThemeVariables(fontFamily: string) {
@@ -132,8 +132,8 @@ export function themeSvg(svg: string, measuredFont: string): string {
     const cssVar = `var(${diagramVar(name as DiagramColor)})`;
     const [r, g, b] = rgbOf(hex).slice(4, -1).split(", ");
     out = out
-      .replace(new RegExp(hex, "giu"), cssVar)
-      .replace(
+      .replaceAll(new RegExp(hex, "giu"), cssVar)
+      .replaceAll(
         new RegExp(
           `rgba?\\(\\s*${r},\\s*${g},\\s*${b}(?:,\\s*([\\d.]+))?\\s*\\)`,
           "gu"
@@ -145,13 +145,19 @@ export function themeSvg(svg: string, measuredFont: string): string {
       );
   }
   // Mermaid respells the family in places ("A", b / "A",b / &quot;A&quot;).
-  const family = measuredFont.replace(/^["']|["'].*$/gu, "");
+  const family = measuredFont.replaceAll(/^["']|["'].*$/gu, "");
   const spelled = new RegExp(
     `(?:"|'|&quot;)${family}(?:"|'|&quot;)\\s*,\\s*sans-serif`,
     "gu"
   );
-  return out.replace(spelled, "var(--font-sans)");
+  return out.replaceAll(spelled, "var(--font-sans)");
 }
+
+const opaque = (c: string) =>
+  c.replace(
+    /^rgba\((?<r>\d+), (?<g>\d+), (?<b>\d+), [\d.]+\)$/u,
+    "rgb($<r>, $<g>, $<b>)"
+  );
 
 /**
  * The colours a rendered diagram actually paints (Chrome's computed fill,
@@ -168,8 +174,6 @@ export function strayPaint(
     ...authored.map(rgbOf),
     INHERITED,
   ]);
-  const opaque = (c: string) =>
-    c.replace(/^rgba\((\d+), (\d+), (\d+), [\d.]+\)$/u, "rgb($1, $2, $3)");
   return [...new Set(painted)].filter(
     (c) =>
       !(ok.has(opaque(c)) || c === "none" || /^rgba\([^)]*,\s*0\)$/u.test(c))

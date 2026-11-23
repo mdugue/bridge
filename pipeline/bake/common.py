@@ -4,6 +4,7 @@ layers without geopandas, and the GeoJSON the viewer reads."""
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,6 +14,7 @@ import rasterio
 import shapely
 import shapely.ops
 from PIL import Image
+from rasterio.merge import merge
 from rasterio.transform import from_bounds, rowcol
 
 OSM_ATTRIBUTION = "© OpenStreetMap contributors (ODbL)"
@@ -124,6 +126,17 @@ class Tile:
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
+    def raw_absent(self, out: Path, what: str) -> bool:
+        """A raw input its provider publishes is not on this machine, and the
+        step's file is committed: the file stays, as with a missing Basis-DLM
+        (`has_dlm`) — a bake on a partial `data/_raw` empties nothing. False
+        where the tile has no file yet: the step then writes its empty one,
+        for every tile carries the same files."""
+        if not out.exists():
+            return False
+        print(f"{self.id}: {what} — leaving {out.name} as it is")
+        return True
+
     def has_dlm(self, what: str) -> bool:
         """Whether the Basis-DLM is there; if not, say what is skipped. A step
         without it leaves its committed files alone rather than emptying them."""
@@ -155,13 +168,33 @@ class Tile:
         found = []
         for tif in sorted((self.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif")):
             tid = tif.stem.removeprefix("dgm1_")
-            with rasterio.open(tif) as ds:
-                b = ds.bounds
-            found.append((tid, (b.left, b.bottom, b.right, b.top)))
+            # the extent its name gives (a 2 km tile's raster is exactly
+            # that); only a file of another scheme is opened to ask
+            bounds = named_extent(tid)
+            if bounds is None:
+                with rasterio.open(tif) as ds:
+                    b = ds.bounds
+                bounds = (b.left, b.bottom, b.right, b.top)
+            found.append((tid, bounds))
         return found
 
     def osm_extract(self) -> Path | None:
         return self.osm if self.osm is not None and self.osm.exists() else None
+
+
+# a tile id as the downloads name it (lib/city/site.ts `tileIdOf`):
+# `<zone><easting km>_<northing km>_<edge km>_<land>`, e.g. 33412_5656_2_sn
+TILE_ID = re.compile(r"(\d{2})(\d+)_(\d+)_(\d+)_[a-z]+")
+
+
+def named_extent(tile_id: str) -> tuple[float, float, float, float] | None:
+    """The extent a tile id names, read from the name alone (nothing is
+    opened); None for an id of another scheme."""
+    m = TILE_ID.fullmatch(tile_id)
+    if m is None:
+        return None
+    e, n, km = (float(g) * 1000 for g in m.groups()[1:])
+    return e, n, e + km, n + km
 
 
 def owns(bounds: tuple[float, float, float, float], x: float, y: float) -> bool:
@@ -290,6 +323,66 @@ def round_coords(coords, digits: int = 2):
 
 def feature(geometry: dict, properties: dict | None = None) -> dict:
     return {"type": "Feature", "properties": properties or {}, "geometry": geometry}
+
+
+def table_json(table: dict, key: str, rows: list[list]) -> str:
+    """`table` with its `rows` under `key`, one row per line (diffable,
+    still plain JSON)."""
+    head = json.dumps(table, indent=2)[:-2]
+    body = ",\n".join(f"    {json.dumps(r)}" for r in rows)
+    listed = f"[\n{body}\n  ]" if rows else "[]"
+    return f'{head},\n  "{key}": {listed}\n}}\n'
+
+
+def dgm_paths(tile: Tile, bounds: tuple[float, float, float, float]) -> list[Path]:
+    """The site's committed DGM1 files that may cover `bounds`: those whose
+    name places them there (one of another naming scheme is kept, for
+    `mosaic` to open and see). A step reads, and is re-baked for, those
+    alone — not every DGM of the site."""
+    return [
+        path
+        for path in sorted((tile.data / "dgm").glob("dgm1_*_tiff/dgm1_*.tif"))
+        if (named := named_extent(path.stem.removeprefix("dgm1_"))) is None
+        or overlaps(named, bounds)
+    ]
+
+
+def dom_paths(tile: Tile, bounds: tuple[float, float, float, float]) -> list[Path]:
+    """The DOM1 files on this machine that may cover `bounds`, by their
+    names as `dgm_paths`: a deck's ground opens its tile's neighbours, not
+    every surface model of the site."""
+    return [
+        path
+        for path in sorted((tile.raw / "dom1").glob("*.tif"))
+        if (named := named_extent(path.stem)) is None or overlaps(named, bounds)
+    ]
+
+
+NODATA = -9999.0  # a mosaic's cells no raster covers, before they read NaN
+
+
+def mosaic(paths: list[Path], bounds: tuple[float, float, float, float]):
+    """The rasters that overlap `bounds`, merged on their 1 m grid (NaN where
+    none has data), with the mosaic's transform. None when none overlaps."""
+    xmin, ymin, xmax, ymax = bounds
+    sources = []
+    for path in paths:
+        src = rasterio.open(path)
+        b = src.bounds
+        if b.left < xmax and b.right > xmin and b.bottom < ymax and b.top > ymin:
+            sources.append(src)
+        else:
+            src.close()
+    if not sources:
+        return None, None
+    try:
+        arr, transform = merge(sources, bounds=bounds, nodata=NODATA)
+    finally:
+        for src in sources:
+            src.close()
+    out = arr[0].astype(np.float64)
+    out[out <= NODATA + 1] = np.nan
+    return out, transform
 
 
 def write_geojson(

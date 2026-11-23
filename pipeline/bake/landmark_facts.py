@@ -1,0 +1,455 @@
+"""What the nameplate says under a landmark's name (the scene's lettering at
+a picked landmark, app/_components/nameplate-layer.ts): when it was built,
+by whom, when it was rebuilt, how tall it is — from Wikidata (CC0), for the
+landmarks the `landmarks` step matched to what the viewer draws.
+
+- `bun run fetch` asks Wikidata once for the site (`fetch_wikidata`): every
+  item the tiles' landmark caches name, in one POSTed query (the endpoint
+  rate-limits hard). The answer is cached raw under
+  `data/_raw/<provider>/wikidata/landmark_facts_<site>.json`; the bake never
+  goes to the network.
+- The site step (`run_site`) reads the committed `landmarks_<tile>.json`
+  (which landmarks the viewer draws, and their LoD2 objects), climbs each
+  object to its Building in the tile's CityJSON (the viewer's object facts
+  carry the Building's id, `buildingId`) and writes
+  `data/<site>/landmark-facts.json`: one entry per landmark with at least
+  one fact.
+
+Which statements count (`facts_of`):
+
+  built     the first year of P571 (inception; an organisation's, often its
+            founding, only where no construction event dates it) and of the events that begin
+            a building (P793: Baubeginn, Grundsteinlegung, Spatenstich,
+            Bauausführung's start), to the last of those that end it (P1619
+            opening; P793: Bauende, Einweihung, Kirchweihe,
+            Einweihungsfeier, Inbetriebnahme, Bauausführung's end) — an end
+            more than `MAX_BUILD_YEARS` after the start is a later event,
+            not the building's (a cathedral's consecration centuries on),
+            and is left out
+  rebuilt   P793 Wiederaufbau / Rekonstruktion: its start and end, or its
+            point in time (its end); `rebuiltFrom` where only its start is
+            stated
+  architects  P84, each by its German label (else mul, en), in their series
+            ordinal where stated, at most `MAX_ARCHITECTS`
+  height    P2048 in metres (normalised), the largest
+"""
+
+from __future__ import annotations
+
+import contextlib
+import json
+import math
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from .osm_buildings import root_of
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+SPARQL = "https://query.wikidata.org/sparql"
+ATTRIBUTION = "Wikidata (CC0)"
+USER_AGENT = "bridge-bake/0.1 (city walker; offline bake)"
+# Items per query: the ids ride in the POST body, but the endpoint times a
+# query out past a minute.
+BATCH = 300
+# The endpoint answers a burst with 429 and a Retry-After; it is asked
+# again after that long (at least this), this many times.
+RETRY_S = 61
+RETRIES = 4
+RETRY_CODES = {429, 500, 502, 503, 504}
+MAX_BUILD_YEARS = 100
+# What the cache's records carry (2: time precisions, architects' items
+# and series ordinals, no deprecated statements; 3: best ranks only;
+# 4: whether the item is an organisation).
+CACHE_VERSION = 4
+MAX_ARCHITECTS = 2
+
+# P793 (significant event) items, by what they say about the building.
+STARTS = {
+    "Q27136782",  # Baubeginn
+    "Q18752057",  # Grundsteinlegung
+    "Q1068633",  # Spatenstich
+}
+ENDS = {
+    "Q59913255",  # Bauende
+    "Q1762010",  # Einweihung
+    "Q3010369",  # Einweihungsfeier
+    "Q25640113",  # Kirchweihe
+    "Q29933828",  # Inbetriebnahme
+}
+SPANS = {
+    "Q385378",  # Bauausführung
+    "Q811972",  # Bauzeit
+    "Q3875186",  # Bau
+}
+REBUILDS = {
+    "Q1370468",  # bauliche Rekonstruktion
+    "Q2478058",  # Rekonstruktion
+    "Q94394406",  # Wiederaufbau
+    "Q3422086",  # Wiederaufbau nach dem Krieg
+}
+
+# Times come with their precision (`?vp`, `?tp`, `?sp`, `?ep`: 9 = year,
+# 8 = decade, 7 = century): a decade or a century is no year to print.
+# Inception, opening, architects and height take the best-ranked
+# statements only (`wikibase:BestRank`, what `wdt:` gives: a preferred one
+# over the rest); the events every statement but a deprecated one (each
+# event is its own statement).
+QUERY = """
+SELECT DISTINCT ?i ?p ?v ?vp ?lang ?a ?o ?ev ?t ?tp ?s ?sp ?e ?ep WHERE {
+  VALUES ?i { %(ids)s }
+  {
+    ?i p:P571 ?st . ?st a wikibase:BestRank .
+    ?st psv:P571 [ wikibase:timeValue ?v ; wikibase:timePrecision ?vp ] .
+    BIND("inception" AS ?p)
+  } UNION {
+    ?i p:P1619 ?st . ?st a wikibase:BestRank .
+    ?st psv:P1619 [ wikibase:timeValue ?v ; wikibase:timePrecision ?vp ] .
+    BIND("opening" AS ?p)
+  } UNION {
+    ?i p:P84 ?st . ?st a wikibase:BestRank . ?st ps:P84 ?a .
+    ?a rdfs:label ?v . BIND(LANG(?v) AS ?lang) FILTER(?lang IN ("de", "mul", "en"))
+    OPTIONAL { ?st pq:P1545 ?o . }
+    BIND("architect" AS ?p)
+  } UNION {
+    ?i p:P2048 ?st . ?st a wikibase:BestRank . ?st psn:P2048/wikibase:quantityAmount ?v .
+    BIND("height" AS ?p)
+  } UNION {
+    ?i wdt:P31 ?c . ?c wdt:P279* wd:Q43229 . hint:Prior hint:gearing "forward" .
+    BIND("institution" AS ?p)
+  } UNION {
+    ?i p:P793 ?st . ?st ps:P793 ?ev . BIND("event" AS ?p)
+    ?st wikibase:rank ?r . FILTER(?r != wikibase:DeprecatedRank)
+    OPTIONAL { ?st pqv:P585 [ wikibase:timeValue ?t ; wikibase:timePrecision ?tp ] . }
+    OPTIONAL { ?st pqv:P580 [ wikibase:timeValue ?s ; wikibase:timePrecision ?sp ] . }
+    OPTIONAL { ?st pqv:P582 [ wikibase:timeValue ?e ; wikibase:timePrecision ?ep ] . }
+  }
+}
+"""
+
+
+def _post(query: str) -> list[dict]:
+    req = urllib.request.Request(
+        SPARQL,
+        data=urllib.parse.urlencode({"query": query}).encode(),
+        headers={"Accept": "application/sparql-results+json", "User-Agent": USER_AGENT},
+    )
+    for attempt in range(RETRIES + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as res:
+                return json.load(res)["results"]["bindings"]
+        except urllib.error.HTTPError as err:
+            # rate-limited, or the endpoint busy (it answers load with 5xx)
+            if err.code not in RETRY_CODES or attempt == RETRIES:
+                raise
+            wait = max(RETRY_S, retry_after(err.headers.get("Retry-After")))
+            print(f"Wikidata asks to wait {wait} s ({err.code})")
+            time.sleep(wait)
+    raise AssertionError("unreachable")
+
+
+def retry_after(value: str | None) -> int:
+    """Seconds a Retry-After header asks for: a number of seconds or an
+    HTTP date; 0 where it says neither."""
+    if not value:
+        return 0
+    value = value.strip()
+    if value.isdigit():
+        return int(value)
+    try:
+        when = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return 0
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return max(0, math.ceil((when - datetime.now(UTC)).total_seconds()))
+
+
+def _value(row: dict, key: str) -> str | None:
+    cell = row.get(key)
+    return cell["value"] if cell else None
+
+
+def _qid(uri: str | None) -> str | None:
+    return uri.rsplit("/", 1)[-1] if uri else None
+
+
+def rows_by_item(rows: list[dict]) -> dict[str, list[dict]]:
+    """The query's rows as compact records per item (what the cache keeps)."""
+    out: dict[str, list[dict]] = {}
+    for r in rows:
+        qid = _qid(_value(r, "i"))
+        if not qid:
+            continue
+        rec = {"p": _value(r, "p")}
+        for key in ("v", "vp", "lang", "o", "t", "tp", "s", "sp", "e", "ep"):
+            if (val := _value(r, key)) is not None:
+                rec[key] = val
+        if (ev := _qid(_value(r, "ev"))) is not None:
+            rec["ev"] = ev
+        if (a := _qid(_value(r, "a"))) is not None:
+            rec["a"] = a
+        out.setdefault(qid, []).append(rec)
+    return out
+
+
+def cache_path(raw: Path, site: str) -> Path:
+    return raw / "wikidata" / f"landmark_facts_{site}.json"
+
+
+def landmark_ids(data: Path, raw: Path | None = None, tiles: Iterable[str] = ()) -> list[str]:
+    """Every item the site's committed landmark files name; for a site not
+    baked yet (no such file), every item the raw Wikidata caches of its
+    `tiles` know (the provider's other tiles are other cities': not read)."""
+    ids: set[str] = set()
+    committed = sorted((data / "dlm").glob("landmarks_*.json"))
+    for path in committed:
+        doc = json.loads(path.read_text())
+        ids.update(i["id"] for i in doc.get("landmarks", []) if "id" in i)
+    if committed:
+        # the bake has matched them: only those
+        return sorted(ids)
+    for tile in tiles if raw is not None else ():
+        path = raw / "wikidata" / f"landmarks_{tile}.json"
+        if path.exists():
+            with contextlib.suppress(ValueError):
+                doc = json.loads(path.read_text())
+                ids.update(i["id"] for i in doc.get("landmarks", []) if "id" in i)
+    return sorted(ids)
+
+
+def fetch_wikidata(raw: Path, data: Path, site: str, tiles: Iterable[str] = ()) -> None:
+    """Asks Wikidata for the facts of the site's landmarks (fetch time
+    only) and caches the answer; a rerun asks only for the items the cache
+    has not asked for yet."""
+    ids = landmark_ids(data, raw, tiles)
+    if not ids:
+        print(f"{site}: no landmarks known yet — the landmark facts are not fetched")
+        return
+    dest = cache_path(raw, site)
+    items: dict[str, list[dict]] = {}
+    asked: set[str] = set()
+    if dest.exists():
+        cached = json.loads(dest.read_text())
+        # a cache of an older query lacks what this one reads: asked anew
+        if cached.get("version") == CACHE_VERSION:
+            items = cached.get("items", {})
+            asked = set(cached.get("ids", []))
+    missing = [i for i in ids if i not in asked]
+    if not missing:
+        print(f"{site}: Wikidata facts cached for all {len(ids)} landmarks")
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    for k in range(0, len(missing), BATCH):
+        if k > 0:
+            # at most one query a minute: the endpoint answers a burst with 429
+            time.sleep(RETRY_S)
+        batch = missing[k : k + BATCH]
+        rows = _post(QUERY % {"ids": " ".join(f"wd:{i}" for i in batch)})
+        items.update(rows_by_item(rows))
+        asked |= set(batch)
+        # each batch kept as it lands: a later one failing keeps it
+        _write_cache(dest, asked, items)
+    print(f"{site}: Wikidata facts for {len(items)} of {len(asked)} landmarks")
+
+
+def _write_cache(dest: Path, asked: set[str], items: dict[str, list[dict]]) -> None:
+    doc = {
+        "source": ATTRIBUTION,
+        "query": SPARQL,
+        "version": CACHE_VERSION,
+        "ids": sorted(asked),
+        "items": items,
+    }
+    part = dest.with_name(dest.name + ".part")
+    part.write_text(json.dumps(doc, ensure_ascii=False, indent=1))
+    part.replace(dest)
+
+
+YEAR_PRECISION = 9
+
+
+def year(value: str | None, precision: str | None = None) -> int | None:
+    """The year of a Wikidata time ("1726-01-01T00:00:00Z"); None for an
+    unknown value (a blank node), a date before the common era, or one
+    known only to the decade or century (`precision` below 9)."""
+    if not value or not value[:4].isdigit():
+        return None
+    if precision is not None and precision.isdigit() and int(precision) < YEAR_PRECISION:
+        return None
+    return int(value[:4])
+
+
+def _span(start: int | None, end: int | None) -> list[int] | None:
+    if start is None:
+        return [end] if end is not None else None
+    if end is None or end <= start or end - start > MAX_BUILD_YEARS:
+        return [start]
+    return [start, end]
+
+
+def _times(r: dict) -> tuple[int | None, int | None, int | None]:
+    """An event's point in time, start and end, as years (or None)."""
+    return (
+        year(r.get("t"), r.get("tp")),
+        year(r.get("s"), r.get("sp")),
+        year(r.get("e"), r.get("ep")),
+    )
+
+
+def _rebuild(events: list[tuple[int | None, int | None]]) -> dict:
+    """`rebuilt` (or `rebuiltFrom`) from the rebuilding events, each its
+    (start, end): the latest event with an end, its own start where that
+    fits; else the latest start alone."""
+    ended = [(s, e) for s, e in events if e is not None]
+    if ended:
+        start, end = max(ended, key=lambda se: (se[1], se[0] or 0))
+        fits = start is not None and 0 < end - start <= MAX_BUILD_YEARS
+        return {"rebuilt": [start, end] if fits else [end]}
+    starts = [s for s, _ in events if s is not None]
+    # begun, its end not stated: "from"
+    return {"rebuiltFrom": max(starts)} if starts else {}
+
+
+LANGS = ("de", "mul", "en")
+
+
+def _ordinal(value: str | None) -> float:
+    return int(value) if value and value.isdigit() else math.inf
+
+
+def _architects(records: list[dict]) -> list[str]:
+    """Each architect (P84 item) once, by its German label, else its
+    multilingual or English one; in the statements' series ordinal (P1545)
+    where stated, else by name; at most `MAX_ARCHITECTS`. Records without
+    the item (a cache of an older query) count each label as one."""
+    best: dict[str, tuple[int, float, str]] = {}
+    for r in records:
+        lang = r.get("lang", "")
+        if lang not in LANGS:
+            continue
+        key = r.get("a") or f"{lang}:{r['v']}"
+        rank = (LANGS.index(lang), _ordinal(r.get("o")), r["v"])
+        if key not in best or rank < best[key]:
+            best[key] = rank
+    if not any(r.get("a") for r in records):
+        # no items to tell who is who: the first language's labels
+        first = min((rank[0] for rank in best.values()), default=0)
+        best = {k: v for k, v in best.items() if v[0] == first}
+    ordered = sorted(best.values(), key=lambda rank: (rank[1], rank[2]))
+    names: list[str] = []
+    for _, _, name in ordered:
+        if name not in names:
+            names.append(name)
+    return names[:MAX_ARCHITECTS]
+
+
+def facts_of(records: list[dict]) -> dict:
+    """The nameplate's facts from one item's cached records."""
+    starts: list[int] = []
+    ends: list[int] = []
+    rebuilds: list[tuple[int | None, int | None]] = []
+    makers: list[dict] = []
+    heights: list[float] = []
+    # an organisation's inception may be its founding rather than its
+    # building's (a gallery, a collection housed in a palace): it stands
+    # back where construction events date the building
+    institution = any(r.get("p") == "institution" for r in records)
+    founded: list[int] = []
+    for r in records:
+        p = r.get("p")
+        if p == "inception" and (y := year(r.get("v"), r.get("vp"))) is not None:
+            (founded if institution else starts).append(y)
+        elif p == "opening" and (y := year(r.get("v"), r.get("vp"))) is not None:
+            ends.append(y)
+        elif p == "architect" and r.get("v"):
+            makers.append(r)
+        elif p == "height":
+            with contextlib.suppress(KeyError, ValueError):
+                heights.append(float(r["v"]))
+        elif p == "event":
+            ev = r.get("ev")
+            at, s, e = _times(r)
+            if ev in STARTS:
+                starts += [y for y in (at, s) if y is not None]
+            elif ev in ENDS:
+                ends += [y for y in (at, e) if y is not None]
+            elif ev in SPANS:
+                starts += [y for y in (s,) if y is not None]
+                ends += [y for y in (e,) if y is not None]
+            elif ev in REBUILDS:
+                rebuilds.append((s, e if e is not None else at))
+    out: dict = {}
+    # an organisation dated by no construction event: its inception after all
+    # (the sole date there is; mostly the building's: a works, a school)
+    start = min(starts or founded) if (starts or founded) else None
+    if start is None:
+        # no start to measure by: the first opening (a later one is a
+        # reopening, which a rebuild states)
+        end = min(ends, default=None)
+    else:
+        # the last end that belongs to the building: a consecration
+        # centuries on does not hide its opening
+        end = max((y for y in ends if start < y <= start + MAX_BUILD_YEARS), default=None)
+    if (built := _span(start, end)) is not None:
+        out["built"] = built
+    out.update(_rebuild(rebuilds))
+    if architects := _architects(makers):
+        out["architects"] = architects
+    if heights:
+        out["height"] = round(max(heights), 1)
+    return out
+
+
+def buildings_of(objects: list[str], city: dict | None) -> list[str]:
+    """The landmark's LoD2 objects as the Buildings they belong to (the
+    viewer's `buildingId`); the objects as they are without the CityJSON."""
+    if city is None:
+        return sorted(set(objects))
+    return sorted({root_of(city, oid) for oid in objects})
+
+
+def run_site(raw: Path, data: Path, site: str) -> None:
+    """Writes `data/<site>/landmark-facts.json` from the fetch's cache."""
+    cache = cache_path(raw, site)
+    if not cache.exists():
+        print(f"{site}: no Wikidata facts cached ({cache}) — run bun run fetch")
+        return
+    cached = json.loads(cache.read_text())
+    if cached.get("version") != CACHE_VERSION:
+        # an older query's records: its rules are not these
+        print(f"{site}: the Wikidata facts cache is of an older query — run bun run fetch")
+        return
+    items = cached.get("items", {})
+    entries = []
+    for path in sorted((data / "dlm").glob("landmarks_*.json")):
+        landmarks = json.loads(path.read_text()).get("landmarks", [])
+        if not landmarks:
+            continue
+        tile = path.stem.removeprefix("landmarks_")
+        cityjson = data / "cityjson" / f"lod2_{tile}.city.json"
+        city = json.loads(cityjson.read_text()) if cityjson.exists() else None
+        for lm in landmarks:
+            facts = facts_of(items.get(lm["id"], []))
+            if not facts:
+                continue
+            entries.append(
+                {
+                    "id": lm["id"],
+                    "name": lm["name"],
+                    "buildings": buildings_of(lm.get("objects", []), city),
+                    **facts,
+                }
+            )
+    entries.sort(key=lambda e: e["id"])
+    out = data / "landmark-facts.json"
+    doc = {"attribution": ATTRIBUTION, "landmarks": entries}
+    out.write_text(json.dumps(doc, ensure_ascii=False, separators=(",", ":")) + "\n")
+    print(f"{site}: landmark facts for {len(entries)} landmarks → {out}")

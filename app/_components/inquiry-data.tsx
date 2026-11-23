@@ -8,42 +8,51 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import type { Inquiry } from "@/lib/city/inquiry";
+import type * as LineageNs from "@/lib/city/lineage";
 import type { DrawnGroup, DrawnRow, LineageEntry } from "@/lib/city/lineage";
 import type { Stated } from "@/lib/city/methods";
 import type { SiteProvenance } from "@/lib/city/provenance";
 import { MethodBadge, MethodLegend } from "./method-badge";
 import { useSite } from "./site-context";
 
-type LineageModule = typeof import("@/lib/city/lineage");
+type LineageModule = typeof LineageNs;
 
 /** The module, loaded once for the page when a card's section is first
  *  wanted (its own chunk: the boot carries none of it). */
 let lineageModule: Promise<LineageModule> | null = null;
-function loadLineage(): Promise<LineageModule> {
-  lineageModule ??= import("@/lib/city/lineage").catch((error: unknown) => {
+async function importLineage(): Promise<LineageModule> {
+  try {
+    return await import("@/lib/city/lineage");
+  } catch (error) {
     // a failed chunk is not kept: the next opening tries again
     lineageModule = null;
     throw error;
-  });
-  return lineageModule;
+  }
+}
+async function loadLineage(): Promise<LineageModule> {
+  lineageModule ??= importLineage();
+  return await lineageModule;
 }
 
 /** The lineage module once `wanted`, null until it has arrived. */
 function useLineage(wanted: boolean): LineageModule | null {
   const [mod, setMod] = useState<LineageModule | null>(null);
   useEffect(() => {
-    if (!wanted || mod) {
-      return;
-    }
     let live = true;
-    loadLineage().then(
-      (m) => {
+    const load = async () => {
+      try {
+        const loaded = await loadLineage();
         if (live) {
-          setMod(m);
+          setMod(loaded);
         }
-      },
-      () => undefined
-    );
+      } catch {
+        // a failed chunk stays unloaded: the section shows "lädt …" and the
+        // next opening tries again
+      }
+    };
+    if (wanted && !mod) {
+      void load();
+    }
     return () => {
       live = false;
     };
@@ -62,7 +71,7 @@ function useLineage(wanted: boolean): LineageModule | null {
  * nears the toggle). Every line carries the badge of how the viewer came
  * by it (lib/city/methods.ts), the legend folded at the end.
  */
-export function InquiryData({
+export const InquiryData = ({
   inquiry,
   provenance,
   sources,
@@ -71,7 +80,7 @@ export function InquiryData({
   provenance: SiteProvenance | null;
   /** the card's source lines: where each fact it states comes from */
   sources: readonly Stated[];
-}) {
+}) => {
   const site = useSite();
   const [open, setOpen] = useState(false);
   const [near, setNear] = useState(false);
@@ -82,16 +91,18 @@ export function InquiryData({
   useEffect(() => {
     const el = root.current;
     const scroller = el?.closest<HTMLElement>("[data-inquiry-scroll]");
-    if (!(open && el && scroller)) {
-      return;
+    let id: number | undefined;
+    if (open && el && scroller) {
+      // once the panel has grown: before, there is nothing to scroll to
+      id = window.setTimeout(() => {
+        const top =
+          el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+        scroller.scrollBy({ top: Math.max(top - 8, 0), behavior: "smooth" });
+      }, 250);
     }
-    // once the panel has grown: before, there is nothing to scroll to
-    const id = window.setTimeout(() => {
-      const top =
-        el.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-      scroller.scrollBy({ top: Math.max(top - 8, 0), behavior: "smooth" });
-    }, 250);
-    return () => window.clearTimeout(id);
+    return () => {
+      window.clearTimeout(id);
+    };
   }, [open]);
   const entries = useMemo(
     () => mod?.lineage(inquiry, provenance, site) ?? null,
@@ -190,15 +201,13 @@ export function InquiryData({
       </CollapsibleContent>
     </Collapsible>
   );
-}
+};
 
-function SectionHead({ children }: { children: string }) {
-  return (
-    <p className="mt-3 mb-1.5 text-[9.5px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
-      {children}
-    </p>
-  );
-}
+const SectionHead = ({ children }: { children: string }) => (
+  <p className="mt-3 mb-1.5 text-[9.5px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+    {children}
+  </p>
+);
 
 /**
  * One group of a building's drawn values: per row its label and value
@@ -206,48 +215,46 @@ function SectionHead({ children }: { children: string }) {
  * under them the source, what of it, and a link to where the source
  * shows this building.
  */
-function DrawnGroupRows({
+const DrawnGroupRows = ({
   group,
   names,
 }: {
   group: DrawnGroup;
   names?: Record<DrawnRow["source"], string>;
-}) {
-  return (
-    <div className="mt-2 first:mt-0" data-testid="inquiry-drawn">
-      <p className="mb-0.5 text-[10.5px] font-medium text-foreground">
-        {group.title}
-      </p>
-      <dl className="space-y-1">
-        {group.rows.map((r) => (
-          <div className="text-[11px] leading-snug" key={r.label}>
-            <div className="flex items-start gap-2">
-              <dt className="w-[5.5rem] shrink-0 text-muted-foreground">
-                {r.label}
-              </dt>
-              <dd className="flex min-w-0 flex-1 items-start gap-1.5 text-foreground">
-                {r.swatch && (
-                  <span
-                    aria-hidden
-                    className="mt-0.5 size-3 shrink-0 rounded-sm border border-black/10"
-                    style={{ background: r.swatch }}
-                  />
-                )}
-                <span className="min-w-0 flex-1 break-words">{r.value}</span>
-              </dd>
-              <MethodBadge className="mt-px" method={r.method} />
-            </div>
-            <p className="pl-[6rem] text-[10px] text-muted-foreground">
-              <DrawnSourceLink name={names?.[r.source] ?? ""} row={r} />
-            </p>
+}) => (
+  <div className="mt-2 first:mt-0" data-testid="inquiry-drawn">
+    <p className="mb-0.5 text-[10.5px] font-medium text-foreground">
+      {group.title}
+    </p>
+    <dl className="space-y-1">
+      {group.rows.map((r) => (
+        <div className="text-[11px] leading-snug" key={r.label}>
+          <div className="flex items-start gap-2">
+            <dt className="w-[5.5rem] shrink-0 text-muted-foreground">
+              {r.label}
+            </dt>
+            <dd className="flex min-w-0 flex-1 items-start gap-1.5 text-foreground">
+              {r.swatch && (
+                <span
+                  aria-hidden
+                  className="mt-0.5 size-3 shrink-0 rounded-sm border border-black/10"
+                  style={{ background: r.swatch }}
+                />
+              )}
+              <span className="min-w-0 flex-1 break-words">{r.value}</span>
+            </dd>
+            <MethodBadge className="mt-px" method={r.method} />
           </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
+          <p className="pl-[6rem] text-[10px] text-muted-foreground">
+            <DrawnSourceLink name={names?.[r.source] ?? ""} row={r} />
+          </p>
+        </div>
+      ))}
+    </dl>
+  </div>
+);
 
-function DrawnSourceLink({ name, row }: { name: string; row: DrawnRow }) {
+const DrawnSourceLink = ({ name, row }: { name: string; row: DrawnRow }) => {
   const text = row.detail ? `${name} · ${row.detail}` : name;
   if (!row.url) {
     return text;
@@ -263,9 +270,9 @@ function DrawnSourceLink({ name, row }: { name: string; row: DrawnRow }) {
       <ExternalLinkIcon className="size-2.5 shrink-0 self-center opacity-60" />
     </a>
   );
-}
+};
 
-function LineageRow({
+const LineageRow = ({
   brief = false,
   entry,
 }: {
@@ -273,7 +280,7 @@ function LineageRow({
    *  say what came from it */
   brief?: boolean;
   entry: LineageEntry;
-}) {
+}) => {
   const meta = [entry.stand ? `Stand ${entry.stand}` : "", entry.credit]
     .filter(Boolean)
     .join(" · ");
@@ -314,4 +321,4 @@ function LineageRow({
       )}
     </li>
   );
-}
+};

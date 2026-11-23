@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { descriptionOf, titleOf } from "@/lib/docs/content";
 import { docFiles } from "@/lib/docs/files";
-import { type NavGroup, type NavItem, navGroups } from "@/lib/docs/nav";
+import { navGroups } from "@/lib/docs/nav";
+import type { NavGroup, NavItem } from "@/lib/docs/nav";
 import { routeOf, segmentsOf } from "@/lib/docs/routes";
 import { REFERENCE_SITE } from "@/sites";
 import { builtSite } from "../../_lib/built-sites";
@@ -20,7 +21,7 @@ export function pageFiles(): string[] {
 
 /** A docs file's Markdown. Paths stay inside docs/, so only docs/ is traced. */
 export function readDoc(file: string): string {
-  return readFileSync(path.join(DOCS, file.replace(/^docs\//u, "")), "utf8");
+  return readFileSync(path.join(DOCS, file.replace(/^docs\//u, "")), "utf-8");
 }
 
 /** The file published at these segments under /wissen, if any. */
@@ -52,7 +53,7 @@ export function neighbours(file: string): {
   for (const group of nav()) {
     const flat = group.items.flatMap((item) => [item, ...item.children]);
     const index = flat.findIndex((item) => item.file === file);
-    if (index >= 0) {
+    if (index !== -1) {
       return {
         group,
         index,

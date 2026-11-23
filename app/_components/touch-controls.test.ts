@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, expect, jest, test } from "bun:test";
-import {
-  attachTouchControls,
-  LONG_PRESS_MS,
-  type TouchControlsCallbacks,
-} from "./touch-controls";
+import { attachTouchControls, LONG_PRESS_MS } from "./touch-controls";
+import type { TouchControlsCallbacks } from "./touch-controls";
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -19,6 +16,10 @@ interface FiredPointer {
   pointerType?: string;
   timeStamp?: number;
 }
+
+// The long press waits on the page's clock, Bun's fake one here:
+// `elapse(ms)` moves it on (by default by a whole long press).
+const elapse = (ms = LONG_PRESS_MS) => jest.advanceTimersByTime(ms);
 
 /**
  * DOM-free harness: a fake element that records the listeners
@@ -38,7 +39,7 @@ function harness() {
     addEventListener: (type: string, fn: (e: PointerEvent) => void) =>
       handlers.set(type, fn),
     removeEventListener: (type: string) => handlers.delete(type),
-    setPointerCapture: () => undefined,
+    setPointerCapture: () => {},
     style: { cursor: "" },
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 400, height: 800 }),
   } as unknown as HTMLElement;
@@ -57,27 +58,36 @@ function harness() {
     zoom: [] as number[],
   };
   const callbacks: TouchControlsCallbacks = {
-    onLook: (dx, dy) => calls.look.push([dx, dy]),
-    onMouseLook: (dx, dy) => calls.mouseLook.push([dx, dy]),
+    onLook: (dx, dy) => {
+      calls.look.push([dx, dy]);
+    },
+    onMouseLook: (dx, dy) => {
+      calls.mouseLook.push([dx, dy]);
+    },
     onPinchStart: () => {
       calls.pinchStart += 1;
     },
-    onPinch: (ratio) => calls.pinch.push(ratio),
-    onDoubleTap: (x, y) => calls.doubleTap.push([x, y]),
+    onPinch: (ratio) => {
+      calls.pinch.push(ratio);
+    },
+    onDoubleTap: (x, y) => {
+      calls.doubleTap.push([x, y]);
+    },
     onWheelDolly: (amount, x, y) => {
       calls.wheel.push(amount);
       calls.wheelAt.push([x, y]);
     },
-    onWheelZoom: (ratio) => calls.zoom.push(ratio),
+    onWheelZoom: (ratio) => {
+      calls.zoom.push(ratio);
+    },
     onTap: (x, y, pointerType) => {
       calls.tap.push([x, y]);
       calls.tapBy.push(pointerType);
     },
-    onLongPress: (x, y) => calls.longPress.push([x, y]),
+    onLongPress: (x, y) => {
+      calls.longPress.push([x, y]);
+    },
   };
-  // The long press waits on the page's clock, Bun's fake one here:
-  // `elapse(ms)` moves it on (by default by a whole long press).
-  const elapse = (ms = LONG_PRESS_MS) => jest.advanceTimersByTime(ms);
   const { detach } = attachTouchControls(element, callbacks);
   const fire = (type: string, e: FiredPointer) =>
     handlers.get(type)?.({
@@ -133,7 +143,7 @@ function harness() {
       clientX,
       clientY,
       scale,
-      preventDefault: () => undefined,
+      preventDefault: () => {},
     } as unknown as PointerEvent);
   return {
     calls,
@@ -141,7 +151,6 @@ function harness() {
     detach,
     element,
     gesture,
-    elapse,
     fire,
     lock,
     mouseMove,
@@ -385,7 +394,7 @@ test("detach removes every listener and releases the pointer lock", () => {
 });
 
 test("a finger held still is a long press, and its release is no tap", () => {
-  const { fire, calls, elapse, contextMenu } = harness();
+  const { fire, calls, contextMenu } = harness();
   fire("pointerdown", { pointerId: 1, clientX: 100, clientY: 200 });
   // the browser's own long-press menu belongs to the gesture now
   expect(contextMenu()).toBe(true);
@@ -418,7 +427,7 @@ test("a finger held still is a long press, and its release is no tap", () => {
 });
 
 test("a mouse held still is no long press: the desktop asks by a click", () => {
-  const { fire, calls, elapse } = harness();
+  const { fire, calls } = harness();
   fire("pointerdown", {
     pointerId: 1,
     clientX: 100,
@@ -437,7 +446,7 @@ test("a mouse held still is no long press: the desktop asks by a click", () => {
 });
 
 test("moving or a second finger cancels a long press", () => {
-  const { fire, calls, elapse } = harness();
+  const { fire, calls } = harness();
   fire("pointerdown", { pointerId: 1, clientX: 100, clientY: 200 });
   fire("pointermove", { pointerId: 1, clientX: 140, clientY: 200 });
   elapse();

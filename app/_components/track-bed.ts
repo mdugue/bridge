@@ -1,10 +1,4 @@
-import {
-  BufferGeometry,
-  Color,
-  Float32BufferAttribute,
-  Mesh,
-  MeshStandardNodeMaterial,
-} from "three/webgpu";
+import { Color, Mesh, MeshStandardNodeMaterial } from "three/webgpu";
 import {
   abs,
   attribute,
@@ -17,7 +11,9 @@ import {
   vec3,
 } from "three/tsl";
 import { footprint } from "./bridge-surface";
-import { gdNoise } from "./ground-detail";
+import { gdNoise } from "./shader-chunks";
+import { finished } from "@/lib/city/build-steps";
+import { geometrySteps } from "./mesh-kit";
 import type { Pt } from "./mesh-kit";
 import type { F, V2, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
@@ -53,7 +49,7 @@ const linear = (hex: number): V3 => {
   return vec3(c.r, c.g, c.b);
 };
 
-/** The ballast (rail-layer.ts COLORS.ballast), concrete and timber
+/** The ballast (mesh-kit.ts COLORS.ballast), concrete and timber
  *  sleepers, an open floor's gaps. */
 const BALLAST = 0x9a_8f_85;
 const CONCRETE = 0xb9_b4_ab;
@@ -99,7 +95,7 @@ export function addSleepers(
     const o = lateral + sign * half;
     return [pts[i].x + nx * o, pts[i].y, pts[i].z + nz * o];
   };
-  for (let i = 0; i < pts.length - 1; i++) {
+  for (let i = 0; i < pts.length - 1; i += 1) {
     const l0 = edge(i, 1);
     const r0 = edge(i, -1);
     const l1 = edge(i + 1, 1);
@@ -155,14 +151,12 @@ function sleeperColour(bed: V2): V3 {
 /** The ribbons as one mesh on the scene-wide sleeper material; null when
  *  empty. Never casts (it lies on the bed). */
 export function sleeperMesh(acc: SleeperRibbons): Mesh | null {
-  if (acc.pos.length === 0) {
+  const g = finished(
+    geometrySteps(acc.pos, acc.nrm, [["aSleeper", acc.bed, 2]])
+  );
+  if (!g) {
     return null;
   }
-  const g = new BufferGeometry();
-  g.setAttribute("position", new Float32BufferAttribute(acc.pos, 3));
-  g.setAttribute("normal", new Float32BufferAttribute(acc.nrm, 3));
-  g.setAttribute("aSleeper", new Float32BufferAttribute(acc.bed, 2));
-  g.computeBoundingSphere();
   const material = sceneMaterial("rail-sleepers", () => {
     const m = new MeshStandardNodeMaterial({ roughness: 0.95 });
     m.name = "rail-sleepers";

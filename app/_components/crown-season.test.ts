@@ -2,18 +2,18 @@ import { expect, jest, test } from "bun:test";
 import {
   Color,
   IcosahedronGeometry,
-  type Material,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
 } from "three/webgpu";
+import type { Material } from "three/webgpu";
 import { TREE_GENERA } from "@/lib/city/tree-season";
 import {
   createSeasonClock,
   SEASON_THROTTLE_MS,
-  type CrownSeasonKey,
   crownWarmup,
   seasonCrowns,
 } from "./crown-season";
+import type { CrownSeasonKey } from "./crown-season";
 import { Instances } from "./instancing";
 import { sceneCrowns } from "./vegetation-layer";
 
@@ -30,7 +30,9 @@ function crowns(keys: CrownSeasonKey[]) {
   const rich = new Instances(geo, leafy, keys.length);
   const green = new Color(0.4, 0.6, 0.3);
   for (const mesh of [cheap, rich]) {
-    keys.forEach((_, i) => mesh.setColorAt(i, green));
+    for (const i of keys.keys()) {
+      mesh.setColorAt(i, green);
+    }
   }
   const season = seasonCrowns({ mid: cheap, rich }, keys, { leafy, bare });
   return { cheap, rich, season, leafy, bare, geo };
@@ -92,9 +94,9 @@ test("the clock re-seasons on a new calendar day only, throttled, the last day w
   jest.useFakeTimers();
   try {
     const days: number[] = [];
-    const clock = createSeasonClock(new Date(2026, 6, 10, 9), (d) =>
-      days.push(d)
-    );
+    const clock = createSeasonClock(new Date(2026, 6, 10, 9), (d) => {
+      days.push(d);
+    });
     expect(clock.day()).toBe(JUL_10);
     clock.set(new Date(2026, 6, 10, 18)); // same day, later hour
     expect(days).toEqual([]);
@@ -112,6 +114,12 @@ test("the clock re-seasons on a new calendar day only, throttled, the last day w
   }
 });
 
+const countDisposals = (material: Material, counter: { count: number }) => {
+  material.addEventListener("dispose", () => {
+    counter.count += 1;
+  });
+};
+
 test("the warm-up stands in for both crown variants, laid out as a crown", () => {
   const geo = new IcosahedronGeometry(1, 1);
   const leafy = new MeshBasicNodeMaterial();
@@ -125,9 +133,9 @@ test("the warm-up stands in for both crown variants, laid out as a crown", () =>
     expect(mesh.geometry.getAttribute("aBare")).toBeDefined();
     expect(mesh.castShadow).toBe(true);
   }
-  let freed = 0;
+  const freed = { count: 0 };
   for (const m of [leafy, bare]) {
-    m.addEventListener("dispose", () => freed++);
+    countDisposals(m, freed);
   }
   let geoFreed = false;
   geo.addEventListener("dispose", () => {
@@ -135,7 +143,7 @@ test("the warm-up stands in for both crown variants, laid out as a crown", () =>
   });
   warm.dispose();
   expect(geoFreed).toBe(true);
-  expect(freed).toBe(0); // the materials are the scene's, not the warm-up's
+  expect(freed.count).toBe(0); // the materials are the scene's, not the warm-up's
 });
 
 test("only the seasonal crown masks (the shadow pass honours it), and twigs lose the glow", () => {
@@ -152,5 +160,8 @@ test("only the seasonal crown masks (the shadow pass honours it), and twigs lose
     expect(m.castShadowPositionNode).not.toBeNull();
     expect(m.castShadowPositionNode).not.toBe(m.positionNode);
   }
-  expect(seasonal.emissiveNode).not.toBe(plain.emissiveNode);
+  // no glow of its own, against the light or otherwise
+  expect(plain.emissiveNode).toBeNull();
+  expect(seasonal.emissiveNode).toBeNull();
+  expect(seasonal.colorNode).not.toBe(plain.colorNode);
 });

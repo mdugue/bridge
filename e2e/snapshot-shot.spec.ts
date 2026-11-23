@@ -1,15 +1,37 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import nodePath from "node:path";
 import { expect, test } from "@playwright/test";
+import { utmToLatLng } from "../lib/city/crs";
+import { arrivalHref } from "../lib/city/geolocation";
 import {
   decodeLook,
   parseSnapshot,
-  type Snapshot,
   snapshotInstant,
 } from "../lib/city/snapshot";
+import type { Snapshot } from "../lib/city/snapshot";
+import { siteById } from "../sites";
+import { SWIFTSHADER_WEBGPU } from "./swiftshader-webgpu";
 
-// Big crisp canvas for inspecting shadow/edge artifacts.
-test.use({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
+/**
+ * Big crisp canvas for inspecting shadow/edge artifacts — or, with
+ * `SHOTS_SMALL=1`, 800 × 500 at 1× (the same 16:10) and fifteen minutes to
+ * load: what a software-rendered container (the routines' street-photo
+ * check, docs/routines.md) can draw, with `SHOTS_QUERY=scene=lite&block=1`.
+ * Dresden's `lite` boot took 7–11 minutes there (2026-10-31). That path
+ * draws WebGPU on SwiftShader's Vulkan (swiftshader-webgpu.ts); the headed
+ * real-GPU path keeps the browser's own adapter.
+ */
+const SHOTS_SMALL = Boolean(process.env.SHOTS_SMALL);
+const READY_MS = SHOTS_SMALL ? 900_000 : 120_000;
+test.use(
+  SHOTS_SMALL
+    ? {
+        viewport: { width: 800, height: 500 },
+        deviceScaleFactor: 1,
+        launchOptions: SWIFTSHADER_WEBGPU,
+      }
+    : { viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 }
+);
 
 /**
  * Snapshot screenshot harness — NOT a smoke test. Reproduces an exact view
@@ -26,41 +48,115 @@ test.use({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
  * yields shots/<name>.png.
  */
 
-const SHOTS_DIR = join(process.cwd(), "shots");
+const SHOTS_DIR = nodePath.join(process.cwd(), "shots");
 /**
  * Before/after pairs from one set of snapshots — the ONE mechanism:
  * `SHOTS_QUERY` is appended to the page URL (with or without its leading
  * `?`, e.g. `SHOTS_QUERY=scene=lite`), and `SHOTS_TAG=x` writes
  * `shots/<name>.x.png` so the untagged plate is not overwritten.
  */
-const SHOTS_QUERY = (process.env.SHOTS_QUERY ?? "").replace(/^\?/, "");
+const SHOTS_QUERY = (process.env.SHOTS_QUERY ?? "").replace(/^\?/u, "");
 /** The city the shots are taken in (its route): `SHOTS_SITE=leipzig`. */
 const SHOTS_SITE = process.env.SHOTS_SITE ?? "dresden";
 const SHOTS_TAG = process.env.SHOTS_TAG ?? "";
+/**
+ * `SHOTS_AT=1`: boot the page at the snapshot's own place (`?at=lat,lng`
+ * from its `camera.epsg`) instead of the site's spawn. The `lite` scene
+ * streams only around where it booted, so a pose a kilometre from the
+ * spawn would otherwise show the wrong part of the city — the street
+ * photos are spread over the whole site.
+ */
+const SHOTS_AT = Boolean(process.env.SHOTS_AT);
 
-function snapshotFiles(): string[] {
+/** The page a snapshot is taken on: the site, its query, its place. */
+function shotUrl(snap: Snapshot): string {
+  const query = SHOTS_QUERY ? `?${SHOTS_QUERY}` : "";
+  const epsg = siteById(SHOTS_SITE)?.provider.epsg;
+  const at =
+    SHOTS_AT && snap.camera.epsg && epsg
+      ? utmToLatLng(epsg, snap.camera.epsg.x, snap.camera.epsg.y)
+      : null;
+  if (!at) {
+    return `/${SHOTS_SITE}${query}`;
+  }
+  return `${arrivalHref(SHOTS_SITE, at)}${SHOTS_QUERY ? `&${SHOTS_QUERY}` : ""}`;
+}
+
+/** Hide every HUD/control overlay so the shot is a clean render plate:
+ *  keep only the canvas and its DOM ancestors visible. */
+function hideOverlays(): void {
+  const canvas = document.querySelector("canvas[data-engine]");
+  if (!canvas) {
+    return;
+  }
+  const keep = new Set<Element>();
+  for (let el: Element | null = canvas; el; el = el.parentElement) {
+    keep.add(el);
+  }
+  for (const node of keep) {
+    const parent = node.parentElement;
+    if (!parent) {
+      continue;
+    }
+    for (const child of Array.from(parent.children)) {
+      if (!keep.has(child)) {
+        (child as HTMLElement).style.visibility = "hidden";
+      }
+    }
+  }
+}
+
+/**
+ * The committed QA views (plan 048, `bun scripts/qa-views.ts`): rendered
+ * beside the dropped snapshots as `shots/qa-<name>.png`, so `shots/`
+ * stays the one output (and gitignored). One of them:
+ * `bun run shots -- --grep qa-<name>`.
+ */
+const QA_VIEWS_DIR = nodePath.join(process.cwd(), "qa", "views");
+
+/** The snapshots in `dir`, their plates named `<prefix><name>`. */
+function jsonsIn(
+  dir: string,
+  prefix: string
+): { path: string; name: string }[] {
   try {
-    return readdirSync(SHOTS_DIR).filter((f) => f.endsWith(".json"));
+    return readdirSync(dir)
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => ({
+        path: nodePath.join(dir, f),
+        name: `${prefix}${f.replace(/\.json$/u, "")}`,
+      }));
   } catch {
     return [];
   }
 }
 
-for (const file of snapshotFiles()) {
-  const name = file.replace(/\.json$/, "");
+/** Each snapshot to render: the dropped ones, then the QA views. */
+function snapshotFiles(): { path: string; name: string }[] {
+  return [...jsonsIn(SHOTS_DIR, ""), ...jsonsIn(QA_VIEWS_DIR, "qa-")];
+}
+
+for (const { path: file, name } of snapshotFiles()) {
   test(`snapshot: ${name}`, async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(READY_MS + 150_000);
     // Validate before rendering: a broken shot fails loudly instead of
     // silently rendering the defaults.
-    const parsed = parseSnapshot(readFileSync(join(SHOTS_DIR, file), "utf8"));
+    const parsed = parseSnapshot(readFileSync(file, "utf-8"));
     if (!parsed.ok) {
       throw new Error(`${file}: ${parsed.reason}`);
     }
     const snap: Snapshot = parsed.snapshot;
 
-    await page.goto(`/${SHOTS_SITE}${SHOTS_QUERY ? `?${SHOTS_QUERY}` : ""}`);
+    await page.goto(shotUrl(snap));
     await page.waitForFunction(() => window.__poc?.ready === true, undefined, {
-      timeout: 120_000,
+      timeout: READY_MS,
+    });
+    // A plate shows the finished city: the snapshot's flight streams, and
+    // the loading veil (load-veil.ts) would draw over what it brings.
+    await page.evaluate(() => {
+      if (window.__poc) {
+        window.__poc.veil = { radius: 6000, strength: 0 };
+      }
     });
 
     // The same codec (and the same minute-floored instant) the HUD's Apply
@@ -83,29 +179,7 @@ for (const file of snapshotFiles()) {
       [snap.camera, instant, lookPatch] as const
     );
 
-    // Hide every HUD/control overlay so the shot is a clean render plate:
-    // keep only the canvas and its DOM ancestors visible.
-    await page.evaluate(() => {
-      const canvas = document.querySelector("canvas[data-engine]");
-      if (!canvas) {
-        return;
-      }
-      const keep = new Set<Element>();
-      for (let el: Element | null = canvas; el; el = el.parentElement) {
-        keep.add(el);
-      }
-      for (const node of keep) {
-        const parent = node.parentElement;
-        if (!parent) {
-          continue;
-        }
-        for (const child of Array.from(parent.children)) {
-          if (!keep.has(child)) {
-            (child as HTMLElement).style.visibility = "hidden";
-          }
-        }
-      }
-    });
+    await page.evaluate(hideOverlays);
 
     // Let the shadow map re-render for the new pose and sun, the motion
     // regression lift (DoF is off for RECOVER_MS after the move) and grading
@@ -113,23 +187,36 @@ for (const file of snapshotFiles()) {
     // GPU took longer than any fixed sleep). By night no shadow map is
     // drawn, so after `shadowless` frames the plate is taken without one.
     await page.waitForFunction(
-      ({ frames, shadows, settle, shadowless }) => {
+      async ({ frames, shadows, settle, shadowless }) => {
         const poc = window.__poc;
+        const focus = await poc?.handle?.getFocusDebug();
         const drawn = (poc?.frames ?? 0) - frames;
         return (
           drawn >= settle &&
-          // the move regressed the post stack: DoF is back once it is still
+          // the move regressed the post stack: DoF is back once it is
+          // still, and grown in fully where the style draws it
           !poc?.regressed &&
+          (focus?.settled ?? true) &&
+          // the rings redraw one a frame, the wide ones at a distance
+          !poc?.handle?.shadowBusy() &&
+          // a plate far from the spawn waits for its own tiles to land
+          !poc?.handle?.streamBusy() &&
           ((poc?.shadowRenders ?? 0) > shadows || drawn >= shadowless)
         );
       },
-      { ...before, settle: 3, shadowless: 30 },
-      { timeout: 120_000 }
+      // settle: frames for the stream to see the new view at all
+      { ...before, settle: 10, shadowless: 30 },
+      { timeout: READY_MS + 60_000 }
     );
 
+    // Again: a notice raised after the move ("Umgebung lädt") was not
+    // there to hide the first time.
+    await page.evaluate(hideOverlays);
     const canvas = page.locator("canvas[data-engine]");
     await expect(canvas).toBeVisible();
     const tag = SHOTS_TAG ? `.${SHOTS_TAG}` : "";
-    await canvas.screenshot({ path: join(SHOTS_DIR, `${name}${tag}.png`) });
+    await canvas.screenshot({
+      path: nodePath.join(SHOTS_DIR, `${name}${tag}.png`),
+    });
   });
 }

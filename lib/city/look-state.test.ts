@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { LOOK_DEFAULTS, lookPatch, type LookValues } from "./look-controls";
+import { LOOK_DEFAULTS, lookPatch } from "./look-controls";
+import type { LookValues } from "./look-controls";
 import { clampLook, createLookState } from "./look-state";
 
 test("boots at the table defaults and keeps the same object until a change", () => {
@@ -12,14 +13,16 @@ test("boots at the table defaults and keeps the same object until a change", () 
   expect(look.get()).not.toBe(before);
   expect(look.get().fogAmount).toBe(0.9);
   // Untouched keys survive a partial set.
-  expect(look.get().multiTuft).toBe(LOOK_DEFAULTS.multiTuft);
+  expect(look.get().style).toBe(LOOK_DEFAULTS.style);
 });
 
 test("set notifies once per change with the new values, never for a no-op", () => {
   const look = createLookState();
   const seen: number[] = [];
-  const stop = look.subscribe((v) => seen.push(v.fogAmount));
-  look.set({ fogAmount: 0.5, multiTuft: false });
+  const stop = look.subscribe((v) => {
+    seen.push(v.fogAmount);
+  });
+  look.set({ fogAmount: 0.5, style: "comic" });
   look.set({ fogAmount: 0.5 });
   expect(seen).toEqual([0.5]);
   stop();
@@ -30,7 +33,7 @@ test("set notifies once per change with the new values, never for a no-op", () =
 test("clampLook keeps percent rows inside [0, 1] and the flags as they are", () => {
   expect(clampLook({ fogAmount: 1.5 })).toEqual({ fogAmount: 1 });
   expect(clampLook({ fogAmount: -1 })).toEqual({ fogAmount: 0 });
-  expect(clampLook({ multiTuft: false })).toEqual({ multiTuft: false });
+  expect(clampLook({ style: "comic" })).toEqual({ style: "comic" });
 });
 
 test("clampLook keeps the data layers' flags and drops anything else there", () => {

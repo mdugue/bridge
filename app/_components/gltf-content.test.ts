@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { TilesRenderer } from "3d-tiles-renderer/three";
-import { LoadingManager, type Mesh } from "three";
+import { LoadingManager } from "three";
+import type { Mesh } from "three";
 import type { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import type { StructuralMetadata } from "@/lib/city/property-table";

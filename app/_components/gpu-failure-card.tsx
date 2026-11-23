@@ -26,7 +26,7 @@ import {
  * browser's own words folded away, for a report. Over the frozen canvas,
  * which no longer answers.
  */
-export function GpuFailureCard({
+export const GpuFailureCard = ({
   detail,
   onLighter,
   onReload,
@@ -35,7 +35,7 @@ export function GpuFailureCard({
   detail: string;
   onLighter: () => void;
   onReload: () => void;
-}) {
+}) => {
   // Both reload the page: one press is enough.
   const [leaving, setLeaving] = useState(false);
   const leave = (then: () => void) => () => {
@@ -83,4 +83,4 @@ export function GpuFailureCard({
       </Card>
     </div>
   );
-}
+};

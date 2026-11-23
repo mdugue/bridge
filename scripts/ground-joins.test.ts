@@ -1,15 +1,12 @@
 import { expect, test } from "bun:test";
 import { fenceGeometry } from "../lib/city/fences";
-import { checkJoins, type HeightAt } from "../lib/city/ground-join";
+import { checkJoins } from "../lib/city/ground-join";
+import type { HeightAt } from "../lib/city/ground-join";
 import { kerbGeometry } from "../lib/city/kerbs";
 import { stairGeometry } from "../lib/city/stairs";
 import { wallGeometry } from "../lib/city/walls";
-import {
-  JOIN_PARTS,
-  type JoinPart,
-  measureJoins,
-  missShare,
-} from "./ground-joins";
+import { JOIN_PARTS, measureJoins, missShare } from "./ground-joins";
+import type { JoinPart } from "./ground-joins";
 
 const offset = { cx: 0, cy: 0 };
 
@@ -106,9 +103,9 @@ test("every builder's joins hold on the ground it stood on", () => {
  * before ADR 0030's audit the walls missed 3.5 %, the stairs 4.5 %, the
  * fences 1.6 %)
  * fails here. The doors' misses (0.8 % at first bake) are sills at the
- * top of a mapped flight of steps, whose ground the stairs lower; the
- * shopfronts' (0.36 % at first bake) a riser whose ground dips below
- * the line between its wall's two ends. Lower a budget when a fix lowers its share; raising one
+ * top of a mapped flight of steps, whose ground the stairs lower (the
+ * shopfronts' risers stood on the ground until their windows became
+ * openings in the wall, 2026-11-10). Lower a budget when a fix lowers its share; raising one
  * needs a reason in the commit. `bun scripts/ground-joins.ts` prints the
  * table and the worst places for the whole site.
  */
@@ -119,18 +116,42 @@ const BUDGET: Record<JoinPart, number> = {
   fences: 0.003,
   sheds: 0.001,
   doors: 0.01,
-  shopfronts: 0.005,
   plinths: 0.01,
+  monorails: 0,
+};
+
+/** Parts the spawn tile does not have, and the tile measured for them:
+ *  Dresden's Schwebebahn stands in Loschwitz. */
+const ELSEWHERE: Partial<Record<JoinPart, string>> = {
+  monorails: "33416_5656_2_sn",
 };
 
 test("the committed parts meet the ground within their budgets", async () => {
   const reports = await measureJoins(["33412_5656_2_sn"]);
-  for (const part of JOIN_PARTS) {
+  for (const part of JOIN_PARTS.filter((k) => !ELSEWHERE[k])) {
     const r = reports[part];
     expect(r.edges + r.feet).toBeGreaterThan(0);
     // a failure names the part and its share
     const share = missShare(r);
     expect({ part, share: share <= BUDGET[part] ? "within" : share }).toEqual({
+      part,
+      share: "within",
+    });
+  }
+}, 60_000);
+
+test("the parts the spawn tile lacks meet the ground where they stand", async () => {
+  for (const [part, tile] of Object.entries(ELSEWHERE) as [
+    JoinPart,
+    string,
+  ][]) {
+    const joins = await measureJoins([tile]);
+    const r = joins[part];
+    expect(r.edges + r.feet).toBeGreaterThan(0);
+    expect({
+      part,
+      share: missShare(r) <= BUDGET[part] ? "within" : missShare(r),
+    }).toEqual({
       part,
       share: "within",
     });

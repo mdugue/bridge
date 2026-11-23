@@ -11,6 +11,7 @@ import {
   float,
   floor,
   fract,
+  fwidth,
   hash,
   log,
   mix,
@@ -19,8 +20,10 @@ import {
   vec3,
 } from "three/tsl";
 import type { BridgeFeature, TrafficFeature } from "@/lib/city/features";
-import { epsgToWorld, type GroundContext } from "@/lib/city/ground-clamp";
-import { type Point2, subdividePolyline } from "@/lib/city/polyline";
+import { epsgToWorld } from "@/lib/city/ground-clamp";
+import type { GroundContext } from "@/lib/city/ground-clamp";
+import { subdividePolyline } from "@/lib/city/polyline";
+import type { Point2 } from "@/lib/city/polyline";
 import {
   flowHeight,
   flowProfile,
@@ -29,12 +32,13 @@ import {
   rightOf,
   TRAFFIC_HEAVY_TINT,
   TRAFFIC_SCALE,
-  type TrafficLane,
   trafficLanes,
 } from "@/lib/city/traffic";
-import { glassColour, glassGrazing } from "./glass";
-import { type DeckPoly, deckLift } from "@/lib/city/decks";
-import { buildDeckTable } from "./rail-layer";
+import type { TrafficLane } from "@/lib/city/traffic";
+import { dataMarkColour, glassColour, glassGrazing } from "./glass";
+import { deckLift } from "@/lib/city/decks";
+import type { DeckPoly } from "@/lib/city/decks";
+import { buildDeckTable } from "./bridge-deck";
 import type { F, V3, V4 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
 import { trafficNow, trafficPositionNode, trafficTravel } from "./traffic-flow";
@@ -73,7 +77,7 @@ import { trafficNow, trafficPositionNode, trafficTravel } from "./traffic-flow";
  *   higher, a bank buries that flank; where it is lower, the flank stands
  *   free of it — a data body follows its line, not the kerb. A section on
  *   a street named a bridge (`br`) rides the deck and its approach ramps
- *   (rail-layer.ts's lift table) where it crosses them; any other street
+ *   (bridge-deck.ts's lift table) where it crosses them; any other street
  *   stays on the ground.
  *
  * Unlit (the glass carries the light of what is behind it), no shadow,
@@ -108,7 +112,7 @@ function liveRamp(dtv: F): { load: F; tint: V3 } {
   let tint = color(TRAFFIC_SCALE[0].tint) as unknown as V3;
   let load = float(0) as F;
   const span = TRAFFIC_SCALE.length - 1;
-  for (let i = 0; i < span; i++) {
+  for (let i = 0; i < span; i += 1) {
     const lo = Math.log(TRAFFIC_SCALE[i].dtv);
     const hi = Math.log(TRAFFIC_SCALE[i + 1].dtv);
     const seg = logd
@@ -172,7 +176,24 @@ function trafficMaterial(): MeshBasicNodeMaterial {
     const light = mix(tint, vec3(1), 0.35).mul(
       pulse.mul(core).mul(ramp.load.mul(0.45).add(0.2))
     );
-    m.colorNode = glass.add(light);
+    // a pen's width along the crown, whatever the body's size on screen
+    // (never narrower than a fiftieth of the flank: on the crown the
+    // tent's two flanks cancel in a pixel quad's difference, and a
+    // zero-width smoothstep's NaN would reach every style through the mix)
+    const px = fwidth(rise).max(0.02);
+    // Under a picture style the flow takes the style's reading of a mark
+    // (glass.ts `dataMarkColour`): its place on the scale, its comets as
+    // the light — along the crown, where a head- or tail-light would be.
+    m.colorNode = dataMarkColour({
+      glass: glass.add(light),
+      tint,
+      scale: ramp.load,
+      light: pulse.mul(smoothstep(0.35, 0.9, rise)),
+      ridge: float(1).sub(
+        smoothstep(px.mul(0.6), px.mul(1.6), float(1).sub(rise))
+      ),
+    });
+    m.userData.paperOwn = true;
     return m;
   });
 }
@@ -214,11 +235,11 @@ const PROFILES: Record<TrafficDetail, [number, number][]> = {
  *  there (0 at the ends, 1 inside, a quarter circle between). */
 function samples(
   lane: TrafficLane,
-  step: number
+  spacing: number
 ): { at: number; p: Point2; size: number }[] {
-  const dense = subdividePolyline(lane.coords, step);
+  const dense = subdividePolyline(lane.coords, spacing);
   const dist = [0];
-  for (let i = 1; i < dense.length; i++) {
+  for (let i = 1; i < dense.length; i += 1) {
     dist.push(
       dist[i - 1] +
         Math.hypot(dense[i][0] - dense[i - 1][0], dense[i][1] - dense[i - 1][1])
@@ -252,7 +273,7 @@ function addLane(
   const height = flowHeight(lane.dtv);
   const pts = samples(lane, DETAIL[detail].sample);
   let prevOk = false;
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < pts.length; i += 1) {
     const { at, p, size } = pts[i];
     const right = rightOf(
       pts[Math.max(i - 1, 0)].p,
@@ -282,7 +303,7 @@ function addLane(
       body.section.push(section);
     }
     if (prevOk) {
-      for (let k = 0; k < ring - 1; k++) {
+      for (let k = 0; k < ring - 1; k += 1) {
         const a = base - ring + k;
         const b = base + k;
         // wound so the outside faces out (forward × up points to the
@@ -318,7 +339,8 @@ export function buildTraffic(
   const needsDecks = features.some((f) => f.properties?.br === 1);
   const decks = needsDecks ? buildDeckTable(bridges, ctx) : [];
   const open = openEnds(features, bounds);
-  for (const [i, f] of features.entries()) {
+  for (let i = 0; i < features.length; i += 1) {
+    const f = features[i];
     const onBridge = f.properties?.br === 1;
     for (const lane of trafficLanes(f, open[i])) {
       addLane(body, i, lane, onBridge, decks, ctx, detail);

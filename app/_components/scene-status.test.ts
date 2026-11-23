@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { FootprintPoly } from "@/lib/city/minimap";
+import type { MapFootprints } from "@/lib/city/minimap";
 import type { CityWalkStats } from "./create-app";
 import type { ModelHud } from "./model-rig";
 import {
@@ -20,7 +20,7 @@ function stats(buildingCount: number): CityWalkStats {
   };
 }
 
-function wire(polys?: FootprintPoly[]) {
+function wire(polys?: MapFootprints) {
   const status = createSceneStatus();
   let live = true;
   const reports = sceneReports(status, {
@@ -33,9 +33,15 @@ function wire(polys?: FootprintPoly[]) {
 test("each report writes its own slice, and only that one is heard", () => {
   const { status, reports } = wire();
   const heard: string[] = [];
-  status.subscribe("busy", () => heard.push("busy"));
-  status.subscribe("stats", () => heard.push("stats"));
-  status.subscribe("fps", () => heard.push("fps"));
+  status.subscribe("busy", () => {
+    heard.push("busy");
+  });
+  status.subscribe("stats", () => {
+    heard.push("stats");
+  });
+  status.subscribe("fps", () => {
+    heard.push("fps");
+  });
   reports.onBusy(true);
   reports.onFps(59.6);
   expect(status.get("busy")).toBe(true);
@@ -67,12 +73,16 @@ test("after a fatal report a late tile failure adds no hole under its card", () 
   expect(status.get("streamError")).toContain("tile 404");
 });
 
-test("a stats pass with the same counters is no change, and the footprints stay the same array", () => {
-  const polys: FootprintPoly[] = [];
+test("a stats pass with the same counters is no change, and the footprints stay the same object", () => {
+  const polys: MapFootprints = { outlines: [], tiles: [] };
   const { status, reports } = wire(polys);
   const heard: string[] = [];
-  status.subscribe("stats", () => heard.push("stats"));
-  status.subscribe("footprints", () => heard.push("footprints"));
+  status.subscribe("stats", () => {
+    heard.push("stats");
+  });
+  status.subscribe("footprints", () => {
+    heard.push("footprints");
+  });
   reports.onStats(stats(10));
   reports.onStats(stats(10));
   expect(status.get("stats")).toEqual({
@@ -86,24 +96,27 @@ test("a stats pass with the same counters is no change, and the footprints stay 
   expect(heard).toEqual(["stats", "footprints", "stats"]);
 });
 
+const view = (scale: number): ModelHud => ({
+  preset: "iso",
+  turnDeg: 30,
+  tiltDeg: 35,
+  scale,
+  metresPerPixel: 0.5,
+  shear: 0,
+  pivot: { x: 1, y: 2, z: 3 },
+  footprint: [{ x: 0, y: 0, z: 0 }],
+  transitioning: false,
+  cutOut: false,
+  cutOutPending: false,
+  cutOutFailed: false,
+});
+
 test("Modell's view rebuilt with the same numbers is no change", () => {
   const { status, reports } = wire();
-  const view = (scale: number): ModelHud => ({
-    preset: "iso",
-    turnDeg: 30,
-    tiltDeg: 35,
-    scale,
-    metresPerPixel: 0.5,
-    shear: 0,
-    pivot: { x: 1, y: 2, z: 3 },
-    footprint: [{ x: 0, y: 0, z: 0 }],
-    transitioning: false,
-    cutOut: false,
-    cutOutPending: false,
-    cutOutFailed: false,
-  });
   let heard = 0;
-  status.subscribe("modelView", () => heard++);
+  status.subscribe("modelView", () => {
+    heard += 1;
+  });
   reports.onModelView(view(1000));
   reports.onModelView(view(1000));
   reports.onModelView(view(2000));

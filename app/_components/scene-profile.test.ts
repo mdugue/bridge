@@ -5,6 +5,7 @@ import {
   liteKeepsBlockFromSearch,
   pixelRatioFor,
   postProfileFor,
+  reversedDepthFromSearch,
   sceneBudgetFor,
   sceneProfileFromSearch,
   shadowMapBytesFor,
@@ -35,15 +36,22 @@ test("sceneProfileFromSearch reads the lite opt-in", () => {
   expect(sceneProfileFromSearch("scene=lite")).toBe("lite");
 });
 
+test("the depth buffer runs reversed unless ?depth=standard asks", () => {
+  expect(reversedDepthFromSearch("")).toBe(true);
+  expect(reversedDepthFromSearch("?scene=lite")).toBe(true);
+  expect(reversedDepthFromSearch("?depth=standard")).toBe(false);
+  expect(reversedDepthFromSearch("?scene=lite&depth=standard")).toBe(false);
+});
+
 test("shadowMapSizeFor keeps the product map and shrinks the lite one", () => {
-  expect(shadowMapSizeFor("full")).toBe(3072);
-  expect(shadowMapSizeFor("lite")).toBe(512);
+  expect(shadowMapSizeFor("full")).toBe(2048);
+  expect(shadowMapSizeFor("lite")).toBe(256);
 });
 
 test("the mobile tier shrinks the shadow map unless lite already did", () => {
-  expect(shadowMapSizeFor("full", "mobile")).toBe(2048);
-  expect(shadowMapSizeFor("full", "desktop")).toBe(3072);
-  expect(shadowMapSizeFor("lite", "mobile")).toBe(512);
+  expect(shadowMapSizeFor("full", "mobile")).toBe(900);
+  expect(shadowMapSizeFor("full", "desktop")).toBe(2048);
+  expect(shadowMapSizeFor("lite", "mobile")).toBe(256);
 });
 
 test("pixelRatioFor caps phones and desktops at 1.5, lite at 0.5", () => {
@@ -68,7 +76,6 @@ test("deviceTierFromMedia maps the coarse-pointer query", () => {
 
 test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters in one go", () => {
   expect(sceneBudgetFor("", false)).toEqual({
-    forceWebGL: false,
     profile: "full",
     safety: 0,
     tier: "desktop",
@@ -76,7 +83,6 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
     lowRasters: false,
   });
   expect(sceneBudgetFor("?scene=lite", true, 2)).toEqual({
-    forceWebGL: false,
     profile: "lite",
     safety: 2,
     tier: "mobile",
@@ -88,9 +94,6 @@ test("sceneBudgetFor resolves profile, tier, the neighbour tiles and the rasters
     true
   );
   expect(sceneBudgetFor("?block=1", false).neighbourTiles).toBe(true);
-  // WebGPU where available; the WebGL2 backend only on request.
-  expect(sceneBudgetFor("?gpu=webgl2", false).forceWebGL).toBe(true);
-  expect(sceneBudgetFor("?gpu=webgpu", false).forceWebGL).toBe(false);
 });
 
 test("aoSamplesFor halves the GTAO samples in the lite profile and on a phone", () => {
@@ -144,9 +147,9 @@ test("postProfileFor leaves the costly post work to the desktop", () => {
 
 test("shadowMapBytesFor counts the depth map alone", () => {
   expect(shadowMapBytesFor(shadowMapSizeFor("full", "mobile"))).toBe(
-    16 * 1024 ** 2
+    900 * 900 * 4 * 4
   );
-  expect(shadowMapBytesFor(512)).toBe(512 * 512 * 4);
+  expect(shadowMapBytesFor(512)).toBe(512 * 512 * 4 * 4);
 });
 
 /**
@@ -199,5 +202,5 @@ test("every safety level is a lighter page than the one before", () => {
   }
   // the lite profile's own numbers hold at every level
   expect(pixelRatioFor("lite", "mobile", 3, 3)).toBe(0.5);
-  expect(shadowMapSizeFor("lite", "mobile", 3)).toBe(512);
+  expect(shadowMapSizeFor("lite", "mobile", 3)).toBe(256);
 });
