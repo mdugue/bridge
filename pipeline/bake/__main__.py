@@ -12,6 +12,7 @@ import hashlib
 import multiprocessing
 import os
 import sys
+import time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -222,15 +223,19 @@ def recorded_tile(spec, step: str, tile, research: bool, key: dict, save: bool) 
     cache off, its old record dropped. A step that fails says on which
     site, tile and step before the error goes on (in a worker of a
     `--jobs` run as well): tile 11 of 15 names itself."""
+    started = time.perf_counter()
     try:
         manifest = step_cache.manifest_path(spec.raw, spec.site, step, tile.id)
         if not save:
             Path(manifest).unlink(missing_ok=True)
             run_tile(step, tile, spec.tiles, research)
-            return
-        with step_cache.recording([os.getcwd(), str(spec.data), str(spec.raw)]) as rec:
-            run_tile(step, tile, spec.tiles, research)
-        step_cache.save(manifest, key, rec)
+        else:
+            with step_cache.recording([os.getcwd(), str(spec.data), str(spec.raw)]) as rec:
+                run_tile(step, tile, spec.tiles, research)
+            step_cache.save(manifest, key, rec)
+        # where a bake's minutes go, tile by tile (the step's own line says
+        # what it found)
+        print(f"{tile.id}: {step} took {time.perf_counter() - started:.1f} s")
     except (Exception, SystemExit) as exc:  # a step's `SystemExit("no OSM extract")` too
         print(f"{spec.site} {tile.id} {step}: {exc}", file=sys.stderr)
         raise
@@ -272,6 +277,14 @@ class Bake:
         self.tiles = {t.id: t for t in spec.tiles}
 
     def _run(self, step: str, tiles) -> None:
+        started = time.perf_counter()
+        try:
+            self._run_tiles(step, tiles)
+        finally:
+            took = time.perf_counter() - started
+            print(f"{self.spec.site}: {step} over {len(tiles)} tile(s) took {took:.1f} s")
+
+    def _run_tiles(self, step: str, tiles) -> None:
         key = step_key(step, self.research, self.spec_hash)
         args = (self.research, key, self.mode != "off")
         if self.jobs <= 1 or len(tiles) <= 1:

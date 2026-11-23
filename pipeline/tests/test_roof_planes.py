@@ -13,10 +13,12 @@ from bake.roof_planes import (
     creases,
     curved_surface,
     flank_cells,
+    flank_facets,
     gable_fit,
     planar_faces,
     plane_facets,
     plausible_fit,
+    wall_ways,
 )
 from bake.roofs import SLOPE, measured_model, step_cells
 
@@ -235,13 +237,109 @@ def test_a_vaults_half_sags_a_flank_does_not():
     assert not bool(_flank_plane(dense, every, np.pi)[1])
 
 
-def test_a_landmarks_face_only_flanks_found_takes_every_buildings_bar():
+def test_a_landmarks_flanks_take_every_buildings_bar():
     # a gable with a tenth of its cells 1.2 m under its planes (a cluttered
-    # roof): flanks for any building; a landmark's face the flank rule
-    # alone found has no other form, so the same holds for it
+    # roof): flanks for any building, a landmark too, whose blurred scan is
+    # the alternative only where flanks fail (the Schauspielhaus's 23° roof)
     clean = _gable(rows=60, cols=24, ridge=12.0, pitch=0.8)
     off = np.random.default_rng(4).random(clean.shape) < 0.1
     h = clean - np.where(off, 1.2, 0.0)
     every = np.ones(h.shape, bool)
     assert plausible_fit(h, every, SLOPE, flanks_only=True) is not None
     assert plausible_fit(h, every, SLOPE, landmark=True, flanks_only=True) is not None
+    fit = plausible_fit(h, every, SLOPE, landmark=True)
+    assert fit is not None and fit[1] is not None  # drawn as flanks, with eaves
+
+
+def test_a_steep_flanks_eave_blurred_over_two_cells_is_still_a_gable():
+    # a steep gable whose scan sinks 1.5 m into the wall over its outer two
+    # cells all round, as a 1 m scan blurs a steep eave: the blur is not
+    # judged, so the flanks still explain the face (judged from the second
+    # cell in, the blur's inner ring alone failed them)
+    h = _gable(rows=30, cols=20, ridge=10.0, pitch=0.8)
+    every = np.ones(h.shape, bool)
+    edge = ndi.distance_transform_cdt(np.pad(every, 1), metric="chessboard")[1:-1, 1:-1]
+    blurred = h - np.where(edge <= 2, 1.5, 0.0)
+    assert gable_surface(blurred, every, SLOPE) is not None
+
+
+def _flank_planes(h, ways=None):
+    lab, planes, flanks, _, _ = flank_facets(h, np.ones(h.shape, bool), SLOPE, 1.0, ways)
+    return lab, planes, flanks
+
+
+def test_a_flank_the_scan_turns_a_degree_or_two_rises_square_to_its_wall():
+    # a gable along the rows; the scan tilts its west flank along the ridge
+    # too (12 mm a metre, 2° off square to the wall: within what a plane
+    # square to the wall still holds)
+    h = _gable()
+    h[:, :15] += 0.012 * (np.arange(40)[:, None] - 20)
+    lab, planes, flanks = _flank_planes(h)
+    west = int(lab[20, 5])
+    assert west in flanks and abs(planes[west][2]) > 0.004
+    # the walls run along the rows and the columns (north and east)
+    ways = wall_ways(np.array([0.0, np.pi / 2]))
+    lab, planes, flanks = _flank_planes(h, ways)
+    for k in flanks:
+        assert abs(planes[k][2]) < 1e-6  # level along the wall: eave and ridge
+        assert abs(abs(planes[k][1]) - 0.4) < 0.02
+
+
+def test_a_flank_a_plane_square_to_the_wall_does_not_hold_keeps_its_way():
+    # the same tilt, but 3 cm a metre: 0.6 m at the gable ends, which a
+    # plane square to the wall misses
+    h = _gable()
+    h[:, :15] += 0.03 * (np.arange(40)[:, None] - 20)
+    ways = wall_ways(np.array([0.0, np.pi / 2]))
+    lab, planes, _ = _flank_planes(h, ways)
+    assert abs(planes[int(lab[20, 5])][2]) > 0.01
+
+
+def test_a_flank_built_off_the_walls_keeps_the_way_the_scan_shows():
+    # a wing turned 40° off the building's walls: no wall to rise square to
+    r, c = np.indices((50, 50)) + 0.5
+    t = np.deg2rad(40.0)
+    across = (c - 25) * np.cos(t) + (r - 25) * np.sin(t)
+    h = 12 - np.abs(across) * 0.5
+    ways = wall_ways(np.array([0.0, np.pi / 2]))
+    _, free, flanks = _flank_planes(h)
+    _, held, _ = _flank_planes(h, ways)
+    for k in flanks:
+        assert np.allclose(held[k], free[k])
+        assert np.isclose(np.rad2deg(np.arctan2(abs(held[k][2]), abs(held[k][1]))), 40.0, atol=1.0)
+
+
+def test_a_deck_cut_into_a_flank_is_a_level_of_its_own_a_dormer_is_not():
+    # a 10 × 8 m plant deck cut into the west flank at 5 m, and a dormer on
+    # the east one: the deck is no part of the flank's plane, the dormer is
+    h = _gable(rows=50, cols=40, ridge=20.0)
+    plain = h.copy()
+    h[15:25, 6:14] = 5.0
+    h[30:33, 26:29] += 1.2
+    lab, planes, flanks = _flank_planes(h)
+    deck = int(lab[20, 10])
+    assert deck not in flanks
+    assert np.hypot(*planes[deck][1:]) < 0.05 and abs(planes[deck][0] - 5.0) < 0.3
+    assert (lab[16:24, 8:13] == deck).all()
+    # the dormer's cells stay the east flank's, whose plane it does not move
+    east = int(lab[31, 27])
+    assert east in flanks and east == int(lab[40, 27])
+    assert abs(planes[east][0] + planes[east][1] * 27 + planes[east][2] * 31 - plain[31, 27]) < 0.2
+
+
+def test_a_deck_with_plant_on_it_lies_level_a_low_roof_between_flanks_keeps_its_pitch():
+    # the deck above with plant along one edge: a plane fitted to it tilts
+    # toward the plant, the level holds as much of the deck
+    h = _gable(rows=50, cols=40, ridge=20.0)
+    h[15:25, 6:14] = 5.0
+    h[15:25, 6:8] += 0.9
+    lab, planes, flanks = _flank_planes(h)
+    deck = int(lab[20, 11])
+    assert deck not in flanks
+    assert not planes[deck][1:].any() and abs(planes[deck][0] - 5.0) < 0.1
+    # a low roof in the same place, rising 2 m over its 10: no level holds it
+    h = _gable(rows=50, cols=40, ridge=20.0)
+    h[15:25, 6:14] = 4.0 + 0.2 * (np.arange(15, 25)[:, None] + 0.5 - 15)
+    lab, planes, flanks = _flank_planes(h)
+    low = int(lab[20, 10])
+    assert low not in flanks and abs(abs(planes[low][2]) - 0.2) < 0.03

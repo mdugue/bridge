@@ -52,6 +52,7 @@ import {
 import { mapWidenNode } from "./map-overlay";
 import type { F, V3 } from "./shader-chunks";
 import { sceneMaterial } from "./three-utils";
+import { pageView } from "./page-view";
 
 /**
  * The city's permanent bicycle counters, live (lib/city/bike-counts.ts;
@@ -95,9 +96,8 @@ const RING_SPEED = 0.18;
 /** At most this many columns (the city runs 35 counters). */
 const CAPACITY = 128;
 
-/** No document (a test, a worker): never hidden. */
-const hidden = (): boolean =>
-  typeof document === "undefined" ? false : document.hidden;
+/** The page is hidden (page-view.ts). */
+const hidden = (): boolean => pageView.hidden;
 
 /** A unit column standing on its foot (y 0..1), the top a soft dome. */
 function columnGeometry(): LatheGeometry {
@@ -441,18 +441,14 @@ export function createBikeFeed(opts: {
       timer = setInterval(() => {
         void read();
       }, BIKE_POLL_MS);
-      if (typeof document !== "undefined") {
-        document.addEventListener("visibilitychange", onVisibility);
-      }
+      pageView.addEventListener("visibilitychange", onVisibility);
     },
     stop: () => {
       if (timer !== null) {
         clearInterval(timer);
         timer = null;
       }
-      if (typeof document !== "undefined") {
-        document.removeEventListener("visibilitychange", onVisibility);
-      }
+      pageView.removeEventListener("visibilitychange", onVisibility);
       aborter?.abort();
       aborter = null;
     },

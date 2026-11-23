@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { FootprintPoly } from "@/lib/city/minimap";
+import type { MapFootprints } from "@/lib/city/minimap";
 import type { CityWalkStats } from "./create-app";
 import type { ModelHud } from "./model-rig";
 import {
@@ -20,7 +20,7 @@ function stats(buildingCount: number): CityWalkStats {
   };
 }
 
-function wire(polys?: FootprintPoly[]) {
+function wire(polys?: MapFootprints) {
   const status = createSceneStatus();
   let live = true;
   const reports = sceneReports(status, {
@@ -73,8 +73,8 @@ test("after a fatal report a late tile failure adds no hole under its card", () 
   expect(status.get("streamError")).toContain("tile 404");
 });
 
-test("a stats pass with the same counters is no change, and the footprints stay the same array", () => {
-  const polys: FootprintPoly[] = [];
+test("a stats pass with the same counters is no change, and the footprints stay the same object", () => {
+  const polys: MapFootprints = { outlines: [], tiles: [] };
   const { status, reports } = wire(polys);
   const heard: string[] = [];
   status.subscribe("stats", () => {

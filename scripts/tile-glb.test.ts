@@ -6,7 +6,7 @@ import {
   readStructuralMetadata,
 } from "../lib/city/property-table";
 import type { StructuralMetadataJson } from "../lib/city/property-table";
-import { ENUM_NONE, enumColumn, writeMeshGlb } from "./tile-glb";
+import { ENUM_NONE, enumColumn, indexed, writeMeshGlb } from "./tile-glb";
 import type { PropertyTable } from "./tile-glb";
 
 /** The JSON chunk of a glb. */
@@ -352,4 +352,47 @@ test("the viewer reads back every column the bake writes, as 3DTilesRendererJS's
   expect(Object.keys(table.properties).toSorted()).toEqual(
     Object.keys(theirs[0]).toSorted()
   );
+});
+
+test("an owned mesh is written the same, turned where it lies", async () => {
+  const input = {
+    name: "city",
+    indices: new Uint32Array([0, 1, 2, 3, 4, 5]),
+    extras: { kind: "city", tileId: "t" },
+  };
+  const copied = await writeMeshGlb({ ...input, positions, normals });
+  const own = positions.slice();
+  const owned = await writeMeshGlb({
+    ...input,
+    positions: own,
+    normals: normals.slice(),
+    owned: true,
+  });
+  expect(Buffer.from(owned).equals(Buffer.from(copied))).toBe(true);
+  // (x, y, z) → (x, z, −y), in the caller's array
+  expect(Array.from(own.subarray(9, 12))).toEqual([5, 1, -5]);
+  expect(Array.from(positions.subarray(9, 12))).toEqual([5, 5, 1]);
+});
+
+test("a child's soup is indexed: equal vertices are one, the triangles stay", () => {
+  // a quad as two triangles, and a third that shares a position but not
+  // its colour
+  const child = indexed({
+    name: "kerbs",
+    positions: new Float32Array([
+      0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 2, 0, 0, 2,
+      2, 0,
+    ]),
+    normals: new Float32Array(27).map((_, i) => (i % 3 === 2 ? 1 : 0)),
+    colors: new Float32Array([
+      ...Array.from({ length: 18 }, () => 0.5),
+      ...Array.from({ length: 9 }, () => 0.25),
+    ]),
+  });
+  expect(Array.from(child.indices ?? [])).toEqual([0, 1, 2, 0, 2, 3, 4, 5, 6]);
+  expect(child.positions).toHaveLength(21);
+  expect(Array.from(child.positions.subarray(9, 12))).toEqual([0, 1, 0]);
+  expect(Array.from(child.colors?.subarray(12, 15) ?? [])).toEqual([
+    0.25, 0.25, 0.25,
+  ]);
 });

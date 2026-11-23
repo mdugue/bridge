@@ -1834,7 +1834,10 @@ def measured_walls(tile: Tile, city: dict, ids: list[str]) -> dict[int, list[dic
 def run(tile: Tile) -> None:
     out = tile.out("dlm", f"dormers_{tile.id}.geojson")
     city_path = tile.data / "cityjson" / f"lod2_{tile.id}.city.json"
-    if not tile.products.dom or not tile.raw_raster("dom1").exists() or not city_path.exists():
+    here = tile.products.dom and city_path.exists()
+    if here and not tile.raw_raster("dom1").exists() and tile.raw_absent(out, "no DOM1 here"):
+        return
+    if not here or not tile.raw_raster("dom1").exists():
         print(f"{tile.id}: no surface model — no dormers")
         write_geojson(out, [], tile.epsg, tile.credit)
         return

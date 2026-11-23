@@ -9,11 +9,12 @@ import type { LookState } from "@/lib/city/look-state";
  * hand. Everything here lives per boot: nothing is module state, so a
  * remount or a recovered page starts clean.
  *
- * A feature's code still ships with the scene: as a chunk of its own
- * (`import()`), the data layers made the viewer's first-load JS 22.7 KB
- * gz larger while moving 10.1 KB out — three.js, imported by both chunks,
- * lost its scope hoisting with the scene's code (ADR 0040). The importer
- * create-app.ts hands `lazyFeature` is where an `import()` would go.
+ * A feature's code ships with the scene, so there is nothing to load: as
+ * a chunk of its own (`import()`) the data layers cost more first-load JS
+ * than they moved in 2026-10 (three.js lost its scope hoisting, ADR 0040),
+ * and measured again in 2026-11, with three in chunks of its own, the
+ * viewer's JS came out 0.5 kB larger and the chunk was fetched at the
+ * boot all the same.
  */
 
 /** An event of the spine a feature can listen to. */
@@ -105,33 +106,27 @@ export interface SpineHooks {
 }
 
 /** A feature that starts once, the first time it is wanted. */
-export interface LazyFeature<F> {
-  /** loads the module and starts the feature, once: resolves to it, or to
-   *  null once the spine is gone. A load that fails rejects, and the next
-   *  call tries again; a start that throws rejects for good. */
+export interface StartedOnce<F> {
+  /** starts the feature, once: resolves to it, or to null once the spine
+   *  is gone. A start that throws rejects, this want and every later one. */
   want: () => Promise<F | null>;
   /** the feature, once it has started */
   current: () => F | null;
-  /** stops the feature, or keeps one still loading from starting */
+  /** stops the feature, or keeps one not yet started from starting */
   dispose: () => void;
 }
 
 /**
- * A feature whose module comes with `importer` and starts with `start` once
- * it has — always after the call that wanted it has returned, never inside
- * it (the importer's promise resolves in a later microtask at the soonest).
+ * A feature that starts with `start` the first time it is wanted — always
+ * after the call that wanted it has returned, never inside it (in a later
+ * microtask), so a spine still setting itself up has finished by then.
  */
-export function lazyFeature<M, F extends { dispose: () => void }>(
-  importer: () => M | Promise<M>,
-  start: (module: M) => F
-): LazyFeature<F> {
+export function startOnce<F extends { dispose: () => void }>(
+  start: () => F
+): StartedOnce<F> {
   let feature: F | null = null;
   let pending: Promise<F | null> | null = null;
   let disposed = false;
-  const dropPending = (cause: unknown): never => {
-    pending = null;
-    throw cause;
-  };
   return {
     want: async () => {
       // (a start that resolved before the spine went would hand out the
@@ -139,13 +134,13 @@ export function lazyFeature<M, F extends { dispose: () => void }>(
       if (disposed) {
         return null;
       }
-      pending ??= Promise.resolve(importer()).then((module) => {
+      pending ??= Promise.resolve().then(() => {
         if (disposed) {
           return null;
         }
-        feature ??= start(module);
+        feature = start();
         return feature;
-      }, dropPending);
+      });
       return await pending;
     },
     current: () => feature,
@@ -161,11 +156,11 @@ export function lazyFeature<M, F extends { dispose: () => void }>(
  * The spine's want of a feature that serves several switches (the data
  * layers): called with whether any of them is on, it wants the feature on
  * each switch-on — none on before — and not on every change while one is,
- * so a load that failed is asked for again the next time, and `failed`
- * hears each want that did not start it.
+ * and `failed` hears each want that did not start it (once a switch-on,
+ * not once a slider's step).
  */
 export function wantOnSwitchOn(
-  feature: Pick<LazyFeature<unknown>, "want">,
+  feature: Pick<StartedOnce<unknown>, "want">,
   failed: (error: unknown) => void
 ): (on: boolean) => void {
   let wasOn = false;

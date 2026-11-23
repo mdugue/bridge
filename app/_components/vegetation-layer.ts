@@ -1910,12 +1910,15 @@ export function* vegetationSteps(
   const rows = yield* inRuns(treeRows, ROW_RUN, (run) => [
     rowPlacements(run, ctx, ndviAt, keepTree),
   ]);
-  const trees = rows.flatMap((r) => r.trees);
-  trees.push(
-    ...(yield* inRuns(features.canopy, PLACEMENT_RUN, (run) =>
-      canopyPlacements(run, ctx, ndviAt, keepTree)
-    ))
-  );
+  // concat, never push(...): a dense canopy places tens of thousands of
+  // trees, past what a worker's smaller stack takes as arguments
+  const trees = rows
+    .flatMap((r) => r.trees)
+    .concat(
+      yield* inRuns(features.canopy, PLACEMENT_RUN, (run) =>
+        canopyPlacements(run, ctx, ndviAt, keepTree)
+      )
+    );
   const extras = features.extraTrees ?? [];
   if (trees.length + extras.length > 0) {
     const built = yield* buildTrees(

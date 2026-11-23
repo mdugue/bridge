@@ -210,6 +210,9 @@ export function forEachPoint(
     size *= 2;
   }
   const hash = new Uint32Array(m);
+  // each bucket's end, counted; then its start, as the corners are laid in
+  // (one table of the buckets, not a second as cursors: a dense tile has
+  // thirty million of them)
   const start = new Uint32Array(size + 1);
   for (let k = 0; k < m; k += 1) {
     const v = alive[k];
@@ -223,11 +226,12 @@ export function forEachPoint(
   for (let b = 0; b < size; b += 1) {
     start[b + 1] += start[b];
   }
-  const fill = start.slice(0, size);
   const order = new Uint32Array(m);
-  for (let k = 0; k < m; k += 1) {
-    order[fill[hash[k]]] = alive[k];
-    fill[hash[k]] += 1;
+  // from the last corner down, each bucket filled from its end: a bucket
+  // holds its corners in rising order, and `start` ends as the starts
+  for (let k = m - 1; k >= 0; k -= 1) {
+    start[hash[k] + 1] -= 1;
+    order[start[hash[k] + 1]] = alive[k];
   }
   const same = (a: number, b: number) =>
     key(3 * a) === key(3 * b) &&
@@ -235,8 +239,8 @@ export function forEachPoint(
     key(3 * a + 2) === key(3 * b + 2) &&
     groups[a] === groups[b];
   for (let b = 0; b < size; b += 1) {
-    const from = start[b];
-    const to = start[b + 1];
+    const from = start[b + 1];
+    const to = b + 1 < size ? start[b + 2] : m;
     if (to - from < 2) {
       continue;
     }

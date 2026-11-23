@@ -750,10 +750,11 @@ visual-variable codebook is in
   client packs it into an RGBA32F texture the clay node reads with
   `textureLoad`
   (`lib/city/city-mesh.ts` `packObjectTexels`), so the style lives once per
-  building, not once per vertex. Footprints go to `footprints_<tile>.json`
-  for the minimap (which draws the bridge decks from each tile's `bridge`
-  file too, in the colour of the class they carry — the class raster
-  shows the river under them). Demolish = filter the building tree out of the index
+  building, not once per vertex. Footprints go, packed, to `footprints_<tile>.fpr.gz`
+  (`lib/city/footprint-pack.ts`), and as ink into the site's one minimap picture (`minimap.webp`,
+  `scripts/bake-minimap.ts`, cover per pixel from `lib/city/footprint-figure.ts`), which also holds the bridge decks from each tile's `bridge`
+  file, in the colour of the class they carry — the class raster
+  shows the river under them. Demolish = filter the building tree out of the index
   buffer + rebuild the BVH; BVH picking/collision, each tile's BVH built
   when a ray first reaches it (`ensureCityBvh`, plan 069,
   [ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)), not as it
@@ -932,7 +933,7 @@ visual-variable codebook is in
   the ALKIS roofs on posts (`51009_1610` Überdachung, `51009_1611`
   Carport) as solid blocks down to the ground: a platform under one
   vanished, a fuel station's pumps stood inside it.
-  `scripts/bake-city-mesh.ts` (`withOpenRoofs`) cuts their walls to a
+  `scripts/city-roofs.ts` (`withOpenRoofs`) cuts their walls to a
   fascia as deep as the slab above, drops the floor and adds an underside
   and the same posts, where at least 1.8 m stays clear (a bin shelter or a
   cellar entrance under that reads as well as a block); they take no
@@ -1095,11 +1096,28 @@ visual-variable codebook is in
   plane rises along its direction alone, so eaves and ridge are level:
   fitted through the median of each metre across it (the first and last
   left out), then on its cells within 0.5 m (dormers and chimneys trimmed
-  away); two neighbouring flanks facing within 15° of opposite share one
-  axis (a level ridge). A level patch between them (a crown, a mansard's
+  away); a flank turned within 15° of square to one of the building's
+  walls rises square to it (since 2026-11-13, `_along_walls`: the eave
+  runs along its wall, where the scan alone turns a flank by a few degrees
+  with its eave's blur and what stands on it — the Schauspielhaus's
+  flanks fell to 45°, 63°, 68° and 77° from walls at 60.5°) — only where
+  the walls leave one such way (a footprint of many directions does not
+  say which wall is the flank's) and its plane then lies on at most 3 %
+  less of its cells, and the flanks so turned are tried first, the scan's
+  own ways where they are no roof's; two neighbouring flanks facing within
+  15° of opposite share one axis (a level ridge). A level patch between them (a crown, a mansard's
   top) is a level plane; a cell near a flank (4 cells) whose plane holds
   it — the scan on it or up to 3 m over it, a dormer — is the flank's;
-  what is left takes planes of its own (`plane_facets`), every other cell
+  a block of more than 30 m² its plane does not explain (off it, or over
+  it wider than a dormer) is no part of the flank but a roof of its own
+  on it or cut into it (since 2026-11-13, `_own_blocks`: the
+  Schauspielhaus's plant deck cut into the auditorium's roof, the roof
+  beyond it, its corner pavilion);
+  what is left takes planes of its own (`plane_facets`) — a level where
+  that holds as much of the patch as its plane, within 3 % (`_level`:
+  what stands on a deck tilts a plane fitted to it; the Schauspielhaus's
+  decks were slabs 9–14° askew; where the face so drawn is no roof's,
+  the patches keep their planes) —, every other cell
   the nearby plane closest to the scan. Two neighbouring planes that each
   rise toward the other (a ridge, a hip; a level crown counts as either
   side) meet on the lower of the two, two that each fall toward the
@@ -1109,9 +1127,13 @@ visual-variable codebook is in
   der Frauenkirche 5's east wing) — within 6 cells of it, so where the
   planes cross further off (a flank joined over a bend) no island of the
   other plane stands far from the border; other borders, a row of houses
-  stepping, stay where the scan put them. The flanks are the face when, judged a cell in from its edge
-  (the eave's blur), 85 % of its cells (a landmark's 95 %, unless only
-  the flank rule found the face: it has no other form) lie within
+  stepping, stay where the scan put them. The flanks are the face when, judged two cells in from its edge
+  (the eave's blur: a 1 m scan rounds a steep flank's eave into the
+  wall over two cells; one where two would leave less than half the
+  face), 85 % of its cells — a landmark's too: its blurred scan is the
+  alternative only where flanks fail (since 2026-11-11; at a 95 % bar the
+  Schauspielhaus's 23° roof over the auditorium, 84 % on its flanks,
+  was drawn as its scan) — lie within
   0.5 m of their plane or under a blob of ≤ 30 m² up to 3 m over it, 60 %
   on it; no flank sags (a parabola through its metre strips' lower
   quartiles — a row of dormers lifts a strip's median, not its lower
@@ -1141,8 +1163,21 @@ visual-variable codebook is in
   together, their takes before their gives, a cell two take going to
   the higher plane (as a valley is drawn): a level they would leave
   smaller than a part or narrower than 7 m (`NARROW_M`, a strip between
-  two wings standing as a box) keeps its cells. An der
-  Frauenkirche 5's ring is now 16 flanks meeting at hips; the block at
+  two wings standing as a box) keeps its cells. **A wall's blur under a
+  flank** (`_split_collars`, since 2026-11-11): a level narrower than
+  7 m below a face drawn as flanks (its median over 1 m under the planes
+  there) that the scan lies flat on (within 0.5 m) over less than half
+  its cells is no roof but the scan grading a wall over a few cells — a
+  stage house's 8 m wall banded into a collar round its hipped roof, the
+  Schauspielhaus's at 145 m: it is split at half height, each cell to the
+  face's plane or to the part beyond (a lower face's plane only within
+  1 m of the scan) whichever its scan lies nearer, so the wall stands
+  where the scan crosses its middle; those cells are not judged when the
+  model's miss is measured (`Model.judged`: no sharp roof lies on a
+  blur, and the split had sent a small gable at 2 % over its bar back to
+  the flat model). 31 buildings on Dresden's, Leipzig's, Hamburg's and
+  Grimma's tiles lost such a collar or ledge, 0.4 % fewer outline points.
+  An der Frauenkirche 5's ring is now 16 flanks meeting at hips; the block at
   Schloßstraße and Sporergasse 23 flanks, the scan within 0.5 m of the
   drawn roof on 70 % of its cells (35 % with the planes first). A face most of whose cells only the
   flank rule found is drawn as flanks or not at all: the planes or a
@@ -1203,8 +1238,24 @@ visual-variable codebook is in
   under 4 m² in plan, dropped →
   `data/<site>/dlm/roofs_<tile>.geojson` (Polygons
   with the object `id`, the roof `z` and, for a face, its `surface`; the
-  provider's credit). **1 080 objects on Dresden's fifteen tiles, 2 738
-  parts, 335 of them faces** (2026-11-10; 2 814 and 367 before the flanks;
+  provider's credit). A face drawn as flanks or planes also carries them
+  as `facets` (since 2026-11-13, `roof_facets.py`): each plane's polygon
+  in plan and its plane. The labels lose their strips a cell wide, their
+  raster borders are straightened (`coverage_simplify`, 1.25 m), then
+  every point of a border between two planes that meet at a crease — the
+  cells either side on their own side of the planes' crossing, 80 % of
+  them — moves onto the line the two cross along, a corner several
+  creases share to their common point (≤ 3 cells); the polygons are cut
+  to the part's outline on a 1 cm grid and noded, each run between two
+  corners one edge (a step's stair within 0.75 m of straight), so two
+  facets share a border point for point; facets that miss the outline by
+  > 0.1 % leave the face to its grid. A ridge, a hip, a valley is one
+  straight edge where the grid cut it off between two cell centres. **1 080 objects on Dresden's fifteen tiles, 2 727
+  parts, 343 of them faces, 319 of those with facets** (2026-11-13; 2 731
+  and 335 before flanks rose square to their walls and blocks on them
+  took planes of their own; 2 741 and 334 before a wall's
+  blur was split, 2 738 and 335 before a landmark's flanks took every
+  building's bar; 2 814 and 367 before the flanks;
   1 081, 2 755 and 222 before the plausibility rule; 886 objects, 2 227 parts before
   the band below 40 %; 2 956 parts before the strips merged; the
   Altstadt most); the step runs on every site — Hamburg 587 objects (365
@@ -1212,7 +1263,14 @@ visual-variable codebook is in
   Grimma 17 (13), München 121 (120).
   `bakeCityMesh` (`withMeasuredRoofs`, `scripts/measured-roofs.ts`) drops
   the object's LoD2 triangles and stands each part from the object's
-  lowest LoD2 vertex — a flat part as a prism, a face as an error-bounded
+  lowest LoD2 vertex — a flat part as a prism, a face with `facets` as
+  those (`facetPrism`: each polygon flat on its plane and shading with
+  the plane's normal, the heights of facets meeting at a corner within
+  0.5 m one height — a crease, or two planes the scan cannot tell from
+  two that meet (the bake's `FLANK_TOL_M`), where a step would be a
+  sliver of wall a hand high across the roof; two meeting at a crease
+  there, within 5 cm, are never parted —, a wall where a facet's
+  edge has no neighbour or a lower one), any other face as an error-bounded
   TIN of its grid (Delatin, 0.25 m) whose inner vertices are triangulated
   with the outline's points where the height along it bends (Delaunay,
   the outline's edges enforced by splitting), its walls on those same
@@ -1221,13 +1279,23 @@ visual-variable codebook is in
   and minimap stay; eave and storey rows follow the new shape, and the
   card says *geformt wie gemessen* where a face is part of it
   (`MEASURED_SHAPE`). The rebuilt objects' triangles: 215 k before and
-  after on the site (a face's TIN costs what its terraces did). The sky-view and horizon bake
+  after on the site (a face's TIN costs what its terraces did); the
+  facets take 9 % off the measured parts' own (Dresden 123.7 k → 111.4 k,
+  Leipzig 80.4 k → 74.6 k, Hamburg 130.8 k → 121.1 k, München 8.2 k →
+  7.4 k, Meißen 3.2 k → 2.7 k, Grimma 2.4 k → 1.7 k, Unna 8.0 k → 7.3 k:
+  a plane is a polygon's few triangles, where its TIN ran along every
+  crease in steps). The sky-view and horizon bake
   (`skyview.py`) burns the rebuilt parts — flat tops, faces on their grid —
   in place of their objects' LoD2 surfaces, so the far shadows match the
-  mesh (`roofs` runs before `skyview`). Limits: a face is the scan's,
+  mesh (`roofs` runs before `skyview`). Limits: a face without facets (a
+  vault, a landmark's scan) is the scan's,
   smoothed: a sharp ridge reads rounded over a metre or two, a dormer or a
-  chimney is smoothed away; a face's TIN keeps its 0.25 m lumps, which the
-  smoothed shading hides more than it removes. Judged in headless
+  chimney is smoothed away; such a face's TIN keeps its 0.25 m lumps, which the
+  smoothed shading hides more than it removes. A hip ends where its two
+  planes meet the outline, which may lie a few decimetres beside the
+  outline's corner (the flanks' eaves are fitted each on its own); the
+  step bakes that read a face (`skyview`, `dormers`, `roof_colour`) read
+  its grid, which the facets leave as it was. Judged in headless
   SwiftShader renders only (before/after), not on a real GPU.
 - **Ground-clamp** `= computed` — the loaded terrains' grids (fine level first) sampled to
   seat trees, lamps, monuments, rails, walls and the player on terrain.
@@ -1511,10 +1579,14 @@ visual-variable codebook is in
   lays each piece on its host's LoD2 wall, which stands up to a couple
   of decimetres off the footprint line and is often turned a little
   against it, and bends a few centimetres along a long stretch (rays
-  every metre against the host's triangles, the band laid piece by piece
-  through them, `wallShiftKnots` — one line fitted through five rays
-  sank the 6 cm Gurtgesims into the wall where it bulged; a mitre meets
-  where the two shifted walls meet),
+  every metre against the host's triangles, `wallShiftKnots` — one line
+  fitted through five rays sank the 6 cm Gurtgesims into the wall where
+  it bulged; the band is laid piece by piece through the knots the wall
+  needs, `thinned`: a knot stays only where the line between its
+  neighbours would sink the band more than 1 cm into the wall as read
+  there or stand it more than 3 cm off, so a flat wall is one piece and
+  a tile's bands a fifth of the triangles a piece every metre made; a
+  mitre meets where the two shifted walls meet),
   and appends a stone band 7 cm proud of it whose front rolls over a
   12 cm quarter-round shoulder into its top, shaded smooth (no hard
   edge), with square ends (`lib/city/plinths.ts`, `appendPlinths`); the
@@ -1605,7 +1677,7 @@ visual-variable codebook is in
   lined stood open into its interior — the bake writes the ceiling's
   plan, the walls along it (and across it at a shut end) and its portals
   (`dlm/passages_<t>.geojson`). The
-  building bake (`bake-city-mesh.ts` `withPassages`, the geometry in
+  building bake (`city-passages.ts` `withPassages`, the geometry in
   `lib/city/building-passages.ts`) gives it its clear height —
   `maxheight:physical` or `maxheight` where plausible, else the larger of
   3.8 m for a drive, 5 m for a track (a contact wire's lowest in a
@@ -1780,7 +1852,8 @@ visual-variable codebook is in
   its cells and its outline, so a strip narrower than a cell has one); until then such a roof's dormers and chimneys stood
   at the LoD2 faces it replaces, metres off the drawn roof — some
   chimneys' measured tops under their own feet (Dresden's rebuilt roofs
-  hold 359 dormers now, 50 before; the block at Schloßstraße and
+  hold 371 dormers now, 50 before (359 before a landmark's flanks took
+  every building's bar: the Kreuzschule's 12, 2 before); the block at Schloßstraße and
   Sporergasse 26, 4 before). The burned 1 m roof
   reads a cell's height, up to half a metre off a 45° face under a
   centre: over all seven cities 7 % of the dormers stood more than 0.3 m
@@ -1930,7 +2003,9 @@ visual-variable codebook is in
   material (P186) fills in where OSM names none. Counts per tile in
   `osmbuild_<tile>.json` (`meta.objects_look`).
 - **Glass and metal facades** `❝ taken` `≈ assumed` (*Streiflicht*; plan 050) — the material's
-  glass and metal set object flags (4, 8; a part takes its root's): the
+  glass and metal (OSM's, or glass the street photos found, *Glass facades
+  from street photos* below) set object flags (4, 8; a part takes its root's
+  mapped material, never its photo glass): the
   clay turns a little cooler (×(0.93, 0.99, 1.07), metal at 60 %) and
   smoother (roughness 0.42 glass, 0.5 metal), and glass mirrors the sky
   (*Spiegelung*, `sky-reflection.ts`: a mipmapped cube map of the sky
@@ -1941,6 +2016,76 @@ visual-variable codebook is in
   and no drawn windows (*Windows on every house* leaves glass and metal
   plain) — the window-grid veto holds (🗃️ below). `osmColour` / `clayGlow` in `visual-style.ts`. Conservative strengths,
   not yet judged on a real GPU.
+- **Glass facades from street photos** `◎ detected` (ADR 0060) — where
+  no source names a building's material, its walls are read on the street
+  photos of every camera (`facade_glass.py`): `bun run fetch` asks
+  Mapillary for every photo near the tile (`<t>.photos.json`), picks per
+  LoD2 outer wall the photo of each of up to eight sequences that sees it
+  best — twice the four the decision keeps, since a tree or a bus that
+  hides a view shows only in the reading — (within 60 m, ≤ 60° off its normal, near enough that its pixel at
+  the wall's nearest point spans no more than the reading's 10 cm — a
+  panorama at ~33 m —, a free line of sight, a framed photo with ≥ 30 %
+  of the wall's upper part in its frame), turns its upright thumbnail and
+  segmentation back into the frame its pose is in (the EXIF orientation:
+  ~6 % of Dresden's framed photos are stored upside down; a mirrored one
+  is not read), rectifies it onto the wall
+  (`facade_measure.rectify`, the camera's own model) and
+  asks CLIP (ViT-B/32, ONNX) whether the upper wall, where the photo sees
+  a quarter of it, is "a glass facade" or "a wall with windows"; the
+  probability is cached per photo and wall. A photo Mapillary drew no
+  building in (none of the uploads before 2021 on the Congress Center's
+  tile, many since) is read on the wall the geometry puts in it, less what
+  its segmentation found in front, and only where a third description,
+  sky, trees or a street, is the less likely (a crop of sky above a cantilevered roof read 0.92 glass against
+  the two walls alone). The cache is `<t>.glass.<key>.jsonl`, named by a
+  hash of the prompts, the model, the crop's limits and the
+  rectification's, and ends with a line saying every photo its plan
+  picked was read, for the walls and planner limits it was planned for
+  (`plan_key`), and which photo it picked for which wall — the decision
+  reads those alone, not one an earlier plan under other limits picked
+  (where the cache is missing or not read through, the
+  windows bake keeps the glass its file holds rather than drop it, and
+  says so; a wall planned later on a photo already read, or
+  numbered anew by a new LoD2 edition — a wall is its object, number and
+  length —, is read at the next fetch); the photo is deleted.
+  `windows.py` keeps one reading a sequence (the photo that saw most of
+  the wall), of the four sequences that saw most, and calls a wall glass
+  where at least two such readings exist and two thirds of them reach 0.95 (`wall_glass`; at 0.9 metal
+  cladding, ribbon-window blocks and a plastered house with balconies came
+  through); the wall gets no window model: a curtain wall's mullions are
+  no rhythm for the stone wing, the house next door, the dormers over it,
+  or its own house where a glazed stair tower too short to make it glass
+  or a material OSM names keeps it from drawing as glass. A Brown
+  camera's parameters are OpenSfM's (fx, fy, cx, cy, k1, k2, …): its focal
+  and radial terms are read from there, and no lens is read past where
+  its distortion turns (a strong barrel folds the world beyond back into
+  the frame); a framed photo's frame is its own
+  shape where Mapillary gives it (the photo list is asked anew when the
+  fields it asks for change). A photo the network, the token or the model's
+  loading failed is read again at the next fetch; one the CDN or the API
+  refuses on its own,
+  or a wall whose crop the model fails on (a worker out of memory over a
+  very long wall; the photo's other walls are kept), is read again and
+  given up after three fetches since it was last read — a first failure
+  is not counted where ten or more and most of a run failed: that is a
+  proxy's, the CDN's or the machine's failure. One Mapillary has taken down since (HTTP 404,
+  410, or its "does not exist" answer) is cached as skipped. A photo is
+  planned at its thumbnail's own size, which is smaller where the
+  original was.
+  The building bake gives an object material `glass`, from `photos`, when
+  its glass walls make at least half the length of its walls read and a
+  quarter of all its outer walls, or 15 m and a twentieth of them
+  (`windows_<t>.json`'s `outer`, every outer edge however short; `lib/city/photo-glass.ts`) — a stone
+  house whose one glazed stair tower was all the photos read stays stone,
+  and so does a mall with a 16 m glazed entrance in 547 m of walls; a
+  file without `outer` asks the 15 m alone. The photos' glass is the
+  object's own: a Building's passes to none of its parts
+  (`inheritedLook`), each part is read on its own walls. It then draws
+  as *Glass and metal facades* above. On the probe (Dresden, 2026-11-10)
+  every known glass front read 0.91–1.00 on its clear views (Prager
+  Spitze, Glaskugelhaus, Gläserne Manufaktur, Ammonhof, Congress Center)
+  and no plastered or stone wall above 0.9 but one clad in white panels;
+  the facade profiles' openings share had read a stucco house at 0.99.
 - **Landmarks from Wikidata** `◎ detected` `❝ taken` (HUD *Erkunden* → *Orte*; plan 050)
   — `bun run fetch` asks Wikidata per tile (`wikibase:box`, instance of a
   subclass of *architectural structure* Q811979, ≥ 2 sitelinks, top 80;
@@ -1958,8 +2103,8 @@ visual-variable codebook is in
   floor gave it one, 🗃️ below) and a dense old town keeps its second rank
   (a fixed 12 per tile cut it, 🗃️ below). → `data/<site>/dlm/landmarks_<tile>.json`. The build flags the
   objects (`OBJECT_FLAG_LANDMARK` = 16; no look of its own), gives them
-  the Wikidata material where OSM names none (`withLandmarks` in
-  `prepare-data.ts`), and writes the site's twelve most notable into the
+  the Wikidata material where OSM names none (`withLandmarks`,
+  `lib/city/landmark-lut.ts`), and writes the site's twelve most notable into the
   tileset's `extras.landmarks` (`siteLandmarks`) — one per building drawn:
   an item whose LoD2 objects a more notable one already holds is that
   one (the Rüstkammer and the Staatliche Kunstsammlungen in the
@@ -2047,7 +2192,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   without windows, no window fitting the storey), and the landmark's
   Wikidata item → one ENUM column `drawn` of the same table, a short
   `key=value;…` text (`lib/city/drawn-facts.ts`, `drawnOf` and
-  `assignWindows` in `scripts/bake-city-mesh.ts`). The card's *Daten*
+  `assignWindows` in `scripts/city-windows.ts`). The card's *Daten*
   section reads it with the object's style row and lists every drawn
   value with its source, its badge and a link to the place (OSM's objects
   there, Mapillary's photos there, the Wikidata item:
@@ -5336,8 +5481,9 @@ GPU**.
   committed) → `pipeline/bake/transit.py`, **site-wide** →
   `data/dresden/transit/trams.json` (≈ 680 KB): 12 lines, 127 stop patterns, 264
   running-time profiles, 2 598 / 2 002 / 1 629 trips on a working day /
-  Saturday / Sunday (the busiest day of each kind in the next three weeks:
-  3 October 2026, a holiday, lost to the 10th). The feed has no shapes:
+  Saturday / Sunday (the busiest day of each kind in the three weeks from
+  the feed's date: 3 October 2026, a holiday, lost to the 10th). The feed
+  has no shapes:
   each leg is laid on the OSM tram tracks (`tram_<tile>.geojson`) as the
   shortest way between the tracks near its two platforms, a metre from
   platform to track weighing three of way, so a car keeps to the track
@@ -5451,8 +5597,11 @@ GPU**.
   placement, turned by the context's TrueNorth (`≈ assumed`: approximate, the panel says so) put
   its origin in the Land's coordinates (`lib/city/ifc-georef.ts`);
   geometry already in them keeps its place. An
-  OBJ (metres, Y up, its MTL and textures from the picked files) and a
-  Rhino .3dm (its unit, Z up turned to Y up, placed `◎ detected` by its
+  OBJ (metres, Y up, its MTL and textures from the picked files, the
+  textures decoded by `createImageBitmap` in the scene's worker) and a
+  Rhino .3dm (its unit, Z up turned to Y up, its textures and text dots
+  left out — three's loader draws them through the DOM, which the
+  worker has not; the panel says so —, placed `◎ detected` by its
   earth anchor where one is set — its elevation as NHN unless it says
   ground level or the earth's centre, or is unread and Rhino's default
   0, then set on the ground; hidden

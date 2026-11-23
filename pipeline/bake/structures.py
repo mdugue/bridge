@@ -485,7 +485,7 @@ def shaped_roof(
     model = roofs.measured_model(dom, inside, known, s.green[win], small)
     if model is None or (model.level.size < 2 and not model.faces.any()):
         return None
-    if roofs.miss_share(model.heights(), dom, known & (model.lab > 0)) > roofs.KEEP_SHARE:
+    if roofs.miss_share(model.heights(), dom, model.judged(known)) > roofs.KEEP_SHARE:
         return None
     parts = []
     miss = roofs.drawn_miss(model, grid, dom, known)
@@ -836,7 +836,10 @@ def find(tile: Tile, s: Surfaces) -> list[dict]:
 
 def run(tile: Tile) -> None:
     out = tile.out("dlm", f"structures_{tile.id}.geojson")
-    if not tile.products.dom or not tile.raw_raster("dom1").exists():
+    absent = not tile.raw_raster("dom1").exists()
+    if tile.products.dom and absent and tile.raw_absent(out, "no DOM1 here"):
+        return
+    if not tile.products.dom or absent:
         print(f"{tile.id}: no surface model — no structures beyond LoD2")
         write_geojson(out, [], tile.epsg, OSM_ATTRIBUTION)
         return

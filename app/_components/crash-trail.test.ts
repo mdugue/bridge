@@ -12,9 +12,11 @@ test("the trail keeps the path and the QA knobs of the URL, nothing else", () =>
   expect(trailUrl("/dresden", "?scene=lite&block=1")).toBe(
     "/dresden?scene=lite&block=1"
   );
-  expect(trailUrl("/leipzig", "?at=51.339300,12.372600&gpu=webgl2")).toBe(
-    "/leipzig?gpu=webgl2"
+  expect(trailUrl("/leipzig", "?at=51.339300,12.372600&thread=main")).toBe(
+    "/leipzig?thread=main"
   );
+  // the backend's old knob is gone with WebGL2 (ADR 0027)
+  expect(trailUrl("/dresden", "?gpu=webgl2")).toBe("/dresden");
   // a view link's snapshot carries the camera's place too
   expect(trailUrl("/dresden", "?safety=3&snap=eyJ2IjoxfQ")).toBe(
     "/dresden?safety=3"

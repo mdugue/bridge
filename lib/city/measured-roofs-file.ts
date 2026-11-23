@@ -8,16 +8,34 @@
  * features.test.ts holds). The one schema of the file (ADR 0059).
  */
 import { z } from "zod";
-import { featureCollection, featureOf, polygonGeometry } from "./bake-file";
+import {
+  featureCollection,
+  featureOf,
+  point2,
+  polygonGeometry,
+} from "./bake-file";
 import type { BakeFile } from "./bake-file";
+
+/** One plane of a face drawn as planes (pipeline/bake/roof_facets.py): its
+ *  rings in plan (the outline first, each closed) and its `plane` [a, b,
+ *  c]: the height a + b·(x − `x`) + c·(y − `y`) in metres from the part's
+ *  `z`, `x` and `y` the surface's. Two facets share a border point for
+ *  point; together they cover the part's outline. */
+export const measuredFacet = z.strictObject({
+  plane: z.tuple([z.number(), z.number(), z.number()]),
+  rings: z.array(z.array(point2)).min(1),
+});
 
 /** A measured roof face's surface (pipeline/bake/roofs.py `surface`): the
  *  heights in centimetres from its part's `z`, on a north-up grid of `res`
  *  metre cells from its north-west corner (`x`, `y`), row by row from the
- *  north; it reaches two cells past the part's outline. */
+ *  north; it reaches two cells past the part's outline. A face drawn as
+ *  flanks or planes carries them as `facets` too, which the build draws in
+ *  place of the grid: its ridges, hips and valleys straight lines. */
 export const measuredSurface = z.strictObject({
   cols: z.int().positive(),
   dz: z.array(z.int()),
+  facets: z.array(measuredFacet).min(1).optional(),
   res: z.number(),
   rows: z.int().positive(),
   x: z.number(),

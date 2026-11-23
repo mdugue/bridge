@@ -52,12 +52,18 @@ export async function withinWait(
   done: Promise<unknown>,
   ms: number
 ): Promise<void> {
-  await Promise.race([
-    done,
-    new Promise<void>((resolve) => {
-      setTimeout(resolve, ms);
-    }),
-  ]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      done,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, ms);
+      }),
+    ]);
+  } finally {
+    // (a tile that compiled in 50 ms does not hold a 3 s timer each)
+    clearTimeout(timer);
+  }
 }
 
 export async function withinCompileWait(done: Promise<unknown>): Promise<void> {

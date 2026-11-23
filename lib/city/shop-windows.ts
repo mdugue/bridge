@@ -1,6 +1,6 @@
 /**
  * A shop window as a real opening in its LoD2 wall (the building bake,
- * scripts/bake-city-mesh.ts `appendShopfronts`): the wall's triangles cut
+ * scripts/city-shopfronts.ts `appendShopfronts`): the wall's triangles cut
  * round each measured bay, a box of reveals into the building (sill, head
  * and sides in the wall's own clay) and the glass at its back — the same
  * logic as the clay's windows over it (a recess the eye looks into, its

@@ -36,8 +36,21 @@ const facadeModel = z.strictObject({
   w: z.number(),
 });
 
+/** What the street photos read of a wall's glass (pipeline/bake/
+ *  facade_glass.py, windows.py `wall_glass`). */
+const wallGlass = z.strictObject({
+  /** enough of the readings say glass: a curtain wall */
+  glass: z.boolean(),
+  /** the readings */
+  n: z.int().min(2),
+  /** their median probability of glass, ‰ */
+  p: z.int().min(0).max(1000),
+});
+
 /** A measured wall: its frame as in shopfronts_<tile>.json, the traits, and
- *  the model where one is drawn. */
+ *  the model where one is drawn. A wall the photos read as glass has no
+ *  model (its mullions are no window rhythm); one no panorama
+ *  measured has its glass alone (no traits, `imgs` 0). */
 const windowWall = z.strictObject({
   a: point2,
   b: point2,
@@ -45,6 +58,7 @@ const windowWall = z.strictObject({
    *  the model has a `phase` */
   drives: z.int().optional(),
   eave: z.number(),
+  glass: wallGlass.optional(),
   imgs: z.int(),
   L: z.number(),
   model: facadeModel.optional(),
@@ -59,11 +73,16 @@ const windowWall = z.strictObject({
 const windowFile = z.strictObject({
   attribution: z.string(),
   buildings: z.record(z.string(), z.array(windowWall)),
+  /** per object with a wall read for glass: the length of all its outer
+   *  walls, m (facades.walls), against which its glass is weighed
+   *  (photo-glass.ts) */
+  outer: z.record(z.string(), z.number().nonnegative()).optional(),
   /** per feature [Spearman ρ between two sequences, walls] on this tile */
   reliability: z.record(z.string(), z.tuple([z.number().nullable(), z.int()])),
 });
 
 export type FacadeModel = z.infer<typeof facadeModel>;
+export type WallGlass = z.infer<typeof wallGlass>;
 export type WindowWall = z.infer<typeof windowWall>;
 export type WindowFile = z.infer<typeof windowFile>;
 

@@ -126,6 +126,7 @@ Vegetationsindex nur mäßig überein (r ≈ 0,7), deshalb steht München in
 | Schuppen und Lauben | Laserscan | `◎ erkannt` |
 | Dachfarbe | Luftbild | `= berechnet` |
 | Fassadenfarbe und Material, wo eingetragen | OpenStreetMap | `❝ übernommen` |
+| Glasfassaden, wo nichts eingetragen ist | Straßenfotos (Mapillary), von einem Bildmodell gelesen | `◎ erkannt` |
 | Backstein oder Putz, wo nichts eingetragen ist | OpenStreetMap, die Nachbarschaft | `≈ angenommen` |
 | Tönung je Gebäude, Geschossbänder | der Viewer | `≈ angenommen` |
 | Haustüren | OpenStreetMap, die Eingänge | `❝ übernommen` |

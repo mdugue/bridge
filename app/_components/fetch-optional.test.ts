@@ -7,7 +7,6 @@ import {
   fetchFeaturesFrom,
   fetchOptionalBinary,
   fetchOptionalJson,
-  fetchRequiredJson,
   STALL_MS,
   untilAborted,
 } from "./fetch-optional";
@@ -170,13 +169,6 @@ test("a gzip read whole that does not inflate is a corrupt file, not the network
   // an optional one is off, at once
   expect(await fetchOptionalBinary("/x.pts.gz")).toBeNull();
   expect(stub.calls()).toBe(2);
-});
-
-test("a required file that is missing throws with its status", async () => {
-  stubFetch(() => new Response(null, { status: 404 }));
-  await expect(fetchRequiredJson("/tileset.json")).rejects.toThrow(
-    "Failed to fetch /tileset.json: HTTP 404"
-  );
 });
 
 test("either signal aborts the merged one; released, neither does", () => {

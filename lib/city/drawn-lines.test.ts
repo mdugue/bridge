@@ -111,6 +111,28 @@ test("what OSM maps is quoted as OSM's, with the place to look it up", () => {
   expect(r.Dachfarbe).toMatchObject({ method: "computed", source: "dop" });
 });
 
+test("a glass front the street photos found is the photos', not OSM's", () => {
+  const r = rows(
+    ask(
+      object(
+        {
+          wall: "use",
+          material: "glass",
+          materialFrom: "photos",
+          storey: "height",
+        },
+        { flags: OBJECT_FLAG_GROUNDED + OBJECT_FLAG_GLASS }
+      )
+    )
+  );
+  expect(r.Material).toMatchObject({
+    value: "Glas",
+    method: "detected",
+    source: "mapillary",
+  });
+  expect(r.Material.url).toStartWith("https://www.mapillary.com/app/");
+});
+
 test("where nothing is mapped or measured, the card says the viewer assumed it", () => {
   const r = rows(
     ask(object({ wall: "use", storey: "height", windows: "type" }))
@@ -194,6 +216,32 @@ test("a listed public building without a storey count is said to be one", () => 
   );
   expect(r.Fenster).toMatchObject({ value: "keine", method: "assumed" });
   expect(r.Fenster.detail).toContain("Baudenkmal");
+});
+
+test("a landmark the photos read as glass has no windows for its glass", () => {
+  const r = rows(
+    ask(
+      object(
+        {
+          material: "glass",
+          materialFrom: "photos",
+          windows: "none",
+          noWindows: "facade",
+          wikidata: "Q1",
+        },
+        {
+          flags:
+            OBJECT_FLAG_GROUNDED + OBJECT_FLAG_LANDMARK + OBJECT_FLAG_GLASS,
+          look: look({ windows: { axis: 0, w: 0, h: 0, style: 0 } }),
+        }
+      )
+    )
+  );
+  expect(r.Fenster).toMatchObject({
+    value: "keine",
+    method: "detected",
+    source: "mapillary",
+  });
 });
 
 test("a palace's windows are said to be its type's", () => {

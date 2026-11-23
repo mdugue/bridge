@@ -41,8 +41,21 @@ const MITRE_MAX_DEG = 135;
 /** Ends this close meet. */
 const MEET_M = 0.02;
 
-/** A cross-section in the wall's frame: out of the wall, up. */
-type Profile = readonly (readonly [number, number])[];
+/** A point of a cross-section in the wall's frame: out of the wall, up;
+ *  and, where the section rounds, the normal (out, up) both faces meeting
+ *  there take — so one face turns its shading from one to the next, a
+ *  round drawn with a single facet. */
+type ProfilePoint =
+  | readonly [number, number]
+  | readonly [number, number, number, number];
+/** A cross-section: its points in order. */
+type Profile = readonly ProfilePoint[];
+
+/** The normal (out, up) at `deg` from out towards up: a round's bend. */
+const bend = (deg: number): [number, number] => [
+  Math.cos((deg * Math.PI) / 180),
+  Math.sin((deg * Math.PI) / 180),
+];
 
 /** Triangles with a normal per vertex: one smooth across a rounded
  *  profile's facets, NaN (flat) on the ends. */
@@ -87,7 +100,7 @@ const noShift: WallShift = () => [0, 0];
  * A straight run of `profile` along the wall from a to b (the street to its
  * right), pushed onto `out` as triangles counter-clockwise from outside: a
  * face per profile edge except those in `hidden` (in the wall, in the
- * ground), shaded smooth over the vertices in `smooth`, and a cap on each
+ * ground), shaded by the normal a point carries, else flat, and a cap on each
  * end not mitred. The profile runs up the front, over the top and down
  * the back, convex.
  */
@@ -96,8 +109,7 @@ function extrude(
   run: Run,
   offset: { cx: number; cy: number },
   profile: Profile,
-  hidden: readonly number[],
-  smooth: readonly number[]
+  hidden: readonly number[]
 ): void {
   const { a, b } = run;
   const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -106,7 +118,7 @@ function extrude(
   }
   const t = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
   const n: [number, number] = [t[1], -t[0]];
-  const at = (end: 0 | 1, [o, z]: readonly [number, number]): number[] => {
+  const at = (end: 0 | 1, [o, z]: ProfilePoint): number[] => {
     const p = end === 0 ? a : b;
     const s = end === 0 ? run.sa : run.sb;
     const m = (end === 0 ? run.ma : run.mb) ?? n;
@@ -123,9 +135,8 @@ function extrude(
     return [(q[1] - p[1]) / l, -(q[0] - p[0]) / l];
   });
   const normalAt = (k: number, v: number): number[] => {
-    const e = edge[k];
-    const other = edge[(v === k ? k - 1 + profile.length : v) % profile.length];
-    const both = smooth.includes(v) ? [e[0] + other[0], e[1] + other[1]] : e;
+    const p = profile[v];
+    const both = p.length === 4 ? [p[2], p[3]] : edge[k];
     const l = Math.hypot(both[0], both[1]) || 1;
     return [(n[0] * both[0]) / l, (n[1] * both[0]) / l, both[1] / l];
   };
@@ -335,27 +346,35 @@ export function plinthMesh(
 }
 
 /** The plinth's section: up the front, over a quarter-round shoulder
- *  into the top, back into the wall. */
+ *  into the top, back into the wall. The shoulder is one facet whose
+ *  normal bends from out to up: the light rolls over it as over the round
+ *  it stands for, at a third of its triangles. */
 function plinthProfile(foot: number, top: number): Profile {
   const { proud, back, round } = PLINTH;
-  const shoulder = [0, 30, 60, 90].map((deg): [number, number] => {
-    const r = (deg * Math.PI) / 180;
-    return [proud * Math.cos(r), top - round + round * Math.sin(r)];
-  });
-  return [[-back, foot], [proud, foot], ...shoulder, [-back, top]];
+  return [
+    [-back, foot],
+    [proud, foot],
+    [proud, top - round, ...bend(0)],
+    [0, top, ...bend(90)],
+    [-back, top],
+  ];
 }
 
 /** The Gurtgesims's section: a flat underside, a half-round nose, a wash
- *  back to the wall. */
+ *  back to the wall. The nose is two facets, their normals bending from
+ *  down over out to up (a half turn needs the middle one). */
 function corniceProfile(z: number): Profile {
   const { proud, back, height, wash } = CORNICE;
-  const rx = proud * 0.7;
-  const cx = proud - rx;
-  const nose = [-90, -45, 0, 45, 90].map((deg): [number, number] => {
-    const r = (deg * Math.PI) / 180;
-    return [cx + rx * Math.cos(r), z + height / 2 + (height / 2) * Math.sin(r)];
-  });
-  return [[-back, z], ...nose, [-back, z + height + wash]];
+  const cx = proud * 0.3;
+  // the wash's own normal, so it shades flat from the nose to the wall
+  const washUp = bend(90 - (Math.atan2(wash, cx + back) * 180) / Math.PI);
+  return [
+    [-back, z],
+    [cx, z, ...bend(-90)],
+    [proud, z + height / 2, ...bend(0)],
+    [cx, z + height, ...washUp],
+    [-back, z + height + wash],
+  ];
 }
 
 /**
@@ -793,31 +812,26 @@ function extrudeBand(
   s: Stretch
 ): void {
   if (kind === "plinth") {
-    // the edges: bottom, front, the shoulder's three facets, top, back
-    extrude(mesh, run, offset, plinthProfile(s.lo, s.hi), [0, 6], [2, 3, 4, 5]);
+    // the edges: bottom, front, shoulder, top, back
+    extrude(mesh, run, offset, plinthProfile(s.lo, s.hi), [0, 4]);
   } else if (kind === "cornice") {
-    // the back (in the wall); smooth from the underside's front edge
-    // over the nose into the wash
-    const profile = corniceProfile(s.hi);
-    extrude(mesh, run, offset, profile, [profile.length - 1], [1, 2, 3, 4, 5]);
+    // the edges: underside, the nose's two, wash, back (in the wall)
+    extrude(mesh, run, offset, corniceProfile(s.hi), [4]);
   } else {
-    // the underside and the back in the wall; smooth over the quarter
-    // round into the lip
-    extrude(mesh, run, offset, eaveProfile(s.hi), [0, 6], [1, 2, 3, 4]);
+    // the edges: underside in the wall, round, lip, top, back
+    extrude(mesh, run, offset, eaveProfile(s.hi), [0, 4]);
   }
 }
 
 /** The Traufgesims's section: out of the wall along its underside, round
- *  a quarter-round up to the lip, back over the top into the wall. */
+ *  a quarter-round up to the lip, back over the top into the wall. The
+ *  round is one facet whose normal bends from down to out. */
 function eaveProfile(z: number): Profile {
   const { proud, back, height, rise } = EAVE_CORNICE;
-  const round = [0, 30, 60, 90].map((deg): [number, number] => {
-    const r = (deg * Math.PI) / 180;
-    return [proud * Math.sin(r), z + rise * (1 - Math.cos(r))];
-  });
   return [
     [-back, z],
-    ...round,
+    [0, z, ...bend(-90)],
+    [proud, z + rise, ...bend(0)],
     [proud - 0.02, z + height],
     [-back, z + height],
   ];
