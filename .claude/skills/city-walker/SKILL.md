@@ -460,9 +460,10 @@ More traps, each found the hard way:
   builds one WGSL expression a call deeper per step; Chrome's WGSL parser
   stops at a depth of about 128 ("maximum parser recursive depth
   reached"), the pipeline is invalid and so is every frame's command
-  buffer — while WebGL2, the headless e2e, compiles it. The lens blur's
-  13 × 13 reach did (CITY-WALK-Y, 2026-11-10). Accumulate into a
-  `toVar()` with `.assign()` (or `addAssign`): one statement per step.
+  buffer — while WebGL2 compiles it (the headless e2e, now on WebGPU,
+  parses as Chrome does). The lens blur's 13 × 13 reach did
+  (CITY-WALK-Y, 2026-11-10). Accumulate into a `toVar()` with
+  `.assign()` (or `addAssign`): one statement per step.
 
 
 Unit tests assert the node setup (a node material, the expected slots set,
