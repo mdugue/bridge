@@ -27,7 +27,9 @@
   gain); beside the aims: the repository's size and the build's time
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: IN PROGRESS — built in its simple variant (ruling 5 of
+- **Status**: DONE as far as built (2026-11-24, the series closed): its row in
+  [README.md](./README.md) says what holds. As it stood before:
+  IN PROGRESS — built in its simple variant (ruling 5 of
   086; *Findings*, 2026-11-24): CI publishes the baked sites under a key
   computed from the checkout, the web build pulls them and bakes
   nothing. The phases below are the plan as first written and are not

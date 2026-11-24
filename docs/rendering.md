@@ -2074,8 +2074,7 @@ or fewer at any contrast, a step of 3 of 255 or less over less than
 about 3 % of the frame, and one step over less than 10 %. A run that
 flakes is re-run by hand or answered by naming the view; nothing
 retries. The plates were built as the rewrite series' scaffolding
-(plan 087), not a permanent gate; whether they stay after the series
-closed (2026-11-24) is not decided.
+(plan 087) and are kept until the maintainer decides otherwise.
 
 Tier 1 draws at `lite`'s pixel ratio of 0.5: a plate is 400 × 250 drawn
 pixels shown twice as large. It never sees the other 42 views, any tile

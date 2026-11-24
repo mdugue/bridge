@@ -58,7 +58,9 @@
 - **Category**: rewrite — all three aims, as their proof
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: IN PROGRESS — phase 1 (the ledger) built 2026-11-16;
+- **Status**: DONE as far as it is built (2026-11-24, the series closed): its row in
+  [README.md](./README.md) says what holds. As it stood before:
+  IN PROGRESS — phase 1 (the ledger) built 2026-11-16;
   phase 2 (the browser's figures) built 2026-11-16; phases 3–6 TODO
 
 ## Why this matters

@@ -38,7 +38,9 @@
   [093](./093-rewrite-streaming-quadtree.md) needs
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: REDUCED (plan 086, "The series, reduced") — phase 0 done
+- **Status**: DONE as far as built (2026-11-24, the series closed): its row in
+  [README.md](./README.md) says what holds. As it stood before:
+  REDUCED (plan 086, "The series, reduced") — phase 0 done
   (2026-11-16); phase 2 and one read helper done (2026-11-24, in
   *Findings*). Phases 1 and 3 to 6 (the schema export, the store, a
   format, site-wide windows, typed buildings) are not built

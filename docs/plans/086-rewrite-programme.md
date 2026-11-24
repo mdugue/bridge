@@ -372,13 +372,15 @@ deleting it is the maintainer's).
 code lines (`code.product`, `qa/ledger.json`) were 152 960 on main
 before the series:
 
-1. *The measuring stick, slimmed* (#327; plans 087, 089, 094): a
-   narrow ledger that gates CI, the e2e limits test, the buildings'
-   bake the same on every machine, the pyright gate, the BBBike
-   fallback, `lib/city/frames.ts`. `code.product` 154 726.
+1. *The measuring stick, slimmed* (#327; plans 087, 089, 094, 095's
+   part B1 and phase 0 of 088, 091 and 092): a narrow ledger that
+   gates CI, the e2e limits test, the buildings' bake the same on
+   every machine, the pyright gate, the BBBike fallback,
+   `lib/city/frames.ts`. `code.product` 154 726.
 2. *The trees and the bake steps* (#344; plans 090, 092): the build
    places every tree, one small file a level; no bake step writes
-   another's file or reads a later step's last output.
+   another's file or reads a later step's last output. `code.product`
+   154 501.
 3. *The web build pulls what CI publishes* (#348; plan 088): the host
    bakes nothing. `code.product` 154 158.
 
@@ -388,8 +390,8 @@ lines bought is the first milestone's list (the portable maths, the
 BBBike fallback, the limits test's probe, `frames.ts`); milestones 2
 and 3 lowered the figure.
 
-**Rejected**, each by ruling 5 (the reason in full is its row in
-[README.md](./README.md)):
+**Rejected**, by ruling 5 unless said otherwise (the reason in full is
+its row in [README.md](./README.md)):
 
 - 089's phases 3–4, annotations in the bakes: they add lines and
   re-key every bake.
@@ -403,9 +405,10 @@ and 3 lowered the figure.
 - 094's phase 3, the register of pipelines: its only customer was 093.
 - 095, packages and frame types: a move deletes nothing.
 - 096, heuristic scores: 600–1 200 lines of scoring.
-- Of 087: the wide ledger, the census and the comparers; tier 2 of the
-  plates, on a real GPU, was not built. Of 088: `data/` out of git, a
-  lock file, the browser reading the store.
+- Of 087: the wide ledger, the census and the comparers. Of 088: the
+  lock file published by hand (not by ruling 5: every pull request
+  that changes a bake would need someone with the token, and two such
+  conflict on its lines).
 
 **Left open**, none of it the series' any more:
 
@@ -414,7 +417,11 @@ and 3 lowered the figure.
   [completed.md](./completed.md) as the README's lifecycle says; that
   condensing is owed.
 - Whether the plates (`bun run plates`, the *Plates* job) stay: built
-  as scaffolding, and the maintainer's to decide.
+  as scaffolding, kept until the maintainer decides otherwise. Their
+  tier 2, on a real GPU, is not built: it waits for the machine the
+  maintainer chooses (ADR 0018).
+- `data/` leaving git (088): not built, a pull request of its own, the
+  maintainer's; whether the browser reads the store is open with it.
 - 090's other layers: decided anew, a layer at a time, on their lines.
 - 094's phase 4: when three fixes `compileAsync`.
 - The host builds with the Bun its build image ships (1.3.14 on

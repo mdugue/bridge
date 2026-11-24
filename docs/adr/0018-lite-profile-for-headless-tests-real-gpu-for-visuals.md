@@ -32,8 +32,8 @@ renderer can answer, since it only has to agree with itself.
    never *good*, over the few views that fit a job there — eight of
    fifty, on the spawn tile, in `lite`. It runs where it is asked for (a
    pull request's label `plates`, or by hand), not on every pull
-   request: built as the rewrite series' scaffolding (plan 087), and
-   whether it stays after the series closed is not decided.
+   request: built as the rewrite series' scaffolding (plan 087), kept
+   until the maintainer decides otherwise.
    *Tier 2* is a real GPU and every view; it gates nothing until the
    maintainer has chosen where it runs.
 6. **No reference image is stored.** The base is rendered in the same

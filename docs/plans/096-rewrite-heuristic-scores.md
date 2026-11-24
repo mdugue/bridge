@@ -28,7 +28,9 @@
   weigh), and quality
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: TODO
+- **Status**: REJECTED (2026-11-24, the series closed): its row in
+  [README.md](./README.md) says what holds. As it stood before:
+  TODO
 
 ## Why this matters
 
