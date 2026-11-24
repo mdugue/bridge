@@ -1190,28 +1190,27 @@ async function buildCoarseDressing(
           asks,
         })
       : undefined;
-  const vegetation =
-    packs.length > 0
-      ? await inSlices(
-          coarseCrownSteps(
-            coarseCrowns(
-              placedTrees(packs, offset).map((t) => t.p),
-              registerTrees(packs, offset, 0)
-            ),
-            {
-              heightAt: terrain.heightAt,
-              offset,
-              sunDirection: ctx.sunDirection,
-            }
+  const vegetation = packs.some((p) => p.trees.length + p.register.length > 0)
+    ? await inSlices(
+        coarseCrownSteps(
+          coarseCrowns(
+            placedTrees(packs, offset).map((t) => t.p),
+            registerTrees(packs, offset, 0)
           ),
-          { signal }
-        ).catch((error: unknown) => {
-          // the bridges and the traffic's slot built, never hung: freed
-          // with the build
-          disposeDressing({ tile, rail, traffic: flows });
-          throw error;
-        })
-      : undefined;
+          {
+            heightAt: terrain.heightAt,
+            offset,
+            sunDirection: ctx.sunDirection,
+          }
+        ),
+        { signal }
+      ).catch((error: unknown) => {
+        // the bridges and the traffic's slot built, never hung: freed
+        // with the build
+        disposeDressing({ tile, rail, traffic: flows });
+        throw error;
+      })
+    : undefined;
   return {
     asks: asks.length > 0 || flows ? asks : undefined,
     rail: rail && rail.children.length > 0 ? rail : undefined,

@@ -2988,7 +2988,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   first, 854 / 252 / 368 / 346; `s: "osm"`, 298 with a genus) — courts, the Zwinger,
   Free-State and private ground. Their height/crown/circumference tags are read (53 / 1 /
   2 in the four first tiles), the gaps filled from the cadastre's own statistics
-  for the tile. They join the cadastre's veto path (`keepTree`), so an OSM
+  for the tile. They join the cadastre's veto in the build (`scripts/bake-trees.ts`), so an OSM
   tree replaces the canopy or laser-scan crown it stands in. The re-bake
   left the cadastre trees unchanged (same set, positions, properties);
   features are now sorted by position so a re-bake diffs by content.

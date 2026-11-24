@@ -51,18 +51,14 @@ export function canopyPlacements(
 
 /**
  * The register's trees placed on the ground (EPSG → world), in file order;
- * one off the ground is left out. The build reads them so to choose which
- * the coarse level draws and to bake each one's ground
- * (scripts/bake-trees.ts).
+ * one off the ground is left out.
  */
 export function inventoryTrees(
   features: TreeFeature[],
   ctx: {
     heightAt: (x: number, y: number) => number | null;
     offset: RecenterOffset;
-  },
-  ndviAt?: RasterSampler,
-  year = new Date().getFullYear()
+  }
 ): InventoryTree[] {
   const out: InventoryTree[] = [];
   for (const f of features) {
@@ -81,8 +77,8 @@ export function inventoryTrees(
         ground,
         f.properties,
         ctx.offset,
-        ndviAt?.(ex, ey),
-        year
+        undefined,
+        new Date().getFullYear()
       )
     );
   }

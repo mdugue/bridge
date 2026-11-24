@@ -1,7 +1,7 @@
 /**
  * The one fetch policy for the viewer's files. The scene's requests — the
  * manifest, the tileset and every tile, their side files and rasters
- * (raster-upload.ts `fetchRasterBytes`), the trees' NDVI sampler — go
+ * (raster-upload.ts `fetchRasterBytes`) — go
  * through `fetchBytes`: a network failure (or a 408/429/5xx) is retried
  * with backoff for a budget of the page's visible time
  * (lib/city/fetch-retry.ts, net-gate.ts), the body read inside the
