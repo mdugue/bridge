@@ -38,8 +38,11 @@ import type { SportTable } from "@/lib/city/sport";
 import { coarseCrowns, coarseCrownsStandIn } from "@/lib/city/coarse-crowns";
 import {
   placedTrees,
+  placedTreeSteps,
   registerFacts,
+  registerTree,
   registerTrees,
+  TREE_RUN,
   unpackTreeFile,
 } from "@/lib/city/tree-table";
 import type { TreePack } from "@/lib/city/tree-table";
@@ -134,6 +137,7 @@ import { bvhBytesUnder } from "./collision";
 import {
   finished,
   giveBack,
+  inRuns,
   inSlices,
   onlyWhile,
 } from "@/lib/city/build-steps";
@@ -837,12 +841,14 @@ function* tileVegetationSteps(
   offset: TileStreamContext["offset"],
   vegCtx: VegetationContext
 ): Steps<VegetationControl> {
-  const register = registerTrees(packs, offset, new Date().getFullYear());
+  const register = yield* inRuns(registerFacts(packs), TREE_RUN, (run) =>
+    run.map((fact) => registerTree(fact, offset, new Date().getFullYear()))
+  );
   const inventory =
     register.length > 0 ? yield* treeInventorySteps(register, vegCtx) : null;
   const canopy = yield* vegetationSteps(
     {
-      trees: placedTrees(packs, offset).map((t) => t.p),
+      trees: yield* placedTreeSteps(packs, offset, (t) => t.p),
       extraTrees: inventory?.instances,
     },
     vegCtx
@@ -1430,7 +1436,7 @@ async function buildDressing(
       // every other tree, the hedges, lamps, furniture, stops and landings
       const more = yield* moreSetsSteps(
         {
-          trees: placedTrees(packs, ctx.offset).map(askedTree),
+          trees: yield* placedTreeSteps(packs, ctx.offset, askedTree),
           rows,
           hedges,
           lamps: ownLamps,
