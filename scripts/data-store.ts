@@ -12,8 +12,8 @@
  * so a manifest that is there names only files that are.
  *
  * The store is read without a credential; only an upload needs
- * `BLOB_READ_WRITE_TOKEN` (Vercel Blob; a secret of CI's, never the
- * repository's). `DATA_STORE` and `DATA_STORE_API` point reads and uploads
+ * `BLOB_READ_WRITE_TOKEN` (Vercel Blob; a secret of the repository's
+ * Actions, never a file's). `DATA_STORE` and `DATA_STORE_API` point reads and uploads
  * elsewhere for a test.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
@@ -47,7 +47,8 @@ const TRIES = 3;
  * among them: coarse on purpose, a miss only costs a bake from CI's warm
  * cache), the locked versions of the packages they import, the patches,
  * and the Bun the repository pins, whose gzip writes the bytes (not the
- * running one: the host's differs and bakes nothing). Paths relative to `root`, so every checkout agrees.
+ * running one: the host's differs and bakes nothing). Paths relative to
+ * `root`, so every checkout agrees.
  */
 export function siteKey(site: string, root = process.cwd()): string {
   const under = (dir: string) =>
@@ -105,9 +106,8 @@ async function request(url: string, init: RequestInit): Promise<Response> {
 /** The store's answer for `file`: a missing one is a 404, anything else
  *  but success fails the run. */
 async function ask(file: string, method = "GET"): Promise<Response | null> {
-  const res = await request(`${process.env.DATA_STORE ?? STORE}/${file}`, {
-    method,
-  });
+  const url = `${process.env.DATA_STORE ?? STORE}/${file}`;
+  const res = await request(url, { method });
   if (res.status === 404) {
     return null;
   }
@@ -201,7 +201,10 @@ export async function pullSite(
   patience = PATIENCE_MS
 ): Promise<void> {
   const until = Date.now() + patience;
-  let manifest = await read(stored(site, MANIFEST_FILE, key));
+  // a request that fails while waiting is "not there yet", until the cap
+  const asked = async () =>
+    await read(stored(site, MANIFEST_FILE, key)).catch(() => null);
+  let manifest = await asked();
   while (!manifest) {
     if (Date.now() >= until) {
       throw new Error(
@@ -209,7 +212,7 @@ export async function pullSite(
       );
     }
     await Bun.sleep(Math.min(ASK_MS, patience));
-    manifest = await read(stored(site, MANIFEST_FILE, key));
+    manifest = await asked();
   }
   mkdirSync(dir, { recursive: true });
   const { files } = JSON.parse(
@@ -241,9 +244,8 @@ if (import.meta.main) {
     for (const site of readdirSync(out)) {
       if (existsSync(path.join(out, site, MANIFEST_FILE))) {
         const key = siteKey(site);
-        const sent = await publishSite(site, path.join(out, site), key);
         process.stdout.write(
-          `data-store: ${site} at ${key}: ${sent} files sent\n`
+          `data-store: ${site} at ${key}: ${await publishSite(site, path.join(out, site), key)} files sent\n`
         );
       }
     }
