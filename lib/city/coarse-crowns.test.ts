@@ -7,7 +7,6 @@ import {
   coarseForm,
   drawnCoarse,
 } from "./coarse-crowns";
-import type { CoarseCrown } from "./coarse-crowns";
 import type { InventoryTree } from "./tree-inventory";
 import type { Placement } from "./tree-placement";
 

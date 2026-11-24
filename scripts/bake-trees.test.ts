@@ -156,6 +156,12 @@ const unpack = (bytes: Uint8Array): TreePack => {
 };
 const at = (t: { x: number; z: number }) => `${t.x},${t.z}`;
 
+/** Every tree of one file, where it stands. */
+const inFile = (pack: TreePack) => [
+  ...placedTrees([pack], offset).map((t) => t.p),
+  ...registerTrees([pack], offset, YEAR),
+];
+
 describe("the spawn tile's trees", () => {
   let coarse: TreePack;
   let fine: TreePack;
@@ -212,10 +218,6 @@ describe("the spawn tile's trees", () => {
   });
 
   test("the coarse level's file holds the third it draws, the fine level's the rest", () => {
-    const inFile = (pack: TreePack) => [
-      ...placedTrees([pack], offset).map((t) => t.p),
-      ...registerTrees([pack], offset, YEAR),
-    ];
     const inCoarse = inFile(coarse);
     const inFine = inFile(fine);
     expect(inCoarse.every((t) => drawnCoarse(t.x, t.z))).toBe(true);
