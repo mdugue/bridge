@@ -1,9 +1,9 @@
 /**
  * Where the canopy and row trees stand, and how big: the placements the
- * vegetation layer (app/_components/vegetation-layer.ts) draws, and the
- * build step reproduces to choose the coarse level's trees
- * (lib/city/coarse-crowns.ts, scripts/coarse-crowns.ts). One owner, so a
- * coarse crown stands where its fine tree does. No THREE, no DOM.
+ * vegetation layer (app/_components/vegetation-layer.ts) draws from the
+ * records the build wrote with the same arithmetic (scripts/bake-trees.ts,
+ * lib/city/tree-table.ts). One owner, so a coarse crown stands where its
+ * fine tree does. No THREE, no DOM.
  */
 import * as PMath from "./portable-math";
 import type { CanopyFeature, MonumentFeature, VegRowFeature } from "./features";

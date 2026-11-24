@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
 import { Color, Matrix4, Vector3 } from "three/webgpu";
 import type { Object3D } from "three/webgpu";
-import { COARSE_TREE_WIDEN, coarseCrowns } from "@/lib/city/coarse-crowns";
+import {
+  COARSE_TREE_WIDEN,
+  coarseCrowns,
+  drawnCoarse,
+} from "@/lib/city/coarse-crowns";
 import type { CoarseCrown } from "@/lib/city/coarse-crowns";
 import type { CanopyFeature, TreeFeature } from "@/lib/city/features";
 import {
@@ -86,7 +90,11 @@ test("a coarse crown stands where its fine tree does, as tall and wider", () => 
   // the fine level's crowns before any far-tier thinning
   const all = drawn(fine.chunks.map((c) => c.mid));
 
-  const crowns = coarseCrowns(placed, surveyed);
+  // the coarse level's file holds the third `drawnCoarse` keeps
+  const crowns = coarseCrowns(
+    placed.filter((p) => drawnCoarse(p.x, p.z)),
+    surveyed.filter((t) => drawnCoarse(t.x, t.z))
+  );
   const coarse = drawn(sets(buildCoarseCrowns(crowns, ground).group));
   // a third of them, register and canopy both
   expect(coarse.size).toBeGreaterThan(all.size * 0.2);

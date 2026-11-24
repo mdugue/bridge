@@ -1,46 +1,18 @@
 /**
  * The tree baker (bake-trees.ts) and its file (lib/city/tree-table.ts), by
- * what they are for: a tree stands where the viewer's own placement put it
- * before the build placed it, on its ground; a steep bank keeps its side;
+ * what they are for: a tree's foot is on its ground; the coarse level's
+ * file is that level's third; a steep bank keeps its side;
  * a tree a record cannot hold fails the build; a file that is not one is
  * none.
  */
 import { beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 import { DRESDEN } from "../sites/dresden";
-import {
-  canopyPlacements,
-  inventoryTrees,
-} from "../lib/city/__fixtures__/place-trees";
-import { parseBakeFile } from "../lib/city/bake-file";
 import { drawnCoarse } from "../lib/city/coarse-crowns";
-import { orchardTrees } from "../lib/city/cultivated";
-import type {
-  CanopyFeature,
-  CultivatedFeature,
-  FeatureCollection,
-  MonumentFeature,
-  TreeFeature,
-  VegRowFeature,
-} from "../lib/city/features";
-import { decodeGreyPng } from "../lib/city/png-raster";
-import { maxWindowSampler } from "../lib/city/raster-sampler";
-import { gapRoofs, lod2Roofs, treesOffRoofs } from "../lib/city/roof-trees";
+import { worldToEpsg } from "../lib/city/ground-clamp";
 import { tileExtentOf } from "../lib/city/site";
-import { treesOffStructures } from "../lib/city/small-buildings";
-import { SMALL_BUILDINGS_FILE } from "../lib/city/small-buildings-file";
-import { STRUCTURES_FILE } from "../lib/city/structures-file";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import { tileIds } from "../lib/city/tile";
-import { inventoryCovers } from "../lib/city/tree-inventory";
-import type { InventoryTree } from "../lib/city/tree-inventory";
-import {
-  offMonuments,
-  plantedRows,
-  rowPlacements,
-} from "../lib/city/tree-placement";
-import type { Placement } from "../lib/city/tree-placement";
 import {
   packTreeFile,
   placedTrees,
@@ -49,7 +21,6 @@ import {
   unpackTreeFile,
 } from "../lib/city/tree-table";
 import type { TreePack } from "../lib/city/tree-table";
-import type { CityJsonDocument } from "../lib/city/types";
 import { packTrees, standTrees, treeSources } from "./bake-trees";
 
 const ROOT = nodePath.join(import.meta.dir, "..");
@@ -75,78 +46,6 @@ function heightAt(x: number, y: number): number | null {
 const ground = { bounds, heightAt, offset, origin: [minX, minY] as const };
 const sources = treeSources(DRESDEN, TILE, ROOT);
 
-const json = (path: string | undefined): unknown =>
-  path && existsSync(path) ? JSON.parse(readFileSync(path, "utf-8")) : null;
-const features = <T>(path: string | undefined): T[] =>
-  (json(path) as FeatureCollection<T> | null)?.features ?? [];
-
-/** The tile's trees as the viewer placed them before the build did: the
- *  canopy off the sheds, the roofs and the monuments, at the float32
- *  offsets the packed canopy held, under the surveyed trees' veto. */
-async function runtimeTrees(): Promise<{
-  placements: Placement[];
-  register: InventoryTree[];
-}> {
-  const sheds = parseBakeFile(
-    SMALL_BUILDINGS_FILE,
-    json(sources.sheds),
-    sources.sheds ?? ""
-  ).features;
-  const roofs = [
-    ...lod2Roofs(json(sources.city) as CityJsonDocument),
-    ...gapRoofs(
-      parseBakeFile(
-        STRUCTURES_FILE,
-        json(sources.structures),
-        sources.structures ?? ""
-      ).features
-    ),
-  ];
-  const surveyed = [
-    ...features<TreeFeature>(sources.trees),
-    ...orchardTrees(features<CultivatedFeature>(sources.cultivated)),
-  ];
-  const covers = inventoryCovers(surveyed);
-  const keepTree = (x: number, y: number, h?: number) => !covers(x, y, h);
-  const ndviAt = maxWindowSampler(
-    await decodeGreyPng(new Uint8Array(readFileSync(sources.ndvi ?? ""))),
-    bounds
-  );
-  const ctx = { heightAt, offset };
-  const packed = (path: string | undefined): CanopyFeature[] =>
-    treesOffRoofs(
-      treesOffStructures(features<CanopyFeature>(path), sheds),
-      roofs
-    ).map((f) => ({
-      ...f,
-      geometry: {
-        type: "Point" as const,
-        coordinates: [
-          minX + Math.fround(f.geometry.coordinates[0] - minX),
-          minY + Math.fround(f.geometry.coordinates[1] - minY),
-        ] as [number, number],
-      },
-    }));
-  const canopy = offMonuments(
-    [...packed(sources.canopy), ...packed(sources.canopyx)],
-    features<MonumentFeature>(sources.monuments)
-  );
-  const rowsMeasured =
-    (json(sources.canopy) as { rows?: unknown } | null)?.rows !== undefined;
-  return {
-    placements: [
-      ...canopyPlacements(canopy, ctx, ndviAt, keepTree),
-      ...rowPlacements(
-        plantedRows(features<VegRowFeature>(sources.vegrows), rowsMeasured),
-        ctx,
-        ndviAt,
-        keepTree
-      ).trees,
-    ],
-    register: inventoryTrees(surveyed, ctx, ndviAt, YEAR),
-  };
-}
-
 const unpack = (bytes: Uint8Array): TreePack => {
   const pack = unpackTreeFile(new Uint8Array(bytes).buffer);
   if (!pack) {
@@ -154,7 +53,6 @@ const unpack = (bytes: Uint8Array): TreePack => {
   }
   return pack;
 };
-const at = (t: { x: number; z: number }) => `${t.x},${t.z}`;
 
 /** Every tree of one file, where it stands. */
 const inFile = (pack: TreePack) => [
@@ -165,55 +63,28 @@ const inFile = (pack: TreePack) => [
 describe("the spawn tile's trees", () => {
   let coarse: TreePack;
   let fine: TreePack;
-  let runtime: Awaited<ReturnType<typeof runtimeTrees>>;
 
   beforeAll(async () => {
     const files = packTrees(await standTrees(sources, ground), [minX, minY]);
     coarse = unpack(files.coarse);
     fine = unpack(files.fine);
-    runtime = await runtimeTrees();
   });
 
-  test("every tree stands where the viewer's placement put it, on its ground", () => {
-    const built = new Map(
-      placedTrees([coarse, fine], offset).map((t) => [at(t.p), t.p])
-    );
-    expect(built.size).toBe(runtime.placements.length);
-    expect(runtime.placements.length).toBeGreaterThan(5000);
-    for (const want of runtime.placements) {
-      const got = built.get(at(want));
-      if (!got) {
-        throw new Error(`no record of the tree at ${at(want)}`);
-      }
-      // its turn, its size and its crown: the record's coordinates seed
-      // the same hashes
-      expect([got.rot, got.s, got.w, got.base]).toEqual([
-        want.rot,
-        want.s,
-        want.w,
-        want.base,
-      ]);
-      // its foot at or under the ground it was stood on, by less than a step
-      expect(got.y).toBeLessThanOrEqual(want.y);
-      expect(want.y - got.y).toBeLessThan(TREE_STEP_Y_M);
-    }
-    const surveyed = new Map(
-      registerTrees([coarse, fine], offset, YEAR).map((t) => [at(t), t])
-    );
-    expect(runtime.register.length).toBeGreaterThan(5000);
-    for (const want of runtime.register) {
-      const got = surveyed.get(at(want));
-      if (!got) {
-        throw new Error(`no record of the surveyed tree at ${at(want)}`);
-      }
-      expect({ ...got, ground: 0, ndvi: 0, slope: 0 }).toEqual({
-        ...want,
-        ground: 0,
-        ndvi: 0,
-        slope: 0,
-      });
-      expect(got.ground).toBeLessThanOrEqual(want.ground);
-      expect(want.ground - got.ground).toBeLessThan(TREE_STEP_Y_M);
+  test("every tree's foot is at or under the ground it stands on, by less than a step", () => {
+    const feet = [
+      ...placedTrees([coarse, fine], offset).map((t) => t.p),
+      ...registerTrees([coarse, fine], offset, YEAR).map((t) => ({
+        ...t,
+        y: t.ground,
+      })),
+    ];
+    expect(feet.length).toBeGreaterThan(10_000);
+    for (const foot of feet) {
+      const { x: e, y: n } = worldToEpsg(foot.x, foot.z, offset);
+      const under = (heightAt(e, n) ?? Number.NaN) - foot.y;
+      // (a millimetre for the float the scene holds a place in)
+      expect(under).toBeGreaterThan(-1e-3);
+      expect(under).toBeLessThan(TREE_STEP_Y_M + 1e-3);
     }
   });
 

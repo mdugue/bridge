@@ -124,47 +124,43 @@ function registerColour(t: InventoryTree): RegisterColour {
 }
 
 /**
- * The crowns a tile's coarse level draws: of the trees its fine level
- * draws — the row and canopy trees (`placements`) and the register's —
- * those `drawnCoarse` keeps.
+ * The trees of a coarse level's file as that level's crowns: its row and
+ * canopy trees (`placements`) and the register's. The file is the
+ * selection (`drawnCoarse`, at the build: scripts/bake-trees.ts).
  */
 export function coarseCrowns(
   placements: readonly Placement[],
   register: readonly InventoryTree[]
 ): CoarseCrown[] {
-  const canopy = placements
-    .filter((p) => drawnCoarse(p.x, p.z))
-    .map((p): CoarseCrown => ({
-      kind: "canopy",
-      x: p.x,
-      z: p.z,
-      rot: p.rot,
-      s: p.s,
-      w: p.w ?? p.s,
-      ndvi: p.ndvi,
-      ...(p.base === undefined ? {} : { base: p.base }),
-      ...(p.evergreen ? { evergreen: true } : {}),
-      ...(p.evergreen && p.pine ? { pine: true } : {}),
-    }));
-  const registered = register
-    .filter((t) => drawnCoarse(t.x, t.z))
-    .map((t): CoarseCrown => ({
-      kind: "register",
-      x: t.x,
-      z: t.z,
-      rot: t.rot,
-      colour: registerColour(t),
-      ext: {
-        crownBase: t.ext.crownBase,
-        crownTop: t.ext.crownTop,
-        crownWidth: t.ext.crownWidth,
-      },
-      genus: t.genus,
-      jitter: t.jitter,
-      ndvi: t.ndvi,
-      ...(t.shape === "cone" ? { cone: true } : {}),
-      ...(t.shape === "pine" ? { pine: true } : {}),
-    }));
+  const canopy = placements.map((p): CoarseCrown => ({
+    kind: "canopy",
+    x: p.x,
+    z: p.z,
+    rot: p.rot,
+    s: p.s,
+    w: p.w ?? p.s,
+    ndvi: p.ndvi,
+    ...(p.base === undefined ? {} : { base: p.base }),
+    ...(p.evergreen ? { evergreen: true } : {}),
+    ...(p.evergreen && p.pine ? { pine: true } : {}),
+  }));
+  const registered = register.map((t): CoarseCrown => ({
+    kind: "register",
+    x: t.x,
+    z: t.z,
+    rot: t.rot,
+    colour: registerColour(t),
+    ext: {
+      crownBase: t.ext.crownBase,
+      crownTop: t.ext.crownTop,
+      crownWidth: t.ext.crownWidth,
+    },
+    genus: t.genus,
+    jitter: t.jitter,
+    ndvi: t.ndvi,
+    ...(t.shape === "cone" ? { cone: true } : {}),
+    ...(t.shape === "pine" ? { pine: true } : {}),
+  }));
   return [...canopy, ...registered];
 }
 

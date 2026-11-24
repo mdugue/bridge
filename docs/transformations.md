@@ -2710,7 +2710,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   tiles. The DOM's form (a cone's peak over
   its shoulders) does not part them (J 0.17) and is not used. An
   evergreen crown keeps its leaves and colour all year (no season
-  jitter) on both terrain levels (`lib/city/coarse-crowns.ts` byte 10),
+  jitter) on both terrain levels (`lib/city/coarse-crowns.ts`),
   and the card says *Nadelbaum, immergrün* with the source that told it.
   It stands as a conifer (2026-10-21, `app/_components/conifer-crown.ts`):
   a three-tier lathe cone in the lobed crown's box, on the same trunk, its
@@ -2719,8 +2719,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   conifers' deeper blue-green (`evergreenColor`; before, the NDVI's
   lush↔dry green), outlined as its cone when asked; the coarse level draws
   it as a six-sided cone of one skirt, and the register's conifers carry
-  their cone there too (`lib/city/coarse-crowns.ts`, the code byte's
-  0x80). A canopy evergreen is a needle forest's crown or a mixed forest's
+  their cone there too (`lib/city/coarse-crowns.ts`, `coarseForm`). A canopy evergreen is a needle forest's crown or a mixed forest's
   green in March, so a pine, spruce or fir — an evergreen broadleaf
   (holly, box, cherry laurel) is a shrub under the canopy's 3 m — and a
   larch in a needle forest is drawn as one (the data tells no larch

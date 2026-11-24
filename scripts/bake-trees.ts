@@ -3,8 +3,8 @@
  * tree of its committed files stood on the fine level's own ground, as a
  * record of what was measured there (lib/city/tree-table.ts) — the third
  * the coarse level draws in that level's file, the rest in the fine
- * level's. Run by prepare/terrain.ts; published as the tile's `trees` and
- * `treesCoarse`.
+ * level's. Run by prepare/dressing.ts; published as the tile's `dressing`
+ * and `dressingCoarse`.
  */
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -302,9 +302,10 @@ export function packTrees(
   stood: Awaited<ReturnType<typeof standTrees>>,
   corner: readonly [number, number]
 ): { coarse: Uint8Array; fine: Uint8Array } {
-  const lowest = Math.min(
-    ...[...stood.trees, ...stood.register].map((t) => t.fact.ground)
-  );
+  let lowest = Number.POSITIVE_INFINITY;
+  for (const t of [...stood.trees, ...stood.register]) {
+    lowest = Math.min(lowest, t.fact.ground);
+  }
   const origin = [
     corner[0],
     corner[1],

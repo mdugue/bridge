@@ -1,7 +1,8 @@
 /**
- * A tile's trees placed from their features on a ground, as the build's
- * tree baker does it feature by feature (scripts/bake-trees.ts): for the
- * tests that need placed trees.
+ * Features placed on a ground, each through its one owner
+ * (`canopyPlacement`, `inventoryTree`): what the layers' tests and the
+ * cost probes feed the layers with. The product places trees in the build
+ * (scripts/bake-trees.ts), never through these loops.
  */
 import type { CanopyFeature, TreeFeature } from "../features";
 import type { RecenterOffset } from "../ground-clamp";

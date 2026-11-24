@@ -117,7 +117,7 @@ import {
 } from "./tree-foot";
 import type { FootGeos, FootMaterials } from "./tree-foot";
 
-export { bucketByCell, hash, type TreeVeto } from "@/lib/city/tree-placement";
+export { bucketByCell, hash } from "@/lib/city/tree-placement";
 
 /**
  * A tree placed by precomputed transforms rather than a uniform scale — the

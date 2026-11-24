@@ -260,7 +260,8 @@ function writeStanding(
 ): void {
   words[at] = field((s.e - origin[0]) / STEP_M, WORD_MAX, report);
   // down to the step, never up: a foot stands in the ground or on it,
-  // never over it (ADR 0030; `treeJoins` reports each)
+  // never over it (ADR 0030; scripts/bake-trees.test.ts holds every foot
+  // of the spawn tile to it)
   words[at + 1] = field(
     Math.floor((s.ground - origin[2]) / TREE_STEP_Y_M),
     WORD_MAX,
@@ -272,7 +273,7 @@ function writeStanding(
 const slopeWord = (slope: readonly [number, number]): number =>
   slopeByte(slope[0]) | (slopeByte(slope[1]) << 8);
 
-/** Writes `tree` as record `index` of a `trees` section. */
+/** Writes `tree` as record `index` of a file's canopy trees. */
 export function writeTree(
   words: Uint16Array,
   index: number,
@@ -299,8 +300,8 @@ export function writeTree(
   words[at + T.slope] = slopeWord(tree.slope);
 }
 
-/** Writes `tree` as record `index` of a `register` section; `before` is
- *  the row of the record before it (0 for the first). */
+/** Writes `tree` as record `index` of a file's surveyed trees; `before`
+ *  is the row of the record before it (0 for the first). */
 export function writeRegister(
   words: Uint16Array,
   index: number,
@@ -339,7 +340,7 @@ const slopeOf = (word: number): [number, number] => [
 ];
 
 /**
- * Record `index` of a `trees` section as the tree the fine level draws
+ * Record `index` of a file's canopy trees as the tree the fine level draws
  * (`canopyPlacement`, `rowTree`), its slope with it, and what a card says
  * of it (`measured`: its height as measured, 0 for a row's; `photo`).
  *
@@ -402,7 +403,7 @@ export function treeAt(
   return { measured: dm / 10, p, photo, row: false, scan: r !== 0 };
 }
 
-/** Record `index` of a `register` section: where it stands (EPSG), its
+/** Record `index` of a file's surveyed trees: where it stands (EPSG), its
  *  file's properties and its row there (`before`: the row of the record
  *  before it, 0 for the first). */
 export function registerAt(

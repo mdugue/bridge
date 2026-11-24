@@ -81,10 +81,9 @@ describe("which trees the coarse level draws", () => {
     const register = Array.from({ length: 300 }, (_, i) =>
       registerTree(i * 3.7)
     );
+    // every tree handed over: the level's file is the selection
     const crowns = coarseCrowns([], register);
-    expect(crowns).toHaveLength(
-      register.filter((t) => drawnCoarse(t.x, t.z)).length
-    );
+    expect(crowns).toHaveLength(register.length);
     expect(crowns[0]).toMatchObject({
       kind: "register",
       colour: "golden",
