@@ -15,7 +15,7 @@ import type { DataManifest } from "../lib/city/tile";
  * Where scripts/prepare-data.ts puts a site's served files (ADR 0024): each
  * artifact under a content-hashed name, the manifest that maps the logical
  * names to them, and, at the end, nothing else — a file no publish named
- * this run is pruned. A warmer (warmers.ts) only names: it writes nothing.
+ * this run is pruned.
  * Every file is written whole or not at all (`writeWhole`): a run killed
  * mid-write leaves a part file, which the next run prunes, never a
  * truncated file under a name it would trust.
@@ -45,13 +45,8 @@ export function hashedName(file: string, content: Uint8Array): string {
   return `${path.basename(file, ext)}.${hash}${ext}`;
 }
 
-export function createPublisher(
-  outDir: string,
-  opts: { warming: boolean }
-): Publisher {
-  if (!opts.warming) {
-    mkdirSync(outDir, { recursive: true });
-  }
+export function createPublisher(outDir: string): Publisher {
+  mkdirSync(outDir, { recursive: true });
   const manifest: DataManifest = { version: 1, files: {} };
   const keep = new Set<string>([MANIFEST_FILE]);
   let written = 0;
@@ -61,7 +56,7 @@ export function createPublisher(
       manifest.files[logical] = hashed;
       keep.add(hashed);
       const dest = path.join(outDir, hashed);
-      if (!opts.warming && !existsSync(dest)) {
+      if (!existsSync(dest)) {
         writeWhole(dest, content);
         written += 1;
       }
@@ -69,15 +64,10 @@ export function createPublisher(
     },
     publishPlain: (name, content) => {
       keep.add(name);
-      if (!opts.warming) {
-        writeWhole(path.join(outDir, name), content);
-      }
+      writeWhole(path.join(outDir, name), content);
     },
     finish: () => {
       const artifacts = Object.keys(manifest.files).length;
-      if (opts.warming) {
-        return { artifacts, written: 0, pruned: 0 };
-      }
       writeWhole(
         path.join(outDir, MANIFEST_FILE),
         `${JSON.stringify(manifest, null, 2)}\n`

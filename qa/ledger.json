@@ -401,11 +401,11 @@
   },
   "code": {
     "product": {
-      "total": 154726,
+      "total": 154363,
       "app": 60932,
       "lib": 41355,
       "components": 3007,
-      "scripts": 13798,
+      "scripts": 13435,
       "pipeline/bake": 35634
     }
   },

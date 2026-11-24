@@ -7,7 +7,9 @@
  * (lib/city/site-index.ts), which the start page lists and the route
  * prerenders from; folders of sites no longer built are pruned. With
  * `PREPARE_SITES=dresden bun dev` only those sites are prepared and the
- * others stay served as they were built last (site-choice.ts).
+ * others stay served as they were built last (site-choice.ts). With
+ * `--pull` (the web build) nothing is baked: each site comes from the
+ * store as CI published it for this checkout (data-store.ts).
  *
  * A site is served exactly when its data is on disk at build time: in a
  * fresh clone that is every site whose folder is committed (ADR 0037 — all
@@ -37,21 +39,13 @@ import type { SiteIndex } from "../lib/city/site-index";
 import { siteReport } from "../lib/city/site-report";
 import { SERVER_WISSEN_DIR, STADTWISSEN_FILE } from "../lib/city/stadtwissen";
 import type { StadtwissenIndex } from "../lib/city/stadtwissen";
-import { MANIFEST_FILE, tileIds } from "../lib/city/tile";
+import { MANIFEST_FILE } from "../lib/city/tile";
 import type { DataManifest } from "../lib/city/tile";
 import { TILESET_FILE } from "../lib/city/tileset";
 import { SITES } from "../sites";
 import type { SiteId } from "../sites";
 import { chosenSites } from "./site-choice";
-import {
-  bakeLimits,
-  createSlots,
-  IF_CACHED_RUN,
-  NOT_CACHED,
-  SITE_PEAK,
-  warmersOn,
-  warmSteps,
-} from "./warmers";
+import { pullSite } from "./data-store";
 
 const OUT_DIR = path.join(process.cwd(), "public/data");
 
@@ -69,18 +63,14 @@ function isReady(id: SiteId): boolean {
   return siteReport(SITES[id], existsSync).every((t) => t.next === "ready");
 }
 
-/** prepare-data.ts for one site (a warmer with `args`, warmers.ts), each
- *  line it prints under the site's id (the bakes run side by side);
- *  resolves with its exit code. It runs on this process's own Bun, not
- *  whichever `bun` comes first on the PATH. */
-async function prepare(id: SiteId, args: string[]): Promise<number | null> {
-  const child = spawn(
-    process.execPath,
-    ["scripts/prepare-data.ts", id, ...args],
-    {
-      stdio: ["ignore", "pipe", "pipe"],
-    }
-  );
+/** prepare-data.ts for one site, each line it prints under the site's id
+ *  (the bakes run side by side); resolves with whether it succeeded. It
+ *  runs on this process's own Bun, not whichever `bun` comes first on the
+ *  PATH. */
+async function bake(id: SiteId): Promise<boolean> {
+  const child = spawn(process.execPath, ["scripts/prepare-data.ts", id], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   for (const [from, to] of [
     [child.stdout, process.stdout],
     [child.stderr, process.stderr],
@@ -90,95 +80,64 @@ async function prepare(id: SiteId, args: string[]): Promise<number | null> {
     });
   }
   return await new Promise((resolve) => {
-    child.on("close", resolve);
+    child.on("close", (code) => resolve(code === 0));
   });
 }
 
-/** The memory the bakes share: the machine's, or the container's limit
- *  when it sets a lower one (a build machine's cgroup). */
-function machineMemory(): number {
-  const limit = process.constrainedMemory();
-  return limit > 0 ? Math.min(totalmem(), limit) : totalmem();
+/** The site from the store (`--pull`); a failure is its one line. */
+async function pull(id: SiteId): Promise<boolean> {
+  try {
+    await pullSite(id, path.join(OUT_DIR, id));
+    return true;
+  } catch (error) {
+    process.stderr.write(`[${id}] ${(error as Error).message}\n`);
+    return false;
+  }
 }
 
 /**
- * Bakes the sites, every bake a process of its own, several at a time
- * (`bakeLimits`: as many as the cores, their peaks within the memory): a
- * bake is single-threaded, so one after the other a cold build waited for
- * every site in turn. Each site is first asked whether it is cached
- * (`--if-cached`, a small peak; a warm site publishes there). One that is
- * not is baked by warmers (warmers.ts), one tile each, so the tiles of
- * every site share the slots — largest site first, its first warmer
- * started ahead of the smaller sites waiting. With `warm` off
- * (`PREPARE_WARMERS=0`) a cold site is one process, counted at
- * `SITE_PEAK`.
+ * A bake is single-threaded and a whole site baked cold in one process
+ * peaks at 2.3 GiB (Dresden; München 1.7, the small sites near 1,
+ * 2026-11-24): as many side by side as the cores and the memory hold at
+ * 4 GB each (the container's limit where it sets one), or `PREPARE_JOBS`.
  */
+function bakesAtOnce(): number {
+  const limit = process.constrainedMemory();
+  const memory = limit > 0 ? Math.min(totalmem(), limit) : totalmem();
+  return (
+    Number(process.env.PREPARE_JOBS) ||
+    Math.max(1, Math.min(availableParallelism(), Math.floor(memory / 4e9)))
+  );
+}
+
+/** Prepares the sites, `lanes` at a time, largest first; resolves with
+ *  the ones that failed. */
 async function prepareAll(
   ids: readonly SiteId[],
-  limits: { jobs: number; memory: number },
-  warm: boolean
+  lanes: number,
+  prepare: (id: SiteId) => Promise<boolean>
 ): Promise<SiteId[]> {
-  const slots = createSlots(limits);
-  const failed: SiteId[] = [];
-  const bakeSite = async (id: SiteId): Promise<boolean> => {
-    const tiles = tileIds(SITES[id]);
-    if (!warm || tiles.length === 0) {
-      // a cached site publishes at a small peak; only a cold one is
-      // counted at a whole site's (warmers.ts SITE_PEAK)
-      const probe = await slots.run(
-        0,
-        IF_CACHED_RUN.peak,
-        async () => await prepare(id, IF_CACHED_RUN.args)
-      );
-      if (probe !== NOT_CACHED) {
-        return probe === 0;
-      }
-      return (
-        (await slots.run(0, SITE_PEAK, async () => await prepare(id, []))) === 0
-      );
-    }
-    const [[first], ...later] = warmSteps(tiles);
-    // Step 0, then step 1 in its slot: the first warmer starts at once,
-    // ahead of the smaller sites waiting.
-    const start = await slots.run(1, first.peak, async () => {
-      const code = await prepare(id, IF_CACHED_RUN.args);
-      return code === NOT_CACHED
-        ? { code: await prepare(id, first.args), warmed: true }
-        : { code, warmed: false };
-    });
-    if (!start.warmed || start.code !== 0) {
-      return start.code === 0;
-    }
-    for (const step of later) {
-      const codes = await Promise.all(
-        step.map(
-          async ({ args, peak }) =>
-            await slots.run(1, peak, async () => await prepare(id, args))
-        )
-      );
-      if (codes.some((code) => code !== 0)) {
-        return false;
-      }
-    }
-    return true;
-  };
   const queue = [...ids].sort(
     (a, b) => SITES[b].tiles.length - SITES[a].tiles.length
   );
-  await Promise.all(
-    queue.map(async (id) => {
-      if (!(await bakeSite(id))) {
+  const failed: SiteId[] = [];
+  const lane = async () => {
+    for (let id = queue.shift(); id; id = queue.shift()) {
+      if (!(await prepare(id))) {
         failed.push(id);
       }
-    })
-  );
+    }
+  };
+  await Promise.all(Array.from({ length: lanes }, lane));
   return failed;
 }
 
+const PULL = "--pull";
+const pulling = process.argv.includes(PULL);
 const chosen = chosenSites({
   env: process.env.PREPARE_SITES,
   known: Object.keys(SITES),
-  named: process.argv.slice(2),
+  named: process.argv.slice(2).filter((arg) => arg !== PULL),
   ready: (id) => isReady(id as SiteId),
   built: (id) => existsSync(path.join(OUT_DIR, id, MANIFEST_FILE)),
 });
@@ -199,39 +158,13 @@ const skipped = Object.keys(SITES).filter(
   (id) => !served.includes(id as SiteId)
 );
 log(
-  `building ${ids.join(", ")}${chosen.keep.length > 0 ? ` (left as built last: ${chosen.keep.join(", ")})` : ""}${skipped.length > 0 ? ` (not ready or not named: ${skipped.join(", ")})` : ""}`
-);
-
-const { limits, warm } = (() => {
-  try {
-    return {
-      warm: warmersOn({ PREPARE_WARMERS: process.env.PREPARE_WARMERS }),
-      limits: bakeLimits({
-        cores: availableParallelism(),
-        memory: machineMemory(),
-        env: {
-          PREPARE_JOBS: process.env.PREPARE_JOBS,
-          PREPARE_MEMORY_GB: process.env.PREPARE_MEMORY_GB,
-        },
-      }),
-    };
-  } catch (error) {
-    return fail((error as Error).message);
-  }
-})();
-// a slow deploy shows why
-const overrides = (
-  ["PREPARE_JOBS", "PREPARE_MEMORY_GB", "PREPARE_WARMERS"] as const
-)
-  .filter((name) => process.env[name])
-  .map((name) => `, ${name}=${process.env[name]}`)
-  .join("");
-log(
-  `up to ${limits.jobs} bakes at once, ${(limits.memory / 1e9).toFixed(1)} GB of peaks between them (${availableParallelism()} cores, ${(machineMemory() / 1e9).toFixed(1)} GB, Bun ${Bun.version}${overrides})`
+  `${pulling ? "pulling" : "building"} ${ids.join(", ")}${chosen.keep.length > 0 ? ` (left as built last: ${chosen.keep.join(", ")})` : ""}${skipped.length > 0 ? ` (not ready or not named: ${skipped.join(", ")})` : ""}`
 );
 
 mkdirSync(OUT_DIR, { recursive: true });
-const failed = await prepareAll(ids, limits, warm);
+const failed = pulling
+  ? await prepareAll(ids, ids.length, pull)
+  : await prepareAll(ids, bakesAtOnce(), bake);
 if (failed.length > 0) {
   fail(`${failed.join(", ")} failed`);
 }

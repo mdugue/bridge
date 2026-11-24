@@ -42,8 +42,6 @@ const PLUMBING_IMPORTS = new Set([
   "scripts/bake-sources.ts",
   "scripts/cache-keys.ts",
   "scripts/publisher.ts",
-  "scripts/shared-cache.ts",
-  "scripts/warmers.ts",
   "sites/index.ts",
 ]);
 

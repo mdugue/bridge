@@ -28,7 +28,7 @@ test("the same bytes are written once; a run names its files in the manifest and
   writeFileSync(path.join(dir, "stale.1234abcd.json"), "old");
   // what a run killed mid-write leaves: a part file, never the served name
   writeFileSync(path.join(dir, "a.5678abcd.json.4242.part"), "o");
-  const first = createPublisher(dir, { warming: false });
+  const first = createPublisher(dir);
   const name = first.publish("a.json", bytes("one"));
   first.publishPlain("site-stats.json", bytes("{}"));
   expect(first.finish()).toEqual({ artifacts: 1, written: 1, pruned: 2 });
@@ -40,21 +40,11 @@ test("the same bytes are written once; a run names its files in the manifest and
   );
   expect(manifest).toEqual({ version: 1, files: { "a.json": name } });
 
-  const second = createPublisher(dir, { warming: false });
+  const second = createPublisher(dir);
   expect(second.publish("a.json", bytes("one"))).toBe(name);
   const changed = second.publish("b.json", bytes("two"));
   // the stats are not named this run: pruned like any file
   expect(second.finish()).toEqual({ artifacts: 2, written: 1, pruned: 1 });
   expect(existsSync(path.join(dir, changed))).toBe(true);
   expect(existsSync(path.join(dir, "site-stats.json"))).toBe(false);
-});
-
-test("a warmer names what it would publish and writes nothing", () => {
-  const dir = path.join(fresh(), "site");
-  const warmer = createPublisher(dir, { warming: true });
-  const name = warmer.publish("a.json", bytes("one"));
-  expect(name).toBe(hashedName("a.json", bytes("one")));
-  warmer.publishPlain("site-stats.json", bytes("{}"));
-  expect(warmer.finish()).toEqual({ artifacts: 1, written: 0, pruned: 0 });
-  expect(existsSync(dir)).toBe(false);
 });
