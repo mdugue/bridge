@@ -52,7 +52,6 @@
  *
  * No THREE, no DOM.
  */
-import { finished } from "./build-steps";
 import type { Steps } from "./build-steps";
 import type { TreeFeature } from "./features";
 import type { RecenterOffset } from "./ground-clamp";
@@ -81,10 +80,10 @@ export const TREE_STEP_Y_M = 1 / 32;
  *  their reach (app/_components/tree-foot.ts `DRAPE_SLOPE`). Every bit
  *  here is the ground's noise on the wire: a byte in full cost the forest
  *  tile's fine level 51 kB. */
-export const TREE_SLOPE_STEP = 8;
+const TREE_SLOPE_STEP = 8;
 /** The NDVI's byte is a multiple of this (of 254): 32 steps of greenness
  *  under each crown's own touch of colour. */
-export const TREE_NDVI_STEP = 8;
+const TREE_NDVI_STEP = 8;
 
 const WORD_MAX = 65_535;
 const HEIGHT_BITS = 10;
@@ -470,14 +469,6 @@ export function registerTree(
   };
 }
 
-/** Every surveyed tree of `packs` as the layers draw it. */
-export const registerTrees = (
-  packs: readonly TreePack[],
-  offset: RecenterOffset,
-  year: number
-): InventoryTree[] =>
-  registerFacts(packs).map((fact) => registerTree(fact, offset, year));
-
 /** The surveyed trees of `packs` as their files had them, each on its
  *  ground: what a question about one is answered from. */
 export function registerFacts(packs: readonly TreePack[]): RegisterFact[] {
@@ -516,10 +507,3 @@ export function* placedTreeSteps<T>(
   }
   return out;
 }
-
-/** The same in one go: the coarse level's third, a test. */
-export const placedTrees = (
-  packs: readonly TreePack[],
-  offset: RecenterOffset
-): ReturnType<typeof treeAt>[] =>
-  finished(placedTreeSteps(packs, offset, (tree) => tree));

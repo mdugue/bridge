@@ -40,6 +40,8 @@ const ASK_MS = 10_000;
 /** Requests side by side, and how often one is tried. */
 const LANES = 12;
 const TRIES = 3;
+/** How long one try may take. */
+const timeLimit = () => AbortSignal.timeout(120_000);
 
 /**
  * What a site's published bytes are made from, as one key: every file of
@@ -90,7 +92,7 @@ const stored = (site: string, name: string, key: string) =>
 async function request(url: string, init: RequestInit): Promise<Response> {
   for (let attempt = 1; ; attempt += 1) {
     try {
-      const res = await fetch(url, init);
+      const res = await fetch(url, { ...init, signal: timeLimit() });
       if ((res.status < 500 && res.status !== 429) || attempt === TRIES) {
         return res;
       }
@@ -202,13 +204,17 @@ export async function pullSite(
 ): Promise<void> {
   const until = Date.now() + patience;
   // a request that fails while waiting is "not there yet", until the cap
+  let failure = "";
   const asked = async () =>
-    await read(stored(site, MANIFEST_FILE, key)).catch(() => null);
+    await read(stored(site, MANIFEST_FILE, key)).catch((error: unknown) => {
+      failure = ` A request failed: ${String(error)}`;
+      return null;
+    });
   let manifest = await asked();
   while (!manifest) {
     if (Date.now() >= until) {
       throw new Error(
-        `${site}: the store has no manifest.${key}.json after ${Math.round(patience / 60_000)} min. CI publishes it: see the step "Publish the sites" of the job "E2E (whole site, shell, docs)" for this commit (a pull request from a fork or from Dependabot has no secret to publish with)`
+        `${site}: the store has no manifest.${key}.json after ${Math.round(patience / 60_000)} min. CI publishes it: see the step "Publish the sites" of the job "E2E (whole site, shell, docs)" for this commit (a pull request from a fork or from Dependabot has no secret to publish with).${failure}`
       );
     }
     await Bun.sleep(Math.min(ASK_MS, patience));

@@ -1133,7 +1133,7 @@ times.
 
 - A push starts the host's build and CI side by side, so the pull asks
   for the manifest every 10 s for up to 15 min, then fails naming the key
-  and CI's step. A push that leaves the key alone waits for nothing; one
+  and CI's step (and a request that failed, if one did). A push that leaves the key alone waits for nothing; one
   that changes a bake waits for CI's bake, and **a preview fails where
   CI's build-check shard does**.
 - CI runs on a push to the long-lived branches (`main`, `rewrite`): a
