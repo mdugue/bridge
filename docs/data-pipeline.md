@@ -1137,8 +1137,9 @@ times.
   that changes a bake waits for CI's bake, and **a preview fails where
   CI's build-check shard does**.
 - CI runs on a push to the long-lived branches (`main`, `rewrite`): a
-  merge is a tree no pull request's run baked, and a later push there
-  does not cancel the run. Any other branch needs a pull request: the
+  merge is a tree no pull request's run baked, and each push's run is
+  on its own, neither cancelled by a later push nor queued behind an
+  earlier one. Any other branch needs a pull request: the
   host builds a preview for every pushed branch, and one whose key no
   run published fails at the pull.
 - The e2e job checks out a pull request's head, not GitHub's merge with

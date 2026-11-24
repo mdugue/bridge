@@ -7,14 +7,13 @@ on:
   push:
     branches: [main, rewrite]
 
-# Cancel an in-flight CI run when new commits land on the same ref. PR pushes
-# are the common case; the queued run is almost always stale by the time it
-# starts.
+# A pull request's new commits cancel its in-flight run: the queued one is
+# almost always stale by the time it starts. A push to main or rewrite is a
+# group of its own (its commit): it neither cancels nor waits behind the
+# run before it, which publishes that commit's sites while its deployment
+# waits for them (scripts/data-store.ts).
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  # Not on a push to main or rewrite: a second merge would cancel the run
-  # that publishes the first one's sites, and that commit's deployment
-  # would wait for them in vain (scripts/data-store.ts).
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
