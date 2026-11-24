@@ -37,6 +37,7 @@
  * z0 + (k+1)·rise, so the last tread is the top landing and every tread
  * lies on or above the ramp z0 → z1.
  */
+import * as PMath from "./portable-math";
 import { EDGE_TOLERANCE_M, joinsAlong, meetGround, SINK } from "./ground-join";
 import type { HeightAt, JoinPoint } from "./ground-join";
 import type { StairFeature, TerraceFeature } from "./features";
@@ -159,7 +160,7 @@ function arcLengths(coords: Point2[]): number[] {
   for (let i = 1; i < coords.length; i += 1) {
     const [x0, y0] = coords[i - 1];
     const [x1, y1] = coords[i];
-    out.push(out[i - 1] + Math.hypot(x1 - x0, y1 - y0));
+    out.push(out[i - 1] + PMath.hypot(x1 - x0, y1 - y0));
   }
   return out;
 }
@@ -215,7 +216,7 @@ function nearestOnAxis(
     const t = Math.min(Math.max(raw, 0), 1);
     const px = x0 + (x1 - x0) * t;
     const py = y0 + (y1 - y0) * t;
-    const d = Math.hypot(x - px, y - py);
+    const d = PMath.hypot(x - px, y - py);
     if (!best || d < best.d) {
       const beyond = (i === 0 && raw < 0) || (i === last && raw > 1);
       best = { d, px, py, s: lengths[i] + t * len, beyond };
@@ -523,7 +524,7 @@ interface Section {
 }
 
 function segmentNormal(a: Point2, b: Point2): [number, number] {
-  const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const l = PMath.hypot(b[0] - a[0], b[1] - a[1]) || 1;
   return [-(b[1] - a[1]) / l, (b[0] - a[0]) / l];
 }
 
@@ -689,7 +690,7 @@ function joint(
   out.triangle([c, [...first, h], [...second, h]], [0, 0, 1], STAIR_TREAD);
   const nx = (a.px + b.px) * side;
   const ny = (a.py + b.py) * side;
-  const nl = Math.hypot(nx, ny) || 1;
+  const nl = PMath.hypot(nx, ny) || 1;
   cheek(out, first, second, [base, base], h, [nx / nl, ny / nl]);
 }
 

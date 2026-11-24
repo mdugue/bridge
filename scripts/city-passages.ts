@@ -4,6 +4,7 @@
  * then cut through the dressed walls and lined (`withPassages`), last of
  * all. No DOM.
  */
+import * as PMath from "../lib/city/portable-math";
 import { cm, triangulateXY } from "./city-bake";
 import type { BakedCityMesh } from "./city-bake";
 import {
@@ -165,7 +166,7 @@ function toPolyline(
         : 0;
     best = Math.min(
       best,
-      Math.hypot(q[0] - a[0] - t * dx, q[1] - a[1] - t * dy)
+      PMath.hypot(q[0] - a[0] - t * dx, q[1] - a[1] - t * dy)
     );
   }
   return best;
@@ -437,6 +438,6 @@ function blend(
   if (!unit) {
     return out;
   }
-  const len = Math.hypot(...out);
+  const len = PMath.hypot(...out);
   return len > 0 ? out.map((c) => c / len) : out.map(() => Number.NaN);
 }

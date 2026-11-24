@@ -35,7 +35,12 @@ export default defineConfig({
   testDir: "./e2e",
   // The --headed snapshot harness renders every shots/*.json at the full
   // profile and overwrites the PNGs; it only runs when asked for (bun run shots).
-  testIgnore: process.env.SHOTS ? [] : ["**/snapshot-shot.spec.ts"],
+  // (and the ledger's browser read only where it is handed a folder:
+  // bun run ledger -- --browser)
+  testIgnore: [
+    ...(process.env.SHOTS ? [] : ["**/snapshot-shot.spec.ts"]),
+    ...(process.env.LEDGER_OUT ? [] : ["**/ledger.spec.ts"]),
+  ],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -79,12 +84,16 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    command: serverCommand(),
-    url: baseURL,
-    ignoreHTTPSErrors: devServer,
-    reuseExistingServer: !process.env.CI,
-    // A cold local production build has to fit in here too.
-    timeout: 240_000,
-  },
+  // The compared plates serve each commit themselves, on a port of its
+  // own (scripts/plates.ts sets PLATES_DIR and PORT).
+  webServer: process.env.PLATES_DIR
+    ? undefined
+    : {
+        command: serverCommand(),
+        url: baseURL,
+        ignoreHTTPSErrors: devServer,
+        reuseExistingServer: !process.env.CI,
+        // A cold local production build has to fit in here too.
+        timeout: 240_000,
+      },
 });

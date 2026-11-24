@@ -16,6 +16,7 @@
  * (lib/city/line-profile.ts, the feature's `lz`), indexed by the very
  * samples the layer takes (`subdividePolyline` at LEVEL_STEP).
  */
+import * as PMath from "./portable-math";
 import { decksAt } from "./decks";
 import type { DeckPoly } from "./decks";
 import type { RailFeature } from "./features";
@@ -198,7 +199,7 @@ class SampleIndex {
             s.piece !== not &&
             (line === null || p.line === line) &&
             (steep === undefined || p.steep === steep) &&
-            Math.hypot(pt[0] - x, pt[1] - y) <= r
+            PMath.hypot(pt[0] - x, pt[1] - y) <= r
           ) {
             out.push(s);
           }
@@ -211,7 +212,7 @@ class SampleIndex {
 
 /** The unit direction from a to b, or null for a zero step. */
 function unit(a: Point2, b: Point2): Point2 | null {
-  const l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const l = PMath.hypot(b[0] - a[0], b[1] - a[1]);
   return l > 0 ? [(b[0] - a[0]) / l, (b[1] - a[1]) / l] : null;
 }
 
@@ -262,7 +263,7 @@ function runOn(
     if ((pt[0] - at[0]) * dir[0] + (pt[1] - at[1]) * dir[1] <= 0.5) {
       continue;
     }
-    run += Math.hypot(pt[0] - last[0], pt[1] - last[1]);
+    run += PMath.hypot(pt[0] - last[0], pt[1] - last[1]);
     last = pt;
     out.push({ piece: best.piece, pt });
     if (run >= LEVEL_CONTEXT_M) {
@@ -334,7 +335,7 @@ export function solvePieces(
     const samples: LevelSample[] = pts.map((c, k) => {
       if (k > 0) {
         const q = pts[k - 1].pt;
-        d += Math.hypot(c.pt[0] - q[0], c.pt[1] - q[1]);
+        d += PMath.hypot(c.pt[0] - q[0], c.pt[1] - q[1]);
       }
       dist.push(d);
       const w = epsgToWorld(c.pt[0], c.pt[1], ground.offset);
@@ -407,7 +408,7 @@ function inTunnel(
   }
   let run = 0;
   for (let k = a; k < b; k += 1) {
-    run += Math.hypot(pts[k + 1][0] - pts[k][0], pts[k + 1][1] - pts[k][1]);
+    run += PMath.hypot(pts[k + 1][0] - pts[k][0], pts[k + 1][1] - pts[k][1]);
   }
   return run > CROSS_TUNNEL_M;
 }

@@ -110,6 +110,7 @@ const ASKED = [
   "disposeForReload",
   "getFocusDebug",
   "getGpuDebug",
+  "getPipelineBudget",
   "getRenderInfo",
   "inquireAt",
   "releaseGpu",
@@ -656,7 +657,13 @@ export async function startScene(
 function pocProbeNow(): PocProbe {
   const poc = typeof window === "undefined" ? undefined : window.__poc;
   return poc
-    ? { hold: poc.hold, step: poc.step, frameMs: poc.frameMs, veil: poc.veil }
+    ? {
+        hold: poc.hold,
+        step: poc.step,
+        frameMs: poc.frameMs,
+        still: poc.still,
+        veil: poc.veil,
+      }
     : {};
 }
 

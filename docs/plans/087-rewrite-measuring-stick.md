@@ -15,6 +15,39 @@
 
 ## Status
 
+> **Slimmed before milestone 1 (2026-11-24; plan 086, ruling 5).** What
+> this plan built is on `rewrite` as a narrow guard, and the rest of it
+> is history at commit `b00b08c2`:
+>
+> - **The ledger** is one module, one script and one browser spec
+>   (`lib/city/ledger.ts`, `scripts/ledger.ts`, `e2e/ledger.spec.ts`):
+>   `published`, `bytes`, the watched tiles' `dressing`, the first load's
+>   JavaScript and a phone's tile cache, and one new figure,
+>   `code.product` (the product's code lines, gated;
+>   `bun run ledger -- --against <ref>` prints the delta a milestone
+>   quotes). Gone, their figures kept in the *Findings* of the plans
+>   that took them: the complexity counters and their lexers, the
+>   buildings' geometry, every site's rasters (091), the census of builds
+>   and `browser.pipelines` (094), the timings, the dressing's recorded
+>   part (090), the bakes' hand-over (092), the block trial (091).
+> - **The comparison of published tilesets** (`scripts/compare-tilesets.ts`,
+>   `compare-glb.ts`, `compare-json.ts`, phase 5) proved the determinism
+>   fix and left `rewrite`: it is on the branch `tools/compare-tilesets`,
+>   to be fetched when plan 088 publishes or plan 092 changes the
+>   hand-over format.
+> - **The plates** (`bun run plates`, `lib/city/plate-diff.ts`) stay as
+>   scaffolding while the series' plans move pixels: they render and
+>   compare, and fail on a differing view, which the report names. The
+>   claims read from a PR's `## Snapshots`, the noise-floor command
+>   (`pairs`), the kept base plates and the `diff` command are gone; the
+>   workflow runs on the label `plates` or by hand, not on every pull
+>   request.
+>
+> The counters' last figures (2026-11-16) are plan 086's "Less
+> complexity" row; beside them, 10 registered upstream workarounds at 8
+> sites in the code. Below, a sentence that names one of those tools
+> describes the state at that commit.
+
 - **Priority**: P1 — the first plan of the series; 088–096 write into
   what it builds
 - **Effort**: M, plus a machine with a GPU that keeps running
@@ -25,7 +58,8 @@
 - **Category**: rewrite — all three aims, as their proof
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: TODO
+- **Status**: IN PROGRESS — phase 1 (the ledger) built 2026-11-16;
+  phase 2 (the browser's figures) built 2026-11-16; phases 3–6 TODO
 
 ## Why this matters
 
@@ -41,7 +75,8 @@ real GPU". Every plan of the series moves geometry, textures or the
 stream; each would queue behind the same hand.
 
 After this plan a pull request is told two things without anyone
-looking: which reference views changed on a real GPU, and which of the
+looking: which reference views changed — in CI on the runner's
+software renderer, and on a real GPU where one runs — and which of the
 series' figures moved. What stays a person's is the judgement whether a
 changed picture is good.
 
@@ -120,7 +155,9 @@ over SwiftShader, none with a GPU. The shard "whole site, shell, docs"
 (`buildCheck: true`) always builds, so `public/data/` exists there.
 
 **ADR 0018** rejects "Pixel diffs in CI: SwiftShader output is not the
-product". That stands; this plan diffs on a real GPU.
+product". That stands for judging a look. Since 2026-11-16 this plan
+also compares base with head on SwiftShader, as a tripwire ("Two
+tiers" below), and Phase 6 rewrites the record.
 
 **Conventions to match**: a script's head comment says what it does; a
 generated file has a `--check` (`scripts/qa-views.ts`); pure logic
@@ -162,7 +199,9 @@ lives in `lib/city/` with a unit test beside it; a CI report goes to
 - Any look, material, bake or tile format. A plate that shows a fault is
   reported, not fixed here.
 - Plan 019's checks by hand (below, "What stays plan 019's").
-- Pixel comparison on SwiftShader, in any form.
+- Judging a look on SwiftShader. (Comparing base with head there, as a
+  tripwire, is in scope since the maintainer's ruling of 2026-11-16 —
+  see "Two tiers" below.)
 - A new image or diff dependency: `sharp` is already pinned and decodes
   a PNG to raw pixels.
 - Golden images in git, Git-LFS, or a bucket of this plan's own.
@@ -208,6 +247,21 @@ new `qa/ledger.json`; the diff is what the reviewer reads.
 `bun test lib/city/ledger.test.ts` → pass. **Ledger**: the first
 baseline of bytes, requests and counters, dated.
 
+**Built (2026-11-16)**, hardened the same day after an independent
+review; the counters, the buildings' geometry and the rasters it also
+wrote are gone (*Status*). What holds:
+
+- Every published file is in exactly one class (`published`: `tiles`,
+  `boot`, `site`, `server`); a file that no tile and no row of
+  `SITE_FILES` (`lib/city/ledger.ts`) names is an error.
+- The wire rule gzips text with the pinned Bun's zlib, so a Bun upgrade
+  may move the JSON figures by a few bytes.
+- Baseline (Dresden): the spawn tile's fine level 5.45 MB in 29 files
+  beyond the reach (a phone's 5.31 MB in 28) and 7.92 MB in 34 once
+  approached (a phone's 7.52 MB in 30), its far set 4.69 MB in 10, the
+  tiles' files 193.6 MB in 641, the boot 39.8 kB in 3, 39 site-wide files
+  with 3.51 MB, 17 of the server's (`docs/data-pipeline.md`).
+
 ### Phase 2 — Figures a browser has to produce
 
 `e2e/ledger.spec.ts` (ignored unless `LEDGER=1`, as the shot spec is
@@ -226,17 +280,41 @@ unless `SHOTS=1`), run by `bun run ledger -- --browser` against the
    `streamTimings.summary()`. Record the `boot:*` marks,
    `dressing:build`, `tile:compile` and `longtask`.
 
-Gated: 1 and 2, with a tolerance each figure names (bytes of JavaScript
-±0.5 %, a tile's bytes exact). **Recorded only**: 3. On SwiftShader a
+**Built (2026-11-16).** `bun run ledger -- --browser` runs
+`e2e/ledger.spec.ts` (never retried) and writes `browser`, gated
+exactly; the timings of item 3 are gone (*Status*). After two reviews:
+
+- the scripts' bodies are gzipped by the pinned Bun, not in Playwright's
+  Node (26–79 bytes a file apart), so the JavaScript needs no ±0.5 %;
+- the phone figure is `phoneLiteSpawnCache`: the cache's own accounting
+  of its loaded contents under the lite profile, not the phone's
+  memory. Two reads of three's `info.memory` on one build differed
+  (attributes 332 against 325), so that is not gated.
+
+Gated: 1 and 2, exactly. **Recorded only**: 3. On SwiftShader a
 timing depends on the runner drawn (`ci.yml` documents a factor of two
 between runners), so the ledger keeps timings in a section of their own
 that `--check` never compares, each with the machine and date it was
 read on.
 
-**Verify**: `LEDGER=1 bun run ledger -- --browser` twice → figures 1
-and 2 equal within their tolerance. **STOP** if the first-load set
+**Verify**: `bun run ledger -- --browser` twice → figures 1 and 2
+equal. **STOP** if the first-load set
 differs between two runs of the same build: find out why before gating
 it. **Ledger**: JavaScript, a phone's tile bytes, the first timings.
+
+### Two tiers (the maintainer's ruling 4 in plan 086, 2026-11-16)
+
+ADR 0018's rejection of pixel comparison on SwiftShader holds for
+judging a look, not for the question a refactor asks — did anything
+change that nobody meant. So phases 3 and 4 are built twice over the
+same code (`lib/city/plate-diff.ts`, `scripts/plates.ts`):
+
+- **Tier 1, in CI**: the merge base and the head rendered by the same
+  runner's software renderer (`SHOTS_SMALL=1`), compared with a
+  tolerance from that renderer's own noise floor. It reports *changed*
+  and names the views; it never says a picture is good.
+- **Tier 2, on a real GPU**: as phases 3 and 4 describe. It gates
+  nothing until the maintainer has chosen where it runs.
 
 ### Phase 3 — A frame that repeats (spike; its numbers decide)
 
@@ -308,8 +386,8 @@ Then build the workflow for the chosen one. Whatever is chosen:
 **Verify**: a branch that changes only a comment → the check passes
 with 0 differing views; a branch that changes one palette colour, with
 no Snapshots section → the check fails and names the views.
-**STOP** if no candidate gives a hardware adapter with a floor Phase 3
-accepts: the plates stay a local command, and the row says so.
+**STOP** (tier 2) if no candidate gives a hardware adapter with a floor
+Phase 3 accepts: tier 2 stays a local command, and the row says so.
 
 ### Phase 5 — The published tileset compared by content
 
@@ -336,7 +414,8 @@ that file named.
 
 Rewrite ADR 0018 (decision 4: compared on a real GPU against main on
 the same machine; decision 7: a PR without snapshots claims no change;
-the SwiftShader alternative stays rejected). Write a new ADR, numbered
+SwiftShader stays rejected for judging a look and is the first tier's
+tripwire). Write a new ADR, numbered
 as `docs/adr/README.md` says under "Numbering": every plan writes its
 figures into the ledger; a gated figure that gets worse is committed
 with the PR that moves it. Update `docs/rendering.md` ("Verifying a
@@ -350,33 +429,104 @@ section M. Plan 019 keeps its reference views; they are now the plates'.
 **Verify**: `bun run verify` → exit 0; `bun test lib/docs` → every
 relative link resolves.
 
+## Findings: tier 1 of phases 3 and 4 (2026-11-16)
+
+Measured in the cloud container (4 cores, no GPU; headless Chromium
+1243, WebGPU on SwiftShader's Vulkan), 800 × 500 at 1×.
+
+**What it costs there.** A SwiftShader frame takes 4–5 s while the shadow
+rings redraw or a tile lands. With the whole site streamed a view took
+3–5 min to settle; with `?scene=lite` alone — the spawn tile — a view
+takes 25–55 s and the page boots in 20 s. So tier 1 can only show views
+that stand on the spawn tile, 25 of the 50, and eight of them are the
+tier (`TIER1_VIEWS`, `scripts/plates.ts`). One render of the eight:
+319–343 s, the boot included. The job, both sides built and rendered:
+16 min 17 s on the hosted runner's first run (the base's bake still
+warm), 14 min 20 s in the container with the cold bake. Its budget is
+30 min.
+
+**What `still` fixed.** Before the harness awaited its settle loop,
+30 of 50 views differed between two renders of one build, whole plates
+by 80–99 %. After that the clouds moved 6–7 % of a plate with sky
+(`rooftops`, `shore-eye`) and the crowns' sway 40–290 pixels along
+crown edges (`street-crossings`, its Comic twin, `fountain-july-day`).
+`__poc.still` holds both: TSL `time` and the scene's phase clock read
+one instant. Without the hold, one pair of nine views: five differed.
+
+**The noise floor.** With the hold, ten same-commit pairs of the eight
+views (eleven renders, each a page of its own): 0 views differed, and no
+pixel moved by a single step (the largest channel difference was 0 in
+all 80 comparisons). Between two builds of one commit, or two servers of
+one build: 3 pixels of `across-400` by one step, nothing else. The ten
+pairs are the container's; the hosted runner's floor is not measured.
+
+**The tolerance** (`TIER1_TOLERANCE`) is that floor and a small margin:
+a pixel differs above 3 of 255; a view differs above 4 such pixels (a
+plate is 400 × 250 drawn pixels), or above 0.1 of 255 on average over
+the plate. The first numbers, 24 of 255 and 20 pixels, passed a whole
+frame 9 % brighter, a 20-pixel object and the sun five minutes later in
+`rooftops`. Seeded on real renders: the sun five minutes later in
+`rooftops` differs in 10 322 pixels (2.6 %, mean 0.62) and in no other
+view; `fogPct` 20 → 60 in `across-400` in 43.6 % of its pixels. A plate
+depends on the views before it — `rooftops` rendered alone, not seventh
+in the row, differed by up to 19 of 255 in 276 pixels — so both sides
+render the same row in the same order. The tolerance lets through a
+change of 4 pixels or fewer at any contrast, a step of 3 of 255 or less
+over less than about 3 % of the frame, and one step over less than 10 %.
+
+**What tier 1 does not see**: 42 of the 50 views; every tile but the
+spawn's, and so every seam; the full profile's shadow rings, AO and
+resolution; the data layers; a view's page query (`?safety=3`,
+`?trail=1`); late parts (murals, window niches) that land after the
+scene reports itself settled.
+
+### What is left for tier 2
+
+The command is the same without `SHOTS_SMALL`: `bun run plates` renders
+all 50 views headed, at the full profile, 1600 × 1000 @2×, on the
+machine's own adapter. Not done, because no GPU was at hand:
+
+1. **Its own noise floor.** Ten same-commit pairs on the chosen
+   machine; `TIER2_TOLERANCE` holds tier 1's numbers until then. Expect
+   what tier 1 could not show: the order tiles land in across fifteen
+   tiles, the late parts, the data layers' clock, the views with a page
+   query (the harness boots one page and ignores a view's query).
+2. **Whether the adapter is hardware**: phase 4's first question, not
+   built.
+3. **Where it runs** — the maintainer's decision, phase 4's three
+   candidates.
+4. **Minutes.** Unknown: a real GPU draws a frame in milliseconds, so
+   the settle (eight frames, then three quiet) is no longer the cost;
+   the stream of fifteen tiles is.
+
 ## Test plan
 
-- `lib/city/ledger.test.ts`: each counter on a fixture; the byte rule
+- `scripts/ledger.test.ts`: the byte rule
   (a `.gz` at face value, a GeoJSON gzipped); a level's file set from a
   two-tile tileset. Model after `lib/city/tile.test.ts`.
 - `lib/city/plate-diff.test.ts`: equal images; one pixel over the
   level; a share just under and just over; images of different size
   are an error, not a difference.
-- `scripts/compare-tilesets.test.ts`: reordered GeoJSON records are
+- `scripts/compare-tilesets.test.ts` (on the branch
+  `tools/compare-tilesets`): reordered GeoJSON records are
   equal; a changed property is not; a glTF re-encoded with the same
   content is equal. Model after `scripts/tile-glb.test.ts`.
-- `app/_components/scene-client.test.ts`: `getTimings` is a value call.
 
 ## Done criteria
 
 - [ ] `bun scripts/ledger.ts --check` exits 0 on main and runs in CI's
   build-check shard
-- [ ] `qa/ledger.json` holds bytes, requests, counters, first-load
-  JavaScript, a phone's tile bytes, and a timings section marked as
-  recorded
+- [ ] `qa/ledger.json` holds bytes, requests, first-load JavaScript
+  and a phone's tile bytes
 - [ ] `grep -n "python3 - <<" docs/data-pipeline.md` finds nothing
 - [ ] Ten same-commit pairs of the kept views differ in 0 views
-  (figure in the ledger)
-- [ ] The plates check exists as the maintainer chose it, never runs a
-  fork's code, and fails a no-snapshot PR that changes a view
-- [ ] `bun scripts/compare-tilesets.ts` names a moved tree and nothing
-  else
+  (figure in *Findings*)
+- [ ] Tier 1 runs in CI on the label `plates` or by hand, base against
+  head on the runner's renderer, and fails where a view differs
+- [ ] Tier 2 exists as the maintainer chose it and never runs a fork's
+  code
+- [ ] `bun scripts/compare-tilesets.ts` (on the branch
+  `tools/compare-tilesets`) names a moved tree and nothing else
 - [ ] ADR 0018 rewritten, the ledger ADR written, `bun run verify`
   exits 0
 - [ ] The row in `docs/plans/README.md` updated
@@ -401,7 +551,8 @@ relative link resolves.
   up by themselves. A view that flakes is fixed or dropped, never
   retried.
 - A new kind of published file needs its reader in
-  `compare-tilesets.ts`, or it compares as bytes only.
+  `compare-tilesets.ts` (on the branch `tools/compare-tilesets`), or it
+  compares as bytes only.
 - The plates compare one adapter with itself. They do not say that an
   iPhone draws the same; that is plan 019.
 - Each bump of three is run through the plates before it merges: the

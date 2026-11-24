@@ -1,0 +1,432 @@
+{
+  "version": 3,
+  "site": "dresden",
+  "tiles": 15,
+  "published": {
+    "files": 700,
+    "boot": {
+      "bytes": 39818,
+      "files": 3
+    },
+    "tiles": {
+      "bytes": 193620659,
+      "files": 641
+    },
+    "site": {
+      "bytes": 3514754,
+      "files": 39
+    },
+    "server": {
+      "bytes": 3859068,
+      "files": 17
+    },
+    "kinds": {
+      "landmark-facts": {
+        "class": "site",
+        "bytes": 4225,
+        "files": 1
+      },
+      "manifest": {
+        "class": "boot",
+        "bytes": 9200,
+        "files": 1
+      },
+      "minimap": {
+        "class": "site",
+        "bytes": 87334,
+        "files": 1
+      },
+      "mural-drawings": {
+        "class": "site",
+        "bytes": 803266,
+        "files": 4
+      },
+      "murals": {
+        "class": "site",
+        "bytes": 671,
+        "files": 1
+      },
+      "plate": {
+        "class": "boot",
+        "bytes": 21264,
+        "files": 1
+      },
+      "provenance": {
+        "class": "site",
+        "bytes": 555,
+        "files": 1
+      },
+      "site-map": {
+        "class": "site",
+        "bytes": 98414,
+        "files": 1
+      },
+      "site-stats": {
+        "class": "server",
+        "bytes": 186,
+        "files": 1
+      },
+      "stadtwissen": {
+        "class": "server",
+        "bytes": 3858882,
+        "files": 16
+      },
+      "tileset": {
+        "class": "boot",
+        "bytes": 9354,
+        "files": 1
+      },
+      "tileset-spawn": {
+        "class": "site",
+        "bytes": 2044,
+        "files": 1
+      },
+      "trams": {
+        "class": "site",
+        "bytes": 144137,
+        "files": 1
+      },
+      "walk-photos": {
+        "class": "site",
+        "bytes": 2352654,
+        "files": 27
+      },
+      "walks": {
+        "class": "site",
+        "bytes": 21454,
+        "files": 1
+      }
+    }
+  },
+  "bytes": {
+    "far": {
+      "spawn": {
+        "tile": "33412_5656_2_sn",
+        "bytes": 4685390,
+        "files": 10
+      },
+      "median": {
+        "tile": "33410_5654_2_sn",
+        "bytes": 4593643,
+        "files": 10
+      },
+      "largest": {
+        "tile": "33416_5656_2_sn",
+        "bytes": 5828229,
+        "files": 10
+      },
+      "site": {
+        "bytes": 67041172,
+        "files": 150
+      }
+    },
+    "fine": {
+      "spawn": {
+        "tile": "33412_5656_2_sn",
+        "bytes": 5448502,
+        "files": 29
+      },
+      "median": {
+        "tile": "33410_5656_2_sn",
+        "bytes": 5620119,
+        "files": 29
+      },
+      "largest": {
+        "tile": "33416_5656_2_sn",
+        "bytes": 7456536,
+        "files": 29
+      },
+      "site": {
+        "bytes": 84044307,
+        "files": 433
+      },
+      "phone": {
+        "spawn": {
+          "tile": "33412_5656_2_sn",
+          "bytes": 5307652,
+          "files": 28
+        },
+        "median": {
+          "tile": "33410_5656_2_sn",
+          "bytes": 5425454,
+          "files": 28
+        },
+        "largest": {
+          "tile": "33416_5656_2_sn",
+          "bytes": 7296929,
+          "files": 28
+        },
+        "site": {
+          "bytes": 81811715,
+          "files": 418
+        }
+      }
+    },
+    "approached": {
+      "spawn": {
+        "tile": "33412_5656_2_sn",
+        "bytes": 7915007,
+        "files": 34
+      },
+      "median": {
+        "tile": "33410_5658_2_sn",
+        "bytes": 8102507,
+        "files": 34
+      },
+      "largest": {
+        "tile": "33416_5656_2_sn",
+        "bytes": 9986129,
+        "files": 34
+      },
+      "site": {
+        "bytes": 118404471,
+        "files": 506
+      },
+      "phone": {
+        "spawn": {
+          "tile": "33412_5656_2_sn",
+          "bytes": 7520658,
+          "files": 30
+        },
+        "median": {
+          "tile": "33410_5656_2_sn",
+          "bytes": 7589137,
+          "files": 30
+        },
+        "largest": {
+          "tile": "33416_5656_2_sn",
+          "bytes": 9625447,
+          "files": 30
+        },
+        "site": {
+          "bytes": 112281794,
+          "files": 448
+        }
+      }
+    },
+    "near": {
+      "spawn": {
+        "tile": "33412_5656_2_sn",
+        "bytes": 3039000,
+        "files": 1
+      },
+      "median": {
+        "tile": "33414_5656_2_sn",
+        "bytes": 2454878,
+        "files": 1
+      },
+      "largest": {
+        "tile": "33414_5654_2_sn",
+        "bytes": 4252759,
+        "files": 1
+      },
+      "site": {
+        "bytes": 37085658,
+        "files": 15
+      }
+    },
+    "ask": {
+      "spawn": {
+        "tile": "33412_5656_2_sn",
+        "bytes": 38461,
+        "files": 1
+      },
+      "median": {
+        "tile": "33410_5658_2_sn",
+        "bytes": 23697,
+        "files": 1
+      },
+      "largest": {
+        "tile": "33410_5654_2_sn",
+        "bytes": 41092,
+        "files": 1
+      },
+      "site": {
+        "bytes": 347613,
+        "files": 15
+      }
+    },
+    "all": {
+      "spawn": {
+        "tile": "33412_5656_2_sn",
+        "bytes": 13786870,
+        "files": 43
+      },
+      "median": {
+        "tile": "33410_5658_2_sn",
+        "bytes": 13766237,
+        "files": 43
+      },
+      "largest": {
+        "tile": "33416_5656_2_sn",
+        "bytes": 17452843,
+        "files": 43
+      },
+      "site": {
+        "bytes": 193620659,
+        "files": 641
+      }
+    },
+    "unvisited": {
+      "spawn": {
+        "tile": "33412_5656_2_sn",
+        "bytes": 153059,
+        "files": 1
+      },
+      "median": {
+        "tile": "33414_5656_2_sn",
+        "bytes": 133590,
+        "files": 1
+      },
+      "largest": {
+        "tile": "33414_5654_2_sn",
+        "bytes": 207054,
+        "files": 1
+      },
+      "site": {
+        "bytes": 1961592,
+        "files": 15
+      }
+    }
+  },
+  "dressing": {
+    "spawn": {
+      "tile": "33412_5656_2_sn",
+      "fine": {
+        "bytes": 249125,
+        "files": 18,
+        "kinds": {
+          "bridge": 1053,
+          "canopy": 40495,
+          "canopyx": 43036,
+          "cultivated": 772,
+          "furniture": 25898,
+          "lamps": 3733,
+          "lowveg": 4252,
+          "mly": 9314,
+          "monuments": 5973,
+          "platform": 796,
+          "rail": 188,
+          "railarea": 193,
+          "riverside": 1431,
+          "sportTable": 1332,
+          "traffic": 8015,
+          "tram": 16963,
+          "trees": 84150,
+          "vegrows": 1531
+        }
+      },
+      "coarse": {
+        "bytes": 84944,
+        "files": 3,
+        "kinds": {
+          "bridge": 1053,
+          "crowns": 75876,
+          "traffic": 8015
+        }
+      }
+    },
+    "forest": {
+      "tile": "33416_5658_2_sn",
+      "fine": {
+        "bytes": 496855,
+        "files": 18,
+        "kinds": {
+          "bridge": 162,
+          "canopy": 468887,
+          "canopyx": 22869,
+          "cultivated": 162,
+          "furniture": 345,
+          "lamps": 162,
+          "lowveg": 191,
+          "mly": 153,
+          "monuments": 561,
+          "platform": 159,
+          "rail": 188,
+          "railarea": 193,
+          "riverside": 162,
+          "sportTable": 620,
+          "traffic": 614,
+          "tram": 162,
+          "trees": 535,
+          "vegrows": 730
+        }
+      },
+      "coarse": {
+        "bytes": 398235,
+        "files": 3,
+        "kinds": {
+          "bridge": 162,
+          "crowns": 397459,
+          "traffic": 614
+        }
+      }
+    },
+    "yards": {
+      "tile": "33410_5656_2_sn",
+      "fine": {
+        "bytes": 275994,
+        "files": 18,
+        "kinds": {
+          "bridge": 5311,
+          "canopy": 56529,
+          "canopyx": 25106,
+          "cultivated": 557,
+          "furniture": 29202,
+          "lamps": 5544,
+          "lowveg": 1730,
+          "mly": 10937,
+          "monuments": 14864,
+          "platform": 5515,
+          "rail": 12840,
+          "railarea": 9839,
+          "riverside": 1413,
+          "sportTable": 1906,
+          "traffic": 7761,
+          "tram": 35801,
+          "trees": 49947,
+          "vegrows": 1192
+        }
+      },
+      "coarse": {
+        "bytes": 78626,
+        "files": 3,
+        "kinds": {
+          "bridge": 5311,
+          "crowns": 65554,
+          "traffic": 7761
+        }
+      }
+    }
+  },
+  "code": {
+    "product": {
+      "total": 154726,
+      "app": 60932,
+      "lib": 41355,
+      "components": 3007,
+      "scripts": 13798,
+      "pipeline/bake": 35634
+    }
+  },
+  "browser": {
+    "readWith": "chromium 153.0.8010.12, google / swiftshader",
+    "firstLoad": {
+      "files": 42,
+      "gzip": 1099792,
+      "workerOnly": {
+        "files": 8,
+        "gzip": 34798
+      }
+    },
+    "phoneLiteSpawnCache": {
+      "bytes": 158979087,
+      "contents": {
+        "city_33412_5656_2_sn_far.glb.gz": 12632382,
+        "city_33412_5656_2_sn.glb.gz": 27015566,
+        "terrain_33412_5656_2_sn_l0.glb.gz": 94610268,
+        "terrain_33412_5656_2_sn_l1.glb.gz": 24720871
+      }
+    }
+  }
+}

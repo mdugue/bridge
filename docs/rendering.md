@@ -80,7 +80,10 @@ thing whatever their `renderOrder`.
 `x = epsgX − cx`, `z = −(epsgY − cy)`, `y = elevation`, with `(cx, cy)` the
 recenter offset captured from the spawn tile's CityJSON at bake time, carried
 in the tileset's root `extras` (`lib/city/tileset.ts`) and shared by every
-tile (`lib/city/recenter.ts`, `lib/city/ground-clamp.ts`).
+tile (`lib/city/recenter.ts`). The conversions between the projected, the
+data and the scene frame live in `lib/city/frames.ts`, whose types brand each
+coordinate with its frame (`EpsgX`, `DataY`, `SceneZ`, …; erased at runtime);
+`lib/city/ground-clamp.ts` re-exports the two older ones.
 
 **Materials derive data-frame positions from world space.** The streamed
 glTF positions are quantised (the dequantisation sits on the node), so
@@ -2038,8 +2041,108 @@ heal calls `resetFailedTiles()` alone. Not reported yet.
 
 Headless CI runs the lite profile under SwiftShader and asserts *presence*
 (a per-layer scene census on `__poc.stats.layerStats`, frame counts,
-shadow re-render counts), never looks. Anything visual is judged on a real
-GPU with the snapshot harness: drop a Snapshot JSON into `shots/` and run
-`bun run shots`. Judge from oblique angles. The streaming tuning (error
-thresholds, cache budget, tile seams, the painted shoreline) is still
-waiting for that look: [plan 019](./plans/019-gpu-verification.md).
+shadow re-render counts), never looks. Whether a picture is good is judged
+on a real GPU with the snapshot harness: drop a Snapshot JSON into
+`shots/` and run `bun run shots`. Judge from oblique angles. The streaming
+tuning (error thresholds, cache budget, tile seams, the painted shoreline)
+is still waiting for that look:
+[plan 019](./plans/019-gpu-verification.md).
+
+Whether a picture *changed* is compared by a machine
+([ADR 0018](./adr/0018-lite-profile-for-headless-tests-real-gpu-for-visuals.md),
+[plan 087](./plans/087-rewrite-measuring-stick.md)): `bun run plates`
+(`scripts/plates.ts`) builds the base commit in a worktree under the
+gitignored `plates/`, serves base and head each on a port of its own,
+renders the QA views of both with the head's harness
+(`e2e/snapshot-shot.spec.ts`, every view from one booted page) and diffs
+each pair (`lib/city/plate-diff.ts`: per pixel the largest channel
+difference; a pixel differs above a level, a view above a share). No
+reference image is stored. Two tiers share that code:
+
+| | Tier 1 | Tier 2 |
+|---|---|---|
+| Where | CI, on a pull request that carries the label `plates`, or by hand (`.github/workflows/plates.yml`); `SHOTS_SMALL=1 bun run plates` locally | a machine with a GPU: `bun run plates` (headed) — not in CI; where it runs is the maintainer's choice |
+| Renderer | WebGPU on SwiftShader's Vulkan, 800 × 500, `?scene=lite` (the spawn tile alone) | the browser's own adapter, the full profile, 1600 × 1000 @2× |
+| Views | eight that stand on the spawn tile (`TIER1_VIEWS`): 25–55 s each there | all of `qa/views/` |
+| Says | *changed*, as a tripwire — never *good* | *changed*, in the light a visitor sees |
+| Tolerance | `TIER1_TOLERANCE`: a pixel differs above 3 of 255; a view above 4 such pixels, or 0.1 of 255 on average. The floor: ten same-commit pairs moved no pixel, two builds of one commit 3 pixels by one step | its own floor, still to measure |
+
+In a view it renders, tier 1's numbers let through a change of 4 pixels
+or fewer at any contrast, a step of 3 of 255 or less over less than
+about 3 % of the frame, and one step over less than 10 %. A run that
+flakes is re-run by hand or answered by naming the view; nothing
+retries. The plates are scaffolding: kept while the rewrite series'
+plans move pixels (plan 087), not a permanent gate.
+
+Tier 1 draws at `lite`'s pixel ratio of 0.5: a plate is 400 × 250 drawn
+pixels shown twice as large. It never sees the other 42 views, any tile
+but the spawn's, the full profile's shadows, AO and resolution, the data
+layers, a view's page query, or late parts landing after the scene
+reports itself settled; and it runs only where it is asked for.
+
+A frame repeats because the harness holds it. `__poc.still` lets no time
+pass in what animates: the scene's phase clock (water, crowns, flags,
+fountains, the lamps' reflections) and three's TSL `time` (the clouds,
+the film grain, Sin City's rain) read one instant, while the loop's own
+clock runs on, at `__poc.frameMs` a frame, so the lens, the regression
+and the eye still settle (`poc-scene.ts`). Without it two renders of one
+build differed in five of nine views — the clouds over 6–7 % of a plate,
+the crowns' sway along their edges. Both probes exist only in a build
+with `NEXT_PUBLIC_POC_DEBUG`. The harness applies a view, waits for the
+scene to have heard it (`handle.sync()`), and takes the plate once the
+stream, the shadow rings and the lens have been quiet for three frames
+on end and the camera stands where the snapshot says.
+
+A differing view fails the run and its report names it: the PR's
+`## Snapshots` says whether it was meant (the `pr-snapshots` skill). So
+does a side that was not held still, a view that does not settle in
+three minutes, a pose that was not applied, a blank plate or two views
+with the same pixels.
+
+**WebGPU's per-pipeline limits are counted** (plan 094). A pipeline with
+a ninth vertex buffer, a seventeenth attribute or more inter-stage
+variables than the device passes is invalid, and its mesh draws nothing
+without an error a spec sees. The e2e "limits" test
+(`e2e/city-walk.spec.ts`) asks the scene for a row a build
+(`handle.getPipelineBudget()`, `pipeline-budget.ts`): for each
+representative of a material, draw kind and layout
+(`compileRepresentatives`) the WGSL three built, through its public
+`renderer.debug.getShaderAsync` in the compiles' turn
+(`PostStack.shadersOf`), counted by `lib/city/wgsl-budget.ts` after the
+WebGPU specification's validation of inter-stage interfaces — sixteen
+variables, of which each of the fragment stage's `front_facing`,
+`sample_index`, `sample_mask` and `primitive_index` takes one, and every
+four clip distances one on the vertex side — and the distinct buffers the
+vertex stage's attributes come from on the geometry. The test holds
+every row to the device's limits and the clay to its budget, a number in
+the spec: 2 spare variables under the walk/fly camera (13 passed, one to
+`front_facing`), 3 under Modell's parallel one, 4 vertex buffers. It
+reads the lite scene at the spawn, from far off (the far building level)
+and in Modell, with the Schnitt's two-sided clay.
+
+What the test does **not** read, so that nobody takes it for more than
+it is:
+
+- what the lite scene does not draw: the traffic bodies (the layer that
+  once vanished past eight buffers: `traffic-layer.test.ts` counts its
+  attributes), tram cars, the data layers, a visitor's design, and
+  whatever only another tile of the site has. Plan 094's census read
+  those once, over a flight of every site with its data layers on and a
+  design loaded (its *Findings*);
+- the clay under a held Ausschnitt: three's hook looks a drawable up
+  outside its `ClippingGroup`, so the probe answers nothing while a cut
+  is held, and the clip distances' variable on the vertex side is not
+  counted;
+- a picture style's swap (Papier, Strich, Schwarzplan:
+  `scene.overrideMaterial`, `paper-scene.ts`): three's hook reads the
+  override once its compile has resolved, the swap holds it for a
+  compile's synchronous half only, and holding it longer would let a
+  frame draw as paper;
+- the shadow pass's builds (the hook reads the main pass's);
+- what is drawn outside the scene: the nameplate's overlay, the
+  outline's mask and blur, the post passes.
+
+The rows are what a compile would walk (`compileRepresentatives`), drawn
+or not: a drawable hidden for good is a row too, and the probe compiles
+it to read it.
+

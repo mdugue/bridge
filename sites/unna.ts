@@ -23,6 +23,8 @@ export const UNNA: Site = {
   // files, but the lamps it detects in the flat photos are taken.
   mapillary: { objects: true, panoramas: false },
   osm: "europe/germany/nordrhein-westfalen/arnsberg-regbez",
+  // BBBike has no Unna; its Hamm rectangle reaches west past the old town
+  bbbike: "Hamm",
   spawn: "kirchplatz",
   tiles: [
     { e: 408, n: 5710 },

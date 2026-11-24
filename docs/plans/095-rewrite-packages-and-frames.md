@@ -28,7 +28,8 @@
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md),
   joint 11
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: TODO
+- **Status**: PARTIAL — B1's spike done (2026-11-16) and stopped at
+  its cast bar: B2 waits for a narrower scope (the Findings)
 
 ## Why this matters
 
@@ -326,7 +327,9 @@ reported, not repaired here.
       test passes)
 - [ ] `oxlint.config.ts` holds no list of page modules
 - [ ] A cold bake after A1 publishes no new file
-- [ ] `bootApp` is under 1 000 lines; each owner has a unit test
+- [ ] `bootApp` is under 1 000 lines of code as the ledger counts them
+      (`counters.longestFunction`: no comment, no blank line; 2 354 on
+      2026-11-16); each owner has a unit test
 - [ ] `AGENTS.md`, the `city-walker` skill, ADR 0002 and ADR 0061 name
       the packages; ADR 0005 names `frames.ts`; the row in
       `docs/plans/README.md` is updated
@@ -370,5 +373,78 @@ wide. Part B owes the series nothing and can go tomorrow.
 
 ## Findings
 
-(Empty. B1's shape and counts, A0's three lists and the spike's chunk
-figures, C1's table.)
+### B1 — the spike (2026-11-16)
+
+**Built.** `lib/city/frames.ts`: six scalar brands (`EpsgX`/`EpsgY`,
+`DataX`/`DataY`, `SceneX`/`SceneZ`; elevation stays `number`), the pair
+`EpsgPair`, and the conversions `epsgToWorld`, `worldToEpsg` and a new
+`epsgToData`, re-exported from `ground-clamp.ts`. The conversions
+**return** branded values and still **take** plain numbers: a brand is a
+subtype of `number`, so none of their 93 call sites moved. Casts in the
+merged code: 6, all in `frames.ts`'s three conversion bodies (their one
+home); 0 in the five modules (`grep -c " as Epsg\| as Scene"`: 0 in
+`ground-clamp.ts`, `ground.ts`, `shadow-rings.ts`, `kerbs.ts`,
+`tree-placement.ts`). Types erase: a cold prepare of Grimma on main and
+on the branch published the same 102 files, byte for byte (the change
+re-keys seven bakes — `ground`, `terrain`, `city`, `plate`, `lineLevels`,
+`platforms`, `coarseCrowns` — since `ground-clamp.ts` is in their keys:
+one re-bake, no new bytes). 087's ledger does not exist yet, so nothing
+was written there.
+
+**What the types caught in the tree.** No coordinate in the wrong frame.
+What surfaced instead: oxlint's type-aware `no-unsafe-unary-minus`
+refuses `-w.z` on a `SceneZ`, and so flagged the four places in
+`monument-layer.ts` that turned the scene's `z` into the data frame's `y`
+by hand — frame crossings outside any conversion, not bugs. They now go
+through `epsgToData` (bit for bit the same; `frames.test.ts` holds it).
+The type-level tests (`frames.test.ts`, `@ts-expect-error`) show what the
+brand refuses: a scene `(x, z)` where a projected `(E, N)` is read,
+easting and northing swapped, a bare number, a destructured `z` used as
+an easting.
+
+**The two shapes, tried with the conversions' callers inside the five
+modules typed strictly** (the trial patches are not merged):
+
+| Shape | Lines touched | Casts | Refuses `heightAt(scene x, scene z)` | Survives `const { x, z } = …` |
+|---|---|---|---|---|
+| brand on the scalar | 37 (`kerbs.ts` 21, `tree-placement.ts` 16) | 9 (5 + 4) | yes | yes |
+| brand on the point | 14 (8 + 6) | 5 (2 + 3) | no — the ground reads take scalars; a point would allocate an object a read | no |
+
+Both are over the STOP bar of one cast in twenty touched lines. Where the
+scalar shape's casts come from: arithmetic inside a frame drops the brand
+(`heightAt(x + rx * PROBE_M, …)`, a kerb's back `x − rx · w`: 4 of 5 in
+`kerbs.ts`), `Math.fround` drops it (`tree-placement.ts` `worldOf`), and
+file data arrives untyped (a GeoJSON point, a resampled polyline: one cast
+a feature or a list, never a vertex). `ground.ts` and `shadow-rings.ts`
+have no crossing of their own to type beyond the conversions.
+
+**What tightening each public type would cost** (the errors `bun check`
+reports with that one type branded, outside the module itself):
+
+| Type branded | Errors | Where, and why |
+|---|---|---|
+| `GroundContext.heightAt` | 51 in 19 files (+8 in its test) | every layer reads the ground with a file's plain numbers |
+| `Ground` (`heightAt`, `atWorld`, `underWorld`, `setCap`) | 14: 13 in `create-app.ts`, 1 in `ground.ts` (+13 in its test) | three's `camera.position`; a branded function passed where a plain one is typed (parameters are contravariant: one branded parameter brands every slot it is handed to); `groundRayDistance` marches in plain numbers |
+| `groundSlope(x, z)` | 2 casts a tree inside a loop over instances | its one caller reads the trunk's instance matrix (`vegetation-layer.ts` `footSlopes`) — the STOP's brand peeled in a loop over vertices |
+| `RingArea` | 4 in `create-app.ts` (+17 in tests) | built from a three `Box3` |
+| `tileArea`'s bounds | 1 site (`TerrainBounds`) + its test | the tile's bounds are a plain tuple everywhere |
+| `Placement.x/z` | 7 in 3 files | crowns read from a baked file, the inventory's trees |
+
+**Recommendation for B2.** Keep the scalar shape and the conversions'
+branded results (they cost nothing and already led the linter to the
+hand crossings), but do not brand parameters across the tree as B2 is
+written: every boundary with three (`Vector3`, `Box3`, an instance
+matrix), with a file and with arithmetic inside a frame is a cast, and
+one branded function type spreads to every slot it is passed through. B2
+narrowed instead: (1) the tree-reading test that no module but
+`frames.ts` computes with `offset.cx`/`offset.cy` (102 lines in
+`app/_components` and `lib/city` by "Current state"'s grep, after this
+spike), each moved onto a named conversion — this is where the
+brands pay, because every result is then typed; (2) the
+no-dressing-under-`world` test over a fake tile, since the worst mistake
+of ADR 0005 is a parent, not a number; (3) parameters branded only where
+a module's values already come branded from a conversion, and file data
+branded once at its schema (ADR 0059's zod `brand()` is type-only) if a
+later count shows that removes the casts at the readers. Drop "a typed
+array of positions carries its frame": a `Float32Array`'s elements are
+plain numbers, so its brand is peeled at every read.

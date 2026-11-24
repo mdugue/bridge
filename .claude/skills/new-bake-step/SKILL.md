@@ -39,14 +39,17 @@ ADR 0037 (fetch → bake → build). Deep reference: the `city-walker` skill,
    `bake-entries.test.ts` catches a module `prepare-data.ts` imports that
    no bake's key holds, not one filed under the wrong artifact). The code
    that reads it goes into its step's module in `scripts/prepare/`, never
-   into `prepare-data.ts`, which no key carries.
+   into `prepare-data.ts`, which no key carries. Its maths is `PMath`
+   (`lib/city/portable-math.ts`), never `Math`'s C-library functions: a
+   bake's bytes are the same on every machine.
 7. **OSM output** carries an `attribution` member; a new source's licence
    and credit go into the guide's licence table (both languages) and, for a
    new provider, `NOTICE`.
 8. **Things on the ground** take their feet and edges from
    `lib/city/ground-join.ts` and are listed in `JOIN_PARTS` (ADR 0030).
 9. **Tests:** a pytest in `pipeline/tests/`; `bun run test:pipeline`
-   (pytest + ruff) and `bun run verify`.
+   (pytest + ruff + the types: a new module starts with no finding) and
+   `bun run verify`.
 10. **Docs:** follow the `docs-upkeep` skill (ledger row, data-flow,
     data-sources page in both languages).
 

@@ -38,7 +38,10 @@
   [093](./093-rewrite-streaming-quadtree.md) needs
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: TODO
+- **Status**: IN PROGRESS — phase 0 done (2026-11-16): the comparer, the
+  inventory and the format trial are in *Findings*; the format is the
+  maintainer's to choose (recommended: GeoJSON under the schema, phase 4
+  skipped)
 
 ## Why this matters
 
@@ -493,5 +496,141 @@ allowed at all. And alone nobody would ask for the cut at publishing;
 
 ## Findings
 
-*(empty: the inventory, the format's criteria table, each site's
-comparison report)*
+> **Slimmed before milestone 1 (2026-11-24; plan 086, ruling 5).** Phase
+> 0's tools left `rewrite`: the ledger's `bakeStore` section, the
+> built-out `scripts/eval/compare-bakes.py` with its test (the file is
+> main's again: the hand-over format stays GeoJSON, decision 4 of plan
+> 086's list), and `scripts/compare-tilesets.ts`, which is on the branch
+> `tools/compare-tilesets`. All are history at commit `b00b08c2`: a
+> phase above that says "compare with `compare-bakes.py`" or
+> "`compare-tilesets.ts`: equal" fetches them from there first. The
+> figures below are the record.
+
+### Phase 0 (2026-11-16): counted, compared, the format tried
+
+Counted over the committed files of all seven sites (32 tiles) and by
+grep; who wrote and read what is from the manifests of a Grimma bake
+(two tiles, 37 steps). The other formats, every time and the Grimma
+re-bake are single runs.
+
+| Counter | At phase 0 |
+|---|---|
+| File kinds a tile hands over (`dlm/` and `dop/`) | 51: 28 GeoJSON, 13 JSON, 10 PNG (Dresden, Grimma, Meißen; Leipzig, München and Unna 50, Hamburg 49) |
+| Formats | 3 |
+| Dresden's fifteen tiles by format | GeoJSON 103.3 MB, PNG 70.9 MB, JSON 12.5 MB |
+| `wc -l pipeline/bake/step_cache.py` | 619, 503 of them code (609 at `5dfa300d`; #315 added ten) |
+| Modules matching `\.neighbours()` | 14 |
+| Modules matching `owns(` | 20 by the plan's grep; 17 call `owns` — `canopy.py`, `roof_planes.py` and `skyview.py` only match in "cr**owns(**" |
+| Steps that write a path another step wrote | 4: `islands` (`landcover.png` and `.json`), `lamp-heights` and `lamp-water` (`lamps`, `mly`), `trees` (`canopyx`) |
+| Kinds with no single key order | 2 over all sites: `furniture` within a file; `traffic` between sites (Dresden `t, f, hf, b, …`, the others `t, f, b, sp, hf, …`). The other 26 feature kinds have one order each |
+| Exact duplicates, rows equal in geometry and every property | furniture 14, trees 13, lamps 9, walls 5, structures 4 |
+| Rings that do not close | 214 of the 623 bridge outlines; no other kind has one |
+| Properties written as `null` | 2: `bridge.name` and `passages.h`; everywhere else a missing value is a missing key |
+
+Grimma as committed against its re-bake, order ignored: 114 files, 103
+the same, 11 differ in 522 places — all newer street photos, a newer
+OSM extract or the missing laser scan (`lowveg`, below).
+
+### The inventory
+
+The two tables, a row a kind (rows, geometry, nested properties,
+identity; writer, readers, owner, halo, TypeScript readers), are in
+this file at `b00b08c2`. What they say to the phases that follow:
+
+| Finding | What it is |
+|---|---|
+| A row's identity is its geometry | in 27 of 28 feature kinds; only the plinths have a name of their own (`of`). "Each row once" compares geometry, and a clipped kind has no identity across a seam |
+| Eight joins go by a row's place in its file | `treefacts` to `trees`; `markings.png` and `sport.png` to their tables; the land cover's tint grid to `water.bodies`; `roofcolor`'s `scan` and `gaps` to `smallbuild` and `structures`, and a rebuilt roof's parts to a building's rows in `roofs`; the build's solved levels to `rail` and `tram`; the terrain study to the walls. Phase 3's `write` keeps the order it is given, or these get keys first |
+| One file, several owner rules | `rail`, `tram`, `walls`, `furniture`, `cultivated`, `riverside` and `lowveg` hold clipped rows beside point-owned ones (the point, a middle, a first vertex, a representative point or a centroid). `KINDS`' anchor rule is a rule a kind of *row*, not a file |
+| Whole where it touches, in both tiles' files by design | `bridge`, `stairs`, `terraces`, the sports grounds, the DLM's rail lines and tree rows, the seam copies of gates and markings. A deck's readers (`lamps`, `furniture`, `traffic`) open every tile's `bridge` file and meet it twice |
+| In no tile's file | a lamp or a piece of furniture mapped in one tile and moved to the kerb in the next (both points must be owned); a platform whose representative point lies on the edge (`box.contains`, where every other step uses `owns`) |
+| `Tile.neighbours()` is the whole site | not the eight around: most callers cut it down with `overlaps`, the decks' readers do not |
+| Halos come in three units | degrees on the OSM read (0.0005 to 0.05), metres on rasters and files (20 to 1 500), and "the site" (five memos; `walls.site_material` and `stairs.site_stair_material` are not memoised). Four were fixed at the fetch (the cadastre 10 m, the photo cells 1 m, the panoramas 30 and 60 m, the bridges' Wikidata 500 m): a `read(kind, extent)` cannot widen those |
+| A step reads a file written after it | `canopy` reads `canopyx`, which `lowveg` writes 26 steps later — the last bake's, so a first bake and a second differ; `landcover` reads the last bake's class rasters, its own among them, for the site's road tone. `shopfronts` rewrites its own last output where its photo cache is not on the machine (`refilter`; `traffic`'s `reflag` is the same). All belong to phase 2's list beside the four rewrites |
+| Read without a schema | two legends nobody reads in TypeScript (`edges.json`, `surface.json`); three served tables published unparsed (`sport.json`, `markings.json`, `treefacts.json`); the kinds 090 still serves as baked are read by a cast in the viewer |
+
+### The format trial
+
+Run on 2026-11-16 (4 cores, Bun 1.4.4, Python 3.13) on Meißen's
+`bridge` (17 rows, nested), `lamps` (715 points) and `osmbuild` (5 012
+records, no geometry), on 1 335 made-up rows of awkward float64, and
+for the times on the largest kind of a Dresden tile, a canopy file of
+81 383 points and 10.9 MB. Nothing of it was installed.
+
+| Criterion | GeoParquet | FlatGeobuf | GeoPackage | GeoJSON under the schema |
+|---|---|---|---|---|
+| Typed columns | yes | scalars only | scalars only | none in the file: the schema is beside it |
+| Nested ones | yes (`list<struct<…>>`; DuckDB shows the same types) | no: a text column holding JSON | no: a text column holding JSON | as JSON, checked by the schema |
+| float64, Python → TypeScript | exact, all 1 335 rows and the three kinds | exact | exact | exact |
+| What does not round-trip as it is | `null` against absent; int64 comes back as `BigInt` unless the column is declared int32 | the same `null`; **row order** (the spatial index sorts the rows; `SPATIAL_INDEX=NO` or a sequence column) | the same `null` | nothing |
+| A table without geometry (`osmbuild`) | yes | written only with `SPATIAL_INDEX=NO`; the package's GeoJSON reader throws on it | yes | yes |
+| TypeScript reader | `hyparquet` 1.33.0: 303 KB installed, no dependency, 61 KB bundled (18 KB gzip), MIT; snappy built in, zstd needs `hyparquet-compressors` (549 KB and four packages in all, 176 KB bundled) | `flatgeobuf` 4.6.1: 3.7 MB installed with four dependencies, 55 KB bundled, BSD-3 | none to add: `bun:sqlite` and `lib/city/wkb.ts` | none |
+| Writer from the pinned Python stack | **no**: the wheel's GDAL 3.12.4 has no Parquet and no Arrow driver; needs `pyarrow` (26.0.1; 166–171 MB installed) | yes | yes | yes |
+| Forked workers | a file a kind and window | a file a kind and window | the same; eight workers writing a layer each into **one** file: seven failed | a file a kind and window |
+| Opens for a look | DuckDB (tried); QGIS where its GDAL has the Parquet driver (not tried) | GDAL, so QGIS; DuckDB's `st_read` (tried) | the same (tried) | the same (tried) |
+| An empty table | 475 B | 2 208 B | 98 304 B — fifty kinds a tile are 4.9 MB of empty tables | 184 B |
+| Size: `bridge` / `lamps` / `osmbuild` (as committed 14.0 / 104.7 / 363.1 KB; gzip 3.5 / 8.5 / 93.0) | 11.8 / 13.2 / 93.5 KB (zstd); 12.4 / 16.0 / 143.4 (snappy) | 15.1 / 110.9 / 461.5 KB | 110.6 / 192.5 / 397.3 KB | as committed |
+| Size: Dresden's canopy tile (10 862 KB; gzip 545) | 417 KB (zstd), 744 (snappy), 2 248 (none) | 10 947 KB (gzip 1 307) | 9 470 KB (gzip 1 830) | 10 862 KB |
+| Write, Python, that tile (best of 3) | 0.56–0.63 s | 0.86–1.01 s | 1.03–1.11 s | 0.24–0.32 s |
+| Read, Python | 0.06–0.07 s (to rows) | 0.14–0.17 s (arrays, WKB undecoded) | 0.18–0.19 s (the same) | 0.18–0.20 s |
+| Read, Bun, to rows | 57–74 ms (snappy), 117–194 ms (zstd) | 172–187 ms | 155–170 ms | 68–112 ms |
+
+The times are good to a factor of about 1.5: no candidate is slow, and
+nothing finer. Whatever the format: a writer that builds its WKB with
+shapely closes the unclosed rings, so a binary store packs its own WKB
+or keeps coordinates in a typed list; phase 1's schema says whether a
+key is `null` or absent; phase 4's "the files' order today" holds for
+`furniture` and `traffic` only once their writers are put in one order
+(their bytes change, not their content); and a store that keeps "a row
+once, by its identity" drops the exact duplicates, which phase 5's
+comparison must expect.
+
+### The recommendation, and the question for the maintainer
+
+**Keep GeoJSON under the one schema and skip phase 4**; build the
+store's `read` and `write` (phase 3) so that the encoding stays behind
+them and can be changed later in one place. If a binary format is
+wanted all the same, **GeoParquet is the only candidate that meets the
+criteria**, at the price of `pyarrow` in the bakes' environment.
+
+- FlatGeobuf and GeoPackage fail the first criterion for the 14 of 28
+  feature kinds that have nested properties and for every record map,
+  and neither is smaller than the GeoJSON it replaces.
+- GeoParquet's files are 1.2 (`bridge`), 3.9 (`osmbuild`), 8 (`lamps`)
+  and 26 (the canopy) times smaller than the GeoJSON as written;
+  against the GeoJSON gzipped, which is how 088's store would hold
+  either, it is larger for `bridge` (3.4 times) and `lamps` (1.6), the
+  same for `osmbuild` and 1.3 times smaller for the canopy.
+- It costs `pyarrow` in every bake's key, a migration a site, a WKB
+  packer of our own, and files no longer readable in an editor or a
+  diff.
+- What the series counts comes from phases 1, 2, 3 and 5 with the
+  format unchanged: the browser reads none of these files after 090,
+  and the build's read of the largest one is 0.1 s.
+- The one number that could change this is phase 5's, not measured: a
+  read by extent parses up to nine windows' files of a kind, 9 ×
+  0.19 s for the canopy in Python against 9 × 0.065 s from Parquet. If
+  the bake's time grows by that (the STOP at a quarter), the format is
+  the lever, and the store is where it is pulled.
+
+The question: **(a)** GeoJSON under the schema, no new dependency,
+phase 4 skipped (recommended); or **(b)** GeoParquet — then granted
+are `pyarrow` (26.0.1 today; bakes only) and `hyparquet` (1.33.0;
+`scripts/` only), both pinned exactly, snappy so that the reader stays
+one package. Phase 1's own question stays open beside it: a small
+validator of our own for the exported schema, or `jsonschema` pinned.
+
+### For phase 2: a step without its raw input
+
+Two cases where a bake wrote less instead of leaving its last output
+standing, against "`Tile.raw_absent` keeps its meaning". **Without the
+OSM extract** a bake rewrote the committed `trees`, `rail`,
+`monuments`, `edges` and `ndvi`, and the canopy and the land cover
+after them, with what the official data alone gives; since PR #315
+such a step skips. **Without the laser scan** (seen in phase 0's
+Grimma bake, not fixed) `small-buildings` skips and `canopyx` stays,
+but `lowveg` rewrites `lowveg_<tile>.geojson` from OSM alone: the
+committed hedges lost the heights the scan had measured (2 of 2 rows
+on `33340_5678`: `h`, `w`, `src`). It is the documented "No LAZ: OSM
+only" of a tile that never had a scan, applied to one whose scan is
+merely not on this machine.

@@ -1,0 +1,242 @@
+{
+  "checker": "pyright 1.1.414",
+  "findings": {
+    "bake/bridge.py": {
+      "reportOperatorIssue": 1,
+      "reportOptionalOperand": 2,
+      "reportOptionalSubscript": 4
+    },
+    "bake/cadastre.py": {
+      "reportOptionalMemberAccess": 1
+    },
+    "bake/canopy.py": {
+      "reportArgumentType": 2,
+      "reportAttributeAccessIssue": 2,
+      "reportCallIssue": 1,
+      "reportIndexIssue": 1
+    },
+    "bake/citygml.py": {
+      "reportOptionalMemberAccess": 5,
+      "reportReturnType": 1
+    },
+    "bake/common.py": {
+      "reportArgumentType": 1,
+      "reportAttributeAccessIssue": 3
+    },
+    "bake/cultivated.py": {
+      "reportAttributeAccessIssue": 11,
+      "reportCallIssue": 1,
+      "reportOptionalMemberAccess": 5,
+      "reportOptionalSubscript": 1
+    },
+    "bake/doors.py": {
+      "reportAttributeAccessIssue": 5
+    },
+    "bake/dop_light.py": {
+      "reportReturnType": 1
+    },
+    "bake/dormers.py": {
+      "reportArgumentType": 3,
+      "reportAttributeAccessIssue": 8,
+      "reportCallIssue": 6,
+      "reportOptionalMemberAccess": 1,
+      "reportOptionalSubscript": 2
+    },
+    "bake/edges.py": {
+      "reportAttributeAccessIssue": 1
+    },
+    "bake/facade_glass.py": {
+      "reportAttributeAccessIssue": 1,
+      "reportCallIssue": 1,
+      "reportIndexIssue": 1
+    },
+    "bake/facade_measure.py": {
+      "reportArgumentType": 4,
+      "reportOptionalMemberAccess": 1,
+      "reportPossiblyUnboundVariable": 1
+    },
+    "bake/facades.py": {
+      "reportArgumentType": 7,
+      "reportAttributeAccessIssue": 6,
+      "reportOptionalMemberAccess": 2,
+      "reportPossiblyUnboundVariable": 2
+    },
+    "bake/furniture.py": {
+      "reportArgumentType": 6,
+      "reportAssignmentType": 2,
+      "reportAttributeAccessIssue": 30,
+      "reportOptionalMemberAccess": 1,
+      "reportReturnType": 1
+    },
+    "bake/lamp_heights.py": {
+      "reportOptionalSubscript": 1
+    },
+    "bake/lamps.py": {
+      "reportAttributeAccessIssue": 5,
+      "reportOptionalSubscript": 1
+    },
+    "bake/landcover.py": {
+      "reportAttributeAccessIssue": 2
+    },
+    "bake/landmark_facts.py": {
+      "reportOptionalOperand": 1
+    },
+    "bake/lowveg.py": {
+      "reportArgumentType": 11,
+      "reportAttributeAccessIssue": 4,
+      "reportOptionalMemberAccess": 1
+    },
+    "bake/lsc.py": {
+      "reportArgumentType": 1,
+      "reportAttributeAccessIssue": 12,
+      "reportCallIssue": 1,
+      "reportPossiblyUnboundVariable": 2
+    },
+    "bake/mapillary.py": {
+      "reportArgumentType": 2,
+      "reportAssignmentType": 1
+    },
+    "bake/markings.py": {
+      "reportAttributeAccessIssue": 9,
+      "reportOptionalOperand": 1
+    },
+    "bake/monuments.py": {
+      "reportArgumentType": 3,
+      "reportAttributeAccessIssue": 13,
+      "reportOptionalMemberAccess": 1
+    },
+    "bake/mural_drawing.py": {
+      "reportArgumentType": 1
+    },
+    "bake/murals.py": {
+      "reportArgumentType": 2,
+      "reportAttributeAccessIssue": 4,
+      "reportReturnType": 2
+    },
+    "bake/osm.py": {
+      "reportAttributeAccessIssue": 1
+    },
+    "bake/osm_buildings.py": {
+      "reportArgumentType": 1,
+      "reportAttributeAccessIssue": 2
+    },
+    "bake/osm_index.py": {
+      "reportAttributeAccessIssue": 6
+    },
+    "bake/passages.py": {
+      "reportArgumentType": 4,
+      "reportAttributeAccessIssue": 4,
+      "reportReturnType": 1
+    },
+    "bake/plinths.py": {
+      "reportArgumentType": 1
+    },
+    "bake/rail.py": {
+      "reportArgumentType": 3,
+      "reportAttributeAccessIssue": 13,
+      "reportCallIssue": 2,
+      "reportOperatorIssue": 1,
+      "reportOptionalMemberAccess": 6,
+      "reportOptionalSubscript": 1
+    },
+    "bake/rail_osm.py": {
+      "reportAttributeAccessIssue": 1
+    },
+    "bake/riverside.py": {
+      "reportArgumentType": 1,
+      "reportAttributeAccessIssue": 26,
+      "reportCallIssue": 1,
+      "reportOptionalMemberAccess": 1,
+      "reportReturnType": 2
+    },
+    "bake/road_widths.py": {
+      "reportIndexIssue": 2
+    },
+    "bake/roof_colour.py": {
+      "reportAttributeAccessIssue": 1,
+      "reportCallIssue": 5,
+      "reportOptionalMemberAccess": 2
+    },
+    "bake/roof_facets.py": {
+      "reportAttributeAccessIssue": 3
+    },
+    "bake/roof_planes.py": {
+      "reportArgumentType": 6,
+      "reportCallIssue": 2,
+      "reportGeneralTypeIssues": 1
+    },
+    "bake/roofs.py": {
+      "reportArgumentType": 6,
+      "reportAttributeAccessIssue": 14,
+      "reportCallIssue": 3,
+      "reportOperatorIssue": 1,
+      "reportOptionalOperand": 2,
+      "reportOptionalSubscript": 1,
+      "reportPossiblyUnboundVariable": 10
+    },
+    "bake/shopfronts.py": {
+      "reportArgumentType": 2,
+      "reportAssignmentType": 1
+    },
+    "bake/skyview.py": {
+      "reportArgumentType": 1,
+      "reportAttributeAccessIssue": 1,
+      "reportOptionalOperand": 1
+    },
+    "bake/small_buildings.py": {
+      "reportAttributeAccessIssue": 3,
+      "reportGeneralTypeIssues": 1
+    },
+    "bake/spec.py": {
+      "reportArgumentType": 1
+    },
+    "bake/sport.py": {
+      "reportAttributeAccessIssue": 7,
+      "reportCallIssue": 2
+    },
+    "bake/structures.py": {
+      "reportAttributeAccessIssue": 12,
+      "reportOptionalMemberAccess": 1
+    },
+    "bake/surface.py": {
+      "reportArgumentType": 3,
+      "reportAttributeAccessIssue": 2,
+      "reportCallIssue": 2,
+      "reportIndexIssue": 1
+    },
+    "bake/traffic.py": {
+      "reportArgumentType": 2,
+      "reportAttributeAccessIssue": 2
+    },
+    "bake/traffic_sources.py": {
+      "reportAttributeAccessIssue": 1
+    },
+    "bake/tram.py": {
+      "reportAttributeAccessIssue": 2
+    },
+    "bake/transit.py": {
+      "reportAttributeAccessIssue": 1
+    },
+    "bake/trees.py": {
+      "reportAttributeAccessIssue": 1
+    },
+    "bake/walls.py": {
+      "reportArgumentType": 6,
+      "reportAttributeAccessIssue": 4,
+      "reportCallIssue": 3,
+      "reportReturnType": 1
+    },
+    "bake/water.py": {
+      "reportArgumentType": 2,
+      "reportAttributeAccessIssue": 9,
+      "reportCallIssue": 4,
+      "reportOptionalMemberAccess": 1
+    },
+    "bake/ways.py": {
+      "reportAttributeAccessIssue": 1
+    },
+    "bake/window_axes.py": {
+      "reportArgumentType": 2
+    }
+  }
+}
