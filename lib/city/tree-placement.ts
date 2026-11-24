@@ -119,10 +119,6 @@ export interface Placement {
    *  cone (vegetation-layer.ts `canopyForm`) */
   pine?: boolean;
   rot: number;
-  /** the ground's slope at its foot along x and z, as two signed bytes
-   *  (× 127; lib/city/ground-clamp.ts `groundSlope`), where the build
-   *  baked it (lib/city/tree-table.ts) */
-  slope?: readonly [number, number];
   /** the vertical scale (height / BASE_TREE_H) */
   s: number;
   /** the horizontal scale (crown width / GENERIC_CROWN_W); absent = `s` */
@@ -165,33 +161,6 @@ export function plantedRows(
 }
 
 /**
- * A tree of a row at EPSG (ex, ey), standing on `ground`: `s` its vertical
- * scale and `rot` its turn (a row's trees are seeded by their place along
- * it), its crown CROWN_TO_HEIGHT wide.
- */
-export function rowTree(
-  ex: number,
-  ey: number,
-  ground: number,
-  s: number,
-  rot: number,
-  offset: RecenterOffset,
-  ndvi?: number
-): Placement {
-  const w = worldOf(ex, ey, offset);
-  return {
-    x: w.x,
-    y: ground,
-    z: w.z,
-    rot,
-    s,
-    w: crownSpread(s * BASE_TREE_H * CROWN_TO_HEIGHT),
-    base: crownBase(s * BASE_TREE_H),
-    ndvi,
-  };
-}
-
-/**
  * The ATKIS veg04 rows resampled and dropped onto the ground (EPSG ->
  * world): a tree every TREE_SPACING m, a hedge segment every HEDGE_SPACING
  * (`plantedRows` says which rows). A row tree an inventory tree stands on
@@ -224,31 +193,23 @@ export function rowPlacements(
         continue; // off-tile or NoData
       }
       const seed = ex * 0.13 + ey * 0.07 + i;
-      const ndvi = ndviAt?.(ex, ey);
-      if (!isHedge) {
-        trees.push(
-          rowTree(
-            ex,
-            ey,
-            ground,
-            0.8 + hash(seed) * 0.6,
-            hash(seed * 1.7) * Math.PI,
-            ctx.offset,
-            ndvi
-          )
-        );
-        continue;
-      }
       const w = worldOf(ex, ey, ctx.offset);
+      const s = isHedge ? 1 : 0.8 + hash(seed) * 0.6;
       const place: Placement = {
         x: w.x,
         y: ground,
         z: w.z,
-        rot: hash(seed) * 0.3,
-        s: 1,
-        ndvi,
+        rot: isHedge ? hash(seed) * 0.3 : hash(seed * 1.7) * Math.PI,
+        s,
+        ...(isHedge
+          ? {}
+          : {
+              w: crownSpread(s * BASE_TREE_H * CROWN_TO_HEIGHT),
+              base: crownBase(s * BASE_TREE_H),
+            }),
+        ndvi: ndviAt?.(ex, ey),
       };
-      hedges.push(place);
+      (isHedge ? hedges : trees).push(place);
     }
   }
   return { trees, hedges };
@@ -272,85 +233,10 @@ export function canopyCrownWidth(
   return height * CROWN_TO_HEIGHT * jitter;
 }
 
-/** What the canopy bake measured of one tree (lib/city/features.ts
- *  `CanopyFeature`, and the scan's radius). */
-export interface CanopyFacts {
-  /** its crown reaches over a carriageway (`c: 1`) */
-  c?: boolean;
-  /** an evergreen (`l: "e"`) */
-  evergreen?: boolean;
-  /** its measured height (m); not finite = not measured */
-  h: number;
-  /** an evergreen whose crown is a pine's (`pine: 1`) */
-  pine?: boolean;
-  /** the laser scan's crown radius (m) */
-  r?: number;
-}
-
-/**
- * One canopy point at EPSG (ex, ey), standing on `ground`, as its tree: as
- * tall as measured, CROWN_TO_HEIGHT wide or as wide as the scan measured,
- * its crown starting at `crownBase` (clear of the traffic over a
- * carriageway). The one owner of that arithmetic: the build's tree table
- * (lib/city/tree-table.ts) and the viewer's reading of it place a tree
- * through here.
- */
-export function canopyPlacement(
-  ex: number,
-  ey: number,
-  ground: number,
-  facts: CanopyFacts,
-  offset: RecenterOffset,
-  ndvi?: number
-): Placement {
-  // A point missing a numeric `h` (only the TS type, not the JSON, promises
-  // one) would make scale NaN; Math.max/min don't clamp NaN, so the NaN
-  // matrix poisons the chunk's bounding sphere and the whole cell culls.
-  const h = Number.isFinite(facts.h) ? facts.h : BASE_TREE_H;
-  const seed = ex * 0.13 + ey * 0.07;
-  const w = worldOf(ex, ey, offset);
-  // Scale the tree to the measured canopy height (± a touch) …
-  const s =
-    Math.min(Math.max(h / BASE_TREE_H, 0.5), 7) * (0.9 + hash(seed) * 0.2);
-  // … and its crown to a measured or a typical width, separately.
-  const width = canopyCrownWidth(
-    s * BASE_TREE_H,
-    facts.r,
-    hash(seed * 2.3 + 0.7)
-  );
-  return {
-    x: w.x,
-    y: ground,
-    z: w.z,
-    rot: hash(seed * 1.7) * Math.PI,
-    s,
-    w: crownSpread(width),
-    base: crownBase(s * BASE_TREE_H, facts.c === true),
-    ndvi,
-    ...(facts.evergreen
-      ? { evergreen: true, ...(facts.pine ? { pine: true } : {}) }
-      : {}),
-  };
-}
-
-/** A canopy feature's measured facts. */
-export function canopyFacts(
-  f: CanopyFeature & {
-    properties: { c?: 1; h: number; l?: "e"; r?: number } | null;
-  }
-): CanopyFacts {
-  const p = f.properties;
-  return {
-    h: p?.h ?? Number.NaN,
-    r: p?.r,
-    c: p?.c === 1,
-    evergreen: p?.l === "e",
-    pine: p?.l === "e" && p.pine === 1,
-  };
-}
-
 /** Canopy points (DOM1-derived, and the laser scan's with a crown radius)
- *  → tree placements (`canopyPlacement`), each on the ground under it. */
+ *  → tree placements as tall as measured, CROWN_TO_HEIGHT wide or as wide
+ *  as the scan measured, their crowns starting at `crownBase` (clear of
+ *  the traffic over a carriageway, `c`). */
 export function canopyPlacements(
   features: (CanopyFeature & {
     properties: { c?: 1; h: number; l?: "e"; r?: number } | null;
@@ -372,16 +258,38 @@ export function canopyPlacements(
     if (ground === null) {
       continue;
     }
-    out.push(
-      canopyPlacement(
-        ex,
-        ey,
-        ground,
-        canopyFacts(f),
-        ctx.offset,
-        ndviAt?.(ex, ey)
-      )
+    // A point missing a numeric `h` (only the TS type, not the JSON, promises
+    // one) would make scale NaN; Math.max/min don't clamp NaN, so the NaN
+    // matrix poisons the chunk's bounding sphere and the whole cell culls.
+    const rawH = f.properties?.h ?? Number.NaN;
+    const h = Number.isFinite(rawH) ? rawH : BASE_TREE_H;
+    const seed = ex * 0.13 + ey * 0.07;
+    const w = worldOf(ex, ey, ctx.offset);
+    // Scale the tree to the measured canopy height (± a touch) …
+    const s =
+      Math.min(Math.max(h / BASE_TREE_H, 0.5), 7) * (0.9 + hash(seed) * 0.2);
+    // … and its crown to a measured or a typical width, separately.
+    const width = canopyCrownWidth(
+      s * BASE_TREE_H,
+      f.properties?.r,
+      hash(seed * 2.3 + 0.7)
     );
+    out.push({
+      x: w.x,
+      y: ground,
+      z: w.z,
+      rot: hash(seed * 1.7) * Math.PI,
+      s,
+      w: crownSpread(width),
+      base: crownBase(s * BASE_TREE_H, f.properties?.c === 1),
+      ndvi: ndviAt?.(ex, ey),
+      ...(f.properties?.l === "e"
+        ? {
+            evergreen: true,
+            ...(f.properties.pine === 1 ? { pine: true } : {}),
+          }
+        : {}),
+    });
   }
   return out;
 }

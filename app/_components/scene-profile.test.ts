@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  blockFormatFor,
   aoSamplesFor,
   deviceTierFromMedia,
   liteKeepsBlockFromSearch,
@@ -11,7 +10,6 @@ import {
   sceneProfileFromSearch,
   shadowMapBytesFor,
   shadowMapSizeFor,
-  svfBlocksRequested,
   LARGEST_TILE_BYTES,
   tileCacheBytesFor,
 } from "./scene-profile";
@@ -205,18 +203,4 @@ test("every safety level is a lighter page than the one before", () => {
   // the lite profile's own numbers hold at every level
   expect(pixelRatioFor("lite", "mobile", 3, 3)).toBe(0.5);
   expect(shadowMapSizeFor("lite", "mobile", 3)).toBe(256);
-});
-
-const everyFeature = () => true;
-
-test("the sky view's blocks only behind ?svf=blocks, BC4 before EAC", () => {
-  expect(svfBlocksRequested("?svf=blocks")).toBe(true);
-  expect(svfBlocksRequested("?svf=1")).toBe(false);
-  expect(svfBlocksRequested("")).toBe(false);
-  expect(blockFormatFor(false, everyFeature)).toBeNull();
-  expect(blockFormatFor(true, everyFeature)).toBe("bc4");
-  expect(blockFormatFor(true, (f) => f === "texture-compression-etc2")).toBe(
-    "eac"
-  );
-  expect(blockFormatFor(true, () => false)).toBeNull();
 });

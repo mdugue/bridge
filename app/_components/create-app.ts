@@ -221,9 +221,6 @@ import type { CpuBytes, DressingPartName, TileDressing } from "./tile-stream";
 import { loadGroundPlate } from "./ground-plate-layer";
 import type { GroundPlate } from "./ground-plate-layer";
 import { createNetworkWatch } from "./tile-retry";
-import { dressingFigures } from "./dressing-figures";
-import type { DressingFigures } from "./dressing-figures";
-import type { TimingStat } from "./stream-timing";
 import { installMainYield, whenIdle } from "./main-yield";
 import {
   bootFrames,
@@ -763,13 +760,6 @@ export interface SceneApp {
    * are a leak.
    */
   getGpuDebug: () => GpuDebug;
-  /** What each level's dressing cost to build, builder by builder, and
-   *  what its parts weigh (dressing-figures.ts; plan 090's baseline),
-   *  beside the stream's timings so far (stream-timing.ts `summary`). */
-  getDressingFigures: () => {
-    levels: DressingFigures;
-    timings: Record<string, TimingStat>;
-  };
   /**
    * A row for every build the scene draws with, and what each asks of
    * WebGPU's per-pipeline limits (pipeline-budget.ts, plan 094): the e2e
@@ -781,9 +771,6 @@ export interface SceneApp {
     hitDist: number | null;
     hitName: string | null;
   };
-  /** The boot's and the stream's timings so far, by category
-   *  (stream-timing.ts): the ledger's recorded timings (plan 087). */
-  getTimings: () => Record<string, TimingStat>;
   /** current Building footprint polygons (EPSG) — shrinks when demolishing */
   getFootprints: () => MapFootprints;
   getPose: () => PlayerPose;
@@ -4456,10 +4443,6 @@ async function bootApp(
       gpuBytes: gpuBytesWith(estimateGeometryBytes(scene)),
       memory: { ...renderer.info.memory },
     }),
-    getDressingFigures: () => ({
-      levels: dressingFigures(),
-      timings: streamTimings.summary(),
-    }),
     getPipelineBudget: async (query) =>
       await pipelineBudget(renderer, postStack, scene, activeCamera(), query),
     getGpuDebug: () => {
@@ -4501,7 +4484,6 @@ async function bootApp(
         },
       };
     },
-    getTimings: () => streamTimings.summary(),
     getFocusDebug: () => ({
       ...postStack.getFocusInfo(),
       hitDist: focus.last()?.dist ?? null,

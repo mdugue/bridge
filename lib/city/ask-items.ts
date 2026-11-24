@@ -25,10 +25,11 @@ import type {
   Xyz,
 } from "./ask-solids";
 import { axisFrame, BRIDGE_STEP } from "./bridge";
-import { finished } from "./build-steps";
+import { finished, inRuns } from "./build-steps";
 import type { Steps } from "./build-steps";
 import type {
   BridgeFeature,
+  CanopyFeature,
   FurnitureFeature,
   FurnitureKind,
   LampFeature,
@@ -36,6 +37,7 @@ import type {
   MonumentFeature,
   RiversideFeature,
   TramFeature,
+  TreeFeature,
   VegRowFeature,
 } from "./features";
 import {
@@ -59,9 +61,8 @@ import {
   treeExtents,
 } from "./tree-inventory";
 import type { TreeArchetype } from "./tree-inventory";
-import { BASE_TREE_H } from "./tree-placement";
-import type { Placement } from "./tree-placement";
-import type { RegisterFact } from "./tree-table";
+import { BASE_TREE_H, canopyPlacements, rowPlacements } from "./tree-placement";
+import type { Placement, TreeVeto } from "./tree-placement";
 import { TREE_GENERA } from "./tree-season";
 
 type HeightAt = (x: number, y: number) => number | null;
@@ -110,11 +111,9 @@ const NEEDLE_ARCHETYPES: ReadonlySet<TreeArchetype> = new Set([
   "bush",
 ]);
 
-/** What a tile knows of its trees beyond their solids, by tree. */
+/** What a tile knows of its trees beyond their solids, by feature index. */
 interface TreeTable {
   crown: Float32Array;
-  /** each tree's row among the tile's tree facts (its file's row) */
-  index: Uint32Array;
   /** bit 1 OSM, bit 2 conifer (NEEDLE_ARCHETYPES), bit 4 orchard, bit 8
    *  measured (an orchard tree DOM1 measured), bit 16 drawn as the cone */
   flags: Uint8Array;
@@ -125,13 +124,13 @@ interface TreeTable {
   trunk: Float32Array;
 }
 
-/** Tree `i` of the table as an inquiry. */
+/** The tree at feature index `i` as an inquiry. */
 function treeInquiry(t: TreeTable, i: number, tile: string): FeatureInquiry {
   const trunk = t.trunk[i];
   return {
     kind: "tree",
     tile,
-    index: t.index[i],
+    index: i,
     position: [t.position[i * 2], t.position[i * 2 + 1]],
     osm: (t.flags[i] & 1) === 1,
     conifer: (t.flags[i] & 2) === 2,
@@ -232,19 +231,18 @@ function packedTreeSet(
 }
 
 /**
- * The inventory trees as askable things, from the tile's tree table
- * (lib/city/tree-table.ts `registerAt`: each on its ground already, its
- * `index` its row among the tile's tree facts), packed: a tile has
- * thousands, and each as objects of its own held 3.5 MB on the busiest
- * tile (7 453 trees); packed, the tile's askables hold 0.8 MB. Per 64 m
- * cell a typed array of trunk-and-crown cylinders; the inquiry is made
- * only for the tree a ray meets.
+ * The inventory trees as askable things (index = the trees file's),
+ * packed: a tile has thousands, and each as objects of its own held 3.5 MB
+ * on the busiest tile (7 453 trees); packed, the tile's askables hold
+ * 0.8 MB. Per 64 m cell a typed array of trunk-and-crown cylinders; the
+ * inquiry is made only for the tree a ray meets.
  */
 export function treeSets(
-  trees: readonly RegisterFact[],
-  ctx: Pick<AskContext, "offset" | "tile">
+  features: readonly TreeFeature[],
+  ctx: OwnGroundContext
 ): AskSet<FeatureInquiry>[] {
-  const n = trees.length;
+  const ground = ctx.treeHeightAt;
+  const n = features.length;
   const table: TreeTable = {
     position: new Float64Array(n * 2),
     height: new Float32Array(n),
@@ -252,22 +250,29 @@ export function treeSets(
     trunk: new Float32Array(n),
     genus: new Uint8Array(n),
     flags: new Uint8Array(n),
-    index: new Uint32Array(n),
   };
   const target = (i: number) => treeInquiry(table, i, ctx.tile);
   return packedCylinderSets(
     n,
     (i) => {
-      const { e, n: north, ground: y, props: p, index } = trees[i];
+      const f = features[i];
+      const p = f.properties;
+      if (f.geometry?.type !== "Point" || !p) {
+        return null;
+      }
+      const [ex, ey] = f.geometry.coordinates;
+      const y = ground(ex, ey);
+      if (y === null) {
+        return null;
+      }
       const archetype = archetypeOf(p.a);
       const ext = treeExtents(p.h, p.d, archetype, p.g === 1);
-      const { x, z } = epsgToWorld(e, north, ctx.offset);
-      table.position.set([e, north], i * 2);
+      const { x, z } = epsgToWorld(ex, ey, ctx.offset);
+      table.position.set([ex, ey], i * 2);
       table.height[i] = p.h;
       table.crown[i] = p.d;
       table.trunk[i] = p.t ?? 0;
       table.genus[i] = p.gn ?? 0;
-      table.index[i] = index;
       table.flags[i] =
         (p.s === "osm" ? 1 : 0) |
         (NEEDLE_ARCHETYPES.has(archetype) ? 2 : 0) |
@@ -709,10 +714,11 @@ const epsgOf = (p: Placement, offset: RecenterOffset): [number, number] => [
   Math.round((offset.cy - p.z) * 10) / 10,
 ];
 
-/** A tree the canopy draws, as its card knows it: its placement (the
- *  tile's tree table, lib/city/tree-table.ts `treeAt`), where its height
- *  came from and what told an evergreen. */
-export interface AskedTree {
+/** Trees and rows placed per step (build-steps.ts). */
+const PLACE_RUN = 256;
+const ROW_RUN = 16;
+
+interface AskedTree {
   height?: number;
   leaf?: CanopyInquiry["evergreen"];
   p: Placement;
@@ -721,12 +727,51 @@ export interface AskedTree {
 
 /**
  * The trees the canopy draws (the DOM1 crowns, the laser scan's, the
- * Basis-DLM rows' trees), as the tile's tree table stands them, packed.
+ * Basis-DLM rows' trees), placed as the layer places them — with the same
+ * veto of the trees a register names — and packed, in steps: per run of
+ * trees placed (build-steps.ts).
+ *
+ * @yields {void} once per run of trees placed
  */
-function canopySets(
-  trees: readonly AskedTree[],
-  ctx: Pick<AskContext, "offset" | "tile">
-): AskSet<FeatureInquiry>[] {
+function* canopySetsSteps(
+  features: {
+    canopy: CanopyFeature[];
+    rows: VegRowFeature[];
+    scan: CanopyFeature[];
+  },
+  ctx: OwnGroundContext,
+  keepTree?: TreeVeto
+): Steps<AskSet<FeatureInquiry>[]> {
+  const place = { heightAt: ctx.treeHeightAt, offset: ctx.offset };
+  // placed one by one, as the layer places them, so each keeps its
+  // measured height
+  const measured = (
+    source: CanopyInquiry["source"],
+    list: readonly CanopyFeature[]
+  ) =>
+    inRuns(list, PLACE_RUN, (run) =>
+      run.flatMap((f) =>
+        canopyPlacements([f], place, undefined, keepTree).map(
+          (p): AskedTree => ({
+            p,
+            source,
+            height: f.properties?.h,
+            leaf: leafOf(f),
+          })
+        )
+      )
+    );
+  // whole rows per run: a row's trees are seeded by their place along it
+  const rowTrees = inRuns(features.rows, ROW_RUN, (run) =>
+    rowPlacements(run, place, undefined, keepTree).trees.map(
+      (p): AskedTree => ({ p, source: "row" })
+    )
+  );
+  const trees: AskedTree[] = [
+    ...(yield* measured("dom", features.canopy)),
+    ...(yield* measured("lsc", features.scan)),
+    ...(yield* rowTrees),
+  ];
   // what a card needs, kept packed: the placements go once packed
   const sources: CanopyInquiry["source"][] = ["dom", "lsc", "row"];
   const position = new Float64Array(trees.length * 2);
@@ -755,6 +800,15 @@ function canopySets(
 const LEAVES = ["forest", "photo"] as const;
 /** The leaf byte's bit for a crown drawn as the cone (`canopyCone`). */
 const LEAF_CONE = 0x80;
+
+/** What told a crown is an evergreen (canopy.py): the forest's kind, or
+ *  the leaf-off orthophoto. */
+const leafOf = (f: CanopyFeature): CanopyInquiry["evergreen"] => {
+  if (f.properties?.l !== "e") {
+    return undefined;
+  }
+  return f.properties.ls === "dop" ? "photo" : "forest";
+};
 
 /** The canopy tree at index `i` as an inquiry (`leaf`: its leaf byte). */
 function canopyInquiry(
@@ -1018,20 +1072,21 @@ export function landingItems(
 /** Everything of a tile beyond its trees, monuments and bridges. */
 export function moreSets(
   features: MoreFeatures,
-  ctx: OwnGroundContext
+  ctx: OwnGroundContext,
+  keepTree?: TreeVeto
 ): AskSet<FeatureInquiry>[] {
-  return finished(moreSetsSteps(features, ctx));
+  return finished(moreSetsSteps(features, ctx, keepTree));
 }
 
 export interface MoreFeatures {
+  canopy: CanopyFeature[];
   furniture: FurnitureFeature[];
   hedges: LowVegFeature[];
   lamps: LampFeature[];
   river: RiversideFeature[];
   rows: VegRowFeature[];
+  scan: CanopyFeature[];
   trams: TramFeature[];
-  /** the canopy's, the scan's and the rows' trees */
-  trees: readonly AskedTree[];
 }
 
 /**
@@ -1041,9 +1096,10 @@ export interface MoreFeatures {
  */
 export function* moreSetsSteps(
   features: MoreFeatures,
-  ctx: OwnGroundContext
+  ctx: OwnGroundContext,
+  keepTree?: TreeVeto
 ): Steps<AskSet<FeatureInquiry>[]> {
-  const canopy = canopySets(features.trees, ctx);
+  const canopy = yield* canopySetsSteps(features, ctx, keepTree);
   yield;
   return [
     ...canopy,

@@ -16,10 +16,6 @@ source.
 |---|---|---|
 | `scipy-stubs/ndimage` | `label`, `distance_transform_edt`, the binary morphology but `binary_opening` | pyright infers their returns from every branch of the source (`Literal[0]` for `label`) |
 | `scipy-stubs/fft` | `rfft2`, `irfft2`, `next_fast_len` | dispatched through uarray, or replaced by a compiled function after the `def` |
-| `rasterio-stubs` (`__init__`) | the submodules as the package's members; `open`, `band` | absolute imports in `__init__.py` bind them at run time, not for pyright |
-| `rasterio-stubs/windows` | `Window`, `from_bounds`, `transform` | an old-style attrs class: pyright sees no constructor |
-| `pyogrio-stubs` (`__init__`) | `raw` (and the rest) as the package's members | as rasterio's |
-| `laspy-stubs/point/record` | the point records | `__getitem__` read as returning every branch at once |
 
 The rules:
 
@@ -30,7 +26,7 @@ The rules:
   read by name).
 - Only what the bakes use: a bake that calls more of a stubbed module adds it
   here, from the source.
-- A bump of scipy, rasterio, pyogrio or laspy: check the stubs against the
+- A bump of scipy: check the stubs against the
   new source, then run `uv run python typecheck.py`. Should the library
   start shipping its own types (a `py.typed`), `tests/test_typings.py`
   fails: a stub here would shadow them, so check it against them and drop

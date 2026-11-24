@@ -6,8 +6,7 @@ import {
   Vector3,
 } from "three/webgpu";
 import type { Object3D } from "three/webgpu";
-import type { CanopyFeature } from "@/lib/city/features";
-import type { Stand } from "@/lib/city/stand-record";
+import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
 import {
   PINE_CROWN_BASE,
   TRUNK_RINGS,
@@ -15,14 +14,12 @@ import {
 } from "@/lib/city/tree-inventory";
 import {
   BASE_TREE_H,
-  canopyPlacements,
   crownBase,
   GENERIC_CROWN_FOOT,
   GENERIC_CROWN_W,
 } from "@/lib/city/tree-placement";
-import { DROP_BIAS, DROP_UNIT } from "@/lib/city/tree-stands";
 import { isInstances } from "./instancing";
-import type { Instances } from "./instancing";
+import { inRasterTurn, setRasterTier } from "./raster-upload";
 import {
   buildConeTiers,
   buildCrownGeo,
@@ -32,6 +29,7 @@ import {
   buildVegetation,
   sceneCrowns,
   createVegetationLod,
+  loadNdviSampler,
   setCrownTime,
   TRUNK_H,
 } from "./vegetation-layer";
@@ -48,46 +46,56 @@ function instancesIn(root: Object3D): number {
   return n;
 }
 
-const ctx: VegetationContext = {};
-
-/** The ground the build stood the trees on. */
-const ground = {
+const ctx: VegetationContext = {
   offset: { cx: 0, cy: 0 },
-  heightAt: (): number | null => 100,
+  heightAt: () => 100,
 };
+
+const row = (kind: "hedge" | "treerow", length: number): VegRowFeature => ({
+  geometry: {
+    type: "LineString",
+    coordinates: [
+      [0, 0],
+      [length, 0],
+    ],
+  },
+  properties: { kind },
+});
 
 const canopy = (x: number, h: number, y = 0): CanopyFeature => ({
   geometry: { type: "Point", coordinates: [x, y] },
   properties: { h },
 });
 
-/** The canopy points as the tile's tree table hands them over: placed. */
-const placed = (points: CanopyFeature[], on = ground) =>
-  canopyPlacements(points, on);
+test("a hedge row is not planted here, a tree row one tree per 9 m", () => {
+  // the DLM's hedges are low-vegetation-layer.ts's
+  const hedges = buildVegetation({ rows: [row("hedge", 10)], canopy: [] }, ctx);
+  expect(instancesIn(hedges.group)).toBe(0);
 
-/** A set's first record's trunk drop (lib/city/tree-stands.ts). */
-const dropOf = (set: Instances): number => {
-  const words = set.stands?.buffer.array as Uint16Array;
-  return words[7] / DROP_UNIT - DROP_BIAS;
-};
+  const trees = buildVegetation(
+    { rows: [row("treerow", 20)], canopy: [] },
+    ctx
+  );
+  // 0, 9, 18 → 3 trees; each is a trunk + a mid, a rich and a far crown
+  // instance (a sparse chunk keeps every tree in the far tier).
+  expect(instancesIn(trees.group)).toBe(3 * 4);
+});
 
 test("canopy points become trees; off-terrain points are skipped", () => {
   const built = buildVegetation(
-    { trees: placed([canopy(5, 12), canopy(50, 8)]) },
+    { rows: [], canopy: [canopy(5, 12), canopy(50, 8)], ndviAt: () => 0.7 },
     ctx
   );
-  // each is a trunk + a mid, a rich and a far crown instance (a sparse
-  // chunk keeps every tree in the far tier)
   expect(instancesIn(built.group)).toBe(2 * 4);
   const off = buildVegetation(
-    { trees: placed([canopy(5, 12)], { ...ground, heightAt: () => null }) },
-    ctx
+    { rows: [], canopy: [canopy(5, 12)] },
+    { ...ctx, heightAt: () => null }
   );
   expect(off.group.children).toHaveLength(0);
 });
 
 test("the pass reports a crown tier change", () => {
-  const built = buildVegetation({ trees: placed([canopy(5, 12)]) }, ctx);
+  const built = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
   const lod = createVegetationLod();
   // Born on the mid crown; the camera standing next to it switches it to
   // rich, and the next pass changes nothing.
@@ -103,8 +111,8 @@ test("the pass reports a crown tier change", () => {
 test("a pass after a tile left plans the tiles still there, from their own tiers", () => {
   // Two tiles 2 km apart, the camera at the first: its chunk rich, the
   // other's far.
-  const near = buildVegetation({ trees: placed([canopy(5, 12)]) }, ctx);
-  const far = buildVegetation({ trees: placed([canopy(2005, 12)]) }, ctx);
+  const near = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
+  const far = buildVegetation({ rows: [], canopy: [canopy(2005, 12)] }, ctx);
   const lod = createVegetationLod();
   expect(lod([near, far], new Vector3(5, 100, 0))).toBe(true);
   expect([near.chunks[0].tier, far.chunks[0].tier]).toEqual(["rich", "far"]);
@@ -119,7 +127,7 @@ test("a pass after a tile left plans the tiles still there, from their own tiers
 });
 
 test("far away a chunk draws the far crown and no trunks", () => {
-  const built = buildVegetation({ trees: placed([canopy(5, 12)]) }, ctx);
+  const built = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
   expect(createVegetationLod()([built], new Vector3(5000, 100, 0))).toBe(true);
   const [chunk] = built.chunks;
   expect(chunk.tier).toBe("far");
@@ -137,56 +145,18 @@ test("a dense chunk's far tier keeps every other tree", () => {
   const forest = Array.from({ length: 800 }, (_, i) =>
     canopy((i % 40) * 5, 12, 10 + Math.floor(i / 40) * 5)
   );
-  const built = buildVegetation({ trees: placed(forest) }, ctx);
+  const built = buildVegetation({ rows: [], canopy: forest }, ctx);
   const [chunk] = built.chunks;
   expect(chunk.trees).toBe(800);
   expect(chunk.far.drawCount).toBe(400);
 });
 
-test("the far tier's crowns wear the tints of the trees it keeps", () => {
-  // lush and dry by turns of three, so a kept tree's tint is not the tint
-  // of the tree at its place in the thinned set
-  const forest = placed(
-    Array.from({ length: 800 }, (_, i) =>
-      canopy((i % 40) * 5, 12, 10 + Math.floor(i / 40) * 5)
-    )
-  ).map((p, i) => ({ ...p, ndvi: [0.05, 0.5, 0.95][i % 3] }));
-  const [chunk] = buildVegetation({ trees: forest }, ctx).chunks;
-  const mid = chunk.mid.instanceTints?.array as Float32Array;
-  const far = chunk.far.instanceTints?.array as Float32Array;
-  const midWords = chunk.mid.stands?.buffer.array as Uint16Array;
-  const farWords = chunk.far.stands?.buffer.array as Uint16Array;
-  const at = new Map<string, number>();
-  for (let i = 0; i < chunk.mid.drawCount; i += 1) {
-    at.set(`${midWords[i * 10]} ${midWords[i * 10 + 2]}`, i);
-  }
-  let moved = 0;
-  for (let j = 0; j < chunk.far.drawCount; j += 1) {
-    // the kept tree, by where it stands (the tiers' tables share a step;
-    // both origins are whole metres)
-    const slot = at.get(`${farWords[j * 10]} ${farWords[j * 10 + 2]}`);
-    expect(slot).toBeDefined();
-    const k = (slot ?? 0) * 3;
-    expect([far[j * 3], far[j * 3 + 1], far[j * 3 + 2]]).toEqual([
-      mid[k],
-      mid[k + 1],
-      mid[k + 2],
-    ]);
-    moved += mid[k] === mid[j * 3] ? 0 : 1;
-  }
-  // the test would pass a copy by place in the set otherwise
-  expect(moved).toBeGreaterThan(100);
-});
-
-test("trunks and the near crowns share one table of records", () => {
-  const built = buildVegetation({ trees: placed([canopy(5, 12)]) }, ctx);
+test("trunks and the near crowns share one instance buffer", () => {
+  const built = buildVegetation({ rows: [], canopy: [canopy(5, 12)] }, ctx);
   const [chunk] = built.chunks;
-  expect(chunk.mid.stands).not.toBeNull();
-  expect(chunk.trunks.placement).toBe(chunk.mid.placement);
-  expect(chunk.rich.placement).toBe(chunk.mid.placement);
+  expect(chunk.trunks.instanceMatrix).toBe(chunk.mid.instanceMatrix);
+  expect(chunk.rich.instanceMatrix).toBe(chunk.mid.instanceMatrix);
   expect(chunk.rich.instanceTints).toBe(chunk.mid.instanceTints);
-  // no matrix is written: twenty bytes a tree
-  expect(chunk.mid.geometry.hasAttribute("iMat0")).toBe(false);
   // Each still culls against a sphere of its own geometry.
   expect(chunk.rich.geometry.boundingSphere).not.toBeNull();
   expect(chunk.trunks.geometry.boundingSphere).not.toBeNull();
@@ -195,51 +165,36 @@ test("trunks and the near crowns share one table of records", () => {
   );
 });
 
-/** A record at (3, y, 3), unturned, at scale 1. */
-const stand = (y: number): Stand => ({
-  x: 3,
-  y,
-  z: 3,
-  turn: 0,
-  scale: [1, 1, 1],
-});
-
-test("a chunk with register trees fits their crowns to each tier, their trunks apart", () => {
+test("a chunk with precomputed trees keeps its own matrices per mesh", () => {
+  const trunk = new Matrix4().makeTranslation(3, 100, 3);
   const crown = {
-    cheap: stand(104),
-    rich: stand(105),
+    cheap: new Matrix4().makeTranslation(3, 104, 3),
+    rich: new Matrix4().makeTranslation(3, 105, 3),
     colour: new Color(0x88_99_66),
   };
   const built = buildVegetation(
     {
-      trees: placed([canopy(5, 12)]),
-      extraTrees: [{ x: 3, z: 3, trunk: stand(100), crown }],
+      rows: [],
+      canopy: [canopy(5, 12)],
+      extraTrees: [{ x: 3, z: 3, trunk, crown }],
     },
     ctx
   );
   const [chunk] = built.chunks;
   expect(chunk.trees).toBe(2);
-  // The register tree's crowns differ by tier: the rich crowns have a
-  // table of their own; the placement's trunk still rides the mid crowns'
-  // records, the register's trunk has its own.
-  expect(chunk.rich.placement).not.toBe(chunk.mid.placement);
-  expect(chunk.trunks.placement).toBe(chunk.mid.placement);
-  expect(chunk.trunks.drawCount).toBe(1);
-  expect(chunk.ownTrunks?.drawCount).toBe(1);
-  expect(chunk.ownTrunks?.placement).not.toBe(chunk.mid.placement);
-  const m = new Matrix4();
-  expect(chunk.mid.getMatrixAt(1, m).elements[13]).toBeCloseTo(104, 2);
-  expect(chunk.rich.getMatrixAt(1, m).elements[13]).toBeCloseTo(105, 2);
+  // The cadastre tree's trunk and crowns differ, so nothing is shared.
+  expect(chunk.trunks.instanceMatrix).not.toBe(chunk.mid.instanceMatrix);
+  expect(chunk.rich.instanceMatrix).not.toBe(chunk.mid.instanceMatrix);
   expect(chunk.far.drawCount).toBe(2);
 });
 
 test("every tile wears the scene's crown and trunk materials; the warm-up carries both crowns", () => {
   const sun = new Vector3(0.3, 0.8, 0.1);
   const a = buildVegetation(
-    { trees: placed([canopy(0, 12), canopy(20, 14)]) },
+    { rows: [], canopy: [canopy(0, 12), canopy(20, 14)] },
     { ...ctx, sunDirection: sun }
   );
-  const b = buildVegetation({ trees: placed([canopy(900, 12)]) }, ctx);
+  const b = buildVegetation({ rows: [], canopy: [canopy(900, 12)] }, ctx);
   const [ca] = a.chunks;
   const [cb] = b.chunks;
   const { leafy, bare, uniforms } = sceneCrowns();
@@ -306,7 +261,7 @@ describe("the generic crown's measures", () => {
 
 describe("a tree's crown base", () => {
   test("its crown spans its base to its top; its trunk stands on the ground", () => {
-    const built = buildVegetation({ trees: placed([canopy(5, 24)]) }, ctx);
+    const built = buildVegetation({ rows: [], canopy: [canopy(5, 24)] }, ctx);
     const [chunk] = built.chunks;
     const m = new Matrix4();
     chunk.mid.getMatrixAt(0, m);
@@ -315,12 +270,11 @@ describe("a tree's crown base", () => {
     // the measured 24 m within the 10 % jitter, its crown from 0.438 of it
     expect(top).toBeGreaterThan(21);
     expect(top).toBeLessThan(27);
-    // (to the record's steps: 4 mm of height, a thousandth of scale)
-    expect(foot).toBeCloseTo(crownBase(top), 1);
-    // the trunk rides the crown's record, its foot lowered by the drop
-    expect(chunk.trunks.placement).toBe(chunk.mid.placement);
-    const drop = dropOf(chunk.trunks);
-    expect(new Vector3(0, -drop, 0).applyMatrix4(m).y).toBeCloseTo(100, 1);
+    expect(foot).toBeCloseTo(crownBase(top), 3);
+    // the trunk rides the crown's matrix, its foot lowered by the drop
+    expect(chunk.trunks.instanceMatrix).toBe(chunk.mid.instanceMatrix);
+    const drop = chunk.trunks.geometry.getAttribute("iDrop")?.getX(0) ?? 0;
+    expect(new Vector3(0, -drop, 0).applyMatrix4(m).y).toBeCloseTo(100, 3);
     // … and its top still reaches into the crown
     const trunkTop = new Vector3(0, TRUNK_H, 0).applyMatrix4(m).y - 100;
     expect(trunkTop).toBeGreaterThan(foot);
@@ -336,7 +290,10 @@ test("a canopy evergreen stands as a cone of its own, in leaf all year", () => {
     geometry: { type: "Point", coordinates: [8, 0] },
     properties: { h: 18, l: "e" },
   };
-  const built = buildVegetation({ trees: placed([canopy(5, 12), pine]) }, ctx);
+  const built = buildVegetation(
+    { rows: [], canopy: [canopy(5, 12), pine] },
+    ctx
+  );
   // one chunk per form in the same 250 m cell, each with its one tree
   expect(built.chunks).toHaveLength(2);
   const [broad, conifer] = [...built.chunks].sort(
@@ -378,7 +335,7 @@ const at = (x: number, pine: boolean): CanopyFeature => ({
 
 test("a canopy pine wears the pine's crown, high on its stem, a chunk of its own", () => {
   const built = buildVegetation(
-    { trees: placed([at(5, false), at(9, true)]) },
+    { rows: [], canopy: [at(5, false), at(9, true)] },
     ctx
   );
   // a cone and a pine in the same 250 m cell: a chunk per form
@@ -389,7 +346,7 @@ test("a canopy pine wears the pine's crown, high on its stem, a chunk of its own
     return {
       foot: new Vector3(0, GENERIC_CROWN_FOOT, 0).applyMatrix4(m).y - 100,
       top: new Vector3(0, BASE_TREE_H, 0).applyMatrix4(m).y - 100,
-      drop: dropOf(c.trunks),
+      drop: c.trunks.geometry.getAttribute("iDrop")?.getX(0) ?? 0,
       m,
     };
   };
@@ -397,12 +354,12 @@ test("a canopy pine wears the pine's crown, high on its stem, a chunk of its own
     .map(foot)
     .sort((a, b) => a.foot / a.top - b.foot / b.top);
   // the pine's crown from PINE_CROWN_BASE of its height, the cone's lower
-  expect(pine.foot / pine.top).toBeCloseTo(PINE_CROWN_BASE, 2);
+  expect(pine.foot / pine.top).toBeCloseTo(PINE_CROWN_BASE, 3);
   expect(cone.foot / cone.top).toBeLessThan(PINE_CROWN_BASE);
   // its trunk still stands on the ground
   expect(new Vector3(0, -pine.drop, 0).applyMatrix4(pine.m).y).toBeCloseTo(
     100,
-    1
+    3
   );
   // the pine's own geometry: the crown's attributes, no index, no style's
   // crown, the leafy material all year
@@ -473,4 +430,70 @@ test("the cone stands in the lobed crown's box, as tall and as wide", () => {
     expect(w / lw).toBeGreaterThan(0.9);
     expect(w / lw).toBeLessThan(1.15);
   }
+});
+
+/** Answers every fetch with `response`, or with what its signal says. */
+async function withFetch<T>(
+  response: Response | null,
+  run: () => Promise<T>
+): Promise<T> {
+  const realFetch = globalThis.fetch;
+  // reason: the loader reads only `ok` and the body of a Response
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    if (response) {
+      return response;
+    }
+    return await new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => {
+        reject(new DOMException("gone", "AbortError"));
+      });
+    });
+  }) as unknown as typeof fetch;
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+describe("the crowns' NDVI sampler", () => {
+  const BOUNDS: [number, number, number, number] = [0, 0, 100, 100];
+
+  test("an absent file is no sampler", async () => {
+    expect(
+      await withFetch(
+        new Response("", { status: 404 }),
+        async () => await loadNdviSampler("ndvi.png", BOUNDS)
+      )
+    ).toBeNull();
+  });
+
+  test("an abort is rethrown", async () => {
+    const aborter = new AbortController();
+    await withFetch(null, async () => {
+      const load = loadNdviSampler("ndvi.png", BOUNDS, aborter.signal);
+      aborter.abort();
+      await expect(load).rejects.toThrow();
+    });
+  });
+
+  test("on a phone it decodes in the raster turn, never over another raster's decode", async () => {
+    setRasterTier("mobile");
+    const { promise: decoded, resolve: finish } = Promise.withResolvers<null>();
+    const other = inRasterTurn(async () => await decoded);
+    let settled = false;
+    await withFetch(new Response(new Uint8Array([1, 2, 3])), async () => {
+      const load = loadNdviSampler("ndvi.png", BOUNDS).finally(() => {
+        settled = true;
+      });
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      expect(settled).toBe(false);
+      finish(null);
+      await other;
+      // not a PNG: no sampler, once it had its turn
+      expect(await load).toBeNull();
+    });
+  });
 });

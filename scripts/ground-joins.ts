@@ -21,7 +21,6 @@ import type { z } from "zod";
 import { parseBakeFile } from "../lib/city/bake-file";
 import type { BakeFile } from "../lib/city/bake-file";
 import { doorJoins } from "../lib/city/doors";
-import { unpackDressing } from "../lib/city/dressing-pack";
 import { DOORS_FILE } from "../lib/city/doors-file";
 import { PLINTHS_FILE } from "../lib/city/plinths-file";
 import { SMALL_BUILDINGS_FILE } from "../lib/city/small-buildings-file";
@@ -45,11 +44,9 @@ import { tileExtentOf, tileIdOf } from "../lib/city/site";
 import { structureJoins } from "../lib/city/small-buildings";
 import { cityMeshSourceFiles, dgmSourceFiles, tileIds } from "../lib/city/tile";
 import { ownsPoint } from "../lib/city/tileset";
-import { treeJoins } from "../lib/city/tree-table";
 import { wallGeometry } from "../lib/city/walls";
 import type { Site } from "../lib/city/site";
 import { REFERENCE_SITE, SITES, siteFromArgs } from "../sites";
-import { bakeDressing } from "./bake-dressing";
 import { FINE_TIN_MAX_ERROR } from "./bake-terrain-tin";
 import { shapeDgm, stairRailLines } from "./bake-tiles";
 import { readDgmFile } from "./dgm-cache";
@@ -75,7 +72,6 @@ export const JOIN_PARTS = [
   "doors",
   "plinths",
   "monorails",
-  "trees",
 ] as const;
 export type JoinPart = (typeof JOIN_PARTS)[number];
 
@@ -160,39 +156,13 @@ function monorails(site: Site, tile: string): RailFeature[] {
     : [];
 }
 
-/**
- * Where a tile's trees meet the ground: every tree as the build stands it
- * (scripts/bake-dressing.ts) on the tile's own ground, each foot at the
- * ground its record holds (lib/city/tree-table.ts `treeJoins`).
- */
-async function treeFeet(
-  site: Site,
-  tile: string,
-  ground: Ground
-): Promise<JoinPoint[]> {
-  const [minX, minY] = tileExtentOf(site.tiles[tileIds(site).indexOf(tile)]);
-  const files = await bakeDressing(site, tile, process.cwd(), {
-    bounds: ground.bounds,
-    heightAt: ground.heightAt,
-    offset: OFFSET,
-    origin: [minX, minY],
-  });
-  return treeJoins(
-    [files.coarse, files.fine].flatMap((bytes) => {
-      const pack = unpackDressing(new Uint8Array(bytes).buffer);
-      return pack ? [pack] : [];
-    })
-  );
-}
-
-/** The joins each part of one tile reports, on the site's ground (the
- *  trees', which stand on their tile's own, apart: `treeFeet`). */
+/** The joins each part of one tile reports, on the site's ground. */
 function tileJoins(
   site: Site,
   tile: string,
   bounds: TerrainBounds,
   heightAt: HeightAt
-): Record<Exclude<JoinPart, "trees">, JoinPoint[]> {
+): Record<JoinPart, JoinPoint[]> {
   const walls = wallLines(site, tile);
   const gates = gatePoints(site, tile);
   const cut = cutWallGates(walls, gates);
@@ -255,16 +225,10 @@ export async function measureJoins(
     JOIN_PARTS.map((part) => [part, [] as JoinPoint[]])
   ) as Record<JoinPart, JoinPoint[]>;
   for (const tile of measured) {
-    const ground = grounds[all.indexOf(tile)];
-    const found = {
-      ...tileJoins(site, tile, ground.bounds, heightAt),
-      trees: await treeFeet(site, tile, ground),
-    };
+    const { bounds } = grounds[all.indexOf(tile)];
+    const found = tileJoins(site, tile, bounds, heightAt);
     for (const part of JOIN_PARTS) {
-      // (not spread: a forest tile's trees are past an argument list)
-      for (const join of found[part]) {
-        joins[part].push(join);
-      }
+      joins[part].push(...found[part]);
     }
   }
   return Object.fromEntries(

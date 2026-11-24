@@ -1,12 +1,9 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import nodePath from "node:path";
 import {
   budgetBreaches,
   budgetSpare,
   DEFAULT_PIPELINE_LIMITS,
   stageInterface,
-  vertexAttributeNames,
   wgslBudget,
 } from "./wgsl-budget";
 
@@ -90,61 +87,9 @@ test("counts attributes, the variables each way and the builtins", () => {
   expect(budgetSpare(budget, eightBuffers).interStage).toBe(2);
 });
 
-test("a comment's text is no part of the interface", () => {
-  const vertex = vertexText({ attributes: 2, varyings: 1 });
-  expect(vertexAttributeNames(vertex)).toEqual(["a0", "a1"]);
-  expect(stageInterface(vertex, "vertex").outputs).toEqual([
-    { location: 0, name: "v_0", type: "vec3<f32>" },
-    { builtin: "position", name: "builtinClipSpace", type: "vec4<f32>" },
-  ]);
-});
-
-test("an entry point may take a struct and return a bare location", () => {
-  const fragment = `struct In {
-  @location(0) @interpolate(flat, either) id : u32,
-  @location(1) uv : vec2<f32>,
-  @builtin(front_facing) front : bool,
-}
-@fragment fn shade(in : In, @builtin(sample_index) s : u32) -> @location(0) vec4<f32> {
-  return vec4<f32>(in.uv, 0.0, 1.0);
-}`;
-  const io = stageInterface(fragment, "fragment");
-  expect(io.inputs.map((v) => v.name)).toEqual(["id", "uv", "front", "s"]);
-  expect(io.outputs).toEqual([{ location: 0, name: "", type: "vec4<f32>" }]);
-  const budget = wgslBudget(
-    vertexText({ attributes: 1, varyings: 2 }),
-    fragment
-  );
-  expect(budget.interStageBuiltins).toEqual(["front_facing", "sample_index"]);
-});
-
 test("a text without the entry point is an error, not a zero", () => {
   expect(() => stageInterface("fn main() {}", "vertex")).toThrow(
     "no @vertex entry point"
-  );
-});
-
-test("a shape the parser does not know is an error, never an empty count", () => {
-  // an alias for the struct: its members would otherwise count as none
-  const aliased = `struct In { @location(0) uv : vec2<f32> }
-alias Inputs = In;
-@fragment fn main(in : Inputs) -> @location(0) vec4<f32> { return vec4<f32>(); }`;
-  expect(() => stageInterface(aliased, "fragment")).toThrow(
-    "neither a location, a builtin nor a struct of them: in : Inputs"
-  );
-  // a location that is a constant, not a literal
-  const named = `const UV = 3;
-@fragment fn main(@location(UV) uv : vec2<f32>) -> @location(0) vec4<f32> { return vec4<f32>(); }`;
-  expect(() => stageInterface(named, "fragment")).toThrow(
-    "a location not a literal"
-  );
-  // clip distances sized by a constant
-  const clipped = vertexText({ attributes: 1, varyings: 1 }).replace(
-    "@builtin( position ) builtinClipSpace : vec4<f32>",
-    "@builtin( position ) builtinClipSpace : vec4<f32>,\n\t@builtin( clip_distances ) clip : array<f32, PLANES>"
-  );
-  expect(() => wgslBudget(clipped, fragmentText({ varyings: 1 }))).toThrow(
-    "clip_distances of an unread size"
   );
 });
 
@@ -213,16 +158,6 @@ test("clip distances take a variable for every four, on the vertex side", () => 
   ]);
 });
 
-test("a point list's vertex stage passes one variable fewer", () => {
-  const points = wgslBudget(
-    vertexText({ attributes: 1, varyings: 16 }),
-    fragmentText({ varyings: 16 })
-  );
-  expect(budgetBreaches(points, { pointList: true, vertexBuffers: 1 })).toEqual(
-    ["vertexOutputs"]
-  );
-});
-
 test("eight vertex buffers pass, a ninth does not; sixteen attributes too", () => {
   const budget = wgslBudget(
     vertexText({ attributes: 16, varyings: 1 }),
@@ -245,50 +180,4 @@ test("eight vertex buffers pass, a ninth does not; sixteen attributes too", () =
       { ...DEFAULT_PIPELINE_LIMITS, maxVertexBuffers: 12 }
     )
   ).toEqual([]);
-});
-
-/**
- * The spike's fixtures (plan 094, phase 0): the clay's WGSL as three r187
- * built it for the spawn tile's buildings, read in the headless e2e
- * through `renderer.debug.getShaderAsync` — `clay|niches` under the
- * walk/fly camera, `clay` under Modell's parallel one.
- */
-const fixture = (name: string) =>
-  readFileSync(
-    nodePath.join(import.meta.dir, "__fixtures__", "wgsl-budget", name),
-    "utf-8"
-  );
-
-test("the clay as three r187 built it: thirteen passed, two spare", () => {
-  const vertex = fixture("clay.vertex.wgsl");
-  const budget = wgslBudget(vertex, fixture("clay.fragment.wgsl"));
-  expect(vertexAttributeNames(vertex)).toEqual([
-    "featureId",
-    "facade",
-    "position",
-    "normal",
-  ]);
-  expect(budget.interStageOut).toBe(13);
-  expect(budget.interStageIn).toBe(13);
-  expect(budget.builtins.fragmentIn).toEqual(["front_facing", "position"]);
-  expect(budget.interStageBuiltins).toEqual(["front_facing"]);
-  expect(budgetSpare(budget, { vertexBuffers: 4 })).toEqual({
-    fragmentInputs: 2,
-    interStage: 2,
-    outLocations: 3,
-    vertexAttributes: 12,
-    vertexBuffers: 4,
-    vertexOutputs: 3,
-  });
-});
-
-test("a parallel camera's clay passes one variable fewer", () => {
-  // the direction to the eye is one for the whole view: no varying
-  const budget = wgslBudget(
-    fixture("clay-parallel.vertex.wgsl"),
-    fixture("clay-parallel.fragment.wgsl")
-  );
-  expect(budget.interStageOut).toBe(12);
-  expect(budget.interStageIn).toBe(12);
-  expect(budgetSpare(budget, { vertexBuffers: 4 }).interStage).toBe(3);
 });

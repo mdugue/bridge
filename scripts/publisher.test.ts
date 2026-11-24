@@ -20,7 +20,7 @@ test("a name carries its content's hash and keeps a compound extension", () => {
   expect(hashedName("lamps_t.geojson", bytes("a"))).toBe(a);
   expect(hashedName("lamps_t.geojson", bytes("b"))).not.toBe(a);
   expect(hashedName("city_t.glb.gz", bytes("a"))).toMatch(/\.glb\.gz$/u);
-  expect(hashedName("dressing_t.drs.gz", bytes("a"))).toMatch(/\.drs\.gz$/u);
+  expect(hashedName("canopy_t.pts.gz", bytes("a"))).toMatch(/\.pts\.gz$/u);
 });
 
 test("the same bytes are written once; a run names its files in the manifest and prunes the rest", () => {

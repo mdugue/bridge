@@ -25,9 +25,9 @@ import {
 } from "./context";
 import { publishLevels, publishPlatforms } from "./lines";
 import {
+  publishCanopy,
   publishClassRaster,
   publishColonies,
-  publishSvfBlocks,
 } from "./side-bakes";
 
 // --- 1. side files --------------------------------------------------------------
@@ -77,27 +77,6 @@ async function bakedTwin(artifact: TileArtifact): Promise<string | undefined> {
   return undefined;
 }
 
-/**
- * Whether this build publishes the sky view's GPU blocks (plan 091 phase
- * 2's trial): only with `SVF_BLOCKS=1`, so that a trial grows no
- * deployment that does not ask for it. `?svf=blocks` reads them where a
- * build has them, and the PNG elsewhere.
- */
-const SVF_BLOCKS = process.env.SVF_BLOCKS === "1";
-
-/** The sky view as committed, and with `SVF_BLOCKS` its GPU blocks — the
- *  PNG first: the manifest lists the files in publish order. None where
- *  the tile has no sky view (optional). */
-async function publishSvf(tile: string, file: string): Promise<Published> {
-  const src = at(sideFileSource(SITE, file));
-  if (!existsSync(src)) {
-    log(`optional source absent, skipping ${file}`);
-    return {};
-  }
-  const svf = publish(file, readFileSync(src));
-  return SVF_BLOCKS ? { svf, ...(await publishSvfBlocks(tile)) } : { svf };
-}
-
 /** Publishes every side file of the tiles this run bakes, into `sideFiles`.
  *  A ground warmer needs none; a tile warmer its own tiles'. */
 export async function publishSideFiles(): Promise<void> {
@@ -112,11 +91,10 @@ export async function publishSideFiles(): Promise<void> {
     ][];
     for (const [kind, artifact] of artifacts) {
       // A `built` row has no committed source and this loop does not
-      // publish it: the dressing files are baked from the tree files on
-      // the fine ground (prepare/dressing.ts), the phones' colony raster
-      // is cropped with the colony raster (`publishColonies`). A `source`
-      // row is read by such a bake and never served.
-      if (artifact.built || artifact.source) {
+      // publish it: the coarse crowns are baked from the tree files on the
+      // fine ground (`publishCrowns`), the phones' colony raster is cropped
+      // with the colony raster (`publishColonies`).
+      if (artifact.built) {
         continue;
       }
       if (
@@ -132,6 +110,13 @@ export async function publishSideFiles(): Promise<void> {
         continue;
       }
       if (
+        (kind === "canopy" || kind === "canopyx") &&
+        existsSync(at(sideFileSource(SITE, artifact.file)))
+      ) {
+        names[kind] = await publishCanopy(tile, artifact.file);
+        continue;
+      }
+      if (
         (kind === "rail" || kind === "tram") &&
         existsSync(at(sideFileSource(SITE, artifact.file)))
       ) {
@@ -143,10 +128,6 @@ export async function publishSideFiles(): Promise<void> {
         existsSync(at(sideFileSource(SITE, artifact.file)))
       ) {
         names[kind] = await publishPlatforms(artifact.file);
-        continue;
-      }
-      if (kind === "svf") {
-        Object.assign(names, await publishSvf(tile, artifact.file));
         continue;
       }
       if (artifact.bakedFrom) {

@@ -102,9 +102,3 @@ test("a page that goes to the background or leaves keeps the count", () => {
     expect(noted).toHaveLength(2);
   }
 });
-
-test("a page drawn through plan 090's spike is told apart", () => {
-  expect(trailUrl("/dresden", "?rails=table&at=51,13")).toBe(
-    "/dresden?rails=table"
-  );
-});

@@ -2,7 +2,7 @@
 packages, each for a library that ships no types of its own.
 
 A stub in pyright's `stubPath` wins over a library's inline types. Were
-scipy, rasterio, pyogrio or laspy to ship them (a `py.typed`), the stub
+scipy to ship them (a `py.typed`), the stub
 would go on shadowing them unnoticed; this fails instead, so that the stub
 is checked against the library's own types and dropped where they cover
 it."""
@@ -19,12 +19,7 @@ STUBS = sorted(p for p in TYPINGS.iterdir() if p.is_dir() and p.name.endswith("-
 
 
 def test_there_are_stub_packages():
-    assert [p.name for p in STUBS] == [
-        "laspy-stubs",
-        "pyogrio-stubs",
-        "rasterio-stubs",
-        "scipy-stubs",
-    ]
+    assert [p.name for p in STUBS] == ["scipy-stubs"]
 
 
 @pytest.mark.parametrize("stub", STUBS, ids=lambda p: p.name)

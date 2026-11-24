@@ -18,13 +18,54 @@
  * (SITE_SEASON, `climateDay`).
  */
 
-import { TREE_GENERA } from "./tree-genera";
-import type { TreeGenus } from "./tree-genera";
-
-// (the genus table and a tree's offset in the year are facts the build
-// reads too: lib/city/tree-genera.ts)
-export { SEASON_JITTER_DAYS, seasonJitter, TREE_GENERA } from "./tree-genera";
-export type { TreeGenus } from "./tree-genera";
+/**
+ * The genus table, in the bake's order (pipeline/bake/tree_archetypes.py
+ * GENERA, written into every trees_<tile>.geojson as `genera`;
+ * features.test.ts checks the committed files against this list). A tree's
+ * `gn` indexes it. Append only. 0 is "other deciduous", the generic curve
+ * the canopy, the tree rows and any tree without a known genus follow.
+ */
+export const TREE_GENERA = [
+  "",
+  "Acer",
+  "Acer rubrum",
+  "Tilia",
+  "Quercus",
+  "Quercus rubra",
+  "Fraxinus",
+  "Aesculus",
+  "Prunus",
+  "Platanus",
+  "Robinia",
+  "Carpinus",
+  "Crataegus",
+  "Gleditsia",
+  "Sophora",
+  "Ulmus",
+  "Betula",
+  "Malus",
+  "Liquidambar",
+  "Populus",
+  "Ailanthus",
+  "Salix",
+  "Alnus",
+  "Koelreuteria",
+  "Sorbus",
+  "Liriodendron",
+  "Catalpa",
+  "Corylus",
+  "Pyrus",
+  "Ginkgo",
+  "Ostrya",
+  "Fagus",
+  "Castanea",
+  "Juglans",
+  "Celtis",
+  "Larix",
+  "Metasequoia",
+  "Taxodium",
+] as const;
+export type TreeGenus = (typeof TREE_GENERA)[number];
 
 /** A day span [from, to] in days since 1 January (0-based). */
 export type DaySpan = readonly [number, number];
@@ -414,6 +455,10 @@ export interface Season {
 /** An evergreen's every day. */
 export const EVERGREEN: Readonly<Season> = { leaf: 1, autumn: 0 };
 
+/** Largest per-tree offset (days) of the phenology: a street turns over
+ *  about a week and a half, not in one night. */
+export const SEASON_JITTER_DAYS = 6;
+
 const YEAR = 365;
 
 /** The phenology of a `gn` (an out-of-table index is the generic curve). */
@@ -443,6 +488,12 @@ export function dayOfYear(date: Date): number {
   const day = (wall - Date.UTC(year, 0, 1)) / 86_400_000;
   const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
   return leap && day >= 59 ? Math.max(day - 1, 58) : day;
+}
+
+/** A tree's phenology offset (days, ±SEASON_JITTER_DAYS) from a stable
+ *  [0, 1) hash of it. */
+export function seasonJitter(u: number): number {
+  return (u - 0.5) * 2 * SEASON_JITTER_DAYS;
 }
 
 function ramp([a, b]: DaySpan, d: number): number {

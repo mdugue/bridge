@@ -1,17 +1,32 @@
 /**
  * The side files step 1 of scripts/prepare-data.ts bakes (side-files.ts
- * publishes the rest as they are): the colony crops, the downsampled
- * class rasters and the sky view's blocks. Their entries name this module
- * (bake-entries.ts `colonies`, `classRaster`, `svfBlocks`), which imports
- * no other step: a change to the lines re-bakes none of them.
+ * publishes the rest as they are): the colony crops, the packed canopy and
+ * the downsampled class rasters. Their entries name this module
+ * (bake-entries.ts `colonies`, `canopy`, `classRaster`), which imports no
+ * other step: a change to the lines re-bakes none of them.
  */
-import { readFileSync } from "node:fs";
-import type { BlockFormat } from "../../lib/city/block-raster";
-import { sideFileSource, tileArtifacts } from "../../lib/city/tile";
-import { decodeGreyPng } from "../../lib/city/png-raster";
+import { existsSync } from "node:fs";
+import { parseBakeFile } from "../../lib/city/bake-file";
+import type { CanopyFeature, FeatureCollection } from "../../lib/city/features";
+import { tileExtentOf } from "../../lib/city/site";
+import { SMALL_BUILDINGS_FILE } from "../../lib/city/small-buildings-file";
+import { STRUCTURES_FILE } from "../../lib/city/structures-file";
+import {
+  canopyStride,
+  packPoints,
+  pointOf,
+  ROWS_MEASURED,
+} from "../../lib/city/point-pack";
+import { gapRoofs, lod2Roofs, treesOffRoofs } from "../../lib/city/roof-trees";
+import type { RoofFootprint } from "../../lib/city/roof-trees";
+import { treesOffStructures } from "../../lib/city/small-buildings";
+import {
+  cityMeshSourceFiles,
+  sideFileSource,
+  tileArtifacts,
+} from "../../lib/city/tile";
+import type { CityJsonDocument } from "../../lib/city/types";
 import { BAKE_ENTRIES } from "../bake-entries";
-import { publishedBlockFile } from "../block-encode";
-import type { Grey } from "../block-encode";
 import { cropColonyRaster } from "../crop-raster";
 import type { ColonyCrop } from "../crop-raster";
 import {
@@ -20,12 +35,15 @@ import {
 } from "../downsample-raster";
 import {
   SITE,
+  TILES,
   at,
   cacheKey,
   cached,
+  gz,
   log,
   parse,
   publish,
+  readJson,
   utf8,
 } from "./context";
 
@@ -74,6 +92,84 @@ export async function publishColonies(
   return { crop, cultivatedLow: publish(lowFile, low), cultivatedRaster };
 }
 
+/** Each tile's roofs, LoD2's and those of the buildings and roofs on posts
+ *  it lacks (structures.py), read once for its canopy and scan crowns. */
+const tileRoofs = new Map<string, RoofFootprint[]>();
+function roofsOf(tile: string): RoofFootprint[] {
+  let roofs = tileRoofs.get(tile);
+  if (!roofs) {
+    const city = at(cityMeshSourceFiles(SITE, tile).city);
+    const gaps = at(cityMeshSourceFiles(SITE, tile).structures);
+    roofs = [
+      ...(existsSync(city)
+        ? lod2Roofs(readJson(city) as CityJsonDocument)
+        : []),
+      ...(existsSync(gaps)
+        ? gapRoofs(
+            parseBakeFile(STRUCTURES_FILE, readJson(gaps), gaps).features
+          )
+        : []),
+    ];
+    tileRoofs.set(tile, roofs);
+  }
+  return roofs;
+}
+
+/**
+ * The canopy (DOM1) or the laser-scan crowns without the points that stand
+ * in or within 0.5 m of one of the tile's scan structures: DOM1 reads a
+ * shed's roof as a 3–4 m tree (lib/city/small-buildings.ts). Here, not in
+ * the canopy bake, because the structures are baked after the canopy. Nor
+ * the points that are a LoD2 roof (lib/city/roof-trees.ts): a hall on what
+ * the Basis-DLM still files as park.
+ */
+export async function publishCanopy(
+  tile: string,
+  file: string
+): Promise<string> {
+  const src = at(sideFileSource(SITE, file));
+  const sheds = at(cityMeshSourceFiles(SITE, tile).smallBuild);
+  const city = at(cityMeshSourceFiles(SITE, tile).city);
+  // Packed, not GeoJSON (lib/city/point-pack.ts): the browser parsed up to
+  // 9.5 MB of it in one task. Relative to the tile's south-west corner, and
+  // pre-gzipped like the glTF (static hosts do not compress binary types).
+  const packed = file.replace(/\.geojson$/u, ".pts.gz");
+  const [minX, minY] = tileExtentOf(SITE.tiles[TILES.indexOf(tile)]);
+  const key = cacheKey(
+    [src, sheds, city, at(cityMeshSourceFiles(SITE, tile).structures)],
+    BAKE_ENTRIES.canopy
+  );
+  const bytes = await cached(packed, key, () => {
+    const doc = readJson(src) as FeatureCollection<CanopyFeature> & {
+      rows?: unknown;
+    };
+    const trees = doc.features ?? [];
+    let features = trees;
+    if (existsSync(sheds)) {
+      const structures = parseBakeFile(
+        SMALL_BUILDINGS_FILE,
+        readJson(sheds),
+        sheds
+      ).features;
+      features = treesOffStructures(trees, structures);
+      log(
+        `${file}: ${trees.length - features.length} points in a scan structure dropped`
+      );
+    }
+    const offSheds = features.length;
+    features = treesOffRoofs(features, roofsOf(tile));
+    if (features.length < offSheds) {
+      log(`${file}: ${offSheds - features.length} points on a roof dropped`);
+    }
+    const points = features.map(pointOf);
+    const stride = canopyStride(points, file.startsWith("canopyx_"));
+    // the canopy bake's tree rows (canopy.py `rows`): the viewer plants none
+    const flags = doc.rows === undefined ? 0 : ROWS_MEASURED;
+    return gz(packPoints(points, [minX, minY], stride, flags));
+  });
+  return publish(packed, bytes);
+}
+
 /** A raster downsampled to the size the artifact table names
  *  (lib/city/tile.ts), published: a class raster, or one of `channels`
  *  interleaved bytes a texel. */
@@ -90,35 +186,4 @@ export async function publishClassRaster(
       : await downsampleClassRaster(src, raster)
   );
   return publish(file, bytes);
-}
-
-/**
- * The sky view's GPU blocks (plan 091 phase 2's trial): the committed PNG
- * encoded as BC4 and as EAC R11 with its mip chain
- * (scripts/block-encode.ts), pre-gzipped like the glTF (static hosts do
- * not compress binary types), published beside the PNG. The viewer reads
- * them only behind `?svf=blocks`.
- */
-export async function publishSvfBlocks(
-  tile: string
-): Promise<{ svfBc4: string; svfEac: string }> {
-  const artifacts = tileArtifacts(tile);
-  const src = at(sideFileSource(SITE, artifacts.svf.file));
-  const key = cacheKey([src], BAKE_ENTRIES.svfBlocks);
-  let decoding: Promise<Grey> | null = null;
-  const grey = async () => {
-    decoding ??= decodeGreyPng(readFileSync(src));
-    return await decoding;
-  };
-  const encoded = async (format: BlockFormat, file: string) =>
-    publish(
-      file,
-      await cached(file, key, async () =>
-        publishedBlockFile(await grey(), format)
-      )
-    );
-  return {
-    svfBc4: await encoded("bc4", artifacts.svfBc4.file),
-    svfEac: await encoded("eac", artifacts.svfEac.file),
-  };
 }

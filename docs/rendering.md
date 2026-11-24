@@ -58,20 +58,7 @@ tile's object texture, while the live look uniforms are shared nodes
 crowns, trunks, hedges, fountains, furniture, wires — is one node material
 for the whole scene (`three-utils.ts` `sceneMaterial`), and instanced layers
 draw through `Instances` (`instancing.ts`) so every set with the same
-material shares one node build. A set is placed in one of two ways: by
-sixteen floats an instance, written on the CPU (what moves, and the
-layers plan 090 has not reached), or by a table of twenty-byte stand
-records (`lib/city/stand-record.ts`, `Instances.ofStands`) whose matrix
-the vertex stage composes — **every tree, on both terrain levels**
-(plan 090, phase 1): the build stands each tree on the fine ground and
-hands it over as what was measured (`lib/city/tree-table.ts`, in the
-level's dressing file), and the layers make its record from that
-(`lib/city/tree-stands.ts`): no ground read, no raster, no matrix. A
-canopy tree's crown tiers, its trunk and its feet draw from one table.
-Behind a QA knob still: rails as a table of segments an instanced
-profile expands (`lib/city/rail-table.ts`, `rail-segments.ts`;
-`?rails=table`). What three's public API does with such a record, and
-the numbers, are in plan 090's *Findings*. Everything a tile adds —
+material shares one node build. Everything a tile adds —
 material, object texture, BVH, splat, water, dressing — is disposed with it
 (`disposeTile` in `tile-stream.ts`).
 
@@ -189,7 +176,7 @@ is the codebook.
 | Crown silhouette | every tree its own crown: the shared geometry pushed in and out by three broad waves over the direction from the crown's centre, their phases from where the tree stands, and its top leaned a little; every tree leans up to 0.7 m and its trunk crooks, the crown carried along (`treeGrowth`), and the trunk forks into three limbs inside the crown (`trunkLimbs`; the register's own trunks stay unforked, a set of their own in a cell that has both) — in the vertex stage, the cast shadow too; no build added; darker and cooler underneath and in the troughs between lobes (`crownOcclusion`, a colour factor per vertex, not while printed) | where the tree stands | `vegetation-layer.ts` `crownShape`, `crownOcclusion` |
 | Crown detail | three tiers per 250 m chunk, decided over the whole site on the 10 Hz pose tick (and in the frame the tiles in view change, or the eye jumps more than 25 m), the cadastre's own silhouettes (flame, cone, pine, dome) in the same plan, their cheap crown standing for mid and far: rich multi-tuft crown near (in 220 m / out 300 m) while the site's rich trees fit a budget of 2 500 (nearest chunks first), mid crown + trunk, far crown (80 tris, no trunk, dense chunks thinned to every other tree drawn 1.35× wider) past 650 m / back at 550 m | — | `lib/city/vegetation-lod.ts`, `createVegetationLod` (no switch: the rich crown is always allowed, since 2026-11-06) |
 | Conifer crown | a canopy evergreen (`l: "e"`) or a register conifer → a three-tier lathe cone in the lobed crown's box; a canopy evergreen read as a pine (`pine: 1`) or a register pine → the pine's high, flat-topped crown (the lobed crown reshaped, starting at 0.55 h; a chunk set of its own, the same node build); a yew → the lobed crown down to the ground (on the same trunk; the coarse level a six-sided cone of one skirt), its own chunk set sharing the broad crowns' node build, an evergreen in the blue-green (`evergreenColor`), no season (a register larch keeps its leaf type's year); asked, outlined as its cone | Basis-DLM forest kind (`VEG`) / OSM `leaf_type`, DOP (leaf-off), cadastre | `conifer-crown.ts`, `vegetation-layer.ts`, `tree-inventory-layer.ts`, `coarse-crowns-layer.ts` |
-| Coarse-level trees | a fixed third of the fine level's trees (a hash of where each stands), as tall, crowns √3 wider, in their colours and season, no trunks; conifers (a register cone or a canopy evergreen) as a six-sided cone, cones and pines as their own sets (`coarseForm`), each crown from its own base — wherever the tile renderer shows the coarse terrain: far off, from the air, in Modell past 2.5 m/px or wherever a coarsened stream or a load leaves the fine level out, at any scale; the fine level draws every tree | where each tree stands (`drawnCoarse`) | `coarse-crowns-layer.ts`, `lib/city/coarse-crowns.ts`, `scripts/bake-dressing.ts`, `dressing_<t>.c.drs.gz` |
+| Coarse-level trees | a fixed third of the fine level's trees (a hash of where each stands), as tall, crowns √3 wider, in their colours and season, no trunks; conifers (a register cone or a canopy evergreen) as a six-sided cone, cones and pines as their own sets (`coarseForm`), each crown from its own base — wherever the tile renderer shows the coarse terrain: far off, from the air, in Modell past 2.5 m/px or wherever a coarsened stream or a load leaves the fine level out, at any scale; the fine level draws every tree | where each tree stands (`drawnCoarse`) | `coarse-crowns-layer.ts`, `lib/city/coarse-crowns.ts`, `scripts/coarse-crowns.ts`, `crowns_<t>.crw.gz` |
 | Inventory tree | surveyed position, height `h`, crown diameter `d` → non-uniform instance scale; genus/cultivar → archetype (clear stem + crown shape: broadleaf / flame / tiered cone / pine / weeping dome; a yew a bush down to the ground); Hamburg's heights from genus and trunk (its register has none); leaf type + `Blut-`/gold cultivars → crown colour; trunk diameter `t` → trunk girth (fitted to the drawn trunk's radius at 1.3 m, flared foot included, × 1.3; else from the height); drops row/canopy trees inside its crown, except in DLM forest/copse (`f`); trunks + broadleaf crowns drawn in the canopy's chunk meshes; OSM `natural=tree` (`s: "osm"`) fills in where the register has no tree within max(3 m, its crown's radius); a city without a register shows all its OSM trees, as tall as DOM1 measures | Stadtbaumkataster Dresden, OSM | `tree-inventory-layer.ts`, `lib/city/tree-inventory.ts` |
 | Tree family | genus `gn` → family (`lib/city/tree-family.ts`): a lean of the summer green (HSL offsets on the NDVI colour, not on cultivars or evergreens), bark colour as the trunk's per-instance tint (`TreeInstance.bark`); eight genera flower (`Phenology.bloom`: cherries pink in April, pears/apples/hawthorn white, …), the crown mixed toward the blossom and kept full while in flower | Stadtbaumkataster (genus) | `tree-family.ts`, `tree-inventory-layer.ts` `inventoryColor`/`barkTint`, `crown-season.ts` `bloomTargets` |
 | Tree age | planting year `y` → age (`lib/city/tree-age.ts`): under 15 years (unmeasured) a thinner trunk, under 5 years three stakes and two rails (`tree-stakes.ts`), past 80 years (unmeasured) a thicker trunk; the crown lighter when young, deeper when old (fine level); height and crown size as measured | Stadtbaumkataster (age / planting year) | `tree-age.ts`, `tree-inventory-layer.ts`, `tree-stakes.ts` |
@@ -915,9 +902,8 @@ set each frame with the lens. Nothing is built for Modell.
   above — and below it too wherever the memory governor has raised the
   error target (×4: from ≈ 1 : 2 400) or the fine tiles are still on
   their way. Each level carries its own trees: the fine one every tree,
-  the coarse one a fixed third of them, √3 wider: the build places every
-  tree once and puts that third into the coarse level's dressing file
-  (`dressing_<t>.c.drs.gz`). So whichever level the
+  the coarse one a fixed third of them, √3 wider, baked by the build
+  from the same placement (`crowns_<t>.crw.gz`). So whichever level the
   renderer shows has its trees, and Modell has no tree rule of its own.
   The bridges ride on both levels as well (the coarse one draws its
   decks too), so no river crossing goes with the level.
@@ -1024,9 +1010,9 @@ pre-gzipped glTF with meshopt compression and quantised positions):
 | edge raster (fine level) | 0.34–0.46 MB | — |
 | kerb stones (in the fine terrain) | ≈ 0.2–0.4 MB | up to 319 k, indexed (up to 468 k vertices; 956 k as a triangle soup until 2026-11-11), as the stairs and walls are |
 | rails, ballast, sleepers, tram tracks and bridges (built at runtime from the line files, `mesh-kit.ts`) | — | welded and indexed, normals as signed bytes (`lib/city/weld.ts`): the yard tile 33408_5656 0.75 M triangles on 0.74 M vertices, 21 MB on the GPU (2.24 M vertices and 56 MB as a triangle soup until 2026-11-11); the tram tile 33410_5656 7 MB of tracks (14) |
-| the fine level's dressing file (two thirds of the tile's trees: canopy, scan, rows, register) | 0.08–0.47 MB (forest tiles top) | up to 84 k trees with the coarse level's third: ≈ 5.5 MB of instance data — twenty bytes a tree for its crown tiers, trunk and feet together, the far tier's kept trees again, twelve of tint (12.1 MB while each was a matrix) |
-| hedges (fine level) | ≤ 0.03 MB raw | — |
-| the coarse level's dressing file (the third of the tile's trees it draws) | 0.04–0.24 MB | 3 700–28 100 crowns, 20 tris each: ≈ 36 B of instance data a crown (record, tint, season) |
+| canopy points (fine level) | 0.6–9.5 MB raw (forest tiles top) | up to 81 k trees: ≈ 9 MB of instance data once built (trunks, mid and rich crowns share one matrix buffer) |
+| cadastre trees, scan trees, hedges (fine level) | 0.4–0.8 / 0.65 (spawn only) / ≤ 0.03 MB raw | — |
+| coarse crowns (coarse level) | 0.04–0.29 MB (0.07–0.56 MB raw) | 3 700–27 900 crowns, 20 tris each: ≈ 90 B of instance data a crown once built (matrix, tint, season) |
 
 Before the tileset a tile was ≈1.0 MB of buildings plus a 1.1 MB
 heightfield; quantised meshes cost more on the wire than a height blob,
@@ -1076,24 +1062,6 @@ stays their measure; the tile cache counts true bytes.
   kept only where a tile's numbers equal the site's: −6 MiB per coarse
   tile after the first, on the GPU and the CPU), and it carries only its
   coarse crowns, traffic and bridges.
-- **The sky view as GPU blocks — a trial behind `SVF_BLOCKS=1` and
-  `?svf=blocks`** (plan 091 phase 2). A build with the flag publishes
-  each tile's sky view beside its PNG
-  as BC4 and as EAC R11 blocks with their mip chain
-  (`lib/city/block-raster.ts`, encoded by `scripts/block-encode.ts`),
-  half a byte a texel: 0.67 MiB a tile instead of 1.33, shared by both
-  levels and the buildings as the PNG is. With the knob a page reads BC4
-  where the GPU has `texture-compression-bc`, else EAC where it has
-  `-etc2`, else the PNG (`scene-profile.ts` `blockFormatFor`), and
-  uploads it as a `CompressedTexture` at once on every tier
-  (`raster-upload.ts` `loadBlockRaster`: no decode, no mips made on the
-  GPU), falling back to the PNG where the blocks fail; a material
-  slot's stand-in for it is one block of its format
-  (`material-slots.ts` `stubLike`). three's `info.memory` counts a
-  compressed texture as one byte: the tracked bytes are its weight.
-  Without the knob, or on a build without the flag, nothing changes.
-  The figures and what a real GPU must still show are in plan 091's
-  *Findings* and the ledger's `blocks` section.
 - **The close-range rasters follow the view** (`lib/city/ground-reach.ts`,
   `ground-reach-follow.ts`, since 2026-11-12). The kerb lines, paving
   patterns and lawn edges fade out by the metres a pixel spans (gone at
@@ -1937,10 +1905,7 @@ the table once loaded and 20 s later (`console.table`). The long tasks
 (`longtask`) and the crash trail's `heapMB` are the page's alone: a
 worker reports neither, so they are counted only with `?thread=main`
 (Chromium; Safari reports no long tasks). The names are a contract for
-later perf work: add one rather than rename one. A dressing's builders
-are counted apart (`dressing:trees`, `dressing:rail`, `dressing:tram`, …;
-`dressing-figures.ts`): the time inside each builder's own slices, the
-pauses between them left out. None of it reaches the
+later perf work: add one rather than rename one. None of it reaches the
 crash trail or the reports — a tile's id names where the player was.
 
 **The renderer itself: `?inspect=1`** (`inspector.ts`) puts three's own
@@ -1956,10 +1921,7 @@ the stream, not the passes.
 
 Each entry is a bug in a dependency, the code that works around it and
 what to undo once a release fixes it. The comments at those sites say
-*upstream workaround* (`grep -rni "upstream workaround" app lib`), and
-the ledger counts both, the entries here (each opens its paragraph in
-bold) and the comments (`qa/ledger.json`, `counters.upstreamWorkarounds`):
-an entry added or dropped is a figure a pull request commits. On a
+*upstream workaround* (`grep -rni "upstream workaround" app lib`). On a
 bump of the dependency, check each entry against its release notes, and
 drop the entry with its workaround.
 
@@ -2099,7 +2061,7 @@ reference image is stored. Two tiers share that code:
 
 | | Tier 1 | Tier 2 |
 |---|---|---|
-| Where | CI, every pull request of this repository (`.github/workflows/plates.yml`); `SHOTS_SMALL=1 bun run plates` by hand | a machine with a GPU: `bun run plates` (headed) — not in CI; where it runs is the maintainer's choice |
+| Where | CI, on a pull request that carries the label `plates`, or by hand (`.github/workflows/plates.yml`); `SHOTS_SMALL=1 bun run plates` locally | a machine with a GPU: `bun run plates` (headed) — not in CI; where it runs is the maintainer's choice |
 | Renderer | WebGPU on SwiftShader's Vulkan, 800 × 500, `?scene=lite` (the spawn tile alone) | the browser's own adapter, the full profile, 1600 × 1000 @2× |
 | Views | eight that stand on the spawn tile (`TIER1_VIEWS`): 25–55 s each there | all of `qa/views/` |
 | Says | *changed*, as a tripwire — never *good* | *changed*, in the light a visitor sees |
@@ -2109,14 +2071,14 @@ In a view it renders, tier 1's numbers let through a change of 4 pixels
 or fewer at any contrast, a step of 3 of 255 or less over less than
 about 3 % of the frame, and one step over less than 10 %. A run that
 flakes is re-run by hand or answered by naming the view; nothing
-retries.
+retries. The plates are scaffolding: kept while the rewrite series'
+plans move pixels (plan 087), not a permanent gate.
 
 Tier 1 draws at `lite`'s pixel ratio of 0.5: a plate is 400 × 250 drawn
 pixels shown twice as large. It never sees the other 42 views, any tile
 but the spawn's, the full profile's shadows, AO and resolution, the data
 layers, a view's page query, or late parts landing after the scene
-reports itself settled; and it does not run on a draft or on a PR
-outside the workflow's `paths`.
+reports itself settled; and it runs only where it is asked for.
 
 A frame repeats because the harness holds it. `__poc.still` lets no time
 pass in what animates: the scene's phase clock (water, crowns, flags,
@@ -2131,11 +2093,11 @@ scene to have heard it (`handle.sync()`), and takes the plate once the
 stream, the shadow rings and the lens have been quiet for three frames
 on end and the camera stands where the snapshot says.
 
-A PR names the views it means to change under `## Snapshots` in its
-description: those are reported. A differing view that is not named
-fails the job, as does a side that was not held still, a view that does
-not settle in three minutes, a pose that was not applied, a blank plate
-or two views with the same pixels (the `pr-snapshots` skill).
+A differing view fails the run and its report names it: the PR's
+`## Snapshots` says whether it was meant (the `pr-snapshots` skill). So
+does a side that was not held still, a view that does not settle in
+three minutes, a pose that was not applied, a blank plate or two views
+with the same pixels.
 
 **WebGPU's per-pipeline limits are counted** (plan 094). A pipeline with
 a ninth vertex buffer, a seventeenth attribute or more inter-stage
@@ -2164,10 +2126,9 @@ it is:
 - what the lite scene does not draw: the traffic bodies (the layer that
   once vanished past eight buffers: `traffic-layer.test.ts` counts its
   attributes), tram cars, the data layers, a visitor's design, and
-  whatever only another tile of the site has. The ledger's census
-  (`bun run ledger -- --census`, `docs/data-pipeline.md`, "The census of
-  builds") reads those with the same probe over a flight of every site
-  with its data layers on and a design loaded — by hand, not on CI;
+  whatever only another tile of the site has. Plan 094's census read
+  those once, over a flight of every site with its data layers on and a
+  design loaded (its *Findings*);
 - the clay under a held Ausschnitt: three's hook looks a drawable up
   outside its `ClippingGroup`, so the probe answers nothing while a cut
   is held, and the clip distances' variable on the vertex side is not

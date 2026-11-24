@@ -30,8 +30,6 @@ import type {
   VegRowFeature,
 } from "../../lib/city/features";
 import { sideFileSource, tileIds } from "../../lib/city/tile";
-import { inventoryCovers, inventoryTrees } from "../../lib/city/tree-inventory";
-import { canopyPlacements, rowPlacements } from "../../lib/city/tree-placement";
 import { REFERENCE_SITE, SITES, siteFromArgs } from "../../sites";
 
 const ROOT = path.join(import.meta.dir, "..", "..");
@@ -74,19 +72,15 @@ for (const tile of tileIds(site)) {
   const canopy = features<CanopyFeature>(`canopy_${tile}.geojson`);
   const scan = features<CanopyExtraFeature>(`canopyx_${tile}.geojson`);
   const trees = features<TreeFeature>(`trees_${tile}.geojson`);
-  // placed as the build's tree table places them (scripts/bake-dressing.ts)
-  const covers = inventoryCovers(trees);
-  const keepTree = (x: number, y: number, h?: number) => !covers(x, y, h);
-  const inv = buildTreeInventory(inventoryTrees(trees, ctx), {});
+  const inv = buildTreeInventory(trees, ctx);
   const veg = buildVegetation(
     {
-      trees: [
-        ...rowPlacements(rows, ctx, undefined, keepTree).trees,
-        ...canopyPlacements([...canopy, ...scan], ctx, undefined, keepTree),
-      ],
+      rows,
+      canopy: [...canopy, ...scan],
+      keepTree: inv.keepTree,
       extraTrees: inv.instances,
     },
-    {}
+    ctx
   );
   controls.push(veg, inv.control);
   for (const group of [veg.group, inv.control.group]) {

@@ -6,7 +6,7 @@
  */
 import type { CultivatedFeature, TreeFeature } from "./features";
 import { TREE_ARCHETYPES } from "./tree-inventory";
-import { TREE_GENERA } from "./tree-genera";
+import { TREE_GENERA } from "./tree-season";
 
 /** The colony raster's G byte (decoded by the terrain's fragment pass,
  *  cultivated-layer.ts): 0 none, else 1 + the plots' axis over

@@ -2,9 +2,15 @@ import { describe, expect, test } from "bun:test";
 import {
   COARSE_TREE_SHARE,
   COARSE_TREE_WIDEN,
+  coarseCrowns,
   coarseCrownsStandIn,
+  coarseForm,
   drawnCoarse,
+  packCrowns,
+  unpackCrowns,
 } from "./coarse-crowns";
+import type { CoarseCrown } from "./coarse-crowns";
+import type { InventoryTree } from "./tree-inventory";
 import type { Placement } from "./tree-placement";
 
 const at = (x: number, z: number, i = 0): Placement => ({
@@ -15,12 +21,33 @@ const at = (x: number, z: number, i = 0): Placement => ({
   s: 1 + i * 0.01,
 });
 
-/** The kept trees' positions, sorted: what the tile's listing order must not change. */
+/** The crowns' positions, sorted: what the tile's listing order must not change. */
 const crownKeys = (list: Placement[]) =>
-  list
-    .filter((p) => drawnCoarse(p.x, p.z))
-    .map((p) => `${p.x},${p.z}`)
+  coarseCrowns(list, [])
+    .map((c) => `${c.x},${c.z}`)
     .sort();
+
+/** A register tree of a cone-shaped genus at `x`. */
+const registerTree = (x: number): InventoryTree => ({
+  colour: 2,
+  ext: { crownBase: 3, crownTop: 12, crownWidth: 8, trunkTop: 6 },
+  genus: 4,
+  ground: 0,
+  jitter: -2.5,
+  leaf: "d",
+  ndvi: 0.4,
+  rot: 1,
+  shape: "cone",
+  x: Math.fround(x),
+  z: 5,
+});
+
+/** The `i`-th canopy pine of a row. */
+const placedPine = (i: number): Placement => ({
+  ...at(i * 3.1, i * 1.7, i),
+  evergreen: true,
+  pine: true,
+});
 
 describe("which trees the coarse level draws", () => {
   test("a third of them, the crowns as much wider as covers what all covered", () => {
@@ -51,6 +78,169 @@ describe("which trees the coarse level draws", () => {
       at(10 + i * 3.7, 20 - i * 1.3, i)
     );
     expect(crownKeys([...trees].reverse())).toEqual(crownKeys(trees));
+  });
+
+  test("register trees join with their crown, colour and season", () => {
+    const register = Array.from({ length: 300 }, (_, i) =>
+      registerTree(i * 3.7)
+    );
+    const crowns = coarseCrowns([], register);
+    expect(crowns).toHaveLength(
+      register.filter((t) => drawnCoarse(t.x, t.z)).length
+    );
+    expect(crowns[0]).toMatchObject({
+      kind: "register",
+      colour: "golden",
+      cone: true,
+      genus: 4,
+      jitter: -2.5,
+      ext: { crownBase: 3, crownTop: 12, crownWidth: 8 },
+    });
+  });
+
+  test("a needle tree keeps its form at a distance: a cone or a pine", () => {
+    const canopy = { kind: "canopy" as const, x: 0, z: 0, rot: 0, s: 1 };
+    expect(coarseForm(canopy)).toBe("broad");
+    expect(coarseForm({ ...canopy, evergreen: true })).toBe("cone");
+    expect(coarseForm({ ...canopy, evergreen: true, pine: true })).toBe("pine");
+    // a pine is an evergreen's form: a broadleaf is never one
+    expect(coarseForm({ ...canopy, pine: true })).toBe("broad");
+    const register = {
+      kind: "register" as const,
+      x: 0,
+      z: 0,
+      rot: 0,
+      colour: "evergreen" as const,
+      ext: { crownBase: 2, crownTop: 12, crownWidth: 5 },
+      genus: 0,
+      jitter: 0,
+    };
+    expect(coarseForm(register)).toBe("broad");
+    expect(coarseForm({ ...register, cone: true })).toBe("cone");
+    expect(coarseForm({ ...register, pine: true })).toBe("pine");
+  });
+
+  test("a register pine and a canopy pine join as pines", () => {
+    const pine: InventoryTree = {
+      colour: 0,
+      ext: { crownBase: 11, crownTop: 20, crownWidth: 9, trunkTop: 14 },
+      genus: 0,
+      ground: 0,
+      jitter: 0,
+      leaf: "e",
+      rot: 0,
+      shape: "pine",
+      x: 0,
+      z: 0,
+    };
+    const many = Array.from({ length: 60 }, (_, i) => ({
+      ...pine,
+      x: Math.fround(i * 3.7),
+    }));
+    const crowns = coarseCrowns(
+      Array.from({ length: 60 }, (_, i) => placedPine(i)),
+      many
+    );
+    expect(crowns.length).toBeGreaterThan(0);
+    expect(crowns.every((c) => coarseForm(c) === "pine")).toBe(true);
+  });
+});
+
+describe("the file", () => {
+  const crowns: CoarseCrown[] = [
+    {
+      kind: "canopy",
+      x: 1234.5,
+      z: -77.25,
+      rot: 2.5,
+      s: 3.21,
+      w: 2.1,
+      ndvi: 0.42,
+      base: 2.3456,
+    },
+    { kind: "canopy", x: -0.125, z: 1999.75, rot: 0, s: 0.5 },
+    { kind: "canopy", x: 5, z: 6, rot: 1, s: 2, evergreen: true },
+    { kind: "canopy", x: 7, z: 8, rot: 1, s: 3, evergreen: true, pine: true },
+    {
+      kind: "register",
+      x: Math.fround(10.1),
+      z: Math.fround(-20.2),
+      rot: 5.9,
+      colour: "evergreen",
+      ext: { crownBase: 2.34, crownTop: 17.5, crownWidth: 9.99 },
+      genus: 12,
+      jitter: 3.4,
+      ndvi: 0.1,
+    },
+    {
+      kind: "register",
+      x: 3,
+      z: 4,
+      rot: 1,
+      colour: "evergreen",
+      cone: true,
+      ext: { crownBase: 1.5, crownTop: 21, crownWidth: 7 },
+      genus: 12,
+      jitter: 0,
+    },
+    {
+      kind: "register",
+      x: 5,
+      z: 4,
+      rot: 1,
+      colour: "evergreen",
+      pine: true,
+      ext: { crownBase: 11, crownTop: 20, crownWidth: 9 },
+      genus: 12,
+      jitter: 0,
+    },
+  ];
+
+  test("keeps the positions exact and the rest to its units", () => {
+    const back = unpackCrowns(packCrowns(crowns).buffer as ArrayBuffer);
+    expect(back).toHaveLength(crowns.length);
+    for (const [i, c] of crowns.entries()) {
+      const b = back?.[i];
+      expect(b?.kind).toBe(c.kind);
+      expect(b?.x).toBe(Math.fround(c.x));
+      expect(b?.z).toBe(Math.fround(c.z));
+      expect(b?.rot).toBeCloseTo(c.rot, 3);
+      if (c.ndvi === undefined) {
+        expect(b?.ndvi).toBeUndefined();
+      } else {
+        expect(b?.ndvi).toBeCloseTo(c.ndvi, 2);
+      }
+      if (c.kind === "canopy" && b?.kind === "canopy") {
+        expect(b.s).toBeCloseTo(c.s, 3);
+        expect(b.w).toBeCloseTo(c.w ?? c.s, 3);
+        expect(b.evergreen).toBe(c.evergreen);
+        expect(b.pine).toBe(c.pine);
+        if (c.base === undefined) {
+          expect(b.base).toBeUndefined();
+        } else {
+          expect(b.base).toBeCloseTo(c.base, 3);
+        }
+      }
+      if (c.kind === "register" && b?.kind === "register") {
+        expect(b.colour).toBe(c.colour);
+        expect(b.cone).toBe(c.cone);
+        expect(b.pine).toBe(c.pine);
+        expect(b.genus).toBe(c.genus);
+        expect(b.jitter).toBeCloseTo(c.jitter, 1);
+        expect(b.ext.crownBase).toBeCloseTo(c.ext.crownBase, 2);
+        expect(b.ext.crownTop).toBeCloseTo(c.ext.crownTop, 2);
+        expect(b.ext.crownWidth).toBeCloseTo(c.ext.crownWidth, 2);
+      }
+    }
+  });
+
+  test("reads nothing that is not one", () => {
+    expect(unpackCrowns(new ArrayBuffer(4))).toBeNull();
+    expect(
+      unpackCrowns(new TextEncoder().encode("PTS1xxxx").buffer)
+    ).toBeNull();
+    const short = packCrowns(crowns).slice(0, 20);
+    expect(unpackCrowns(short.buffer)).toBeNull();
   });
 });
 

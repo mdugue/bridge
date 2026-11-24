@@ -118,8 +118,6 @@ const BUDGET: Record<JoinPart, number> = {
   doors: 0.01,
   plinths: 0.01,
   monorails: 0,
-  // a tree's record holds the ground down to its step: never over it
-  trees: 0,
 };
 
 /** Parts the spawn tile does not have, and the tile measured for them:

@@ -130,18 +130,8 @@ export const TERRAIN_RASTER_KEYS = [
   "markingsTable",
   "markingsLow",
   "svf",
-  "svfBc4",
-  "svfEac",
   "horizon",
 ] as const satisfies readonly (keyof TerrainExtras)[];
-
-/** The extras keys of a soft raster's GPU blocks (plan 091 phase 2's
- *  trial, lib/city/block-raster.ts): published beside the PNG, read only
- *  behind `?svf=blocks`. */
-export const BLOCK_RASTER_KEYS = [
-  "svfBc4",
-  "svfEac",
-] as const satisfies readonly (keyof TerrainFiles | keyof CityFiles)[];
 
 /** An extras key that names a raster (or its table) file. */
 export type TerrainRasterKey = Exclude<
@@ -225,11 +215,6 @@ export interface TerrainContent {
 export interface TerrainFiles {
   /** fine level only */
   dressing?: DressingFiles;
-  /** fine level only: its tile's coarse level's dressing file
-   *  (`coarse.dressingCoarse`), which holds the third of the tile's trees
-   *  that level draws — the fine level draws every tree and reads it
-   *  beside its own (lib/city/tree-table.ts) */
-  coarseDressing?: string;
   /** coarse level only: the few side files it is dressed with
    *  (lib/city/tile.ts `COARSE_DRESSING_KINDS`) */
   coarse?: Partial<Record<CoarseDressingKind, string>>;
@@ -264,10 +249,6 @@ export interface TerrainFiles {
   markingsTable?: string;
   /** sky-view factor raster (both levels; the clay reads it too) */
   svf?: string;
-  /** its GPU blocks, BC4 and EAC R11 (plan 091 phase 2's trial,
-   *  lib/city/block-raster.ts; read behind `?svf=blocks`) */
-  svfBc4?: string;
-  svfEac?: string;
   /** horizon raster, eight RGBA layers stacked: the far band, then the
    *  near band (both levels) */
   horizon?: string;
@@ -292,9 +273,6 @@ export interface CityFiles {
   /** the tile's sky-view raster, shared with its terrain (the facades'
    *  ambient light) */
   svf?: string;
-  /** its GPU blocks, as the terrain names them (`TerrainFiles`) */
-  svfBc4?: string;
-  svfEac?: string;
 }
 
 export type CityExtras = CityContent & CityFiles;

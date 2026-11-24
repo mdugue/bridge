@@ -20,6 +20,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   abs,
   atan,
+  attribute,
   cameraPosition,
   clamp,
   cos,
@@ -64,10 +65,9 @@ import {
 } from "@/lib/city/landcover";
 import { SINK } from "@/lib/city/ground-join";
 import { TRUNK_UNIT_H, trunkRadiusAt } from "@/lib/city/tree-inventory";
-import { DROP_BIAS, DROP_UNIT } from "@/lib/city/tree-stands";
 import { outOfDesignSite } from "./design-site";
 import { edgeAt, paletteOf } from "./ground-detail";
-import { instanceColumn, Instances, standByte, standSpare } from "./instancing";
+import { instanceFloat, Instances } from "./instancing";
 import {
   setGraph,
   setSlots,
@@ -230,24 +230,10 @@ const JOINT_SHADE = 0.62;
  *  horizontal scale gives the drawn foot. */
 const TRUNK_FOOT = trunkRadiusAt(0);
 
-/**
- * How far a trunk's foot lies below its record's place, in the record's
- * vertical units: a canopy tree's trunk is drawn on its crown's record,
- * whose frame the crown's base lifts (lib/city/tree-stands.ts
- * `placementStand`; 0 on a surveyed tree's own trunk, and off a set of
- * records).
- */
-export function trunkDrop(): F {
-  return Fn((builder) =>
-    builder.geometry.hasAttribute("iPlace")
-      ? standSpare().div(DROP_UNIT).sub(DROP_BIAS)
-      : 0
-  )() as F;
-}
-
-/** The ground's rise along x and z at the foot: the record's two bytes
- *  (lib/city/tree-stands.ts), signed, × 127. */
-const footSlope = (): V2 => vec2(standByte(2), standByte(3)).sub(128).div(127);
+/** The trunks' drop to the ground (vegetation-layer.ts `TRUNK_DROP`). */
+const DROP = "iDrop";
+/** The feet's attribute: the ground's rise along x and z at the foot. */
+const SLOPE = "iSlope";
 
 /** The cull sphere's growth over the trunks' (m): the farthest leaf. */
 export const FOOT_REACH = CROWN_MAX * LEAF_BEYOND + 0.5;
@@ -419,15 +405,15 @@ const ORDER: Record<Part, number> = {
 };
 
 /**
- * The feet of a chunk's trunks: a set per part on the trunks' own records
- * (the very table: nothing uploaded or counted twice — the drop and the
- * ground's slope at each foot ride in it), drawn as many as the trunks,
- * culled by their sphere grown by the leaves' reach.
+ * The feet of a chunk's trunks: a set per part on the trunks' buffers (the
+ * very attribute objects: nothing uploaded or counted twice), drawn as
+ * many as the trunks, culled by their sphere grown by the leaves' reach.
  */
 export function treeFeet(
   geos: FootGeos,
   materials: FootMaterials,
   trunks: Instances,
+  slopes: BufferAttribute,
   needle = false
 ): Instances[] {
   const sets: Instances[] = [];
@@ -448,8 +434,17 @@ export function treeFeet(
       geo,
       material,
       trunks.capacity,
-      trunks.placement
+      trunks.instanceMatrix
     );
+    // the ground's slope at the foot: the feet's own (two bytes a tree),
+    // one attribute for all the chunk's sets
+    feet.geometry.setAttribute(SLOPE, slopes);
+    for (const name of ["iMat0", "iMat1", "iMat2", "iMat3", DROP]) {
+      const shared = trunks.geometry.getAttribute(name);
+      if (shared) {
+        feet.geometry.setAttribute(name, shared);
+      }
+    }
     feet.drawCount = trunks.drawCount;
     const sphere = trunks.geometry.boundingSphere?.clone();
     if (sphere) {
@@ -564,12 +559,12 @@ function footSlots(r: FootRasters): FootSlots {
 }
 
 /** Column `i` of the tree's instance matrix. */
-const col = instanceColumn;
+const col = (i: number) => attribute(`iMat${i}`, "vec4");
 
 function footFrame(s: FootSlots, size: [number, number]): FootFrame {
   // the trunk's foot in the content's frame (its matrix, lowered by its
   // drop) and its drawn foot radius
-  const foot = col(3).xyz.sub(col(1).xyz.mul(trunkDrop()));
+  const foot = col(3).xyz.sub(col(1).xyz.mul(instanceFloat(DROP)));
   const rt = float(TRUNK_FOOT).mul(length(col(0).xyz));
   const world = modelWorldMatrix.mul(vec4(foot, 1)).xyz;
   const uv = rasterUv(vec2(world.x, world.z.negate()), s.origin, size);
@@ -589,7 +584,7 @@ function footFrame(s: FootSlots, size: [number, number]): FootFrame {
   const wood = max(isClass(FOREST_CLASS), isClass(COPSE_CLASS));
   // the trunk's drawn length (its foot lowered by its drop)
   const length1 = float(TRUNK_UNIT_H)
-    .add(trunkDrop())
+    .add(instanceFloat(DROP))
     .mul(length(col(1).xyz));
   const crown = clamp(length1.mul(CROWN_SPREAD), CROWN_MIN, CROWN_MAX);
   const roots = rootSeed(col(3).xz);
@@ -608,7 +603,7 @@ function footFrame(s: FootSlots, size: [number, number]): FootFrame {
     axisX: normalize(col(0).xz),
     axisZ: normalize(col(2).xz),
     road,
-    slope: footSlope(),
+    slope: attribute(SLOPE, "vec2"),
     cls,
   };
 }
@@ -1075,8 +1070,8 @@ function shadeGraph(
   const day = sun ? smoothstep(0.02, 0.12, sun.y) : float(0);
   const height = f.crown.mul(0.4).add(
     float(TRUNK_UNIT_H)
-      .add(trunkDrop())
-      .mul(length(col(1).xyz))
+      .add(instanceFloat(DROP))
+      .mul(length(attribute("iMat1", "vec4").xyz))
   );
   // (no throw at night: the quad shrinks to the crown's cover)
   const throwRaw = sun

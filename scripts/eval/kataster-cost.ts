@@ -49,8 +49,6 @@ import {
   shadowFocusAhead,
 } from "../../lib/city/shadow-fit";
 import { sampleHeightfield } from "../../lib/city/terrain-geometry";
-import { inventoryCovers, inventoryTrees } from "../../lib/city/tree-inventory";
-import { canopyPlacements, rowPlacements } from "../../lib/city/tree-placement";
 import { dgmSourceFiles, tileIds } from "../../lib/city/tile";
 import type { DataManifest } from "../../lib/city/tile";
 import { parseTilesetExtras, TILESET_FILE } from "../../lib/city/tileset";
@@ -131,37 +129,31 @@ for (const tile of tileIds(evalSite)) {
   const trees = features<TreeFeature>(`trees_${tile}.geojson`);
   const scan = features<CanopyExtraFeature>(`canopyx_${tile}.geojson`);
   const hedges = features<LowVegFeature>(`lowveg_${tile}.geojson`);
-  // placed as the build's tree table places them (scripts/bake-dressing.ts):
-  // the rows' and the canopy's trees, vetoed where a register tree stands
-  const covers = inventoryCovers(trees);
-  const keepTree = (x: number, y: number, h?: number) => !covers(x, y, h);
-  const place = (points: CanopyFeature[], veto?: typeof keepTree) => [
-    ...rowPlacements(rows, ctx, undefined, veto).trees,
-    ...canopyPlacements(points, ctx, undefined, veto),
-  ];
   let t0 = performance.now();
-  controls.canopy.push(buildVegetation({ trees: place(canopy) }, {}));
+  controls.canopy.push(buildVegetation({ rows, canopy }, ctx));
   buildMs.canopy += performance.now() - t0;
   t0 = performance.now();
-  const inv = buildTreeInventory(inventoryTrees(trees, ctx), {});
+  const inv = buildTreeInventory(trees, ctx);
   controls.kataster.push(
     inv.control,
     buildVegetation(
-      { trees: place(canopy, keepTree), extraTrees: inv.instances },
-      {}
+      { rows, canopy, keepTree: inv.keepTree, extraTrees: inv.instances },
+      ctx
     )
   );
   buildMs.kataster += performance.now() - t0;
   t0 = performance.now();
-  const inv2 = buildTreeInventory(inventoryTrees(trees, ctx), {});
+  const inv2 = buildTreeInventory(trees, ctx);
   controls.shipped.push(
     inv2.control,
     buildVegetation(
       {
-        trees: place([...canopy, ...scan], keepTree),
+        rows,
+        canopy: [...canopy, ...scan],
+        keepTree: inv2.keepTree,
         extraTrees: inv2.instances,
       },
-      {}
+      ctx
     ),
     { group: buildLowVegetation(hedges, ctx) }
   );

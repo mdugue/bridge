@@ -124,13 +124,7 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   alpha (water coverage), animated normal wobble.
 - `vegetation-layer.ts` — instanced trees (`Instances`; rows + DOM1 canopy + the
   laser-scan extra trees + the cadastre's trunks and broadleaf crowns, passed
-  in as precomputed `TreeInstance`s), chunked for culling. **The build
-  places every tree** (`scripts/bake-dressing.ts`: on the fine ground, its
-  height, slope and NDVI baked into a twelve- or twenty-byte record,
-  `lib/city/tree-table.ts`, in the level's dressing file,
-  `lib/city/dressing-pack.ts`); the layer reads no ground, no raster and
-  no GeoJSON, makes each tree's twenty-byte stand record
-  (`lib/city/tree-stands.ts`) and draws sets of those — no matrix.
+  in as precomputed `TreeInstance`s), chunked for culling.
   Lives in the **Y-up frame** (a tile's content root), never inside the
   rotated `world` group itself. `tree-inventory-layer.ts` draws only the
   cadastre's reshaped silhouettes (flame / cone / dome) and vetoes canopy
@@ -142,8 +136,7 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   (`buildTrunkMaterial`); `tree-foot.ts` adds the ground round it (pits,
   leaves, the crown's shade glaze, worn earth, roots in the paving,
   grates, guard hoops — the one opaque mesh) as `Instances` sets on the trunks' own
-  table of records (no bytes of their own, nothing counted twice: the
-  trunk's drop and the ground's slope at its foot ride in the record), their
+  attribute objects (no bytes of their own, nothing counted twice), their
   materials per tile with the class and edge rasters and the light in
   their slots; `renderOrder` orders the blended sets (rings before earth,
   so pits merge); the crowns' LOD hides a far chunk's sets.
@@ -287,9 +280,8 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   `figure`; the ground's `paperGroundOn` = 1, 2, 3).
   Each terrain level carries its trees, in every mode: the fine one
   all of them, the coarse one a fixed third (`drawnCoarse`, a hash of
-  where each stands), √3 wider — that third is the coarse level's
-  dressing file, which the fine level reads beside its own
-  (`lib/city/tree-table.ts`, `coarse-crowns-layer.ts`) — the coarse
+  where each stands), √3 wider, baked by the build from the fine level's
+  placement (`crowns_<t>.crw.gz`, `coarse-crowns-layer.ts`) — the coarse
   level shows past 2.5 m/px and wherever the memory governor or a load
   leaves the fine one out, at any scale, so never tie a layer's trees to
   Modell's scale; anything else on the fine level vanishes there at
@@ -418,11 +410,7 @@ and therefore what keeps builds out of frames:
   is widened to 32 bits on upload (r187, `WebGPUAttributeUtils`): two or
   four times its bytes. An interleaved buffer is uploaded as it is, has
   ONE typed array, and every view of it takes its format from that
-  array — so a compact record is an interleaved `Uint16Array` whose
-  fields are words (not normalized: `vec4<u32>` in the shader, exact), a
-  byte taken out of its word in the shader (`lib/city/stand-record.ts`,
-  measured by `scripts/eval/stand-record-probe.ts`; plan 090's
-  *Findings*).
+  array (plan 090's *Findings*).
 - **Eight vertex buffers a draw on WebGPU** (the device's default limit;
   three requests no more). Each non-interleaved attribute is one buffer,
   `position` and `normal` included (an interleaved instance matrix is
@@ -435,9 +423,7 @@ and therefore what keeps builds out of frames:
   three's vertex stage names, by the geometry's distinct buffers); a
   layer the lite scene does not draw — traffic, the very one that
   vanished, the data layers, the designs — tests its own count
-  (`traffic-layer.test.ts`), and the ledger's census (`bun run ledger
-  -- --census`, by hand) reads the whole site's builds with the same
-  probe, data layers on and a design loaded.
+  (`traffic-layer.test.ts`).
 - **Points are 1 px on WebGPU**, whatever their size. The lamp halos are
   billboard quads: an `Instances` set under a `PointsNodeMaterial`.
 - **No tone mapping.** The output node is `renderOutput(…, NoToneMapping,
@@ -729,16 +715,9 @@ not sky.
   otherwise put ~9 000 rich crowns on screen and lost the GPU context; the
   mid crown + trunk; and past 650 m (back at 550 m) a detail-1 crown (80
   tris), no trunk, dense chunks thinned to every other tree drawn wider.
-  Every set draws from a table of stand records
-  (`Instances.ofStands`, twenty bytes a tree): the mid and rich crowns,
-  the canopy trees' trunks (a prefix of the table, `drawCount`; each foot
-  lowered by the record's drop) and the feet share ONE table (and the
-  crowns one `instanceTints`); a cell with register trees has a second
-  for the rich crowns (they are fitted to each tier's geometry), the far
-  tier's kept trees one of their own (drawn wider) — ≈ 5.5 MB for a
-  forest tile where matrices took 12; compute each set's bounding sphere
-  after sharing. A set of records has no `instanceMatrix` (it throws):
-  read `getMatrixAt`, share with `placement`.
+  Trunks, mid and rich crowns of a chunk share ONE `instanceMatrix` (and
+  the crowns one `instanceTints`) — ~9 MB instead of ~21 MB for a forest
+  tile; compute each set's bounding sphere after sharing.
 - Crown look (`buildCrownMaterial`): sway in `positionNode`
   (`instancePosition(sway.local)`, the per-tree phase from the instance's
   world column), the shadow rigid (`castShadowPositionNode`); occlusion
@@ -1136,12 +1115,7 @@ from the Geofabrik extract — no Overpass.
 `prepare-sites.ts` → `prepare-data.ts <site>` for every ready site, then the
 index `public/data/sites.json` the start page and `app/[site]` read): per
 site the tileset (`tileset.json`, `tileset-spawn.json`), per tile
-`city_<tile>.glb.gz`, `terrain_<tile>_l0|l1.glb.gz`, `footprints_<tile>.json`,
-each level's dressing file (`dressing_<tile>.drs.gz`,
-`dressing_<tile>.c.drs.gz`: tables of what the build placed —
-`lib/city/dressing-pack.ts`, the trees so far, `scripts/bake-dressing.ts`;
-a new placed kind is a section there, read through
-`scripts/dressing-sources.ts`, never a fetch of its own)
+`city_<tile>.glb.gz`, `terrain_<tile>_l0|l1.glb.gz`, `footprints_<tile>.json`
 and the side files, all content-hashed under `public/data/<site>/` with its
 `manifest.json` (and the shared `sites.json`) as the no-cache entries. `scripts/tile-glb.ts` owns the
 glTF writing (meshopt, quantisation, the feature table); the `.tif` and the

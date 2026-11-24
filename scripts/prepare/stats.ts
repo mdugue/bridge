@@ -37,7 +37,6 @@ import {
   siteWide,
   utf8,
 } from "./context";
-import { readCanopy, readScanCrowns } from "../dressing-sources";
 import { landmarkFile } from "./landmarks";
 
 // --- the city in numbers ------------------------------------------------------------
@@ -104,10 +103,12 @@ async function siteStats(
         histogram[c] = (histogram[c] ?? 0) + 1;
       }
     }
-    // through the dressing's one reader a kind (dressing-sources.ts)
-    crowns +=
-      readCanopy(at(sideFileSource(SITE, kinds.canopy.file))).features.length +
-      readScanCrowns(at(sideFileSource(SITE, kinds.canopyx.file))).length;
+    for (const kind of ["canopy", "canopyx"] as const) {
+      const src = at(sideFileSource(SITE, kinds[kind].file));
+      if (existsSync(src)) {
+        crowns += (readJson(src) as { features: unknown[] }).features.length;
+      }
+    }
     heights.push(
       ...buildingHeights(
         readJson(at(cityMeshSourceFiles(SITE, tile).city)) as CityJsonDocument

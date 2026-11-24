@@ -13,13 +13,7 @@ Deep reference: the `city-walker` skill, "Node materials" and "Tiles".
 
 - **Depends only on baked data** (no look control, no time of day, no
   device)? Bake it into the fine terrain glTF as a named node in
-  `scripts/bake-tiles.ts`; the layer file only gives it a material. A
-  thing that *stands* (many of one model: a tree, a lamp) is a record of
-  the level's dressing file instead (`lib/city/dressing-pack.ts`: a
-  section, its reader in `scripts/dressing-sources.ts`, its baker beside
-  `scripts/bake-dressing.ts`; plan 090): what was measured, never a
-  derived or a look value, drawn as a set of stand records
-  (`Instances.ofStands`).
+  `scripts/bake-tiles.ts`; the layer file only gives it a material.
 - **Otherwise** build it at runtime in the dressing plugin
   (`tile-stream.ts`), as a builder of steps run in slices
   (`lib/city/build-steps.ts`) if it can take more than a few ms on a phone.

@@ -49,10 +49,6 @@ const TRAIL_QUERY = [
   "trace",
   "inspect",
   "depth",
-  // plan 090's spike: a page drawn through it is not the default page
-  "rails",
-  // plan 091 phase 2's trial
-  "svf",
 ] as const;
 
 /** The path plus the known knobs of `search`, in TRAIL_QUERY's order. */
