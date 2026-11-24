@@ -712,6 +712,15 @@ real store, and the host's build time before and after.
 - **C — the browser reads the store:** saves the pull and the 481 MB
   each deployment carries, for a request to a second host (ADR 0043)
   and transfer billed per visit. Not built; the choice stays open.
+- **D — the crutches gone and no store.** Put to the maintainer on
+  2026-11-24 with what this pull request's own previews showed: with
+  `warmers.ts` and `shared-cache.ts` deleted and the bake cache not
+  kept, the host's builder baked all seven sites cold and deployed in
+  6:15, 6:20 and 9:30 min (three builds, read off the deployments'
+  timestamps), since a site's peak is 2.3 GiB and no longer 4.5. D
+  would be smaller by `data-store.ts` and its couplings. The maintainer
+  kept A′: a web build that never bakes, and the step `data/` leaving
+  git stands on.
 - **Transport encoding (phase 5):** not in this variant. The 6.4–6.7 %
   measured above stand; the files are published as they are.
 
