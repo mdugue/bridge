@@ -37,15 +37,13 @@ import { sportFixtures } from "@/lib/city/sport";
 import type { SportTable } from "@/lib/city/sport";
 import { coarseCrowns, coarseCrownsStandIn } from "@/lib/city/coarse-crowns";
 import {
-  placedTrees,
   placedTreeSteps,
   registerFacts,
   registerTree,
-  registerTrees,
   TREE_RUN,
   unpackTreeFile,
 } from "@/lib/city/tree-table";
-import type { TreePack } from "@/lib/city/tree-table";
+import type { treeAt, TreePack } from "@/lib/city/tree-table";
 import {
   keepOrder,
   siteTileOfTile,
@@ -841,8 +839,9 @@ function* tileVegetationSteps(
   offset: TileStreamContext["offset"],
   vegCtx: VegetationContext
 ): Steps<VegetationControl> {
+  const year = new Date().getFullYear();
   const register = yield* inRuns(registerFacts(packs), TREE_RUN, (run) =>
-    run.map((fact) => registerTree(fact, offset, new Date().getFullYear()))
+    run.map((fact) => registerTree(fact, offset, year))
   );
   const inventory =
     register.length > 0 ? yield* treeInventorySteps(register, vegCtx) : null;
@@ -898,7 +897,7 @@ export async function fetchTrees(
 }
 
 /** A tree of the tile's table as its card knows it (lib/city/ask-items.ts). */
-function askedTree(t: ReturnType<typeof placedTrees>[number]): AskedTree {
+function askedTree(t: ReturnType<typeof treeAt>): AskedTree {
   let source: AskedTree["source"] = "dom";
   if (t.row) {
     source = "row";
@@ -1152,6 +1151,11 @@ async function buildCoarseDressing(
     fetchKind<BridgeFeature>(files.bridge),
     fetchTrees(files.dressingCoarse, url, ctx, tile, signal),
   ]);
+  // (first, in slices: a forest tile's third is some 28 000 trees)
+  const placed = await inSlices(
+    placedTreeSteps(packs, offset, (t) => t.p),
+    { signal }
+  );
   // the same bridges as the fine level draws (its decks are measured, the
   // piers stand on the ground in reach), the same owner per seam
   const owns = (x: number, y: number) => ownsPoint(extent, x, y);
@@ -1200,8 +1204,8 @@ async function buildCoarseDressing(
     ? await inSlices(
         coarseCrownSteps(
           coarseCrowns(
-            placedTrees(packs, offset).map((t) => t.p),
-            registerTrees(packs, offset, 0)
+            placed,
+            registerFacts(packs).map((fact) => registerTree(fact, offset, 0))
           ),
           {
             heightAt: terrain.heightAt,

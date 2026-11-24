@@ -27,6 +27,10 @@ ADR 0037 (fetch → bake → build). Deep reference: the `city-walker` skill,
    under `data/` twice. Read another step's features with
    `Tile.features(kind)` — with an extent, the neighbours' that reach
    into it too.
+   Two reads are still a last bake's (`docs/data-pipeline.md`, "What a
+   re-bake runs"): a step whose raw input is not on the machine may read
+   its own last output, and the land cover's water tint reads the same
+   step's class rasters of the other tiles.
 4. **Every tile, the same files.** A step that finds nothing writes an empty
    file. `lib/city/tile-data.test.ts` fails when one tile lacks a kind of
    file another has: bake the step on every tile of every committed site.

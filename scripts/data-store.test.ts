@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,7 +15,12 @@ import { MANIFEST_FILE } from "../lib/city/tile";
 import { pullSite, publishSite, siteKey } from "./data-store";
 import { createPublisher } from "./publisher";
 
-const fresh = (name: string) => mkdtempSync(path.join(tmpdir(), `${name}-`));
+const made: string[] = [];
+const fresh = (name: string) => {
+  const dir = mkdtempSync(path.join(tmpdir(), `${name}-`));
+  made.push(dir);
+  return dir;
+};
 const bytes = (text: string) => new TextEncoder().encode(text);
 
 /** A checkout in small: prepare-data.ts, a module it imports, a site's
@@ -67,7 +73,6 @@ test("a site's key follows what its bytes are made from, and nothing else", () =
 
 const shelf = fresh("store");
 let server: ReturnType<typeof Bun.serve>;
-const before = { ...process.env };
 
 beforeAll(() => {
   server = Bun.serve({
@@ -92,8 +97,11 @@ beforeAll(() => {
 
 afterAll(async () => {
   await server.stop(true);
-  process.env.DATA_STORE = before.DATA_STORE;
-  process.env.DATA_STORE_API = before.DATA_STORE_API;
+  delete process.env.DATA_STORE;
+  delete process.env.DATA_STORE_API;
+  for (const dir of made) {
+    rmSync(dir, { recursive: true });
+  }
 });
 
 /** A baked site: two hashed files, the stats, the manifest. */

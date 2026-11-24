@@ -9,14 +9,16 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 import { DRESDEN } from "../sites/dresden";
 import { drawnCoarse } from "../lib/city/coarse-crowns";
+import { finished } from "../lib/city/build-steps";
 import { worldToEpsg } from "../lib/city/ground-clamp";
 import { tileExtentOf } from "../lib/city/site";
 import type { TerrainBounds } from "../lib/city/terrain-geometry";
 import { tileIds } from "../lib/city/tile";
 import {
   packTreeFile,
-  placedTrees,
-  registerTrees,
+  placedTreeSteps,
+  registerFacts,
+  registerTree,
   TREE_STEP_Y_M,
   unpackTreeFile,
 } from "../lib/city/tree-table";
@@ -53,6 +55,12 @@ const unpack = (bytes: Uint8Array): TreePack => {
   }
   return pack;
 };
+
+const placedTrees = (packs: TreePack[], at: typeof offset) =>
+  finished(placedTreeSteps(packs, at, (tree) => tree));
+
+const registerTrees = (packs: TreePack[], at: typeof offset, year: number) =>
+  registerFacts(packs).map((fact) => registerTree(fact, at, year));
 
 /** Every tree of one file, where it stands. */
 const inFile = (pack: TreePack) => [
