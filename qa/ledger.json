@@ -407,10 +407,10 @@
     "readWith": "chromium 153.0.8010.12, google / swiftshader",
     "firstLoad": {
       "files": 42,
-      "gzip": 1098304,
+      "gzip": 1098323,
       "workerOnly": {
         "files": 8,
-        "gzip": 34659
+        "gzip": 34658
       }
     },
     "phoneLiteSpawnCache": {

@@ -696,12 +696,12 @@ shipped once, not in both levels' files, is what makes a visit smaller.
 | yards | 276.0 → 231.6 kB, 18 → 16 | 78.6 → 58.2 kB | 341.5 → 276.7 kB, 19 → 17 |
 
 The site's tiles 193.62 → 192.29 MB in 641 → 611 files;
-`browser.firstLoad.gzip` 1 099 792 → 1 098 304;
+`browser.firstLoad.gzip` 1 099 792 → 1 098 323;
 `browser.phoneLiteSpawnCache.bytes` 158 979 087, **unchanged** — the
 trees are drawn from the same matrices, so the tile cache holds what it
 held (the first attempt's 55 % off the vegetation's instance data came
 from the stand record, which costs more lines than this phase removes);
-`code.product` 154 726 → 154 695 (app −74, lib +18, scripts +25).
+`code.product` 154 533 → 154 501 (app −75, lib +18, scripts +25).
 
 **What moved in the picture.** A tree's place, turn, size, crown width
 and crown base are the runtime's to the bit for canopy and surveyed
