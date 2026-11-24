@@ -810,7 +810,8 @@ def run(tile: Tile, research: bool = False) -> None:
             if f["properties"].get("row")
         ]
         if extra and rows:
-            far = cKDTree(rows).query(_points(out))[0] > CANOPY_DEDUP_M
+            at = [f["geometry"]["coordinates"][:2] for f in extra]
+            far = cKDTree(rows).query(at)[0] > CANOPY_DEDUP_M
             extra = [f for f, keep in zip(extra, far, strict=True) if keep]
     else:
         return

@@ -642,7 +642,7 @@ no join step, less code.
 
 | What phase 0 found | What it is now |
 |---|---|
-| `islands` rewrote the land cover's raster and legend | the step is gone: `landcover` carved the islands itself already, the step only did it again (and alone on a machine without the raw DLM, where `landcover` stops) |
+| `islands` rewrote the land cover's raster and legend | the step is gone: `landcover` carved the islands itself already, the step only did it again. Gone with it: refreshing the islands of a committed raster from a newer extract on a machine without the raw DLM (`--step islands`), where `landcover` stops |
 | `lamp-heights` and `lamp-water` rewrote `lamps` and `mly` | `lamps` and `mapillary` hand their points on under `data/_raw/<provider>/work/<site>/` (`Tile.work`), `lamp-heights` the two with their heights, and `lamp-water` alone writes the two files. `tram`, which reads the lamps, runs after it |
 | `trees` rewrote `canopyx` (`lowveg.rethin_scan_trees`) | `lowveg`, whose file it is, thins its standing scan trees itself where the scan is not on the machine |
 | `canopy` read the last bake's `canopyx` | it reads none: `lowveg` writes no scan crown within 5 m of a canopy point, a row's tree among them, so the row's tree now stands where a scan crown took its place before |
@@ -673,7 +673,7 @@ dormers, furniture, lowveg, roof-colour, small-buildings, tram, ways);
 call `Tile.neighbours()` stay 14: the others read rasters, not
 features.
 
-**Counted.** `code.product.pipeline/bake` 35 634 → 35 435 (−199);
+**Counted.** `code.product.pipeline/bake` 35 634 → 35 441 (−193);
 steps 37 → 36; steps that write a path another step wrote 4 → 0.
 
 **Grimma, baked here** (two tiles, BBBike's extract, no laser scan —

@@ -175,10 +175,10 @@ visual-variable codebook is in
   `area:highway` (footway, pedestrian, traffic island) areas and fountain
   basins become built-up (4), `leisure=park|garden` and
   `landuse=grass|village_green|meadow|flowerbed` meadow (1), the lawn
-  winning inside a pedestrian area. Idempotent, so `bun run bake <site> --step
-  islands` applies it to the committed raster without the raw DLM
-  (2026-09-25: ≈ 0.2–0.7 M texels per tile, Prager Straße and the Altmarkt
-  among them). The legend then carries the OSM credit.
+  winning inside a pedestrian area (2026-09-25: ≈ 0.2–0.7 M texels per
+  tile, Prager Straße and the Altmarkt among them; until 2026-11-24 a
+  step of its own, `islands`, also applied it to the committed raster
+  without the raw DLM). The legend then carries the OSM credit.
   `pipeline/bake/landcover.py` `carve_islands`.
 - **Surface colours** `❝ taken` `= computed` — Basis-DLM land-cover → a 4096² **class-id raster**
   (8-bit, ids 0–9 — 9 arable since 2026-10-21, below —, burned lowest priority first so water wins;

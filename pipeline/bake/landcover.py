@@ -224,7 +224,7 @@ def osm_islands(tile: Tile) -> list[tuple[int, list[shapely.Geometry]]]:
 def carve_islands(raster: np.ndarray, tile: Tile) -> int:
     """Re-classes the road texels OSM calls pedestrian ground or lawn, in
     place; the number of texels changed. Idempotent (only road texels
-    change), so it can run over a committed raster (`--step islands`)."""
+    change)."""
     px = raster.shape[0]
     islands = np.zeros_like(raster)
     for cls, geoms in osm_islands(tile):

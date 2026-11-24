@@ -184,7 +184,7 @@ class Tile:
         for tid in ids:
             path = self.data / "dlm" / f"{kind}_{tid}.geojson"
             if path.exists():
-                found += json.loads(path.read_text())["features"]
+                found += json.loads(path.read_text()).get("features", [])
         return found
 
     def neighbours(self) -> list[tuple[str, tuple[float, float, float, float]]]:

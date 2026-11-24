@@ -313,6 +313,7 @@ def run(tile: Tile) -> None:
     # lamp-water's, and stands where this step hands on nothing
     final = tile.out("dlm", f"mly_{tile.id}.geojson")
     out = tile.work(final.name)
+    out.unlink(missing_ok=True)
     path = cache_path(tile)
     if not tile.mapillary_objects or not path.exists():
         if tile.mapillary_objects and tile.raw_absent(final, "no Mapillary cache (v2) here"):

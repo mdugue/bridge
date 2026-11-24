@@ -359,6 +359,10 @@ def streets(tile: Tile) -> tuple[shapely.STRtree, np.ndarray]:
 
 
 def run(tile: Tile, lamp_height: float = LAMP_H) -> None:
+    # lamp-heights and lamp-water finish them: the tile's file is
+    # lamp-water's, and stands where this step hands on nothing
+    out = tile.work(f"lamps_{tile.id}.geojson")
+    out.unlink(missing_ok=True)
     if not has_extract(tile, "the lamps"):
         return
     if tile.classes() is None:
@@ -394,8 +398,7 @@ def run(tile: Tile, lamp_height: float = LAMP_H) -> None:
         features.append(
             feature({"type": "Point", "coordinates": [round(at.x, 1), round(at.y, 1)]}, props)
         )
-    # lamp-heights and lamp-water finish them: the tile's file is lamp-water's
-    write_geojson(tile.work(f"lamps_{tile.id}.geojson"), features, tile.epsg, OSM_ATTRIBUTION)
+    write_geojson(out, features, tile.epsg, OSM_ATTRIBUTION)
     walled = sum((f["properties"] or {}).get("on") == "wall" for f in features)
     print(
         f"{tile.id}: {len(features)} lamps ({hung} hung across the street, {on_walls} on a"

@@ -237,6 +237,9 @@ def run(tile: Tile) -> None:
     files = [(tile.work(f"lamps_{tile.id}.geojson"), False)]
     files.append((tile.work(f"mly_{tile.id}.geojson"), True))
     docs = [(p, json.loads(p.read_text()), m) for p, m in files if p.exists()]
+    # what an earlier run handed on is not this run's
+    for path, _ in files:
+        tile.work(f"h_{path.name}").unlink(missing_ok=True)
     if not docs:
         print(f"{tile.id}: no lamps — skipping their heights")
         return
