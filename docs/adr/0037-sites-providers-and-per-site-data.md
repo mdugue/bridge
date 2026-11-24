@@ -1,7 +1,7 @@
 # ADR 0037: Cities, providers and the pipeline — fetch, bake, build; one deployment, a route per city
 
 - **Status:** accepted
-- **Date:** 2026-09, rewritten 2026-10
+- **Date:** 2026-09, rewritten 2026-11
 
 ## Context
 
@@ -35,6 +35,15 @@ Land; what the viewer needs per tile is megabytes.
    time, each under its own prerendered route (`/dresden`); `/` lists them.
    Dresden is the reference site: its data is what the checks measure and
    `/wissen` describes.
+6. **The web build bakes nothing; CI publishes.** CI's build job bakes
+   every city (it needs them for its tests) and uploads the result to a
+   public object store; the host's build pulls it into `public/data/`,
+   every file checked against the hash in its name, and the browser
+   reads it from the site's own host as before. Both find a city under a
+   key each computes from its checkout — the city's data, every module
+   the build step reaches, their locked packages, the patches — so no
+   file in git names a published version and no one publishes by hand.
+   Only uploading needs a credential, a secret of CI's.
 
 ## Consequences
 
@@ -42,10 +51,22 @@ Land; what the viewer needs per tile is megabytes.
   `sites/index.ts`; a new Land is a provider entry and one adapter.
 - Clone, `bun install`, `bun dev` works without GDAL or a download.
 - A re-bake is a maintainer action and shows up as a data diff.
-- Build time grows with the cities built; each is a separately cached
-  `prepare-data.ts` run.
-- Beyond a handful of committed cities, site data should move out of git
-  (a release asset or object storage) — not decided yet.
+- CI's bake time grows with the cities built; each is a separately cached
+  `prepare-data.ts` run. The host's build does not bake, so its memory
+  and time limits no longer shape the bake.
+- A deployment waits for CI's bake where a push changes one, and fails
+  where CI's build fails; a pull request without CI's secret (a fork,
+  Dependabot) deploys only while it leaves the key alone.
+- The host computes the key on its own Bun and CI on the pinned one;
+  should they ever disagree, the pull finds no manifest and the
+  deployment fails, loudly.
+- Any pull request from a branch of the repository runs the upload with
+  the credential, before review, and could write under any key: the
+  store is as trusted as the repository's collaborators, no further.
+- A gap in the key serves stale tiles; CI fails where a key it finds in
+  the store names other bytes than it just baked.
+- Beyond a handful of committed cities, `data/<site>/` should move out
+  of git into the same store — not decided yet.
 
 ## Alternatives
 
@@ -57,5 +78,11 @@ Land; what the viewer needs per tile is megabytes.
   paths; replaced by the package.
 - **Downloading in the build:** the deploy would depend on every portal's
   uptime and rotating share links.
+- **Baking in the host's build:** its 8.6 GB builder needed each city
+  split into one process a tile and a second cache shared between
+  branches, machinery that existed for the builder alone.
+- **A lock file in git naming what was published:** every pull request
+  that changes a bake needs someone with the credential to publish and
+  commit it, and two such pull requests conflict on its lines.
 - **Git-LFS:** a bandwidth quota and a host setting for files that fit
   plain git (the largest is 16 MB).

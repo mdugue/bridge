@@ -1,7 +1,7 @@
 /**
- * What every step of scripts/prepare-data.ts shares: the site and mode this
- * run bakes, the log, the publisher and the bake cache (`cached`: the local
- * entry, else the shared one, else baked). Every cache key carries this
+ * What every step of scripts/prepare-data.ts shares: the site this run
+ * bakes, the log, the publisher and the bake cache (`cached`: the local
+ * entry, else baked). Every cache key carries this
  * module (`COMMON_SOURCES`), the gzip level and the JSON encoding among it,
  * so it holds plumbing only: a bake belongs in the module of its step.
  */
@@ -9,25 +9,17 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 import { tileIds } from "../../lib/city/tile";
 import { siteFromArgs } from "../../sites";
-import { bakeMode, NOT_CACHED } from "../warmers";
 import { readLockfile } from "../bake-sources";
 import { cachedEntry, generations, writeEntry } from "../bake-cache";
 import { KEY_PLUMBING, KEY_STOPS } from "../bake-entries";
 import { createKeyMaker } from "../cache-keys";
-import { sharedCache } from "../shared-cache";
 import { createPublisher } from "../publisher";
 
-/** On Vercel the cache lives under `.next/cache`, the one folder (with
- *  node_modules) its Next.js builds carry from one deployment to the next;
- *  elsewhere under `.cache`, so clearing `.next` keeps a local bake. */
-const CACHE_DIR = nodePath.join(
-  process.cwd(),
-  process.env.VERCEL ? ".next/cache/prepare-data" : ".cache/prepare-data"
-);
-export const { MODE, SITE } = (() => {
+/** Under `.cache`, so clearing `.next` keeps a local bake. */
+const CACHE_DIR = nodePath.join(process.cwd(), ".cache/prepare-data");
+export const SITE = (() => {
   try {
-    const { rest, site } = siteFromArgs(process.argv.slice(2));
-    return { MODE: bakeMode(rest, tileIds(site)), SITE: site };
+    return siteFromArgs(process.argv.slice(2)).site;
   } catch (error) {
     process.stderr.write(`prepare-data: ${(error as Error).message}\n`);
     return process.exit(2);
@@ -35,13 +27,6 @@ export const { MODE, SITE } = (() => {
 })();
 export const OUT_DIR = nodePath.join(process.cwd(), "public/data", SITE.id);
 export const TILES = tileIds(SITE);
-/** A warmer (warmers.ts; prepare-sites.ts bakes every cold site with
- *  them unless PREPARE_WARMERS=0) only fills the cache for its own tiles:
- *  it publishes nothing — no file under public/data, no manifest, no
- *  prune. */
-export const WARMING = MODE.kind !== "publish";
-/** The tiles this run bakes. */
-export const OWN = new Set(MODE.kind === "publish" ? TILES : MODE.tiles);
 /** What a missing source means for a site that has not been fetched yet. */
 export const HINT = ` — run \`bun run fetch ${SITE.id}\` and \`bun run bake ${SITE.id}\``;
 
@@ -69,7 +54,7 @@ export const readJson = (path: string): unknown =>
 
 // --- publish ------------------------------------------------------------------
 
-export const publisher = createPublisher(OUT_DIR, { warming: WARMING });
+export const publisher = createPublisher(OUT_DIR);
 export const { publish } = publisher;
 
 // --- cache --------------------------------------------------------------------
@@ -120,43 +105,6 @@ export const siteWide = (name: string) => `${SITE.id}.${name}`;
 /** How many entries a name keeps in the local cache (bake-cache.ts). */
 const KEPT = generations();
 
-/** Every branch's bake cache, behind the local one (shared-cache.ts). */
-const SHARED = sharedCache(
-  process.env,
-  log,
-  `bun ${Bun.version} ${process.platform}-${process.arch}`
-);
-log(`shared bake cache: ${SHARED.reason}`);
-
-/** The entry from the shared cache, written to the local one, or null. */
-async function fromShared(
-  name: string,
-  key: string
-): Promise<{ bytes: Uint8Array; path: string } | null> {
-  const bytes = await SHARED.cache?.get(name, key);
-  return bytes
-    ? { bytes, path: writeEntry(CACHE_DIR, name, key, bytes, KEPT) }
-    : null;
-}
-
-/** A baked entry, written to the local cache and noted for the shared one
- *  (`settleShared` uploads it, read back from the local cache). */
-function store(name: string, key: string, bytes: Uint8Array): string {
-  const path = writeEntry(CACHE_DIR, name, key, bytes, KEPT);
-  SHARED.cache?.put(name, key, () =>
-    existsSync(path) ? readFileSync(path) : null
-  );
-  return path;
-}
-
-/** `--if-cached` (warmers.ts) stops at the first entry it would bake. */
-function mayBake(name: string): void {
-  if (MODE.kind === "publish" && MODE.ifCached) {
-    log(`${name} is not cached: the warmers bake the site`);
-    process.exit(NOT_CACHED);
-  }
-}
-
 /** The cached bytes for `key`, or the baked ones (then cached: one entry
  *  per name, written whole — bake-cache.ts). */
 export async function cached(
@@ -168,13 +116,8 @@ export async function cached(
   if (path) {
     return readFileSync(path);
   }
-  const shared = await fromShared(name, key);
-  if (shared) {
-    return shared.bytes;
-  }
-  mayBake(name);
   const bytes = await bake();
-  store(name, key, bytes);
+  writeEntry(CACHE_DIR, name, key, bytes, KEPT);
   return bytes;
 }
 
@@ -185,16 +128,10 @@ export async function cachedFile(
   key: string,
   bake: () => Promise<Uint8Array> | Uint8Array
 ): Promise<string> {
-  let path = cachedEntry(CACHE_DIR, name, key);
-  if (!path) {
-    const shared = await fromShared(name, key);
-    path = shared?.path ?? null;
-  }
-  if (path) {
-    return path;
-  }
-  mayBake(name);
-  return store(name, key, await bake());
+  return (
+    cachedEntry(CACHE_DIR, name, key) ??
+    writeEntry(CACHE_DIR, name, key, await bake(), KEPT)
+  );
 }
 
 /** Bun's libdeflate: at the same level about twice as fast as zlib here and
@@ -205,16 +142,4 @@ export function gz(bytes: Uint8Array): Uint8Array {
     level: 9,
     library: "libdeflate",
   });
-}
-
-/** Uploads what this run baked to the shared cache, then logs what the run
- *  took from and gave to it: a run's last step before it exits. */
-export async function settleShared(): Promise<void> {
-  await SHARED.cache?.flush();
-  const stats = SHARED.cache?.stats();
-  if (stats && stats.hits + stats.misses + stats.stored > 0) {
-    log(
-      `shared bake cache: ${stats.hits} fetched (${(stats.bytes / 1024 ** 2).toFixed(1)} MB), ${stats.misses} missing, ${stats.stored} stored`
-    );
-  }
 }

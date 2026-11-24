@@ -395,11 +395,11 @@
   },
   "code": {
     "product": {
-      "total": 154501,
+      "total": 154158,
       "app": 60863,
       "lib": 41385,
       "components": 3007,
-      "scripts": 13805,
+      "scripts": 13462,
       "pipeline/bake": 35441
     }
   },

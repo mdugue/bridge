@@ -63,7 +63,6 @@ test("a name keeps its newest generations, the one last read among them", () => 
 
 test("Vercel and CI keep one generation, a desk three, the variable any", () => {
   expect(generations({})).toBe(3);
-  expect(generations({ VERCEL: "1" })).toBe(1);
   expect(generations({ CI: "true" })).toBe(1);
   expect(generations({ CI: "true", BAKE_CACHE_GENERATIONS: "2" })).toBe(2);
   expect(generations({ BAKE_CACHE_GENERATIONS: "0" })).toBe(3);

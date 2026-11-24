@@ -22,9 +22,8 @@
  *
  * This file is the order of the steps; each step's bakes live in a module
  * of scripts/prepare/, which their bake entries name (bake-entries.ts).
- * Baked outputs are cached in `.cache/prepare-data/` (gitignored; on Vercel
- * `.next/cache/prepare-data/`, which its build cache keeps, and behind it
- * the cache every branch shares, shared-cache.ts) under a key of their
+ * Baked outputs are cached in `.cache/prepare-data/` (gitignored) under a
+ * key of their
  * inputs' contents, every module the artifact's own bake imports
  * (bake-sources.ts, walked from that bake's entry), the plumbing
  * (prepare/context.ts), the site's own config, the names they reference and
@@ -93,18 +92,14 @@ import {
   tramTimetableSource,
 } from "../lib/city/tram-timetable";
 import {
-  MODE,
-  OWN,
   SITE,
   TILES,
-  WARMING,
   at,
   log,
   parse,
   publish,
   publisher,
   readJson,
-  settleShared,
   since,
   started,
   utf8,
@@ -112,7 +107,6 @@ import {
 import { landmarkFile } from "./prepare/landmarks";
 import { publishSideFiles, sideFiles } from "./prepare/side-files";
 import { frame, offset } from "./prepare/frame";
-import { groundFile } from "./prepare/ground";
 import { bakeCity } from "./prepare/city";
 import { bakeTerrain, dropTerrain } from "./prepare/terrain";
 import { bakePlate } from "./prepare/plate";
@@ -139,33 +133,13 @@ function valleyRims(): ValleyRim[] {
   });
 }
 
-/** A warmer's last line: what it cached, how long it took, its peak. */
-async function warmed(what: string): Promise<never> {
-  await settleShared();
-  log(
-    `warmed ${what} in ${since(started)} ms, peak RSS ${(process.resourceUsage().maxRSS / 1024 ** 2).toFixed(2)} GiB (published nothing)`
-  );
-  process.exit(0);
-}
-
 await publishSideFiles();
-
-if (MODE.kind === "ground") {
-  for (const tile of MODE.tiles) {
-    await groundFile(tile);
-    Bun.gc(true);
-  }
-  await warmed(`the fine ground of ${MODE.tiles.join(", ")}`);
-}
 
 const baked: BakedTile[] = [];
 const footprintFiles = new Map<string, string>();
 const groundHeights: number[] = [];
 for (let i = 0; i < TILES.length; i += 1) {
   const tile = TILES[i];
-  if (!OWN.has(tile)) {
-    continue;
-  }
   let t0 = performance.now();
   const city = await bakeCity(tile);
   const cityMs = since(t0);
@@ -198,9 +172,6 @@ for (let i = 0; i < TILES.length; i += 1) {
   // tile's peak.
   dropTerrain(tile);
   Bun.gc(true);
-}
-if (WARMING) {
-  await warmed(`${baked.map((t) => t.id).join(", ")} (buildings + terrain)`);
 }
 log(`baked ${TILES.length} tiles (buildings + terrain at two levels)`);
 
@@ -405,10 +376,7 @@ const { artifacts, written, pruned } = publisher.finish();
 log(
   `${artifacts} artifacts in public/data/${SITE.id} (${written} new, ${pruned} pruned)`
 );
-await settleShared();
 // resourceUsage's maxRSS is in KiB
 log(
   `done in ${since(started)} ms, peak RSS ${(process.resourceUsage().maxRSS / 1024 ** 2).toFixed(2)} GiB`
 );
-// a request the shared cache gave up on may still hold a socket open
-process.exit(0);

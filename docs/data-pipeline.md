@@ -800,6 +800,12 @@ layout). A fresh clone (and CI) has every committed site's data —
 Dresden, Grimma, Hamburg, Leipzig, Meißen, München, Unna — so all seven
 are served; Berlin, configured but not fetched, is left out.
 
+**The web build bakes nothing.** The host builds with `bun run build:web`
+(`vercel.json`),
+which runs `prepare-sites.ts --pull`: each site comes from the store as
+CI baked it for the same checkout (*The store* below), and the index is
+written from that. `bun dev`, `bun run build` and CI bake.
+
 `prepare-data.ts <site>` turns `data/<site>/` into an **OGC 3D Tiles 1.1**
 tileset under `public/data/<site>/`
 ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)), which
@@ -969,74 +975,17 @@ card showing the figure it is ranked by.
 ### Bakes side by side
 
 A bake is single-threaded, so `prepare-sites.ts` runs several
-`prepare-data.ts` processes at once, within two limits
-(`scripts/warmers.ts` `bakeLimits`, logged first): as many as the cores
-(`os.availableParallelism()`), and their peaks together within 80 % of the
-memory — the machine's, or the container's limit where it sets a lower one
-(`process.constrainedMemory()`). Each site is first asked whether it is
-cached (`--if-cached`, counted at 1.6 GB: a warm site publishes there and
-is done); a site that must bake is baked tile by tile, by warmers (below),
-largest site first. `PREPARE_JOBS=<n>` sets the number of bakes at once,
-`PREPARE_MEMORY_GB=<gb>` the memory they share (as on a smaller machine:
-the bakes still keep to 80 % of it).
-
-**Warmers** (off with `PREPARE_WARMERS=0`). One tile per process:
-`prepare-data.ts <site>` runs as **warmers**, which only fill the cache,
-before one plain run finds everything cached and publishes. A tile warmer
-counts as 2.0 GB (its buildings are the peak: München's heaviest tile
-`32690_5334` 1.26 GiB with three others beside it on 2026-11-11, since
-the bands are cut where their wall bends and not every metre — 2.40 GiB
-and a count of 3.2 GB before; Vercel's Bun 1.3.14 took about 15 % more
-for a whole site), every other bake as
-1.6 GB (a ground warmer 0.6 GiB at most, a site's publishing run 1.12 GiB,
-Dresden's).
-
-0. `--if-cached`: the plain run, which publishes when every entry is
-   cached — a warm build runs no warmer — and stops at the first entry it
-   would bake (exit 3), when the warmers follow;
-1. `--warm-ground=<first tile>`, alone: the site-wide values every later
-   process reads — the frame, the line levels — and that tile's fine
-   ground;
-2. `--warm-ground=<tile>` for each other tile, side by side: its fine
-   ground (a cache entry of its own, below);
-3. `--warm=<tile>` for every tile, side by side: its side files, its
-   buildings and both terrain levels, the fine level's walls, kerbs,
-   stairs and fences on the cached grounds (a ground it has to build
-   itself logs `ground <tile>: built`, which step 2 leaves none to);
-4. the plain run: all cache hits; it publishes.
-
-Each step waits for the one before it. A warmer publishes nothing — no
-file under `public/data/`, no manifest, no prune — so it can never remove
-what another process wrote. One tile per warmer because a process's memory
-grows with every tile it bakes: a whole cold site in one process peaks
-near twice its heaviest tile (München 4.47 GiB), so Vercel's 4-core,
-8.6 GB builder holds one cold site at a time but three tiles, CI's
-16.8 GB runner four (its cores). A slot that frees late still finds a tile to take. Anything
-new that is computed from every tile must be cached by step 1, or every
-warmer computes it again.
-
-Measured cold on 2026-10-31, all seven sites on a box held to Vercel's
-builder (4 cores, `PREPARE_MEMORY_GB=8.6`): one process per site, one cold
-site at a time (`PREPARE_WARMERS=0`, the default until then), 11:07 min;
-the warmers 5:19; with the buildings' bake made faster (below) 4:40. Until
-then the warmers were opt-in and split Dresden alone: on 2026-10-10 two
-cold sites still fitted side by side on Vercel's builder, the parallelism
-two tile warmers give, and they showed no gain there. By 2026-10-31
-München's cold peak in one process had grown to 6.1 GiB (Dresden's 5.05):
-the buildings' bake appends six kinds of parts (scan structures, gaps,
-plinths and bands, shopfronts, doors, dormers), each copying the vertex
-stream and leaving its parts' plain arrays behind, and Bun's lazy
-collector let them pile up — past what the 8 GB builder holds beside its
-own build, where München went silent at its second tile until the
-45-minute limit. A collection after each append, after the mesh, before
-the far glb and after it (`bake-city-mesh.ts` `appendBeyondLod2`,
-`prepare/city.ts`) brings München to 4.47 GiB and Dresden to 3.81, the
-bytes unchanged. Since 2026-11-11 no append goes through plain arrays
-(`scripts/vertex-stream.ts`), and a tile's peak, which lay in the
-passages' cut, the rounded normals and the glb's writer, is lower: the
-mesh is released once its glb is written, the writer turns its arrays in
-place. München's heaviest tile alone 2.58 → 1.88 GiB, the bytes
-unchanged; four tiles side by side still reach 1.9 GiB.
+`prepare-data.ts` processes at once, one a site, largest site first, each
+line prefixed with the site's id: as many as the cores
+(`os.availableParallelism()`) and as the memory holds at 4 GB a site —
+the machine's, or the container's limit where it sets a lower one
+(`process.constrainedMemory()`); `PREPARE_JOBS=<n>` overrides. A whole
+site baked cold in one process peaks at 2.3 GiB (Dresden; München 1.7,
+the small sites near 1; all seven cold in 291 s, two at a time on four
+cores, 2026-11-24), since the bake collects after every tile and after
+each of the buildings' appends. Only CI and a desk bake:
+the host's 8.6 GB builder, which needed a site split into one process a
+tile, pulls (*The store*).
 
 **Where a tile's time goes.** The buildings are nearly all of a cold
 bake (the ground and side files a few seconds a tile). München's heaviest
@@ -1067,9 +1016,7 @@ a copy that has to match their rounding, bounds and pruning byte for byte.
 
 ### Cache and publish
 
-**Cache.** Baked outputs are cached in `.cache/prepare-data/` (gitignored;
-on Vercel in `.next/cache/prepare-data/`, since its build cache keeps only
-`node_modules` and `.next/cache` from one deployment to the next),
+**Cache.** Baked outputs are cached in `.cache/prepare-data/` (gitignored),
 one entry per output, under a key over the **contents** of its input
 files, the bake's own sources and the values it depends on (the recenter
 offset, what its `extras` say). The sources are found in two steps. The
@@ -1120,15 +1067,14 @@ picture; a bump of a package only the viewer imports (React, Next.js,
 terrain (`bake-tiles.ts` meshes the ground, `bake-city-mesh.ts` the
 buildings). A key hashes a module's text, so even a type or a comment in a
 module every ground walks (`lib/city/tileset.ts`, `lib/city/site.ts`,
-`lib/city/tile.ts`) re-bakes every site cold — on Vercel past its build
-time. Something only the viewer or another bake reads goes in its own
+`lib/city/tile.ts`) re-bakes every site cold. Something only the viewer or another bake reads goes in its own
 module (the walks' `extras` field is `WalksExtras` in `lib/city/walks.ts`).
 A changed input or a changed bake re-bakes; a renamed side file, a
 checkout or a touch alone does not; anything else is a cache
 read. Every site shares the directory, and it keeps a name's newest
 entries (`generations()`: three at a desk, so a checkout of another branch
-and back across a bake module bakes neither way; one on Vercel and in CI,
-whose caches travel with every build; `BAKE_CACHE_GENERATIONS` overrides): a
+and back across a bake module bakes neither way; one in CI,
+whose cache travels with every build; `BAKE_CACHE_GENERATIONS` overrides): a
 tile's names are unique across sites, the site-wide ones (the frame, the
 map picture, the stats) carry the site's id. An entry is written whole
 (`scripts/bake-cache.ts`): to a part file, renamed into place, the name's
@@ -1164,39 +1110,50 @@ id times its constant) is folded, good to about 1e−15 and the same bits
 everywhere. The gzip (libdeflate, level 9) and meshopt's codecs gave
 the same bytes on both machines.
 
-**Shared cache.** Vercel restores each branch's build cache from that
-branch's last build (production's for a new branch), so branches rebased
-onto the same main each baked the same entries cold, side by side. Behind
-the local cache sits one every branch shares (`scripts/shared-cache.ts`):
-Vercel's Remote Cache, the artifacts API Turborepo uses, under a hash of
-the entry's name, its key, the runtime that baked it (Bun's version and
-the platform: a branch that bumps Bun bakes under addresses of its own)
-and its scope. A local miss is fetched from it before it is baked (a
-preview asks both scopes at once), and a baked entry is uploaded at the
-run's end (read back from the local cache, four at a time; a 13 MB entry
-takes under half a second then). Never beside the bake: its peak leaves
-no memory for a queue of bytes, and beside it Vercel's builds went
-silent in München; the price is that a run that dies shares nothing it
-baked. So a key is baked once for all branches. Production trusts only
-itself: its builds store under the production scope and read only that;
-a preview reads production's, then the previews' scope, and stores under
-the previews'. A key that misses an input thus never brings an unmerged
-branch's bytes to production; production bakes the keys a merged branch
-changed once more itself. Each entry is stored behind its SHA-256, and
-one whose bytes do not match is a miss. Only Vercel's builds use it (the
-token is `VERCEL_ARTIFACTS_TOKEN`, which Vercel's build passes; the scope
-comes from `VERCEL_ENV`), and it is never fatal: a failed request reads
-as a miss; a request is given up 30 s plus its size at 1 MiB/s after it
-starts, whether or not the fetch heeds its abort (a run exits once done,
-an open socket left behind); three failures in a row end the run's use
-of it; two uploads cut off end the run's uploads (the link is down or
-crawling); an entry refused for its size, or whose local copy cannot be
-read back, is skipped alone. `BAKE_SHARED_CACHE=0` turns it off;
-`BAKE_SHARED_CACHE_API` points it at a stand-in API for a local trial
-(ignored on Vercel, so the token goes nowhere else). Each run logs whether it is
-on, how long each upload over 8 MB took, and what it fetched and stored.
-Two branches starting in the same minute still bake the same key twice:
-neither has stored it yet.
+**The store.** The web build bakes nothing: CI's build-check shard, which
+bakes every site for its e2e half anyway, uploads `public/data/<site>/`
+(ahead of its `next build`, which a deployment need not wait for)
+to a public object store (Vercel Blob; `scripts/data-store.ts`, the step
+*Publish the sites*), and the host's build pulls it back into
+`public/data/` — the browser reads `/data/*` from the site's own host as
+before. Both sides find a site under its **site key** (`siteKey`), which
+each computes from its checkout alone, so there is no lock file and
+nothing to commit: a hash over every file of `data/<site>/`, every module
+`prepare-data.ts` reaches, the locked versions of the packages those
+import, `patches/`, and the Bun `package.json` pins (its gzip writes the
+bytes). It is coarser than the artifact keys on purpose
+(another site's config moves it): a new key costs CI a bake from its warm
+artifact cache and one manifest. In the store a file keeps its hashed
+name (`<site>/<name>`, uploaded once, never changed), and the two
+unhashed ones carry the key (`<site>/manifest.<key>.json`,
+`site-stats.<key>.json`), the manifest last, so a manifest that is there
+names only files that are. The pull checks every file against the hash
+in its name, one already on disk too, and tries a failed request three
+times.
+
+- A push starts the host's build and CI side by side, so the pull asks
+  for the manifest every 10 s for up to 15 min, then fails naming the key
+  and CI's step. A push that leaves the key alone waits for nothing; one
+  that changes a bake waits for CI's bake, and **a preview fails where
+  CI's build-check shard does**.
+- CI runs on a push to the long-lived branches (`main`, `rewrite`): a
+  merge is a tree no pull request's run baked, and a later push there
+  does not cancel the run. Any other branch needs a pull request: the
+  host builds a preview for every pushed branch, and one whose key no
+  run published fails at the pull.
+- The e2e job checks out a pull request's head, not GitHub's merge with
+  its base: the key CI publishes must be the one the host computes for
+  the commit it builds.
+- A manifest already under the key must be the one just baked: the same
+  key over other bytes is an input the key does not cover or a bake that
+  depends on the machine, and fails the step instead of serving stale
+  tiles. `scripts/data-store.test.ts` holds what moves the key.
+- Uploading needs `BLOB_READ_WRITE_TOKEN`, a secret of the repository's
+  Actions; reading needs none (the store's public address is a
+  constant of `data-store.ts`). A pull request from a fork or from Dependabot gets no secret:
+  the step says so and publishes nothing, and its preview fails at the
+  pull unless its key was published before.
+- The store only grows; nothing deletes from it.
 
 Each tile's **fine ground** is an entry of its own
 (`ground_<t>.bin`, `scripts/ground-pack.ts`: the TIN, or the shaped grid
@@ -1207,8 +1164,7 @@ process reads the other tiles' grounds from the cache — each tile's
 heights only once a point asks — instead of refining their TINs again,
 and the fine level's mesh is rebuilt from the same entry (`tinMesh`,
 `gridMesh`; ≈ 6.7 MB a Dresden tile; the cache of all seven sites
-≈ 420 MB). A cold run of all seven sites takes 235 s on Vercel's
-builder (above); a warm one ≈ 3 s for Dresden, ≈ 10 s for all seven. CI
+≈ 420 MB). A warm run takes ≈ 3 s for Dresden, ≈ 10 s for all seven. CI
 keeps the directory between runs (`actions/cache` in the e2e job): any
 earlier entry is a sound start, since every artifact is keyed by what it
 was baked from. Most of a cold Dresden is its buildings (≈ 390 of its 540

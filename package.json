@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "bun scripts/copy-wasm.ts && bun scripts/prepare-sites.ts && next dev --experimental-https",
     "build": "bun scripts/copy-wasm.ts && bun scripts/prepare-sites.ts && next build && NODE_ENV=production bun scripts/sentry-release.ts",
+    "build:web": "bun scripts/copy-wasm.ts && bun scripts/prepare-sites.ts --pull && next build && NODE_ENV=production bun scripts/sentry-release.ts",
     "start": "next start",
     "lint": "bun --bun oxlint --max-warnings=0 && oxfmt --check",
     "typecheck": "bun check",

@@ -2,15 +2,20 @@ name: CI
 
 on:
   pull_request:
+  # `rewrite` too: the host deploys it, and its tip's site keys are
+  # published by no pull request's run (scripts/data-store.ts).
   push:
-    branches: [main]
+    branches: [main, rewrite]
 
 # Cancel an in-flight CI run when new commits land on the same ref. PR pushes
 # are the common case; the queued run is almost always stale by the time it
 # starts.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Not on a push to main or rewrite: a second merge would cancel the run
+  # that publishes the first one's sites, and that commit's deployment
+  # would wait for them in vain (scripts/data-store.ts).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -183,7 +188,12 @@ jobs:
             args: --grep @desktop-look
             buildCheck: false
     steps:
+      # A pull request's head, not GitHub's merge with its base: the site
+      # keys the build-check shard publishes under (scripts/data-store.ts)
+      # must be the ones the host computes for the commit it builds.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       # Which CPU this runner drew: the same shard runs twice as long on some
       # (see the timings above), and this is what tells them apart.
       - name: Runner CPU
@@ -274,6 +284,18 @@ jobs:
           restore-keys: |
             nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-
             nextjs-${{ runner.os }}-
+      # The web build bakes nothing: it pulls each site from the store
+      # under its key (docs/data-pipeline.md, "The store"), which this step
+      # fills — the bake first and alone, ahead of `next build` (whose own
+      # prepare then finds every entry cached): a deployment of this commit
+      # is waiting for it, 15 min at most. A manifest already under a key
+      # must be the one just baked, or the step fails. Without the secret (a
+      # fork's or Dependabot's pull request) it publishes nothing and says so.
+      - name: Publish the sites
+        if: matrix.shard.buildCheck
+        run: bun scripts/prepare-sites.ts && bun scripts/data-store.ts
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
       # NEXT_PUBLIC_POC_DEBUG exposes the window.__poc hook the specs drive. It
       # is a single inlined constant, so this still exercises the real
       # production build path; a deploy builds without it and ships no hook.
