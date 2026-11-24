@@ -228,7 +228,7 @@ test("the figures of a fixture site, each from the files it names", () => {
       coarse: {
         bytes: gz(root, "crowns_a.json"),
         files: 1,
-        kinds: { crowns: gz(root, "crowns_a.json") },
+        kinds: { dressingCoarse: gz(root, "crowns_a.json") },
       },
     },
   });
