@@ -253,7 +253,6 @@ def run(tile: Tile) -> None:
     roads = carriageways(tile)
     for f in posts:
         props = f["properties"]
-        props.pop("arm", None)
         at = shapely.Point(f["geometry"]["coordinates"][:2])
         arm = arm_of(at, props.get("h", LAMP_H), bool(props.get("bent")), roads)
         if arm is not None:
@@ -270,7 +269,6 @@ def _measure(tile: Tile, posts: list[dict], counts: dict[str, int]) -> None:
     found = heights(points, Surface(tile), Streets(tile))
     for f, h in zip(posts, found, strict=True):
         props = f["properties"]
-        props.pop("hs", None)
         if h is None:
             props["h"] = LAMP_H
             counts["kept"] += 1

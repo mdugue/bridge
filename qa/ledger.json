@@ -401,12 +401,12 @@
   },
   "code": {
     "product": {
-      "total": 154726,
+      "total": 154527,
       "app": 60932,
       "lib": 41355,
       "components": 3007,
       "scripts": 13798,
-      "pipeline/bake": 35634
+      "pipeline/bake": 35435
     }
   },
   "browser": {

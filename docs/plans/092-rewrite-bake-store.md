@@ -38,10 +38,10 @@
   [093](./093-rewrite-streaming-quadtree.md) needs
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: IN PROGRESS — phase 0 done (2026-11-16): the comparer, the
-  inventory and the format trial are in *Findings*; the format is the
-  maintainer's to choose (recommended: GeoJSON under the schema, phase 4
-  skipped)
+- **Status**: REDUCED (plan 086, "The series, reduced") — phase 0 done
+  (2026-11-16); phase 2 and one read helper done (2026-11-24, in
+  *Findings*). Phases 1 and 3 to 6 (the schema export, the store, a
+  format, site-wide windows, typed buildings) are not built
 
 ## Why this matters
 
@@ -634,3 +634,64 @@ committed hedges lost the heights the scan had measured (2 of 2 rows
 on `33340_5678`: `h`, `w`, `src`). It is the documented "No LAZ: OSM
 only" of a tile that never had a scan, applied to one whose scan is
 merely not on this machine.
+
+### Phase 2 (2026-11-24): a file has one writer, and the ledger goes
+
+Built reduced, as plan 086's ruling 5 asks: no new file under `data/`,
+no join step, less code.
+
+| What phase 0 found | What it is now |
+|---|---|
+| `islands` rewrote the land cover's raster and legend | the step is gone: `landcover` carved the islands itself already, the step only did it again (and alone on a machine without the raw DLM, where `landcover` stops) |
+| `lamp-heights` and `lamp-water` rewrote `lamps` and `mly` | `lamps` and `mapillary` hand their points on under `data/_raw/<provider>/work/<site>/` (`Tile.work`), `lamp-heights` the two with their heights, and `lamp-water` alone writes the two files. `tram`, which reads the lamps, runs after it |
+| `trees` rewrote `canopyx` (`lowveg.rethin_scan_trees`) | `lowveg`, whose file it is, thins its standing scan trees itself where the scan is not on the machine |
+| `canopy` read the last bake's `canopyx` | it reads none: `lowveg` writes no scan crown within 5 m of a canopy point, a row's tree among them, so the row's tree now stands where a scan crown took its place before |
+| the `Ledger`, the `again` / `then` loops, the recorder's `before` | gone: `step_cache.unchanged` is the key, the inputs, the probes, the listings and the outputs as recorded; `VERSION` 4. `step_cache.py` 619 → 503 lines |
+
+Not done, and why:
+
+- `landcover` still takes the flight's cast for the water's tint from
+  every tile's class raster as the last bake left it — the same step's
+  on the other tiles, no later step's. Only a site's very first bake
+  reads fewer of them than its second. Reading them in the same bake
+  needs a second pass over the tiles or a file of its own.
+- `shopfronts` (`refilter`) and `traffic` (`reflag`) still filter their
+  own last output where their raw input is not on the machine, as
+  `lowveg` now does its scan trees: `Tile.raw_absent`'s meaning.
+- `lowveg` without the laser scan still writes the hedges from OSM
+  alone ("For phase 2", above): the scan is opt-in (`--lsc`), so "not
+  on this machine" cannot be told from "never fetched".
+- On a machine without the Mapillary cache the tile's `mly` file stands
+  as before, but its lamps are no longer measured again with OSM's
+  (they are not handed on).
+
+**The read helper.** `Tile.features(kind, near=None)`: a kind's
+features of the tile, with an extent those of every tile that reaches
+into it. Used where it made the call site shorter (canopy, cultivated,
+dormers, furniture, lowveg, roof-colour, small-buildings, tram, ways);
+`json.loads` calls in `pipeline/bake/*.py` 102 → 87. The modules that
+call `Tile.neighbours()` stay 14: the others read rasters, not
+features.
+
+**Counted.** `code.product.pipeline/bake` 35 634 → 35 435 (−199);
+steps 37 → 36; steps that write a path another step wrote 4 → 0.
+
+**Grimma, baked here** (two tiles, BBBike's extract, no laser scan —
+GeoSN's listing has none today), cold with `--force`, `rewrite` twice
+and this branch twice, then once more with the cache:
+
+- `rewrite`'s two bakes are the same 114 files.
+- This branch against `rewrite`: 107 files the same bytes; 7 differ, all
+  on purpose. `canopy_<t>.geojson`: 75 and 107 row trees more (16 → 91,
+  15 → 122), each within 4.5 m of a scan crown that had kept it out.
+  `canopyx_<t>.geojson`: those scan crowns gone (5 410 → 5 338,
+  2 492 → 2 384). `svf_<t>.png`, which draws both: 1.0 % and 1.8 % of
+  its texels. `provenance.json`: no `islands` entry.
+- The branch's first, second and third bake are the same bytes; the
+  third skips all 72 runs. In its manifests no path is in two steps'
+  outputs and no step reads what a later step wrote.
+
+Every step is keyed anew (`common.py` changed, and `VERSION`): the next
+bake of a site runs all of it. On a machine with the scans the
+committed data then changes where Grimma's did here — the canopy's row
+trees, the scan trees beside them, the sky view — and nowhere else.

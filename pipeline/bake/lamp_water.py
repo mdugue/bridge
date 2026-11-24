@@ -228,8 +228,6 @@ def run(tile: Tile) -> None:
     lamps = [f for _, doc, m in docs for f in _lamps(doc, m)]
     for f in lamps:
         f["properties"] = dict(f["properties"] or {})
-        f["properties"].pop("w", None)
-        f["properties"].pop("wr", None)
     if not lamps or not tile.dgm.exists():
         for path, doc, _ in docs:
             _write(path, doc)

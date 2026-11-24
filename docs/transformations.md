@@ -2533,7 +2533,11 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   (2026-10-21, P7, `canopy.py` `row_trees`): DOM1's crown peaks within 3 m
   of the line (nDOM smoothed 1 m, over 3 m, off LoD2 and the traffic),
   projected onto it, as tall as measured, thinned tallest-first 3 m apart,
-  none within 4.5 m of a canopy or scan crown; written into
+  none within 4.5 m of a canopy point (until 2026-11-24 nor of a scan
+  crown, read from the last bake's `canopyx`: now the scan crown gives
+  way — `lowveg` writes none within 5 m of a canopy point, a row's tree
+  among them, so a first bake and a second agree; Grimma's row trees
+  16 → 91 and 15 → 122, each where a scan crown stood); written into
   `canopy_<t>.geojson` as `row: 1` with a `rows` member, which the pack
   carries as `ROWS_MEASURED` (`lib/city/point-pack.ts`), and the viewer
   then draws only the hedges from `vegrows`. Without DOM1 the trees stand

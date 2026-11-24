@@ -799,10 +799,19 @@ def run(tile: Tile, research: bool = False) -> None:
         extra, peaks = canopy_extra(inputs, dlm / f"canopy_{tile.id}.geojson", trees)
     elif out.exists():
         # the scan is not on this machine: its trees stand, but for one a
-        # register or OSM tree has since been placed on (Dresden 2026-10-21:
-        # 5 of 5 734 on one tile)
+        # row's tree covers (as `canopy_extra` leaves it out) or a register
+        # or OSM tree has since been placed on (Dresden 2026-10-21: 5 of
+        # 5 734 on one tile)
         extra = json.loads(out.read_text())["features"]
         peaks = len(extra)
+        rows = [
+            f["geometry"]["coordinates"][:2]
+            for f in tile.features("canopy")
+            if f["properties"].get("row")
+        ]
+        if extra and rows:
+            far = cKDTree(rows).query(_points(out))[0] > CANOPY_DEDUP_M
+            extra = [f for f, keep in zip(extra, far, strict=True) if keep]
     else:
         return
     extra, dropped = cadastre_filter(extra, trees)
