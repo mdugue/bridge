@@ -14,8 +14,8 @@ name: Plates
 # every other tile, the full profile's shadows, AO and resolution, the
 # data layers and a view's page query are tier 2's.
 #
-# Scaffolding while the rewrite series' plans move pixels (plan 087): it
-# runs where a pull request carries the label `plates`, or by hand — not
+# Built as the rewrite series' scaffolding (plan 087; the series closed
+# on 2026-11-24, and whether this job stays is not decided): it runs where a pull request carries the label `plates`, or by hand — not
 # on every pull request. A differing view fails the job; the summary
 # names it, and the pull request's `## Snapshots` says whether it was meant.
 

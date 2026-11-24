@@ -14,7 +14,7 @@ and say that they are SwiftShader. The JSON is the deliverable.
 
 ## The plates say what changed
 
-While the rewrite series moves pixels, CI can compare a pull request
+CI can compare a pull request
 with its base (`.github/workflows/plates.yml`, ADR 0018, tier 1): views
 rendered for both by the same runner's software renderer, and diffed. It
 runs on a pull request that carries the label `plates`, or by hand.

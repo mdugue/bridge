@@ -6,8 +6,8 @@
  * built and rendered here, in a worktree under the gitignored `plates/`.
  * It says which views *changed* — never whether a picture is good.
  *
- * Scaffolding: kept while the rewrite series' plans move pixels (plan
- * 087), not a permanent gate.
+ * Built as the rewrite series' scaffolding (plan 087), not a permanent
+ * gate; whether it stays after the series closed is not decided.
  *
  * Two tiers over the same code:
  *

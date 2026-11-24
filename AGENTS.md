@@ -96,7 +96,8 @@ a −90° X-rotated `world` group turns data-Z up, and tile content is Y-up.
 Dressing lives in the Y-up frame, **never inside the rotated group**.
 New code converts between frames through `lib/city/frames.ts`; the
 older hand arithmetic on the offset is counted in plan 095's Findings and
-goes with its phase B2. glTF positions are quantised: shaders derive
+stays where it is (its phase B2, which would have replaced it, was
+rejected). glTF positions are quantised: shaders derive
 data-frame coordinates from world space (`shader-chunks.ts`). The glTF
 extras key is `tileId`, never `tile` (the renderer writes `userData.tile`
 itself). See ADR 0005.
@@ -199,8 +200,9 @@ uploaded; nothing it names is fetched (ADR 0054).
 - A PR that changes what the viewer shows carries JSON snapshots in its
   description (`pr-snapshots` skill). On a PR labelled `plates`, or by
   hand, CI compares it with its base on the runner's software renderer
-  (the *Plates* job, ADR 0018; scaffolding while the rewrite series
-  moves pixels) and names each differing view. It says *changed*, never
+  (the *Plates* job, ADR 0018; built as the rewrite series'
+  scaffolding, kept until the maintainer decides otherwise) and names
+  each differing view. It says *changed*, never
   *good*, and it sees little: 8 of the 50 QA views, all on the spawn
   tile, in `lite` at 400 × 250 drawn pixels. The other views, every
   other tile, the full profile's shadows, AO and resolution, the data
