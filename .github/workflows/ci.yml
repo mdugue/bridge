@@ -12,7 +12,10 @@ on:
 # starts.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Not on a push to main or rewrite: a second merge would cancel the run
+  # that publishes the first one's sites, and that commit's deployment
+  # would wait for them in vain (scripts/data-store.ts).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -281,6 +284,18 @@ jobs:
           restore-keys: |
             nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-
             nextjs-${{ runner.os }}-
+      # The web build bakes nothing: it pulls each site from the store
+      # under its key (docs/data-pipeline.md, "The store"), which this step
+      # fills — the bake first and alone, ahead of `next build` (whose own
+      # prepare then finds every entry cached): a deployment of this commit
+      # is waiting for it, 15 min at most. A manifest already under a key
+      # must be the one just baked, or the step fails. Without the secret (a
+      # fork's or Dependabot's pull request) it publishes nothing and says so.
+      - name: Publish the sites
+        if: matrix.shard.buildCheck
+        run: bun scripts/prepare-sites.ts && bun scripts/data-store.ts
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
       # NEXT_PUBLIC_POC_DEBUG exposes the window.__poc hook the specs drive. It
       # is a single inlined constant, so this still exercises the real
       # production build path; a deploy builds without it and ships no hook.
@@ -291,17 +306,6 @@ jobs:
         env:
           NEXT_PUBLIC_POC_DEBUG: "1"
           NEXT_TELEMETRY_DISABLED: "1"
-      # The web build bakes nothing: it pulls each site from the store
-      # under its key (docs/data-pipeline.md, "The store"), which this step
-      # fills from the bake above — before the tests, since a deployment of
-      # this commit is waiting for it. A manifest already under a key must
-      # be the one just baked, or the step fails. Without the secret (a
-      # fork's or Dependabot's pull request) it publishes nothing and says so.
-      - name: Publish the sites
-        if: matrix.shard.buildCheck
-        run: bun scripts/data-store.ts
-        env:
-          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
       - uses: actions/cache/save@v6
         if: matrix.shard.buildCheck && steps.bake-cache.outputs.cache-hit != 'true'
         with:

@@ -85,12 +85,12 @@ const stored = (site: string, name: string, key: string) =>
     : `${site}/${name}`;
 
 /** `fetch`, tried again after a pause where the network or the server
- *  (5xx) failed: one blip among a site's files is no failed deployment. */
+ *  (5xx, 429) failed: one blip among a site's files is no failed deployment. */
 async function request(url: string, init: RequestInit): Promise<Response> {
   for (let attempt = 1; ; attempt += 1) {
     try {
       const res = await fetch(url, init);
-      if (res.status < 500 || attempt === TRIES) {
+      if ((res.status < 500 && res.status !== 429) || attempt === TRIES) {
         return res;
       }
     } catch (error) {

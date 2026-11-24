@@ -57,6 +57,12 @@ Land; what the viewer needs per tile is megabytes.
 - A deployment waits for CI's bake where a push changes one, and fails
   where CI's build fails; a pull request without CI's secret (a fork,
   Dependabot) deploys only while it leaves the key alone.
+- The host computes the key on its own Bun and CI on the pinned one;
+  should they ever disagree, the pull finds no manifest and the
+  deployment fails, loudly.
+- Any pull request from a branch of the repository runs the upload with
+  the credential, before review, and could write under any key: the
+  store is as trusted as the repository's collaborators, no further.
 - A gap in the key serves stale tiles; CI fails where a key it finds in
   the store names other bytes than it just baked.
 - Beyond a handful of committed cities, `data/<site>/` should move out

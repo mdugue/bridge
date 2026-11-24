@@ -1112,6 +1112,7 @@ the same bytes on both machines.
 
 **The store.** The web build bakes nothing: CI's build-check shard, which
 bakes every site for its e2e half anyway, uploads `public/data/<site>/`
+(ahead of its `next build`, which a deployment need not wait for)
 to a public object store (Vercel Blob; `scripts/data-store.ts`, the step
 *Publish the sites*), and the host's build pulls it back into
 `public/data/` — the browser reads `/data/*` from the site's own host as
@@ -1135,8 +1136,11 @@ times.
   and CI's step. A push that leaves the key alone waits for nothing; one
   that changes a bake waits for CI's bake, and **a preview fails where
   CI's build-check shard does**.
-- CI runs on a push to every branch the host deploys (`main`,
-  `rewrite`): a merge is a tree no pull request's run baked.
+- CI runs on a push to the long-lived branches (`main`, `rewrite`): a
+  merge is a tree no pull request's run baked, and a later push there
+  does not cancel the run. Any other branch needs a pull request: the
+  host builds a preview for every pushed branch, and one whose key no
+  run published fails at the pull.
 - The e2e job checks out a pull request's head, not GitHub's merge with
   its base: the key CI publishes must be the one the host computes for
   the commit it builds.
