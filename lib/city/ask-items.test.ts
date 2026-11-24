@@ -30,7 +30,7 @@ import type { CardCredits } from "./card-lines";
 import { inquiryCard } from "./inquiry";
 import type { FeatureInquiry } from "./inquiry-features";
 import { samplePolyline } from "./polyline";
-import { canopyPlacements } from "./tree-placement";
+import { canopyPlacements } from "./__fixtures__/place-trees";
 import type { RegisterFact } from "./tree-table";
 
 const TILE = "33412_5656_2_sn";

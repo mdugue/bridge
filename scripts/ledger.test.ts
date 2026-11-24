@@ -26,7 +26,7 @@ const level = (t: string, n: 0 | 1): TerrainFiles => ({
         surfaceFar: `surface_${t}.r1024.png`,
         dressing: { lamps: `lamps_${t}.geojson` },
       }
-    : { coarse: { crowns: `crowns_${t}.json` } }),
+    : { coarse: { dressingCoarse: `crowns_${t}.json` } }),
 });
 
 const baked = (t: string, x: number): BakedTile => ({
