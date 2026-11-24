@@ -13,8 +13,8 @@
  *
  * The store is read without a credential; only an upload needs
  * `BLOB_READ_WRITE_TOKEN` (Vercel Blob; a secret of the repository's
- * Actions, never a file's). `DATA_STORE` and `DATA_STORE_API` point reads and uploads
- * elsewhere for a test.
+ * Actions, never a file's). `DATA_STORE` and `DATA_STORE_API` point reads
+ * and uploads elsewhere for a test.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
