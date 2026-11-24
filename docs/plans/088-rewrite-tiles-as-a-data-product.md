@@ -695,8 +695,15 @@ peak 2.30 GiB; München 94 s, 1.66 GiB) — the peaks are half of what
 `warmers.ts` counted on 2026-10-31, so sites now run side by side at
 4 GB each. Against a store in a folder: publishing all seven (1 513
 files, 481 MB) and pulling them back gave `diff -r` no difference in
-`public/data` and `.stadtwissen`. **Not measured:** an upload to the
-real store, and the host's build time before and after.
+`public/data` and `.stadtwissen`.
+
+**Measured against the store, 2026-11-24** (pull request #342). CI's
+first upload: all seven sites, 1 453 files, in 93 s, no request
+refused; the next run found every key, compared the manifests and sent
+nothing in 5 s. The host's first pull (4 cores, 8 GB, Bun 1.3.14 —
+the keys agreed with CI's on Bun 1.4.4): seven sites in 13 s, the
+whole deployment in 72 s, where the same branch baking cold took 6:15
+to 9:50 min.
 
 **Rejected, each with its reason:**
 
