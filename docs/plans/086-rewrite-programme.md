@@ -78,6 +78,30 @@ Beside them, counted but not an aim of its own: a phone's memory
    the maintainer's to grant first: rulings 1 and 2 above, and what
    AGENTS.md lists under "When in doubt, ask before" (a backend, a
    heavy dependency, a second render path, committing raw data).
+5. **Less code, in the end and on the way** (2026-11-24). The series is
+   there to make the code simpler and more idiomatic; faster and
+   smaller on the wire come with it, not instead of it. Counted on
+   2026-11-24, the first milestone as it stood added 45 720 lines and
+   removed 931: 13 800 of tests and fixtures, 10 900 of measuring
+   tools, 10 700 of ledger data, 3 000 of plans, 1 700 of stubs — and
+   4 800 lines of product code, where the maintainer expected thousands
+   fewer. So:
+   - **The product's code lines are a gated figure** of the ledger
+     (the viewer, `lib/`, the build and the bakes; no tests, no
+     measuring tools). A milestone lowers it. A plan that cannot say
+     by how much it will, and where, is not built.
+   - **Replace and delete in one PR.** The old way does not ship
+     beside the new one beyond the PR that replaces it.
+   - **A spike lives on a branch that is thrown away.** What lands in
+     `rewrite` is its findings, in the plan.
+   - **Scaffolding has an end.** What exists to prove that the result
+     equals the old one (the comparers, the eval scripts, the knobs,
+     most of the ledger's data) is marked as scaffolding where it is
+     added and goes in a closing milestone. What stays is small: the
+     limits test, the type check, a narrow ledger.
+   - **Few tests of behaviour**, not one for each mutation a reviewer
+     thought of. A review still tries to break the code; what it asks
+     for is the test that would have caught a real fault.
 
 ## The plans, in the order they go
 
