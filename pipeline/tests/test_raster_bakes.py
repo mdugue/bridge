@@ -11,7 +11,7 @@ import rasterio
 from PIL import Image
 
 from bake import canopy, lamps, ndvi, roof_colour
-from bake.common import Tile, overlaps, pixel_of, value_at
+from bake.common import SITE, Tile, overlaps, pixel_of, value_at
 from tests.synthetic import SIZE, X0, Y0, neighbour, osm_tile, read, tags
 
 WATER, ROAD, MEADOW = 8, 7, 3
@@ -82,7 +82,7 @@ def test_lamps_stand_where_the_ground_allows_and_credit_osm(tmp_path, monkeypatc
     lamp = tags(highway="street_lamp")
     tile = osm_tile(tmp_path, monkeypatch, {1: (50, 50, lamp), 2: (150, 50, lamp)}, classes=cls)
     lamps.run(tile, lamp_height=6.0)
-    doc = read(tile, "lamps")
+    doc = json.loads(tile.work("lamps_t.geojson").read_text())
     assert "OpenStreetMap" in doc["attribution"]
     assert len(doc["features"]) == 1
     (only,) = doc["features"]
@@ -94,7 +94,7 @@ def test_lamps_without_a_class_raster_write_nothing(tmp_path, monkeypatch):
     tile = osm_tile(tmp_path, monkeypatch, {1: (50, 50, tags(highway="street_lamp"))})
     (tile.data / "dlm" / "landcover_t.png").unlink()
     lamps.run(tile)
-    assert not (tile.data / "dlm" / "lamps_t.geojson").exists()
+    assert not tile.work("lamps_t.geojson").exists()
 
 
 # --- canopy --------------------------------------------------------------------
@@ -217,3 +217,17 @@ def test_a_roof_takes_the_median_orthophoto_colour_in_linear_rgb(tmp_path, monke
     assert green == pytest.approx(0.012983 * kg, abs=1e-4)
     assert blue == pytest.approx(0.012983 * kb, abs=1e-4)
     assert out["meta"]["buildings_sampled"] == 1
+
+
+def test_a_tile_reads_a_kind_s_features_its_own_and_those_within_an_extent(tmp_path, monkeypatch):
+    tile = osm_tile(tmp_path, monkeypatch, {}, classes=np.zeros((SIZE, SIZE), np.uint8))
+    neighbour(tile, "u")
+    assert tile.features("walls") == []  # not baked yet
+    for tid in ("t", "u"):
+        tile.out("dlm", f"walls_{tid}.geojson").write_text(json.dumps({"features": [{"id": tid}]}))
+    assert tile.features("walls") == [{"id": "t"}]
+    xmin, ymin, xmax, ymax = tile.bounds
+    # an extent that stays on the tile, one that reaches over its east edge
+    assert tile.features("walls", (xmin, ymin, xmax, ymax)) == [{"id": "t"}]
+    assert tile.features("walls", (xmin, ymin, xmax + 1, ymax)) == [{"id": "t"}, {"id": "u"}]
+    assert tile.features("walls", SITE) == [{"id": "t"}, {"id": "u"}]

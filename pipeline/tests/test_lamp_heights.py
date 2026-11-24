@@ -59,14 +59,14 @@ def _tile(tmp_path, monkeypatch):
         "properties": {"h": 7.0, "wire": [[X0 + 100, Y0 + 40], [X0 + 100, Y0 + 60]]},
     }
     features = _lamps((20, 60, 100, 140, 180), 152) + _lamps((60, 120), 52) + [hung]
-    tile.out("dlm", "lamps_t.geojson").write_text(
+    tile.work("lamps_t.geojson").write_text(
         json.dumps({"type": "FeatureCollection", "features": features})
     )
     return tile
 
 
 def _heights(tile):
-    doc = json.loads(tile.out("dlm", "lamps_t.geojson").read_text())
+    doc = json.loads(tile.work("h_lamps_t.geojson").read_text())
     return [(f["properties"]["h"], f["properties"].get("hs")) for f in doc["features"]]
 
 
@@ -118,7 +118,7 @@ def test_a_lamp_on_a_bridge_is_read_over_its_deck(tmp_path, monkeypatch):
     features = _lamps((40, 100, 160), 102)
     for f in features:
         f["properties"]["deck"] = 106.0
-    tile.out("dlm", "lamps_t.geojson").write_text(
+    tile.work("lamps_t.geojson").write_text(
         json.dumps({"type": "FeatureCollection", "features": features})
     )
     lamp_heights.run(tile)
@@ -128,7 +128,7 @@ def test_a_lamp_on_a_bridge_is_read_over_its_deck(tmp_path, monkeypatch):
 def test_a_lamp_on_a_facade_keeps_its_height(tmp_path, monkeypatch):
     """Over a wall lantern DOM1 reads the facade's eave, not a post."""
     tile = _tile(tmp_path, monkeypatch)
-    path = tile.out("dlm", "lamps_t.geojson")
+    path = tile.work("lamps_t.geojson")
     doc = json.loads(path.read_text())
     wall = {
         "type": "Feature",
@@ -209,9 +209,10 @@ def test_lamp_heights_give_the_tall_posts_of_a_main_road_an_arm(tmp_path, monkey
 
     features = [lamp(x, 152.5) for x in (20, 60, 100, 140)]
     features += [lamp(40, 52.5), lamp(80, 52.5, bent=True), lamp(120, 52.5)]
-    path = tile.out("dlm", "lamps_t.geojson")
+    path = tile.work("lamps_t.geojson")
     path.write_text(json.dumps({"type": "FeatureCollection", "features": features}))
     lamp_heights.run(tile)
-    out = [f["properties"] for f in json.loads(path.read_text())["features"]]
+    done = tile.work("h_lamps_t.geojson")
+    out = [f["properties"] for f in json.loads(done.read_text())["features"]]
     assert [(p["h"], p.get("arm")) for p in out[:4]] == [(10.0, 180)] * 4
     assert [(p["h"], p.get("arm")) for p in out[4:]] == [(4.5, None), (4.5, 180), (4.5, None)]

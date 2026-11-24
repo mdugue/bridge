@@ -483,24 +483,6 @@ def cadastre_filter(extra, trees_path):
     return kept, len(extra) - len(kept)
 
 
-def rethin_scan_trees(tile: Tile) -> int | None:
-    """The committed scan trees (`canopyx`) thinned against the tile's
-    current trees file, as `cadastre_filter` thins them when lowveg bakes.
-    A tile whose laser scan is not on disk cannot re-bake its scan trees,
-    but the trees step can place a register or OSM tree where one stands
-    (Dresden 2026-10-21: 5 of 5 734 on one tile): that scan tree goes, the
-    rest stay as they are. How many went; None without a `canopyx` file."""
-    dlm = tile.data / "dlm"
-    path = dlm / f"canopyx_{tile.id}.geojson"
-    if not path.exists():
-        return None
-    doc = json.loads(path.read_text())
-    kept, dropped = cadastre_filter(doc["features"], dlm / f"trees_{tile.id}.geojson")
-    if dropped:
-        write_geojson(tile.out("dlm", path.name), kept, tile.epsg, doc.get("attribution"))
-    return dropped
-
-
 def crown_radii(chm, mass, peaks, others) -> np.ndarray:
     """Each peak's crown radius (m): its share of the crown `mass` — the
     watershed of the smoothed heights `chm` from every peak and from every
@@ -620,10 +602,6 @@ def load_osm(tile: Tile):
     return hedges, scrub, shrubs
 
 
-def _features(path: Path) -> list:
-    return json.loads(path.read_text())["features"] if path.exists() else []
-
-
 def load_inputs(tile: Tile, grid: Grid) -> dict:
     dlm = lambda name: tile.data / "dlm" / f"{name}_{tile.id}"  # noqa: E731
     inputs = {"grid": grid}
@@ -638,13 +616,10 @@ def load_inputs(tile: Tile, grid: Grid) -> dict:
     inputs["bld"] = building_mask(grid, tile.data / "cityjson" / f"lod2_{tile.id}.city.json")
     # The walls file also carries fences and gates (walls.py): only walls mask.
     walls = [
-        f
-        for f in _features(dlm("walls").with_suffix(".geojson"))
-        if f["properties"].get("kind") not in ("fence", "gate")
+        f for f in tile.features("walls") if f["properties"].get("kind") not in ("fence", "gate")
     ]
     inputs["walls"] = grid.burn([shape(f["geometry"]).buffer(WALL_BUF_M) for f in walls])
-    bridges = _features(dlm("bridge").with_suffix(".geojson"))
-    inputs["bridge"] = grid.burn([shape(f["geometry"]) for f in bridges])
+    inputs["bridge"] = grid.burn([shape(f["geometry"]) for f in tile.features("bridge")])
     der = lsc_rasters(tile)
     inputs["has_lsc"] = der is not None
     inputs["traffic"] = (
@@ -756,7 +731,7 @@ def build(tile: Tile):
         mask, lsc_lines, lsc_shrubs = lsc_candidates(inputs, o_scrub)
     support = osm_support_rasters(inputs, mask) if inputs["has_lsc"] else None
     feats, osm_lines = osm_hedge_features(grid, o_hedges, support, mapped.DomHeights.read(tile))
-    rows = _features(tile.data / "dlm" / f"vegrows_{tile.id}.geojson")
+    rows = tile.features("vegrows")
     dlm = [shape(f["geometry"]) for f in rows if f["properties"].get("kind") == "hedge"]
     feats += lsc_hedge_features(lsc_lines, osm_lines + dlm, inputs if inputs["has_lsc"] else None)
     # Width for OSM hedges: the nearest scan hedge's, where one overlaps.
@@ -818,14 +793,20 @@ def run(tile: Tile, research: bool = False) -> None:
     write_geojson(tile.out("dlm", f"lowveg_{tile.id}.geojson"), hedges, tile.epsg, attribution)
     scan = sum(f["properties"]["src"] == "lsc" for f in hedges)
     print(f"{tile.id}: {len(hedges)} hedges shipped ({scan} the scan's) of {len(feats)} candidates")
-    if not inputs["has_lsc"]:
-        return
     dlm = tile.data / "dlm"
-    extra, peaks = canopy_extra(
-        inputs, dlm / f"canopy_{tile.id}.geojson", dlm / f"trees_{tile.id}.geojson"
-    )
-    extra, dropped = cadastre_filter(extra, dlm / f"trees_{tile.id}.geojson")
-    write_geojson(tile.out("dlm", f"canopyx_{tile.id}.geojson"), extra, tile.epsg, lsc_credit(tile))
+    out, trees = tile.out("dlm", f"canopyx_{tile.id}.geojson"), dlm / f"trees_{tile.id}.geojson"
+    if inputs["has_lsc"]:
+        extra, peaks = canopy_extra(inputs, dlm / f"canopy_{tile.id}.geojson", trees)
+    elif out.exists():
+        # the scan is not on this machine: its trees stand, but for one a
+        # register or OSM tree has since been placed on (Dresden 2026-10-21:
+        # 5 of 5 734 on one tile)
+        extra = json.loads(out.read_text())["features"]
+        peaks = len(extra)
+    else:
+        return
+    extra, dropped = cadastre_filter(extra, trees)
+    write_geojson(out, extra, tile.epsg, lsc_credit(tile))
     print(
         f"{tile.id}: {len(extra)} extra trees of {peaks} crown peaks "
         f"({dropped} dropped as cadastre trees)"

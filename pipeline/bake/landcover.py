@@ -20,7 +20,6 @@ import json
 
 import numpy as np
 import shapely
-from PIL import Image
 from rasterio.features import rasterize
 
 from . import hedges, landcover_osm, road_widths, water
@@ -239,21 +238,6 @@ def carve_islands(raster: np.ndarray, tile: Tile) -> int:
 
 def _island_credit(tile: Tile) -> str:
     return f"{tile.credit}; islands: {OSM_ATTRIBUTION}"
-
-
-def run_islands(tile: Tile) -> None:
-    """The OSM islands over the committed class raster, without the DLM."""
-    if not tile.products.dlm or not has_extract(tile, "the road islands"):
-        return
-    path = tile.out("dlm", f"landcover_{tile.id}.png")
-    raster = np.array(Image.open(path).convert("L"))
-    changed = carve_islands(raster, tile)
-    save_grey_png(path, raster)
-    legend_path = tile.out("dlm", f"landcover_{tile.id}.json")
-    legend = json.loads(legend_path.read_text())
-    legend["attribution"] = _island_credit(tile)
-    legend_path.write_text(json.dumps(legend, indent=2) + "\n")
-    print(f"{tile.id}: {changed} road texels re-classed from OSM islands")
 
 
 def veg_rows(tile: Tile) -> list[dict]:

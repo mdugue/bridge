@@ -57,7 +57,6 @@ layer.ts); prepare-data crops it to the texels that carry a colony.
 
 from __future__ import annotations
 
-import json
 import math
 
 import numpy as np
@@ -77,7 +76,6 @@ from .common import (
     column,
     feature,
     geometry_json,
-    overlaps,
     owns,
     save_grey_png,
     write_geojson,
@@ -566,19 +564,13 @@ def measured_trees(tile: Tile, near: tuple[float, float, float, float]) -> tuple
     """The measured trees (MEASURED_TREES files) of every tile whose extent
     reaches `near`, as (xy, crown radius) — across a seam too."""
     xy, r = [], []
-    for tid, b in tile.neighbours():
-        if not overlaps(b, near):
-            continue
-        for kind in MEASURED_TREES:
-            path = tile.data / "dlm" / f"{kind}_{tid}.geojson"
-            if not path.exists():
+    for kind in MEASURED_TREES:
+        for f in tile.features(kind, near):
+            geom, props = f.get("geometry"), f.get("properties") or {}
+            if not geom or geom.get("type") != "Point":
                 continue
-            for f in json.loads(path.read_text())["features"]:
-                geom, props = f.get("geometry"), f.get("properties") or {}
-                if not geom or geom.get("type") != "Point":
-                    continue
-                xy.append(geom["coordinates"][:2])
-                r.append(float(props.get("r") or props.get("d", 0) / 2 or 0))
+            xy.append(geom["coordinates"][:2])
+            r.append(float(props.get("r") or props.get("d", 0) / 2 or 0))
     return np.asarray(xy, np.float64).reshape(-1, 2), np.asarray(r, np.float64)
 
 
