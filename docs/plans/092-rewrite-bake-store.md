@@ -648,6 +648,9 @@ no join step, less code.
 | `canopy` read the last bake's `canopyx` | it reads none: `lowveg` writes no scan crown within 5 m of a canopy point, a row's tree among them, so the row's tree now stands where a scan crown took its place before |
 | the `Ledger`, the `again` / `then` loops, the recorder's `before` | gone: `step_cache.unchanged` is the key, the inputs, the probes, the listings and the outputs as recorded; `VERSION` 4. `step_cache.py` 619 → 503 lines |
 
+**The maintainer's decision (2026-11-24, passed on by the series'
+coordinator): a row's tree wins over a scan crown, as built here.**
+
 Not done, and why:
 
 - `landcover` still takes the flight's cast for the water's tint from
