@@ -273,6 +273,8 @@ test("a tree file comes back as packed; what is not one is none", () => {
   const wrong = new Uint8Array(file);
   wrong[0] = 0;
   expect(unpackTreeFile(wrong.buffer)).toBeNull();
-  expect(unpackTreeFile(new Uint8Array(file.subarray(0, -2)).buffer)).toBeNull();
+  expect(
+    unpackTreeFile(new Uint8Array(file.subarray(0, -2)).buffer)
+  ).toBeNull();
   expect(unpackTreeFile(new ArrayBuffer(8))).toBeNull();
 });
