@@ -34,6 +34,13 @@ jobs:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
       - run: bun lint
+      # The product's code lines against qa/ledger.json (plan 086, ruling
+      # 5): fails where the total rose and the PR did not commit the number
+      # (`bun run ledger -- --code`). Counted from the tracked sources: no
+      # build.
+      - name: Code lines
+        run: bun scripts/ledger.ts --code --check | tee -a "$GITHUB_STEP_SUMMARY"
+        shell: bash
 
   typecheck:
     name: Typecheck

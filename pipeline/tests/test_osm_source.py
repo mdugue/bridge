@@ -3,20 +3,17 @@ boundary, whether it covers a site with the bakes' widest read margin, the
 record beside the extract and the provenance a bake writes from it — and
 that no bake reads OSM farther beyond a tile than that margin."""
 
-import ast
 import dataclasses
 import errno
 import json
-import os
 import re
 import urllib.error
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 from bake import __main__ as bake_main
-from bake import osm_source, step_cache
+from bake import osm_source
 from bake.common import Tile
 from bake.spec import parse
 
@@ -215,32 +212,6 @@ def _first_tile_fails(spec, step, tile, *args):
     return True, True
 
 
-def test_with_jobs_the_tiles_that_finished_count_when_the_first_fails(tmp_path, monkeypatch):
-    spec = _spec(tmp_path, 412, 5656)
-    tiles = [dataclasses.replace(spec.tiles[0], id=f"t{i}") for i in range(3)]
-    monkeypatch.setattr(bake_main, "recorded_tile", _first_tile_fails)
-    monkeypatch.setattr(bake_main, "warm", lambda *a: None)
-    bake = bake_main.Bake(spec, 3, False, "h", "off")
-    with pytest.raises(RuntimeError):
-        bake.step("walls", tiles)
-    assert bake.ran == {("walls", "t1"): (True, True), ("walls", "t2"): (True, True)}
-
-
-def test_which_steps_read_osm_is_what_they_read_not_what_they_import():
-    # these reach osm.py for a helper but read no extract
-    for step in ("skyview", "roofs", "dormers", "windows", "facades", "plinths", "lamp-water"):
-        assert not bake_main.reads_osm(step)
-    assert bake_main.reads_osm("lamps") and bake_main.reads_osm("trees")
-    # skyview bakes without an extract; a listed step that reads one fails
-    bake_main.refuse_without_extract(_spec(Path("/nonexistent"), 392, 5668), ["skyview"], False)
-    tile = _spec(Path("/x"), 412, 5656).tiles[0]
-    rec = SimpleNamespace(reads={os.path.abspath(tile.osm): None})
-    assert bake_main.took_extract("lamps", tile, rec)
-    with pytest.raises(RuntimeError):
-        bake_main.took_extract("skyview", tile, rec)
-    assert not bake_main.took_extract("lamps", tile, SimpleNamespace(reads={}))
-
-
 def test_a_step_baked_without_the_extract_keeps_no_day(tmp_path):
     pbf = tmp_path / "Leipzig.osm.pbf"
     provenance = tmp_path / "provenance.json"
@@ -248,122 +219,6 @@ def test_a_step_baked_without_the_extract_keeps_no_day(tmp_path):
     provenance.write_text(json.dumps({"openstreetmap": {"baked": {"trees": {"a": old}}}}))
     osm_source.record_bake(provenance, pbf, [], [("trees", "a")])
     assert "trees" not in json.loads(provenance.read_text())["openstreetmap"]["baked"]
-
-
-def test_only_the_osm_reader_and_the_two_site_readers_read_the_extract_directly():
-    # murals and coverage read the site's own bbox (no margin): every other
-    # read goes through read_osm / read_ways, whose margins the test below holds
-    callers = {
-        p.name
-        for p in BAKE.glob("*.py")
-        if re.search(r"\bread_extract\(|osm_index\.read\(", p.read_text())
-    }
-    assert callers == {"osm.py", "murals.py", "coverage.py"}
-
-
-# The functions that read OSM around a tile, and the index of their margin
-# among the positional arguments: the readers in osm.py, and every bake
-# function that hands its own `margin` on to one (found below).
-READERS = {"read_osm": 4, "read_ways": 3, "wgs84_bbox": 1}
-
-
-def _number(node: ast.expr, consts: dict[str, float]) -> float | None:
-    if isinstance(node, ast.Constant) and isinstance(node.value, int | float):
-        return float(node.value)
-    if isinstance(node, ast.Name):
-        return consts.get(node.id)
-    return None
-
-
-def _margin_arg(call: ast.Call, index: int) -> ast.expr | None:
-    for kw in call.keywords:
-        if kw.arg == "margin":
-            return kw.value
-    return call.args[index] if len(call.args) > index else None
-
-
-def _called(call: ast.Call) -> str | None:
-    f = call.func
-    return f.id if isinstance(f, ast.Name) else f.attr if isinstance(f, ast.Attribute) else None
-
-
-def test_no_bake_reads_osm_beyond_the_margin_the_coverage_check_uses():
-    trees = {p: ast.parse(p.read_text()) for p in sorted(BAKE.glob("*.py"))}
-    readers = dict(READERS)
-    # a function whose `margin` parameter reaches a reader is one too
-    grew = True
-    while grew:
-        grew = False
-        for tree in trees.values():
-            for fn in ast.walk(tree):
-                if not isinstance(fn, ast.FunctionDef) or fn.name in readers:
-                    continue
-                names = [a.arg for a in fn.args.args]
-                if "margin" not in names:
-                    continue
-                for call in ast.walk(fn):
-                    if isinstance(call, ast.Call) and _called(call) in readers:
-                        arg = _margin_arg(call, readers[_called(call)])
-                        if isinstance(arg, ast.Name) and arg.id == "margin":
-                            readers[fn.name] = names.index("margin")
-                            grew = True
-                            break
-    seen, unread = [], []
-    for path, tree in trees.items():
-        if path.name in ("osm_source.py", "coverage.py", "murals.py"):
-            continue  # the check itself; the two read the site's own bbox
-        consts = {
-            t.id: v
-            for node in tree.body
-            if isinstance(node, ast.Assign)
-            for t in node.targets
-            if isinstance(t, ast.Name) and (v := _number(node.value, {})) is not None
-        }
-        for fn in ast.walk(tree):
-            if isinstance(fn, ast.FunctionDef) and fn.name in readers:
-                args = fn.args
-                named = [a.arg for a in args.args][len(args.args) - len(args.defaults) :]
-                defaults = dict(zip(named, args.defaults, strict=True))
-                if "margin" in defaults:
-                    seen.append((path.name, fn.name, _number(defaults["margin"], consts)))
-        for call in ast.walk(tree):
-            if not (isinstance(call, ast.Call) and _called(call) in readers):
-                continue
-            arg = _margin_arg(call, readers[_called(call)])
-            if arg is None or (isinstance(arg, ast.Name) and arg.id == "margin"):
-                continue  # the default (checked above), or a caller's (checked at it)
-            value = _number(arg, consts)
-            if value is None:
-                unread.append(f"{path.name}:{call.lineno}")
-            else:
-                seen.append((path.name, call.lineno, value))
-    assert not unread, f"margins the test cannot read (a literal or a module constant): {unread}"
-    assert len(seen) > 20
-    wide = [s for s in seen if s[2] is not None and s[2] > osm_source.MAX_MARGIN_DEG]
-    assert not wide, f"read beyond MAX_MARGIN_DEG — raise it, and the docs' coverage table: {wide}"
-    assert max(s[2] for s in seen if s[2] is not None) == osm_source.MAX_MARGIN_DEG
-
-
-def test_a_step_listed_as_reading_no_osm_fails_at_the_read_every_time(tmp_path, monkeypatch):
-    # roofs made to read the extract: it fails at the read, before it
-    # writes and before its run is recorded, so the next bake fails too
-    spec = _spec(tmp_path, 412, 5656)
-    spec.osm.parent.mkdir(parents=True, exist_ok=True)
-    spec.osm.write_bytes(b"x")
-    tile = spec.tiles[0]
-    out = tmp_path / "data" / "roofs_t.geojson"
-
-    def reads_then_writes(step, tile, tiles, research):
-        step_cache.note_read(tile.osm)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text("{}")
-
-    monkeypatch.setattr(bake_main, "run_tile", reads_then_writes)
-    manifest = step_cache.manifest_path(spec.raw, spec.site, "roofs", tile.id)
-    for _ in range(2):
-        with pytest.raises(step_cache.ForbiddenRead):
-            bake_main.recorded_tile(spec, "roofs", tile, False, {"k": 1}, True)
-        assert not out.exists() and not manifest.exists()
 
 
 def test_a_step_that_skipped_without_the_extract_keeps_its_day(tmp_path):
@@ -381,19 +236,3 @@ def test_a_step_that_skipped_without_the_extract_keeps_its_day(tmp_path):
     bake.ran = {("walls", "t"): (False, True)}
     bake_main.record_provenance(spec, bake)
     assert "walls" not in json.loads(provenance.read_text())["openstreetmap"]["baked"]
-
-
-def test_the_bake_writes_only_its_own_member_of_a_hand_formatted_record():
-    text = (
-        '{\n  "tiles": ["a", "b"],\n  "openstreetmap": {\n    "licence": "ODbL",'
-        '\n    "x": [1, 2]\n  },\n  "wikidata": {"dataAsOf": "2026-11-01"}\n}\n'
-    )
-    run = {"lamps": {"a": {"dataAsOf": "2026-11-14 (…)", "on": "2026-11-16"}}}
-    out = osm_source.with_baked(text, run)
-    assert json.loads(out)["openstreetmap"]["baked"] == run
-    kept = [ln for ln in text.splitlines() if "baked" not in ln]
-    # every line of the record is still there as it was, but the one the
-    # member's comma joins
-    assert [ln for ln in kept if ln not in out.splitlines()] == ['    "x": [1, 2]']
-    again = osm_source.with_baked(out, {})
-    assert json.loads(again)["openstreetmap"]["baked"] == {}

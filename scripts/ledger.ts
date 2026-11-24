@@ -11,6 +11,10 @@
  *                                          # anew (e2e/ledger.spec.ts against a
  *                                          # NEXT_PUBLIC_POC_DEBUG=1 build);
  *                                          # else the committed ones stand
+ *   bun scripts/ledger.ts --code           # write code.product alone: no
+ *                                          # build needed, seconds
+ *   bun scripts/ledger.ts --code --check   # fail where its total rose (CI's
+ *                                          # Lint job); a fall passes
  *   bun scripts/ledger.ts --against <ref>  # code.product here and at <ref>,
  *                                          # nothing written: what a
  *                                          # milestone PR quotes
@@ -249,6 +253,37 @@ function against(root: string, ref: string): string {
     .join("");
 }
 
+/**
+ * `--code`: the product's code lines alone, which need no build. Written
+ * into the committed ledger; or checked, failing only where the total
+ * rose — a fall passes, and the next write records it.
+ */
+function codeOnly(
+  root: string,
+  committed: Partial<Ledger>,
+  check: boolean,
+  out: (text: string) => void
+): number {
+  const product = codeProduct(root);
+  if (!check) {
+    writeFileSync(
+      nodePath.join(root, LEDGER_PATH),
+      `${JSON.stringify({ ...committed, code: { product } }, null, 2)}\n`
+    );
+    out(`${LEDGER_PATH}: code.product.total ${product.total}\n`);
+    return 0;
+  }
+  const was = committed.code?.product.total ?? 0;
+  if (product.total <= was) {
+    out(`code.product.total: ${product.total} (committed ${was})\n`);
+    return 0;
+  }
+  out(
+    `code.product.total rose: ${was} → ${product.total}. The series makes the code smaller (plan 086, ruling 5): remove as much elsewhere, or run bun run ledger -- --code, commit ${LEDGER_PATH} and say in the PR what the lines buy. Only git-tracked files count: a new file not yet added is uncounted here.\n`
+  );
+  return 1;
+}
+
 export interface RunOptions {
   /** where the report goes */
   out?: (text: string) => void;
@@ -277,10 +312,12 @@ export function run(argv: readonly string[], opts: RunOptions = {}): number {
     out(against(root, argv[1]));
     return 0;
   }
-  const unknown = argv.filter((arg) => !["--check", "--browser"].includes(arg));
+  const unknown = argv.filter(
+    (arg) => !["--check", "--browser", "--code"].includes(arg)
+  );
   if (unknown.length > 0) {
     out(
-      `ledger: unknown argument ${unknown.join(" ")} (known: --check, --browser, --against <ref>); nothing written\n`
+      `ledger: unknown argument ${unknown.join(" ")} (known: --check, --browser, --code, --against <ref>); nothing written\n`
     );
     return 2;
   }
@@ -288,6 +325,9 @@ export function run(argv: readonly string[], opts: RunOptions = {}): number {
   const committed = existsSync(file)
     ? (JSON.parse(readFileSync(file, "utf-8")) as Partial<Ledger>)
     : {};
+  if (argv.includes("--code")) {
+    return codeOnly(root, committed, argv.includes("--check"), out);
+  }
   const browser = argv.includes("--browser")
     ? readBrowser(site, root)
     : committed.browser;

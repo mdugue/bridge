@@ -2,668 +2,241 @@
   "checker": "pyright 1.1.414",
   "findings": {
     "bake/bridge.py": {
-      "reportOperatorIssue": {
-        "Operator \"+\" not supported for types \"float | None\" and \"float | None\"": 1
-      },
-      "reportOptionalOperand": {
-        "Operator \"*\" not supported for \"None\"": 2
-      },
-      "reportOptionalSubscript": {
-        "Object of type \"None\" is not subscriptable": 4
-      }
+      "reportOperatorIssue": 1,
+      "reportOptionalOperand": 2,
+      "reportOptionalSubscript": 4
     },
     "bake/cadastre.py": {
-      "reportOptionalMemberAccess": {
-        "\"credit\" is not a known attribute of \"None\"": 1
-      }
+      "reportOptionalMemberAccess": 1
     },
     "bake/canopy.py": {
-      "reportArgumentType": {
-        "Argument of type \"tuple[ndarray[_AnyShape, dtype[float64]] | ndarray[_AnyShape, dtype[intp]] | ndarray[_AnyShape, dtype[Unknown]] | ndarray[_AnyShape, dtype[Incomplete]] | Unknown, ndarray[_AnyShape, dtype[float64]] | ndarray[_AnyShape, dtype[intp]] | ndarray[_AnyShape, dtype[Unknown]] | ndarray[_AnyShape, dtype[Incomplete]] | Unknown]\" cannot be assigned to parameter \"key\" of type \"_ToIndices\" in function \"__getitem__\"": 1,
-        "Argument of type \"tuple[ndarray[_AnyShape, dtype[float64]] | ndarray[_AnyShape, dtype[intp]] | ndarray[_AnyShape, dtype[Unknown]] | ndarray[_AnyShape, dtype[Incomplete]] | Unknown, ndarray[_AnyShape, dtype[float64]] | ndarray[_AnyShape, dtype[intp]] | ndarray[_AnyShape, dtype[Unknown]] | ndarray[_AnyShape, dtype[Incomplete]] | Unknown]\" cannot be assigned to parameter \"key\" of type \"list[str]\" in function \"__getitem__\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "\"cKDTree\" is unknown import symbol": 1,
-        "Cannot access attribute \"is_empty\" for class \"Geometry\"": 1
-      },
-      "reportCallIssue": {
-        "No overloads for \"__getitem__\" match the provided arguments": 1
-      },
-      "reportIndexIssue": {
-        "\"__getitem__\" method not defined on type \"Point\"": 1
-      }
+      "reportArgumentType": 2,
+      "reportAttributeAccessIssue": 2,
+      "reportCallIssue": 1,
+      "reportIndexIssue": 1
     },
     "bake/citygml.py": {
-      "reportOptionalMemberAccess": {
-        "\"split\" is not a known attribute of \"None\"": 5
-      },
-      "reportReturnType": {
-        "Type \"list[tuple[float, float, float]] | list[tuple[float, ...]]\" is not assignable to return type \"list[tuple[float, float, float]]\"": 1
-      }
+      "reportOptionalMemberAccess": 5,
+      "reportReturnType": 1
     },
     "bake/common.py": {
-      "reportArgumentType": {
-        "Argument of type \"Geometry\" cannot be assigned to parameter \"ob\" of type \"SupportsGeoInterface\" in function \"mapping\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"difference\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"intersection\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"intersects\" for class \"Geometry\"": 1
-      }
+      "reportArgumentType": 1,
+      "reportAttributeAccessIssue": 3
     },
     "bake/cultivated.py": {
-      "reportAttributeAccessIssue": {
-        "\"transform\" is not a known attribute of module \"rasterio\"": 1,
-        "Cannot access attribute \"area\" for class \"Geometry\"": 4,
-        "Cannot access attribute \"bounds\" for class \"Geometry\"": 3,
-        "Cannot access attribute \"buffer\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"centroid\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"exterior\" for class \"BaseGeometry\"": 1
-      },
-      "reportCallIssue": {
-        "Expected 0 positional arguments": 1
-      },
-      "reportOptionalMemberAccess": {
-        "\"any\" is not a known attribute of \"None\"": 1,
-        "\"astype\" is not a known attribute of \"None\"": 4
-      },
-      "reportOptionalSubscript": {
-        "Object of type \"None\" is not subscriptable": 1
-      }
+      "reportAttributeAccessIssue": 11,
+      "reportCallIssue": 1,
+      "reportOptionalMemberAccess": 5,
+      "reportOptionalSubscript": 1
     },
     "bake/doors.py": {
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"contains\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"exterior\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"geom_type\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"geoms\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"interiors\" for class \"Geometry\"": 1
-      }
+      "reportAttributeAccessIssue": 5
     },
     "bake/dop_light.py": {
-      "reportReturnType": {
-        "Type \"bool_\" is not assignable to return type \"bool\"": 1
-      }
+      "reportReturnType": 1
     },
     "bake/dormers.py": {
-      "reportArgumentType": {
-        "Argument of type \"Point | GeoArray\" cannot be assigned to parameter \"geoms\" of type \"GeoArrayLikeSeq\" in function \"__init__\"": 2,
-        "Argument of type \"tuple[dict[Unknown, Unknown], int]\" cannot be assigned to parameter \"object\" of type \"dict[Unknown, Unknown]\" in function \"append\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"area\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"covers\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"distance\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"intersection\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"is_empty\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"minimum_rotated_rectangle\" for class \"Geometry\"": 1
-      },
-      "reportCallIssue": {
-        "Expected 5 positional arguments": 6
-      },
-      "reportOptionalMemberAccess": {
-        "\"astype\" is not a known attribute of \"None\"": 1
-      },
-      "reportOptionalSubscript": {
-        "Object of type \"None\" is not subscriptable": 2
-      }
+      "reportArgumentType": 3,
+      "reportAttributeAccessIssue": 8,
+      "reportCallIssue": 6,
+      "reportOptionalMemberAccess": 1,
+      "reportOptionalSubscript": 2
     },
     "bake/edges.py": {
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"is_empty\" for class \"Geometry\"": 1
-      }
+      "reportAttributeAccessIssue": 1
     },
     "bake/facade_glass.py": {
-      "reportAttributeAccessIssue": {
-        "\"BICUBIC\" is not a known attribute of module \"PIL.Image\"": 1
-      },
-      "reportCallIssue": {
-        "Expected 5 positional arguments": 1
-      },
-      "reportIndexIssue": {
-        "\"__getitem__\" method not defined on type \"SparseTensor\"": 1
-      }
+      "reportAttributeAccessIssue": 1,
+      "reportCallIssue": 1,
+      "reportIndexIssue": 1
     },
     "bake/facade_measure.py": {
-      "reportArgumentType": {
-        "Argument of type \"Any | NDArray[bool_] | None\" cannot be assigned to parameter \"holes\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"ground_top\"": 1,
-        "Argument of type \"int | bytes\" cannot be assigned to parameter \"b\" of type \"bytes\" in function \"_fields\"": 1,
-        "Argument of type \"int | bytes\" cannot be assigned to parameter \"b\" of type \"bytes\" in function \"_packed\"": 1,
-        "Argument of type \"int | bytes\" cannot be assigned to parameter \"extent\" of type \"int\" in function \"_feature_rings\"": 1
-      },
-      "reportOptionalMemberAccess": {
-        "\"get\" is not a known attribute of \"None\"": 1
-      },
-      "reportPossiblyUnboundVariable": {
-        "\"th\" is possibly unbound": 1
-      }
+      "reportArgumentType": 4,
+      "reportOptionalMemberAccess": 1,
+      "reportPossiblyUnboundVariable": 1
     },
     "bake/facades.py": {
-      "reportArgumentType": {
-        "Argument of type \"LineString\" cannot be assigned to parameter \"geoms\" of type \"GeoArrayLikeSeq\" in function \"__init__\"": 1,
-        "Argument of type \"Point | GeoArray\" cannot be assigned to parameter \"geoms\" of type \"GeoArrayLikeSeq\" in function \"__init__\"": 2,
-        "Argument of type \"Unknown | Literal[3] | None\" cannot be assigned to parameter \"h\" of type \"int\" in function \"project\"": 1,
-        "Argument of type \"Unknown | Literal[4] | None\" cannot be assigned to parameter \"wd\" of type \"int\" in function \"project\"": 1,
-        "Argument of type \"ndarray[_AnyShape, dtype[Any]] | None\" cannot be assigned to parameter \"cls\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"measure\"": 1,
-        "Argument of type \"ndarray[_AnyShape, dtype[Any]] | None\" cannot be assigned to parameter \"img\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"measure\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"contains\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"exterior\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"geom_type\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"geoms\" for class \"Geometry\"": 1,
-        "Cannot assign to attribute \"graph_error\" for class \"HTTPError\"": 1
-      },
-      "reportOptionalMemberAccess": {
-        "\"bounds\" is not a known attribute of \"None\"": 1,
-        "\"sample\" is not a known attribute of \"None\"": 1
-      },
-      "reportPossiblyUnboundVariable": {
-        "\"ws\" is possibly unbound": 2
-      }
+      "reportArgumentType": 7,
+      "reportAttributeAccessIssue": 6,
+      "reportOptionalMemberAccess": 2,
+      "reportPossiblyUnboundVariable": 2
     },
     "bake/furniture.py": {
-      "reportArgumentType": {
-        "Argument of type \"Decks\" cannot be assigned to parameter \"geoms\" of type \"GeoArrayLikeSeq\" in function \"__init__\"": 1,
-        "Argument of type \"Geometry | Unknown\" cannot be assigned to parameter \"p\" of type \"Point\" in function \"open\"": 1,
-        "Argument of type \"Geometry | Unknown\" cannot be assigned to parameter \"p\" of type \"Point\" in function \"water_facing\"": 1,
-        "Argument of type \"Geometry | Unknown\" cannot be assigned to parameter \"point\" of type \"Point\" in function \"facing\"": 1,
-        "Argument of type \"Geometry\" cannot be assigned to parameter \"p\" of type \"Point\" in function \"_point_feature\"": 1,
-        "Argument of type \"Unknown | None\" cannot be assigned to parameter \"lines\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"facing\"": 1
-      },
-      "reportAssignmentType": {
-        "Type \"list[Any]\" is not assignable to declared type \"Decks | None\"": 1,
-        "Type \"list[BaseGeometry]\" is not assignable to declared type \"Decks | None\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "\"errors\" is not a known attribute of module \"rasterio\"": 1,
-        "Cannot access attribute \"area\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"boundary\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"buffer\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"coords\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"exterior\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"geom_type\" for class \"Geometry\"": 9,
-        "Cannot access attribute \"geoms\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"interpolate\" for class \"Geometry\"": 3,
-        "Cannot access attribute \"interpolate\" for class \"ndarray[_AnyShape, dtype[Any]]\"": 2,
-        "Cannot access attribute \"is_ring\" for class \"Geometry\"": 3,
-        "Cannot access attribute \"length\" for class \"ndarray[_AnyShape, dtype[Any]]\"": 1,
-        "Cannot access attribute \"project\" for class \"ndarray[_AnyShape, dtype[Any]]\"": 1,
-        "Cannot access attribute \"representative_point\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"x\" for class \"GeoArray\"": 1,
-        "Cannot access attribute \"y\" for class \"GeoArray\"": 1
-      },
-      "reportOptionalMemberAccess": {
-        "\"junction_ahead\" is not a known attribute of \"None\"": 1
-      },
-      "reportReturnType": {
-        "Type \"BaseGeometry\" is not assignable to return type \"Polygon | None\"": 1
-      }
+      "reportArgumentType": 6,
+      "reportAssignmentType": 2,
+      "reportAttributeAccessIssue": 30,
+      "reportOptionalMemberAccess": 1,
+      "reportReturnType": 1
     },
     "bake/lamp_heights.py": {
-      "reportOptionalSubscript": {
-        "Object of type \"None\" is not subscriptable": 1
-      }
+      "reportOptionalSubscript": 1
     },
     "bake/lamps.py": {
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"interpolate\" for class \"Geometry\"": 3,
-        "Cannot access attribute \"length\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"project\" for class \"Geometry\"": 1
-      },
-      "reportOptionalSubscript": {
-        "Object of type \"None\" is not subscriptable": 1
-      }
+      "reportAttributeAccessIssue": 5,
+      "reportOptionalSubscript": 1
     },
     "bake/landcover.py": {
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"is_empty\" for class \"Geometry\"": 2
-      }
+      "reportAttributeAccessIssue": 2
     },
     "bake/landmark_facts.py": {
-      "reportOptionalOperand": {
-        "Operator \"/\" not supported for \"None\"": 1
-      }
+      "reportOptionalOperand": 1
     },
     "bake/lowveg.py": {
-      "reportArgumentType": {
-        "Argument of type \"_Array[tuple[int, int], Incomplete] | ndarray[tuple[int], _dtype] | ndarray[Unknown, _dtype] | Unknown\" cannot be assigned to parameter \"value\" of type \"Grid\" in function \"__setitem__\"": 4,
-        "Argument of type \"bool\" cannot be assigned to parameter \"value\" of type \"Grid\" in function \"__setitem__\"": 2,
-        "Argument of type \"ndarray[_AnyShape, _dtype]\" cannot be assigned to parameter \"value\" of type \"Grid\" in function \"__setitem__\"": 3,
-        "Argument of type \"ndarray[_AnyShape, dtype[Any]] | NDArray[floating[Any]] | _Array[tuple[int, int], floating[_32Bit]]\" cannot be assigned to parameter \"value\" of type \"Grid\" in function \"__setitem__\"": 1,
-        "Argument of type \"ndarray[_AnyShape, dtype[Any]] | NDArray[floating[Any]]\" cannot be assigned to parameter \"value\" of type \"Grid\" in function \"__setitem__\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "\"cKDTree\" is unknown import symbol": 1,
-        "Cannot access attribute \"geoms\" for class \"LineString\"": 1,
-        "Cannot access attribute \"intersection\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"intersects\" for class \"Geometry\"": 1
-      },
-      "reportOptionalMemberAccess": {
-        "\"astype\" is not a known attribute of \"None\"": 1
-      }
+      "reportArgumentType": 11,
+      "reportAttributeAccessIssue": 4,
+      "reportOptionalMemberAccess": 1
     },
     "bake/lsc.py": {
-      "reportArgumentType": {
-        "Argument of type \"PackedPointRecord | SubFieldView | ScaledArrayView | Unknown\" cannot be assigned to parameter \"y\" of type \"ArrayLike\" in function \"where\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"classification\" for class \"ScaledArrayView\"": 1,
-        "Cannot access attribute \"classification\" for class \"SubFieldView\"": 1,
-        "Cannot access attribute \"intensity\" for class \"ScaledArrayView\"": 1,
-        "Cannot access attribute \"intensity\" for class \"SubFieldView\"": 1,
-        "Cannot access attribute \"number_of_returns\" for class \"ScaledArrayView\"": 1,
-        "Cannot access attribute \"number_of_returns\" for class \"SubFieldView\"": 1,
-        "Cannot access attribute \"x\" for class \"ScaledArrayView\"": 1,
-        "Cannot access attribute \"x\" for class \"SubFieldView\"": 1,
-        "Cannot access attribute \"y\" for class \"ScaledArrayView\"": 1,
-        "Cannot access attribute \"y\" for class \"SubFieldView\"": 1,
-        "Cannot access attribute \"z\" for class \"ScaledArrayView\"": 1,
-        "Cannot access attribute \"z\" for class \"SubFieldView\"": 1
-      },
-      "reportCallIssue": {
-        "No overloads for \"where\" match the provided arguments": 1
-      },
-      "reportPossiblyUnboundVariable": {
-        "\"keep\" is possibly unbound": 1,
-        "\"mapped\" is possibly unbound": 1
-      }
+      "reportArgumentType": 1,
+      "reportAttributeAccessIssue": 12,
+      "reportCallIssue": 1,
+      "reportPossiblyUnboundVariable": 2
     },
     "bake/mapillary.py": {
-      "reportArgumentType": {
-        "Argument of type \"Point | GeoArray\" cannot be assigned to parameter \"geoms\" of type \"GeoArrayLikeSeq\" in function \"__init__\"": 2
-      },
-      "reportAssignmentType": {
-        "Type \"Point | None\" is not assignable to declared type \"Point\"": 1
-      }
+      "reportArgumentType": 2,
+      "reportAssignmentType": 1
     },
     "bake/markings.py": {
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"buffer\" for class \"Geometry\"": 3,
-        "Cannot access attribute \"distance\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"interpolate\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"is_empty\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"length\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"project\" for class \"Geometry\"": 1
-      },
-      "reportOptionalOperand": {
-        "Operator \">\" not supported for \"None\"": 1
-      }
+      "reportAttributeAccessIssue": 9,
+      "reportOptionalOperand": 1
     },
     "bake/monuments.py": {
-      "reportArgumentType": {
-        "Argument of type \"Geometry\" cannot be assigned to parameter \"area\" of type \"Polygon\" in function \"_basin\"": 1,
-        "Argument of type \"tuple[intp, ...]\" cannot be assigned to parameter \"seed\" of type \"tuple[int, int]\" in function \"_flood\"": 2
-      },
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"area\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"exterior\" for class \"BaseGeometry\"": 1,
-        "Cannot access attribute \"exterior\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"geom_type\" for class \"Geometry\"": 5,
-        "Cannot access attribute \"geoms\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"representative_point\" for class \"Geometry\"": 2
-      },
-      "reportOptionalMemberAccess": {
-        "\"astype\" is not a known attribute of \"None\"": 1
-      }
+      "reportArgumentType": 3,
+      "reportAttributeAccessIssue": 13,
+      "reportOptionalMemberAccess": 1
     },
     "bake/mural_drawing.py": {
-      "reportArgumentType": {
-        "Argument of type \"tuple[int, ...]\" cannot be assigned to parameter \"ink\" of type \"tuple[int, int, int]\" in function \"__init__\"": 1
-      }
+      "reportArgumentType": 1
     },
     "bake/murals.py": {
-      "reportArgumentType": {
-        "Argument of type \"Geometry\" cannot be assigned to parameter \"line\" of type \"LineString\" in function \"place_line\"": 1,
-        "Argument of type \"Geometry\" cannot be assigned to parameter \"p\" of type \"Point\" in function \"place_point\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"centroid\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"contains\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"geom_type\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"length\" for class \"Geometry\"": 1
-      },
-      "reportReturnType": {
-        "Type \"list[tuple[float, ...]]\" is not assignable to return type \"list[tuple[float, float]]\"": 2
-      }
+      "reportArgumentType": 2,
+      "reportAttributeAccessIssue": 4,
+      "reportReturnType": 2
     },
     "bake/osm.py": {
-      "reportAttributeAccessIssue": {
-        "\"raw\" is not a known attribute of module \"pyogrio\"": 1
-      }
+      "reportAttributeAccessIssue": 1
     },
     "bake/osm_buildings.py": {
-      "reportArgumentType": {
-        "Argument of type \"tuple[str, str] | None\" cannot be assigned to parameter \"object\" of type \"tuple[str, str]\" in function \"append\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "\"cKDTree\" is unknown import symbol": 1,
-        "Cannot access attribute \"area\" for class \"Geometry\"": 1
-      }
+      "reportArgumentType": 1,
+      "reportAttributeAccessIssue": 2
     },
     "bake/osm_index.py": {
-      "reportAttributeAccessIssue": {
-        "\"raw\" is not a known attribute of module \"pyogrio\"": 6
-      }
+      "reportAttributeAccessIssue": 6
     },
     "bake/passages.py": {
-      "reportArgumentType": {
-        "Argument of type \"BaseGeometry\" cannot be assigned to parameter \"axis\" of type \"LineString\" in function \"ground_along\"": 1,
-        "Argument of type \"BaseGeometry\" cannot be assigned to parameter \"axis\" of type \"LineString\" in function \"object_part\"": 1,
-        "Argument of type \"BaseGeometry\" cannot be assigned to parameter \"axis\" of type \"LineString\" in function \"strip_of\"": 1,
-        "Argument of type \"BaseGeometry\" cannot be assigned to parameter \"line\" of type \"LineString\" in function \"max_bend\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"boundary\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"contains\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"intersection\" for class \"Geometry\"": 2
-      },
-      "reportReturnType": {
-        "Type \"Point | LineString\" is not assignable to return type \"LineString\"": 1
-      }
+      "reportArgumentType": 4,
+      "reportAttributeAccessIssue": 4,
+      "reportReturnType": 1
     },
     "bake/plinths.py": {
-      "reportArgumentType": {
-        "Argument of type \"tuple[float64, float64 | None]\" cannot be assigned to parameter \"object\" of type \"tuple[float, float]\" in function \"append\"": 1
-      }
+      "reportArgumentType": 1
     },
     "bake/rail.py": {
-      "reportArgumentType": {
-        "Argument of type \"Geometry\" cannot be assigned to parameter \"line\" of type \"OptGeoArrayLikeSeq\" in function \"line_interpolate_point\"": 2,
-        "Argument of type \"Unknown | None\" cannot be assigned to parameter \"transform\" of type \"Affine\" in function \"rasterize\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"buffer\" for class \"Geometry\"": 3,
-        "Cannot access attribute \"exterior\" for class \"BaseGeometry\"": 1,
-        "Cannot access attribute \"interpolate\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"intersection\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"intersects\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"is_empty\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"length\" for class \"Geometry\"": 5
-      },
-      "reportCallIssue": {
-        "No overloads for \"line_interpolate_point\" match the provided arguments": 2
-      },
-      "reportOperatorIssue": {
-        "Operator \"-\" not supported for types \"float | None\" and \"float | None\"": 1
-      },
-      "reportOptionalMemberAccess": {
-        "\"c\" is not a known attribute of \"None\"": 2,
-        "\"f\" is not a known attribute of \"None\"": 2,
-        "\"shape\" is not a known attribute of \"None\"": 2
-      },
-      "reportOptionalSubscript": {
-        "Object of type \"None\" is not subscriptable": 1
-      }
+      "reportArgumentType": 3,
+      "reportAttributeAccessIssue": 13,
+      "reportCallIssue": 2,
+      "reportOperatorIssue": 1,
+      "reportOptionalMemberAccess": 6,
+      "reportOptionalSubscript": 1
     },
     "bake/rail_osm.py": {
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"length\" for class \"Geometry\"": 1
-      }
+      "reportAttributeAccessIssue": 1
     },
     "bake/riverside.py": {
-      "reportArgumentType": {
-        "Argument of type \"float | None\" cannot be assigned to parameter \"value\" of type \"str\" in function \"__setitem__\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "\"transform\" is not a known attribute of module \"rasterio\"": 1,
-        "\"windows\" is not a known attribute of module \"rasterio\"": 1,
-        "Cannot access attribute \"area\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"boundary\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"buffer\" for class \"Geometry\"": 3,
-        "Cannot access attribute \"contains\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"coords\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"distance\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"exterior\" for class \"BaseGeometry\"": 1,
-        "Cannot access attribute \"exterior\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"geom_type\" for class \"Geometry\"": 6,
-        "Cannot access attribute \"geoms\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"interpolate\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"is_empty\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"is_ring\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"length\" for class \"Geometry\"": 2
-      },
-      "reportCallIssue": {
-        "Expected 0 positional arguments": 1
-      },
-      "reportOptionalMemberAccess": {
-        "\"astype\" is not a known attribute of \"None\"": 1
-      },
-      "reportReturnType": {
-        "Type \"BaseGeometry\" is not assignable to return type \"Polygon | None\"": 2
-      }
+      "reportArgumentType": 1,
+      "reportAttributeAccessIssue": 26,
+      "reportCallIssue": 1,
+      "reportOptionalMemberAccess": 1,
+      "reportReturnType": 2
     },
     "bake/road_widths.py": {
-      "reportIndexIssue": {
-        "\"__getitem__\" method not defined on type \"Point\"": 2
-      }
+      "reportIndexIssue": 2
     },
     "bake/roof_colour.py": {
-      "reportAttributeAccessIssue": {
-        "Cannot assign to attribute \"slope\" for class \"Frame*\"": 1
-      },
-      "reportCallIssue": {
-        "Expected 4 positional arguments": 1,
-        "Expected 6 positional arguments": 4
-      },
-      "reportOptionalMemberAccess": {
-        "\"az\" is not a known attribute of \"None\"": 1,
-        "\"el\" is not a known attribute of \"None\"": 1
-      }
+      "reportAttributeAccessIssue": 1,
+      "reportCallIssue": 5,
+      "reportOptionalMemberAccess": 2
     },
     "bake/roof_facets.py": {
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"area\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"covers\" for class \"Geometry\"": 1
-      }
+      "reportAttributeAccessIssue": 3
     },
     "bake/roof_planes.py": {
-      "reportArgumentType": {
-        "Argument of type \"float64\" cannot be assigned to parameter \"cols\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"_plane\"": 2,
-        "Argument of type \"float64\" cannot be assigned to parameter \"rows\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"_plane\"": 2,
-        "Argument of type \"tuple[slice[Any, Any, Any], slice[Any, Any, Any]]\" cannot be assigned to parameter \"key\" of type \"tuple[None, ...]\" in function \"__getitem__\"": 2
-      },
-      "reportCallIssue": {
-        "No overloads for \"__getitem__\" match the provided arguments": 2
-      },
-      "reportGeneralTypeIssues": {
-        "\"None\" is not iterable": 1
-      }
+      "reportArgumentType": 6,
+      "reportCallIssue": 2,
+      "reportGeneralTypeIssues": 1
     },
     "bake/roofs.py": {
-      "reportArgumentType": {
-        "Argument of type \"Grid\" cannot be assigned to parameter \"field\" of type \"Field\" in function \"burn_triangles\"": 2,
-        "Argument of type \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\" cannot be assigned to parameter \"key\" of type \"(_T@max) -> SupportsRichComparison\" in function \"max\"": 1,
-        "Argument of type \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\" cannot be assigned to parameter \"key\" of type \"_ToIndices\" in function \"__getitem__\"": 1,
-        "Argument of type \"list[ndarray[_AnyShape, Any] | list[Unknown | None]]\" cannot be assigned to parameter \"tup\" of type \"Sequence[ArrayLike]\" in function \"column_stack\"": 1,
-        "Argument of type \"ndarray[_AnyShape, dtype[Any]] | Any | None\" cannot be assigned to parameter \"point\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"__new__\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"area\" for class \"Geometry\"": 5,
-        "Cannot access attribute \"bounds\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"coords\" for class \"ndarray[_AnyShape, dtype[Any]]\"": 1,
-        "Cannot access attribute \"exterior\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"geom_type\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"geoms\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"interiors\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"is_empty\" for class \"Geometry\"": 1
-      },
-      "reportCallIssue": {
-        "No overloads for \"__getitem__\" match the provided arguments": 1,
-        "No overloads for \"column_stack\" match the provided arguments": 1,
-        "No overloads for \"max\" match the provided arguments": 1
-      },
-      "reportOperatorIssue": {
-        "Operator \"|=\" not supported for types \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\" and \"_Array1D[float64] | ndarray[tuple[int], dtype[Any]] | ndarray[Unknown, Unknown]\"": 1
-      },
-      "reportOptionalOperand": {
-        "Operator \">\" not supported for \"None\"": 2
-      },
-      "reportOptionalSubscript": {
-        "Object of type \"None\" is not subscriptable": 1
-      },
-      "reportPossiblyUnboundVariable": {
-        "\"drawn\" is possibly unbound": 2,
-        "\"faces\" is possibly unbound": 2,
-        "\"lab\" is possibly unbound": 4,
-        "\"surface\" is possibly unbound": 2
-      }
+      "reportArgumentType": 6,
+      "reportAttributeAccessIssue": 14,
+      "reportCallIssue": 3,
+      "reportOperatorIssue": 1,
+      "reportOptionalOperand": 2,
+      "reportOptionalSubscript": 1,
+      "reportPossiblyUnboundVariable": 10
     },
     "bake/shopfronts.py": {
-      "reportArgumentType": {
-        "Argument of type \"LineString\" cannot be assigned to parameter \"geoms\" of type \"GeoArrayLikeSeq\" in function \"__init__\"": 1,
-        "Argument of type \"list[float]\" cannot be assigned to parameter \"value\" of type \"list[list[float]]\" in function \"__setitem__\"": 1
-      },
-      "reportAssignmentType": {
-        "Type \"None\" is not assignable to declared type \"(x: float, y: float) -> (float | None)\"": 1
-      }
+      "reportArgumentType": 2,
+      "reportAssignmentType": 1
     },
     "bake/skyview.py": {
-      "reportArgumentType": {
-        "Argument of type \"set[str]\" cannot be assigned to parameter \"skip\" of type \"frozenset[Unknown]\" in function \"lod2_rings\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"bounds\" for class \"Geometry\"": 1
-      },
-      "reportOptionalOperand": {
-        "Operator \"/\" not supported for \"None\"": 1
-      }
+      "reportArgumentType": 1,
+      "reportAttributeAccessIssue": 1,
+      "reportOptionalOperand": 1
     },
     "bake/small_buildings.py": {
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"bounds\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"exterior\" for class \"BaseGeometry\"": 1,
-        "Cannot access attribute \"exterior\" for class \"Geometry\"": 1
-      },
-      "reportGeneralTypeIssues": {
-        "\"None\" is not iterable": 1
-      }
+      "reportAttributeAccessIssue": 3,
+      "reportGeneralTypeIssues": 1
     },
     "bake/spec.py": {
-      "reportArgumentType": {
-        "Argument of type \"tuple[float, ...]\" cannot be assigned to parameter \"bounds\" of type \"tuple[float, float, float, float]\" in function \"__init__\"": 1
-      }
+      "reportArgumentType": 1
     },
     "bake/sport.py": {
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"area\" for class \"Geometry\"": 5,
-        "Cannot access attribute \"bounds\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"exterior\" for class \"BaseGeometry\"": 1
-      },
-      "reportCallIssue": {
-        "Expected 8 positional arguments": 2
-      }
+      "reportAttributeAccessIssue": 7,
+      "reportCallIssue": 2
     },
     "bake/structures.py": {
-      "reportAttributeAccessIssue": {
-        "\"transform\" is not a known attribute of module \"rasterio\"": 2,
-        "Cannot access attribute \"area\" for class \"Geometry\"": 3,
-        "Cannot access attribute \"buffer\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"centroid\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"geom_type\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"intersects\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"simplify\" for class \"Geometry\"": 2
-      },
-      "reportOptionalMemberAccess": {
-        "\"astype\" is not a known attribute of \"None\"": 1
-      }
+      "reportAttributeAccessIssue": 12,
+      "reportOptionalMemberAccess": 1
     },
     "bake/surface.py": {
-      "reportArgumentType": {
-        "Argument of type \"Literal[0, -1]\" cannot be assigned to parameter \"value\" of type \"slice[Any, Any, Any]\" in function \"__setitem__\"": 1,
-        "Argument of type \"Polygon | GeoArray\" cannot be assigned to parameter \"iterable\" of type \"Iterable[Unknown]\" in function \"extend\"": 1,
-        "Argument of type \"str | None\" cannot be assigned to parameter \"key\" of type \"str\" in function \"get\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"is_empty\" for class \"Geometry\"": 2
-      },
-      "reportCallIssue": {
-        "No overloads for \"__setitem__\" match the provided arguments": 1,
-        "No overloads for \"get\" match the provided arguments": 1
-      },
-      "reportIndexIssue": {
-        "\"__getitem__\" method not defined on type \"LineString\"": 1
-      }
+      "reportArgumentType": 3,
+      "reportAttributeAccessIssue": 2,
+      "reportCallIssue": 2,
+      "reportIndexIssue": 1
     },
     "bake/traffic.py": {
-      "reportArgumentType": {
-        "Argument of type \"BaseGeometry\" cannot be assigned to parameter \"piece\" of type \"LineString\" in function \"bridge_flag\"": 2
-      },
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"geoms\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"is_empty\" for class \"Geometry\"": 1
-      }
+      "reportArgumentType": 2,
+      "reportAttributeAccessIssue": 2
     },
     "bake/traffic_sources.py": {
-      "reportAttributeAccessIssue": {
-        "\"raw\" is not a known attribute of module \"pyogrio\"": 1
-      }
+      "reportAttributeAccessIssue": 1
     },
     "bake/tram.py": {
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"boundary\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"geom_type\" for class \"Geometry\"": 1
-      }
+      "reportAttributeAccessIssue": 2
     },
     "bake/transit.py": {
-      "reportAttributeAccessIssue": {
-        "\"cKDTree\" is unknown import symbol": 1
-      }
+      "reportAttributeAccessIssue": 1
     },
     "bake/trees.py": {
-      "reportAttributeAccessIssue": {
-        "\"cKDTree\" is unknown import symbol": 1
-      }
+      "reportAttributeAccessIssue": 1
     },
     "bake/walls.py": {
-      "reportArgumentType": {
-        "Argument of type \"BaseGeometry\" cannot be assigned to parameter \"polygon\" of type \"Polygon\" in function \"orient\"": 1,
-        "Argument of type \"Geometry\" cannot be assigned to parameter \"line\" of type \"OptGeoArrayLikeSeq\" in function \"line_interpolate_point\"": 3,
-        "Expression of type \"tuple[()]\" cannot be assigned to parameter of type \"list[Geometry]\"": 1,
-        "Expression of type \"tuple[()]\" cannot be assigned to parameter of type \"list[tuple[Geometry, float]]\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"coords\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"length\" for class \"Geometry\"": 2
-      },
-      "reportCallIssue": {
-        "No overloads for \"line_interpolate_point\" match the provided arguments": 3
-      },
-      "reportReturnType": {
-        "Type \"NDArray[int64]\" is not assignable to return type \"tuple[ndarray[_AnyShape, dtype[Any]], ndarray[_AnyShape, dtype[Any]]]\"": 1
-      }
+      "reportArgumentType": 6,
+      "reportAttributeAccessIssue": 4,
+      "reportCallIssue": 3,
+      "reportReturnType": 1
     },
     "bake/water.py": {
-      "reportArgumentType": {
-        "Argument of type \"intp\" cannot be assigned to parameter \"c\" of type \"float\" in function \"xy\"": 1,
-        "Argument of type \"intp\" cannot be assigned to parameter \"r\" of type \"float\" in function \"xy\"": 1
-      },
-      "reportAttributeAccessIssue": {
-        "\"transform\" is not a known attribute of module \"rasterio\"": 1,
-        "Cannot access attribute \"coords\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"distance\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"interpolate\" for class \"Geometry\"": 2,
-        "Cannot access attribute \"intersects\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"length\" for class \"Geometry\"": 1,
-        "Cannot access attribute \"project\" for class \"Geometry\"": 1
-      },
-      "reportCallIssue": {
-        "Expected 6 positional arguments": 4
-      },
-      "reportOptionalMemberAccess": {
-        "\"astype\" is not a known attribute of \"None\"": 1
-      }
+      "reportArgumentType": 2,
+      "reportAttributeAccessIssue": 9,
+      "reportCallIssue": 4,
+      "reportOptionalMemberAccess": 1
     },
     "bake/ways.py": {
-      "reportAttributeAccessIssue": {
-        "Cannot access attribute \"is_empty\" for class \"Geometry\"": 1
-      }
+      "reportAttributeAccessIssue": 1
     },
     "bake/window_axes.py": {
-      "reportArgumentType": {
-        "Argument of type \"ndarray[_AnyShape, dtype[Any]] | None\" cannot be assigned to parameter \"a\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"register\"": 1,
-        "Argument of type \"ndarray[_AnyShape, dtype[Any]] | None\" cannot be assigned to parameter \"b\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"register\"": 1
-      }
+      "reportArgumentType": 2
     }
   }
 }

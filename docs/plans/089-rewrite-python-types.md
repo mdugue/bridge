@@ -344,8 +344,8 @@ and pay a re-bake for each batch. In the series:
 ## Findings
 
 > **Slimmed before milestone 1 (2026-11-24; plan 086, ruling 5).** The
-> gate is halved to its job: `typecheck.py` keys a finding by file, rule
-> and message, fails on a count above or below the baseline and when
+> gate is halved to its job: `typecheck.py` counts findings by file and
+> rule, fails on a count above or below the baseline and when
 > pyright did not read every module; the escapes' count, the settings
 > check and `--against` with `Typecheck-baseline-raise` are gone (a
 > raised baseline shows in the PR's diff). Of phase 2's stubs scipy's

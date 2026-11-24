@@ -173,7 +173,7 @@ OSM driver reads `.osm` as well as `.osm.pbf`). CI's `pipeline` job runs it
 with ruff after `uv sync --locked`, and then type-checks `bake/` with
 pyright (pinned in the dev group, set in `pyproject.toml`) against
 `pipeline/typecheck-baseline.json` (plan 089): `typecheck.py` keys each
-finding by file, rule and message (never by line) and fails on any count
+finding by file and rule (never by line) and fails on any count
 above the baseline and on any below it, so that a fix lowers the baseline
 in the same PR: `cd pipeline && uv run python typecheck.py --update`
 writes the lower counts and refuses to raise one. It also fails when
@@ -1435,9 +1435,14 @@ neither blank nor comment-only in the git-tracked `.ts` and `.tsx` under
 the measuring tools themselves (`MEASURING_TOOLS` in `lib/city/ledger.ts`
 names them) — by area and in total. A line counts unless it opens as a
 comment (`//`, `/*`, `*`, `{/*`; `#` in Python): one regular expression
-a language, read by `git grep`, no parser. Gated like the bytes: the
-rewrite series exists to make the code smaller (plan 086, ruling 5), and
-a pull request shows what it added. `bun run ledger -- --against <ref>`
+a language, read by `git grep`, no parser. It has a check of its own,
+which needs no build and runs in CI's Lint job: `bun scripts/ledger.ts
+--code --check` fails where the total **rose** — the rewrite series
+exists to make the code smaller (plan 086, ruling 5) — and passes where
+it fell. A pull request that raises it commits the number
+(`bun run ledger -- --code`, seconds) and says what the lines buy; the
+full `--check` does not compare it. Only tracked files count: a new file
+not yet added is uncounted locally. `bun run ledger -- --against <ref>`
 prints the figure here and at a ref, with the delta: what a milestone
 quotes.
 

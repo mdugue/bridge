@@ -40,8 +40,8 @@ bun run plates          # the QA views of the merge base against the head's,
                         # diffed (SHOTS_SMALL=1: CI's tier on SwiftShader)
 bun run ledger          # qa/ledger.json: bytes, requests, the product's code
                         # lines (-- --check: CI; -- --browser: first-load JS, a
-                        # phone's tile cache; -- --against <ref>: code.product
-                        # here and there)
+                        # phone's tile cache; -- --code: the code lines alone,
+                        # no build; -- --against <ref>: them here and there)
 bun run site <site>     # where a site stands (--all: every site)
 bun run fetch <site>    # downloads → data/_raw/<provider>/, sources → data/<site>/
 bun run bake <site>     # offline bakes [tile…] [--step X] [--jobs N] [--force]
@@ -205,9 +205,11 @@ uploaded; nothing it names is fetched (ADR 0054).
   layers and a view's page query it never sees: a green job is no
   licence to skip the snapshots or the GPU.
 - `qa/ledger.json` is gated by CI (`bun run ledger -- --check`): a PR
-  that moves a published byte, a request or the product's code lines
-  (`code.product`) commits the new file, and its diff is what the
-  reviewer reads.
+  that moves a published byte or a request commits the new file, and its
+  diff is what the reviewer reads. The product's code lines
+  (`code.product`) may fall freely; a PR that raises their total commits
+  the number (`bun run ledger -- --code`, no build) and says what the
+  lines buy.
 - What holds a frame still for a plate is a probe of the debug hook
   (`__poc.still`, `poc-scene.ts`): something new that animates takes its
   time through `pocPhase` or TSL `time`, or the plates flake.

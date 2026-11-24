@@ -626,8 +626,9 @@ export interface Ledger {
   version: typeof LEDGER_VERSION;
 }
 
-/** The paths `--check` never compares. */
-const UNCOMPARED = new Set(["browser.readWith"]);
+/** The paths `--check` never compares: `code` has a check of its own
+ *  (`--code --check`), which needs no build and lets a fall pass. */
+const UNCOMPARED = new Set(["browser.readWith", "code"]);
 
 /** Leaf paths with their values (`bytes.fine.spawn.bytes`). */
 function leaves(value: unknown, path = ""): Map<string, string> {

@@ -14,7 +14,7 @@ import { gzipSync } from "node:zlib";
 import { browserFigures } from "../lib/city/ledger";
 import { buildTileset } from "../lib/city/tileset";
 import type { BakedTile, TerrainFiles } from "../lib/city/tileset";
-import { codeProduct, LEDGER_PATH, measure, run, viewerReads } from "./ledger";
+import { codeProduct, LEDGER_PATH, measure, run } from "./ledger";
 
 const level = (t: string, n: 0 | 1): TerrainFiles => ({
   landcover: `landcover_${t}_${n}.png`,
@@ -300,6 +300,12 @@ test("a file that grew fails the check, by its figures' names", () => {
   expect(report).toContain("differs: bytes.fine.spawn.bytes: ");
   expect(report).toContain("differs: published.tiles.bytes: ");
   expect(report).toContain("run bun scripts/ledger.ts and commit");
+  // a file that shrank fails too: a saving is committed
+  runOn(root, []);
+  resize(root, "surface_a.png", 2000);
+  expect(runOn(root, ["--check"]).report).toContain(
+    "differs: bytes.approached.spawn.bytes: "
+  );
   // a site-wide file and the server's are gated too
   runOn(root, []);
   resize(root, "trams.json", 400);
@@ -309,25 +315,25 @@ test("a file that grew fails the check, by its figures' names", () => {
   expect(site).toContain("differs: published.server.bytes: 5002 → 6002\n");
 });
 
-test("a file that shrank fails the check too: a saving is committed", () => {
+test("--code needs no build: a rise fails, a fall passes, a write records it", () => {
   const root = fixture();
   runOn(root, []);
-  resize(root, "surface_a.png", 2000);
-  const { code, report } = runOn(root, ["--check"]);
-  expect(code).toBe(1);
-  expect(report).toContain("differs: bytes.approached.spawn.bytes: ");
-  expect(report).not.toContain("bytes.fine.spawn");
-});
-
-test("a code line more fails the check; a comment does not", () => {
-  const root = fixture();
-  runOn(root, []);
+  rmSync(nodePath.join(root, "public"), { recursive: true });
   put(root, "lib/city/thing.ts", "// why\nexport const c = 1;\n");
-  expect(runOn(root, ["--check"]).code).toBe(0);
+  expect(runOn(root, ["--code", "--check"]).code).toBe(0);
   put(root, "lib/city/thing.ts", "export const c = 1;\nc.toFixed();\n");
-  expect(runOn(root, ["--check"]).report).toContain(
-    "differs: code.product.lib: 1 → 2\ndiffers: code.product.total: 8 → 9\n"
+  const rose = runOn(root, ["--code", "--check"]);
+  expect(rose.code).toBe(1);
+  expect(rose.report).toContain("code.product.total rose: 8 → 9");
+  expect(runOn(root, ["--code"]).report).toBe(
+    "qa/ledger.json: code.product.total 9\n"
   );
+  expect(runOn(root, ["--code", "--check"]).code).toBe(0);
+  rmSync(nodePath.join(root, "pipeline/bake/trees.py"));
+  expect(runOn(root, ["--code", "--check"])).toEqual({
+    code: 0,
+    report: "code.product.total: 7 (committed 9)\n",
+  });
 });
 
 test("a file in no class, and an extension the wire rule does not know, are errors", () => {
@@ -352,39 +358,6 @@ test("an argument the script does not know is refused, nothing written", () => {
   expect(code).toBe(2);
   expect(report).toContain("unknown argument --chekc");
   expect(runOn(root, ["--check"]).report).toContain("(none)");
-});
-
-test("the ledger reads what the viewer reads: twins beyond the reach, a phone's own", () => {
-  const fine = {
-    landcover: "landcover.png",
-    landcoverLow: "landcover.r2048.png",
-    surface: "surface.png",
-    surfaceFar: "surface.r1024.png",
-    sport: "sport.png",
-    sportFar: "sport.r1024.png",
-    sportTable: "sport.json",
-    svf: "svf.png",
-  };
-  expect(viewerReads(fine, 0, false, "beyond").toSorted()).toEqual([
-    "landcover.png",
-    "sport.json",
-    "sport.r1024.png",
-    "surface.r1024.png",
-    "svf.png",
-  ]);
-  expect(viewerReads(fine, 0, false, "within").toSorted()).toEqual([
-    "landcover.png",
-    "sport.json",
-    "sport.png",
-    "surface.png",
-    "svf.png",
-  ]);
-  // a phone: the class raster's twin, and no sports grounds
-  expect(viewerReads(fine, 0, true, "within").toSorted()).toEqual([
-    "landcover.r2048.png",
-    "surface.png",
-    "svf.png",
-  ]);
 });
 
 test("the browser's figures: the scripts weighed, the phone's loaded contents", () => {

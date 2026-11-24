@@ -1,10 +1,10 @@
 """The bakes' type check against a baseline that only shrinks (plan 089).
 
 Runs pyright over `bake/` (its settings: `[tool.pyright]` in
-pyproject.toml) and counts its findings per file, rule and message
-(whitespace folded, a line number it names replaced) — never by line, so an
-edit above a finding moves nothing. The counts are held to
-`typecheck-baseline.json`:
+pyproject.toml) and counts its findings per file and rule — never by line,
+so an edit above a finding moves nothing (a finding fixed and another of
+the same rule added in the same file is no change: the price of a baseline
+a reviewer can read). The counts are held to `typecheck-baseline.json`:
 
 - a count above the baseline, or a key the baseline lacks: exit 1, with the
   findings of that key and their lines;
@@ -24,7 +24,6 @@ this file and let pyright's exit code be the gate.
 from __future__ import annotations
 
 import json
-import re
 import subprocess
 import sys
 from collections.abc import Iterable, Mapping
@@ -37,22 +36,16 @@ BASELINE = ROOT / "typecheck-baseline.json"
 # A finding pyright files under no rule (a syntax error, an import cycle).
 NO_RULE = "(no rule)"
 
-Key = tuple[str, str, str]  # file, rule, message
+Key = tuple[str, str]  # file, rule
 Counts = dict[Key, int]
 
 
 def key_of(d: Mapping, root: Path = ROOT) -> Key:
-    """A diagnostic's key: its file relative to `root`, its rule, and its
-    message's first line (what follows explains it, and is long)."""
-    message = d["message"].strip().splitlines()[0] if d["message"].strip() else ""
+    """A diagnostic's key: its file relative to `root`, and its rule."""
     file = Path(d["file"])
     if file.is_absolute() and file.is_relative_to(root):
         file = file.relative_to(root)
-    return (
-        file.as_posix(),
-        d.get("rule") or NO_RULE,
-        re.sub(r"\bline \d+", "line N", " ".join(message.split())),
-    )
+    return (file.as_posix(), d.get("rule") or NO_RULE)
 
 
 def fold(diagnostics: Iterable[Mapping], root: Path = ROOT) -> Counts:
@@ -66,24 +59,19 @@ def fold(diagnostics: Iterable[Mapping], root: Path = ROOT) -> Counts:
 
 
 def to_json(checker: str, counts: Counts) -> dict:
-    """The baseline file: `{file: {rule: {message: count}}}`, sorted."""
-    findings: dict[str, dict[str, dict[str, int]]] = {}
-    for (f, rule, message), n in sorted(counts.items()):
-        findings.setdefault(f, {}).setdefault(rule, {})[message] = n
+    """The baseline file: `{file: {rule: count}}`, sorted."""
+    findings: dict[str, dict[str, int]] = {}
+    for (f, rule), n in sorted(counts.items()):
+        findings.setdefault(f, {})[rule] = n
     return {"checker": checker, "findings": findings}
 
 
 def from_json(baseline: Mapping) -> Counts:
-    return {
-        (f, rule, message): n
-        for f, rules in baseline["findings"].items()
-        for rule, messages in rules.items()
-        for message, n in messages.items()
-    }
+    return {(f, rule): n for f, rules in baseline["findings"].items() for rule, n in rules.items()}
 
 
 def compare(was: Counts, now: Counts) -> tuple[list, list]:
-    """(risen, fallen): each `(file, rule, message, was, now)`, sorted. A
+    """(risen, fallen): each `(file, rule, was, now)`, sorted. A
     key one side lacks counts 0 there."""
     risen, fallen = [], []
     for key in sorted(was.keys() | now.keys()):
@@ -97,7 +85,7 @@ def check(baseline: Mapping, checker: str, diagnostics: list[Mapping], update: b
     """(exit code, report lines, the baseline to write or None)."""
     now = fold(diagnostics)
     risen, fallen = compare(from_json(baseline), now)
-    describe = lambda r: f"  {r[0]}: {r[1]}: {r[2]}: {r[4]} (baseline {r[3]})"  # noqa: E731
+    describe = lambda r: f"  {r[0]}: {r[1]}: {r[3]} (baseline {r[2]})"  # noqa: E731
     if update:
         if risen and checker == baseline["checker"]:
             return 1, ["Refusing to raise the baseline:", *map(describe, risen)], None
@@ -107,9 +95,9 @@ def check(baseline: Mapping, checker: str, diagnostics: list[Mapping], update: b
         for r in risen:
             lines.append(describe(r))
             lines += [
-                f"    {r[0]}:{d['range']['start']['line'] + 1}"
+                f"    {r[0]}:{d['range']['start']['line'] + 1}: {d['message'].splitlines()[0]}"
                 for d in diagnostics
-                if key_of(d) == r[:3]
+                if key_of(d) == r[:2]
             ]
         if baseline["checker"] != checker:
             lines.append(f"(The checker moved: {baseline['checker']} -> {checker}.)")

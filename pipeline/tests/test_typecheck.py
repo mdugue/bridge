@@ -1,5 +1,5 @@
-"""The type check's gate (typecheck.py, plan 089): findings are keyed by
-file, rule and message, and their counts only shrink."""
+"""The type check's gate (typecheck.py, plan 089): findings are counted by
+file and rule, and the counts only shrink."""
 
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ ONE = [finding('"x" is  possibly unbound\n  explained at length')]
 BASELINE = typecheck.to_json(CHECKER, typecheck.fold(ONE))
 
 
-def test_a_finding_is_keyed_by_file_rule_and_message_never_by_line():
-    assert BASELINE["findings"] == {"bake/a.py": {"reportX": {'"x" is possibly unbound': 1}}}
+def test_a_finding_is_counted_by_file_and_rule_never_by_line():
+    assert BASELINE["findings"] == {"bake/a.py": {"reportX": 1}}
     moved = [finding('"x" is possibly unbound', line=40)]
     assert typecheck.check(BASELINE, CHECKER, moved, False)[0] == 0
     note = {**finding("a note"), "severity": "information"}
@@ -34,8 +34,8 @@ def test_a_finding_is_keyed_by_file_rule_and_message_never_by_line():
 def test_a_new_finding_fails_with_its_line():
     code, lines, new = typecheck.check(BASELINE, CHECKER, [*ONE, finding("new", line=6)], False)
     assert (code, new) == (1, None)
-    assert "  bake/a.py: reportX: new: 1 (baseline 0)" in lines
-    assert "    bake/a.py:7" in lines
+    assert "  bake/a.py: reportX: 2 (baseline 1)" in lines
+    assert "    bake/a.py:7: new" in lines
 
 
 def test_a_fixed_finding_is_a_stale_baseline_until_updated():

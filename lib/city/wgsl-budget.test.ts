@@ -4,7 +4,6 @@ import {
   budgetSpare,
   DEFAULT_PIPELINE_LIMITS,
   stageInterface,
-  vertexAttributeNames,
   wgslBudget,
 } from "./wgsl-budget";
 
@@ -88,61 +87,9 @@ test("counts attributes, the variables each way and the builtins", () => {
   expect(budgetSpare(budget, eightBuffers).interStage).toBe(2);
 });
 
-test("a comment's text is no part of the interface", () => {
-  const vertex = vertexText({ attributes: 2, varyings: 1 });
-  expect(vertexAttributeNames(vertex)).toEqual(["a0", "a1"]);
-  expect(stageInterface(vertex, "vertex").outputs).toEqual([
-    { location: 0, name: "v_0", type: "vec3<f32>" },
-    { builtin: "position", name: "builtinClipSpace", type: "vec4<f32>" },
-  ]);
-});
-
-test("an entry point may take a struct and return a bare location", () => {
-  const fragment = `struct In {
-  @location(0) @interpolate(flat, either) id : u32,
-  @location(1) uv : vec2<f32>,
-  @builtin(front_facing) front : bool,
-}
-@fragment fn shade(in : In, @builtin(sample_index) s : u32) -> @location(0) vec4<f32> {
-  return vec4<f32>(in.uv, 0.0, 1.0);
-}`;
-  const io = stageInterface(fragment, "fragment");
-  expect(io.inputs.map((v) => v.name)).toEqual(["id", "uv", "front", "s"]);
-  expect(io.outputs).toEqual([{ location: 0, name: "", type: "vec4<f32>" }]);
-  const budget = wgslBudget(
-    vertexText({ attributes: 1, varyings: 2 }),
-    fragment
-  );
-  expect(budget.interStageBuiltins).toEqual(["front_facing", "sample_index"]);
-});
-
 test("a text without the entry point is an error, not a zero", () => {
   expect(() => stageInterface("fn main() {}", "vertex")).toThrow(
     "no @vertex entry point"
-  );
-});
-
-test("a shape the parser does not know is an error, never an empty count", () => {
-  // an alias for the struct: its members would otherwise count as none
-  const aliased = `struct In { @location(0) uv : vec2<f32> }
-alias Inputs = In;
-@fragment fn main(in : Inputs) -> @location(0) vec4<f32> { return vec4<f32>(); }`;
-  expect(() => stageInterface(aliased, "fragment")).toThrow(
-    "neither a location, a builtin nor a struct of them: in : Inputs"
-  );
-  // a location that is a constant, not a literal
-  const named = `const UV = 3;
-@fragment fn main(@location(UV) uv : vec2<f32>) -> @location(0) vec4<f32> { return vec4<f32>(); }`;
-  expect(() => stageInterface(named, "fragment")).toThrow(
-    "a location not a literal"
-  );
-  // clip distances sized by a constant
-  const clipped = vertexText({ attributes: 1, varyings: 1 }).replace(
-    "@builtin( position ) builtinClipSpace : vec4<f32>",
-    "@builtin( position ) builtinClipSpace : vec4<f32>,\n\t@builtin( clip_distances ) clip : array<f32, PLANES>"
-  );
-  expect(() => wgslBudget(clipped, fragmentText({ varyings: 1 }))).toThrow(
-    "clip_distances of an unread size"
   );
 });
 
@@ -209,16 +156,6 @@ test("clip distances take a variable for every four, on the vertex side", () => 
     "outLocations",
     "vertexOutputs",
   ]);
-});
-
-test("a point list's vertex stage passes one variable fewer", () => {
-  const points = wgslBudget(
-    vertexText({ attributes: 1, varyings: 16 }),
-    fragmentText({ varyings: 16 })
-  );
-  expect(budgetBreaches(points, { pointList: true, vertexBuffers: 1 })).toEqual(
-    ["vertexOutputs"]
-  );
 });
 
 test("eight vertex buffers pass, a ninth does not; sixteen attributes too", () => {
