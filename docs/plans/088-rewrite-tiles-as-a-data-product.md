@@ -686,7 +686,7 @@ privacy page.
   `scripts/warmers.ts`, the `.next/cache` branch of the bake cache, the
   `--if-cached` and warmer modes of `prepare-data.ts`, and the knobs
   `PREPARE_WARMERS`, `PREPARE_MEMORY_GB`, `BAKE_SHARED_CACHE` and
-  `BAKE_SHARED_CACHE_API`. `code.product`: 154 726 → 154 363 (−363, all
+  `BAKE_SHARED_CACHE_API`. `code.product`: 154 501 → 154 158 (−343, all
   in `scripts`).
 
 **Measured in a cloud session** (4 cores, 15 GB, Bun 1.4.4): all seven

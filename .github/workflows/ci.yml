@@ -2,8 +2,10 @@ name: CI
 
 on:
   pull_request:
+  # `rewrite` too: the host deploys it, and its tip's site keys are
+  # published by no pull request's run (scripts/data-store.ts).
   push:
-    branches: [main]
+    branches: [main, rewrite]
 
 # Cancel an in-flight CI run when new commits land on the same ref. PR pushes
 # are the common case; the queued run is almost always stale by the time it
@@ -300,7 +302,6 @@ jobs:
         run: bun scripts/data-store.ts
         env:
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-          DATA_STORE: ${{ vars.DATA_STORE }}
       - uses: actions/cache/save@v6
         if: matrix.shard.buildCheck && steps.bake-cache.outputs.cache-hit != 'true'
         with:

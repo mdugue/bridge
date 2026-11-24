@@ -19,8 +19,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { isInstances } from "../../app/_components/instancing";
-import { buildTreeInventory } from "../../app/_components/tree-inventory-layer";
-import { buildVegetation } from "../../app/_components/vegetation-layer";
+import { placedInventory, placedVegetation } from "./placed-layers";
 import type { VegetationControl } from "../../app/_components/vegetation-layer";
 import type {
   CanopyExtraFeature,
@@ -72,8 +71,8 @@ for (const tile of tileIds(site)) {
   const canopy = features<CanopyFeature>(`canopy_${tile}.geojson`);
   const scan = features<CanopyExtraFeature>(`canopyx_${tile}.geojson`);
   const trees = features<TreeFeature>(`trees_${tile}.geojson`);
-  const inv = buildTreeInventory(trees, ctx);
-  const veg = buildVegetation(
+  const inv = placedInventory(trees, ctx);
+  const veg = placedVegetation(
     {
       rows,
       canopy: [...canopy, ...scan],

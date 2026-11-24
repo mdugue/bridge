@@ -1622,11 +1622,11 @@ test.describe("desktop viewer, rendering", { tag: "@desktop-render" }, () => {
     // Plan 052 phase 4: a street tree of the register, asked from above
     // and a little aside, answers with its species, where it stands and
     // the register as its source — the facts file fetched with the
-    // question.
-    const treesRes = await page.request.get(
-      await dataUrl(page, "trees_33412_5656_2_sn.geojson")
-    );
-    const trees = (await treesRes.json()) as {
+    // question. The register's source file is the build's: the viewer
+    // gets the trees as a table (lib/city/tree-table.ts).
+    const trees = JSON.parse(
+      readFileSync("data/dresden/dlm/trees_33412_5656_2_sn.geojson", "utf-8")
+    ) as {
       features: {
         geometry: { coordinates: [number, number] };
         properties: { h: number; s?: string };

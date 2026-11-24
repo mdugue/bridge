@@ -32,6 +32,7 @@ function checkout(): string {
   write("data/grimma/dgm/a.tif", "heights");
   write("patches/tool.patch", "-a\n+b\n");
   write("bun.lock", '{ "packages": {} }\n');
+  write("package.json", '{ "packageManager": "bun@1.4.4" }\n');
   return root;
 }
 
@@ -50,6 +51,7 @@ test("a site's key follows what its bytes are made from, and nothing else", () =
     ["data/meissen/dgm/a.tif", "other heights", true],
     ["data/meissen/dlm/new.geojson", "{}", true],
     ["patches/tool.patch", "-a\n+c\n", true],
+    ["package.json", '{ "packageManager": "bun@1.5.0" }\n', true],
   ];
   let last = key;
   for (const [file, text, moves] of changes) {
