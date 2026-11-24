@@ -401,9 +401,9 @@
   },
   "code": {
     "product": {
-      "total": 154726,
-      "app": 60932,
-      "lib": 41355,
+      "total": 154327,
+      "app": 60762,
+      "lib": 41126,
       "components": 3007,
       "scripts": 13798,
       "pipeline/bake": 35634
@@ -412,11 +412,11 @@
   "browser": {
     "readWith": "chromium 153.0.8010.12, google / swiftshader",
     "firstLoad": {
-      "files": 43,
-      "gzip": 1105320,
+      "files": 42,
+      "gzip": 1099792,
       "workerOnly": {
-        "files": 9,
-        "gzip": 35836
+        "files": 8,
+        "gzip": 34798
       }
     },
     "phoneLiteSpawnCache": {
