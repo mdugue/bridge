@@ -103,6 +103,29 @@ Beside them, counted but not an aim of its own: a phone's memory
      thought of. A review still tries to break the code; what it asks
      for is the test that would have caught a real fault.
 
+## The series, reduced (2026-11-24)
+
+Ruling 5 was put to the plans: each one's product code lines, counted
+from the tree and from what had landed. As written the series would
+have added 5 000 to 12 000 lines more; the tree holds almost no dead or
+doubled code, so no plan here removes thousands. The maintainer chose
+the reduced series. What is built:
+
+1. **Milestone 1, slimmed** (PR #338): 11 083 lines added against
+   `main` where it had 45 720; `code.product` 1 766 over `main`'s
+   152 960 — the portable maths (about 540), the BBBike fallback (about
+   730), the limits test's probe (about 400), `frames.ts`.
+2. **The trees, simplified** (090's phase 1, PR #330): the stand record
+   baked directly; `code.product` does not rise.
+3. **092's phase 2** and one read helper for the bakes.
+4. **088's simple variant**, once the maintainer has chosen the store.
+
+Rejected, each with its reason in its row of the README: 089's phases
+3–4, 091, 093, 094's phase 3, 095, 096, and 092 beyond its phase 2.
+Whether 090 goes on after the trees is decided anew on its lines. The
+table and the joints below are the series as it was planned on
+2026-11-16; where they speak of a rejected plan they are history.
+
 ## The plans, in the order they go
 
 | Plan | What is true afterwards | Effort | Needs |
