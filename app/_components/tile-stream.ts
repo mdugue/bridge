@@ -18,7 +18,6 @@ import { MeshoptDecoder as meshoptDecoder } from "three/addons/libs/meshopt_deco
 import type {
   AreaFeature,
   BridgeFeature,
-  CanopyExtraFeature,
   CultivatedFeature,
   FurnitureFeature,
   MapillaryFeature,
@@ -29,22 +28,21 @@ import type {
   RiversideFeature,
   TrafficFeature,
   TramFeature,
-  TreeFeature,
   VegRowFeature,
 } from "@/lib/city/features";
-import { orchardTrees, vineRows } from "@/lib/city/cultivated";
+import { vineRows } from "@/lib/city/cultivated";
 import { HOUSE_STRIDE } from "@/lib/city/window-niches";
 import type { LookValues } from "@/lib/city/look-controls";
-import {
-  pointFeatures,
-  ROWS_MEASURED,
-  unpackPoints,
-} from "@/lib/city/point-pack";
 import { sportFixtures } from "@/lib/city/sport";
 import type { SportTable } from "@/lib/city/sport";
-import { offMonuments, plantedRows } from "@/lib/city/tree-placement";
-import type { TreeVeto } from "@/lib/city/tree-placement";
-import { coarseCrownsStandIn, unpackCrowns } from "@/lib/city/coarse-crowns";
+import { coarseCrowns, coarseCrownsStandIn } from "@/lib/city/coarse-crowns";
+import {
+  placedTrees,
+  registerFacts,
+  registerTrees,
+  unpackTreeFile,
+} from "@/lib/city/tree-table";
+import type { TreePack } from "@/lib/city/tree-table";
 import {
   keepOrder,
   siteTileOfTile,
@@ -67,6 +65,7 @@ import {
   moreSetsSteps,
   treeSets,
 } from "@/lib/city/ask-items";
+import type { AskedTree } from "@/lib/city/ask-items";
 import { askSets } from "@/lib/city/ask-solids";
 import type { AskSet } from "@/lib/city/ask-solids";
 import { isAllocationFailure } from "@/lib/city/gpu-allocation";
@@ -155,16 +154,8 @@ import type { TrafficBuilder } from "./data-layers-feature";
 import type { TrafficDetail } from "./traffic-layer";
 import { tramSteps } from "./tram-layer";
 import { treeInventorySteps } from "./tree-inventory-layer";
-import {
-  buildCrownWarmup,
-  vegetationSteps,
-  loadNdviSampler,
-} from "./vegetation-layer";
-import type {
-  VegetationContext,
-  VegetationControl,
-  VegetationFeatures,
-} from "./vegetation-layer";
+import { buildCrownWarmup, vegetationSteps } from "./vegetation-layer";
+import type { VegetationContext, VegetationControl } from "./vegetation-layer";
 import { footMaterialFor } from "./tree-foot";
 import { follow } from "./feature-seam";
 import type { Watch } from "./feature-seam";
@@ -833,39 +824,37 @@ function buildSport(
 }
 
 /**
- * The tile's trees as one control: the canopy (DLM rows, DOM1 crowns, scan
- * crowns) and, where the tile has them, the street-tree cadastre
- * (tree-inventory-layer.ts). A cadastre tree vetoes the canopy point it
- * stands on (`keepTree`), and its trunk and broadleaf crown ride in the
- * canopy's chunk meshes (instances, not draw calls); only its reshaped
+ * The tile's trees as one control, from its tree files (the level's own
+ * and, on a fine level, its coarse level's: lib/city/tree-table.ts): the
+ * canopy's, the scan's and the rows' trees and, where the tile has them,
+ * the street-tree cadastre's (tree-inventory-layer.ts), whose trunks and
+ * broadleaf crowns ride in the canopy's chunk meshes; only its reshaped
  * silhouettes (flame, cone, weeping) are meshes of its own.
  * @yields {void} once per finished run, to hand the thread back.
  */
 function* tileVegetationSteps(
-  features: Omit<VegetationFeatures, "extraTrees" | "keepTree">,
-  inventoryTrees: TreeFeature[],
+  packs: readonly TreePack[],
+  offset: TileStreamContext["offset"],
   vegCtx: VegetationContext
-): Steps<{ keepTree?: TreeVeto; vegetation: VegetationControl }> {
+): Steps<VegetationControl> {
+  const register = registerTrees(packs, offset, new Date().getFullYear());
   const inventory =
-    inventoryTrees.length > 0
-      ? yield* treeInventorySteps(inventoryTrees, vegCtx, features.ndviAt)
-      : null;
+    register.length > 0 ? yield* treeInventorySteps(register, vegCtx) : null;
   const canopy = yield* vegetationSteps(
     {
-      ...features,
-      keepTree: inventory?.keepTree,
+      trees: placedTrees(packs, offset).map((t) => t.p),
       extraTrees: inventory?.instances,
     },
     vegCtx
   );
   if (!inventory) {
-    return { vegetation: canopy };
+    return canopy;
   }
   const own = inventory.control;
   const group = new Group();
   group.name = "vegetation";
   group.add(canopy.group, own.group);
-  const vegetation: VegetationControl = {
+  return {
     group,
     chunks: canopy.chunks,
     cells: own.cells,
@@ -876,7 +865,50 @@ function* tileVegetationSteps(
       return a || b;
     },
   };
-  return { keepTree: inventory.keepTree, vegetation };
+}
+
+/**
+ * A level's tree file (lib/city/tree-table.ts), or none where the level
+ * names none. A file the level names that does not come or is not one is
+ * none too, and said through the dressing's failure hook (the trail's
+ * `dressing failed`, the HUD's hole): the rest of the tile is still built.
+ */
+export async function fetchTrees(
+  file: string | undefined,
+  url: (file: string) => string,
+  ctx: Pick<TileStreamContext, "onDressingFailed">,
+  tile: string,
+  signal?: AbortSignal
+): Promise<TreePack[]> {
+  if (!file) {
+    return [];
+  }
+  const buffer = await fetchOptionalBinary(url(file), signal);
+  const pack = buffer ? unpackTreeFile(buffer) : null;
+  if (!pack) {
+    ctx.onDressingFailed?.(new Error("Bäume: Tabelle nicht lesbar"), tile);
+  }
+  return pack ? [pack] : [];
+}
+
+/** A tree of the tile's table as its card knows it (lib/city/ask-items.ts). */
+function askedTree(t: ReturnType<typeof placedTrees>[number]): AskedTree {
+  let source: AskedTree["source"] = "dom";
+  if (t.row) {
+    source = "row";
+  } else if (t.scan) {
+    source = "lsc";
+  }
+  let leaf: AskedTree["leaf"];
+  if (t.p.evergreen) {
+    leaf = t.photo ? "photo" : "forest";
+  }
+  return {
+    p: t.p,
+    source,
+    ...(t.measured > 0 ? { height: t.measured } : {}),
+    ...(leaf ? { leaf } : {}),
+  };
 }
 
 /** `Promise.all` over named promises: no position to get out of step. */
@@ -1109,12 +1141,10 @@ async function buildCoarseDressing(
   const tile = extras.tileId;
   const fetchKind = async <T>(file: string | undefined): Features<T> =>
     file ? await fetchFeatures<T>(url(file), signal) : [];
-  const [traffic, bridges, crownBytes] = await Promise.all([
+  const [traffic, bridges, packs] = await Promise.all([
     fetchKind<TrafficFeature>(files.traffic),
     fetchKind<BridgeFeature>(files.bridge),
-    files.crowns
-      ? fetchOptionalBinary(url(files.crowns), signal)
-      : Promise.resolve(null),
+    fetchTrees(files.dressingCoarse, url, ctx, tile, signal),
   ]);
   // the same bridges as the fine level draws (its decks are measured, the
   // piers stand on the ground in reach), the same owner per seam
@@ -1160,15 +1190,20 @@ async function buildCoarseDressing(
           asks,
         })
       : undefined;
-  const crowns = (crownBytes && unpackCrowns(crownBytes)) ?? [];
   const vegetation =
-    crowns.length > 0
+    packs.length > 0
       ? await inSlices(
-          coarseCrownSteps(crowns, {
-            heightAt: terrain.heightAt,
-            offset,
-            sunDirection: ctx.sunDirection,
-          }),
+          coarseCrownSteps(
+            coarseCrowns(
+              placedTrees(packs, offset).map((t) => t.p),
+              registerTrees(packs, offset, 0)
+            ),
+            {
+              heightAt: terrain.heightAt,
+              offset,
+              sunDirection: ctx.sunDirection,
+            }
+          ),
           { signal }
         ).catch((error: unknown) => {
           // the bridges and the traffic's slot built, never hung: freed
@@ -1212,25 +1247,9 @@ async function buildDressing(
     const file = d[kind];
     return file ? await fetchFeatures<T>(url(file), signal) : [];
   };
-  // The canopy points come packed (lib/city/point-pack.ts, prepare-data.ts):
-  // no parse, the same features for the vegetation. Not a pack = off.
-  // whether the canopy holds the tree rows' trees (point-pack.ts)
-  let rowsMeasured = false;
-  const getPoints = async (
-    kind: "canopy" | "canopyx"
-  ): Promise<CanopyExtraFeature[]> => {
-    const file = d[kind];
-    const buffer = file ? await fetchOptionalBinary(url(file), signal) : null;
-    const points = buffer ? unpackPoints(buffer) : null;
-    if (kind === "canopy" && points) {
-      rowsMeasured = (points.flags & ROWS_MEASURED) !== 0;
-    }
-    return points ? (pointFeatures(points) as CanopyExtraFeature[]) : [];
-  };
   const {
-    rows: mappedRows,
-    canopy,
-    ndviAt,
+    rows,
+    treePacks,
     lamps: osmLamps,
     monuments,
     furniture: osmFurniture,
@@ -1240,8 +1259,6 @@ async function buildDressing(
     ballast,
     platforms,
     sportTable,
-    inventory,
-    scanTrees,
     hedges,
     cultivated,
     trams,
@@ -1249,10 +1266,13 @@ async function buildDressing(
     traffic,
   } = await allNamed({
     rows: get<VegRowFeature>("vegrows"),
-    canopy: getPoints("canopy"),
-    ndviAt: extras.ndvi
-      ? loadNdviSampler(url(extras.ndvi), terrain.bounds, signal)
-      : Promise.resolve(null),
+    // The tile's trees, placed by the build: the level's own file and
+    // its coarse level's, which holds the third of them that level draws
+    // and is loaded before this one shows.
+    treePacks: Promise.all([
+      fetchTrees(extras.coarseDressing, url, ctx, tile, signal),
+      fetchTrees(d.dressing, url, ctx, tile, signal),
+    ]),
     lamps: get<LampFeature>("lamps"),
     monuments: get<MonumentFeature>("monuments"),
     furniture: get<FurnitureFeature>("furniture"),
@@ -1267,10 +1287,6 @@ async function buildDressing(
     sportTable: extras.sportTable
       ? fetchOptionalJson<SportTable>(url(extras.sportTable), signal)
       : Promise.resolve(null),
-    // the street-tree cadastre (tree-inventory-layer.ts)
-    inventory: get<TreeFeature>("trees"),
-    // laser-scan crowns outside the canopy mask (tiles with a laser scan)
-    scanTrees: getPoints("canopyx"),
     hedges: get<LowVegFeature>("lowveg"),
     // allotments, orchards, vineyards (cultivated-layer.ts)
     cultivated: get<CultivatedFeature>("cultivated"),
@@ -1278,9 +1294,7 @@ async function buildDressing(
     river: get<RiversideFeature>("riverside"),
     traffic: get<TrafficFeature>("traffic"),
   });
-  // A canopy that holds its tile's tree rows' trees (DOM1's crown peaks
-  // along them) leaves only the hedges to be planted from the rows.
-  const rows = plantedRows(mappedRows, rowsMeasured);
+  const packs = treePacks.flat();
   const fromMapillary = mapillaryParts(mly);
   const lamps = [...osmLamps, ...fromMapillary.lamps];
   const furniture = [...osmFurniture, ...fromMapillary.furniture];
@@ -1301,29 +1315,11 @@ async function buildDressing(
       offset: ctx.offset,
       heightAt: ctx.pinnedGround?.() ?? ctx.heightAt,
     };
-    // Orchard trees join the cadastre as its "small" archetype, appended: an
-    // index stays the trees file's (and its facts row), the orchard's past it.
-    const trees = [...inventory, ...orchardTrees(cultivated)];
-    const ownCanopy = offMonuments(canopy, monuments);
-    const ownScan = offMonuments(scanTrees, monuments);
-    const { vegetation, keepTree } = await inSlices(
-      tileVegetationSteps(
-        {
-          rows,
-          // The laser-scan crowns outside the canopy mask join the canopy as
-          // ordinary trees (they carry the same measured `h`); the bake already
-          // dropped the ones a cadastre tree claims.
-          canopy: [...ownCanopy, ...ownScan],
-          ndviAt: ndviAt ?? undefined,
-        },
-        trees,
-        {
-          offset: ctx.offset,
-          heightAt: terrain.heightAt,
-          sunDirection: ctx.sunDirection,
-          footMaterial: (sun) => footMaterialFor(terrain, sun),
-        }
-      ),
+    const vegetation = await inSlices(
+      tileVegetationSteps(packs, ctx.offset, {
+        sunDirection: ctx.sunDirection,
+        footMaterial: (sun) => footMaterialFor(terrain, sun),
+      }),
       { signal }
     );
     // (its season: from the environment, as the plugin queues it)
@@ -1426,7 +1422,7 @@ async function buildDressing(
       // its span from the first step to the last, the pauses included
       const start = streamTimings.now();
       const own = [
-        ...treeSets(trees, askCtx),
+        ...treeSets(registerFacts(packs), askCtx),
         ...askSets(monumentItems(monuments, askCtx)),
       ];
       yield;
@@ -1435,8 +1431,7 @@ async function buildDressing(
       // every other tree, the hedges, lamps, furniture, stops and landings
       const more = yield* moreSetsSteps(
         {
-          canopy: ownCanopy,
-          scan: ownScan,
+          trees: placedTrees(packs, ctx.offset).map(askedTree),
           rows,
           hedges,
           lamps: ownLamps,
@@ -1444,8 +1439,7 @@ async function buildDressing(
           trams,
           river,
         },
-        askCtx,
-        keepTree
+        askCtx
       );
       // all at once, in their order: a question finds the tile's sets whole
       for (const set of [...own, ...(bridgeSet ? [bridgeSet] : []), ...more]) {

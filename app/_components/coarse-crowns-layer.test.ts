@@ -1,16 +1,14 @@
 import { expect, test } from "bun:test";
 import { Color, Matrix4, Vector3 } from "three/webgpu";
 import type { Object3D } from "three/webgpu";
-import {
-  COARSE_TREE_WIDEN,
-  coarseCrowns,
-  packCrowns,
-  unpackCrowns,
-} from "@/lib/city/coarse-crowns";
+import { COARSE_TREE_WIDEN, coarseCrowns } from "@/lib/city/coarse-crowns";
 import type { CoarseCrown } from "@/lib/city/coarse-crowns";
 import type { CanopyFeature, TreeFeature } from "@/lib/city/features";
-import { inventoryTrees } from "@/lib/city/tree-inventory";
-import { canopyPlacements } from "@/lib/city/tree-placement";
+import {
+  canopyPlacements,
+  inventoryTrees,
+} from "@/lib/city/__fixtures__/place-trees";
+import { inventoryCovers } from "@/lib/city/tree-inventory";
 import { buildCoarseCrowns } from "./coarse-crowns-layer";
 import { isInstances } from "./instancing";
 import type { Instances } from "./instancing";
@@ -18,10 +16,12 @@ import { buildTreeInventory } from "./tree-inventory-layer";
 import { buildCrownGeo, buildVegetation } from "./vegetation-layer";
 import type { VegetationContext } from "./vegetation-layer";
 
-const ctx: VegetationContext = {
+/** The ground the trees are stood on, and the coarse level's. */
+const ground = {
   offset: { cx: 411_000.37, cy: 5_657_000.81 },
   heightAt: () => 100,
 };
+const ctx: VegetationContext = {};
 
 const canopy = (x: number, y: number, h: number): CanopyFeature => ({
   geometry: { type: "Point", coordinates: [x, y] },
@@ -74,25 +74,20 @@ test("a coarse crown stands where its fine tree does, as tall and wider", () => 
   const register = Array.from({ length: 30 }, (_, i) =>
     lime(411_050.5 + i * 7.1, 5_656_880.25)
   );
-  const inventory = buildTreeInventory(register, ctx);
+  const covers = inventoryCovers(register);
+  const keepTree = (x: number, y: number, h?: number) => !covers(x, y, h);
+  const placed = canopyPlacements(points, ground, undefined, keepTree);
+  const surveyed = inventoryTrees(register, ground);
+  const inventory = buildTreeInventory(surveyed, ctx);
   const fine = buildVegetation(
-    {
-      rows: [],
-      canopy: points,
-      keepTree: inventory.keepTree,
-      extraTrees: inventory.instances,
-    },
+    { trees: placed, extraTrees: inventory.instances },
     ctx
   );
   // the fine level's crowns before any far-tier thinning
   const all = drawn(fine.chunks.map((c) => c.mid));
 
-  const crowns = coarseCrowns(
-    canopyPlacements(points, ctx, undefined, inventory.keepTree),
-    inventoryTrees(register, ctx)
-  );
-  const file = unpackCrowns(packCrowns(crowns).buffer as ArrayBuffer) ?? [];
-  const coarse = drawn(sets(buildCoarseCrowns(file, ctx).group));
+  const crowns = coarseCrowns(placed, surveyed);
+  const coarse = drawn(sets(buildCoarseCrowns(crowns, ground).group));
   // a third of them, register and canopy both
   expect(coarse.size).toBeGreaterThan(all.size * 0.2);
   expect(coarse.size).toBeLessThan(all.size * 0.5);
@@ -102,7 +97,7 @@ test("a coarse crown stands where its fine tree does, as tall and wider", () => 
     if (!twin) {
       continue;
     }
-    // the same height (to the file's units), COARSE_TREE_WIDEN wider
+    // the same height, COARSE_TREE_WIDEN wider
     expect(column(m, 1)).toBeCloseTo(column(twin.m, 1), 2);
     expect(column(m, 0) / column(twin.m, 0)).toBeCloseTo(COARSE_TREE_WIDEN, 2);
     expect(m.elements[13]).toBeCloseTo(twin.m.elements[13], 2);
@@ -118,7 +113,7 @@ test("a coarse conifer stands on its own cone, as its fine tree does", () => {
     { kind: "canopy", x: 10, z: 10, rot: 0, s: 2 },
     { kind: "canopy", x: 14, z: 10, rot: 0, s: 3, evergreen: true },
   ];
-  const all = sets(buildCoarseCrowns(crowns, ctx).group);
+  const all = sets(buildCoarseCrowns(crowns, ground).group);
   expect(all).toHaveLength(2);
   const cone = all.find((s) => s.userData.styleCrown === undefined);
   const lobed = all.find((s) => s.userData.styleCrown === "far");
@@ -144,11 +139,10 @@ test("a coarse pine stands on the pine's crown, high on its stem, as its fine tr
     },
     properties: { h: 16 + (i % 5), l: "e", pine: 1 },
   }));
-  const fine = buildVegetation({ rows: [], canopy: pines }, ctx);
+  const placed = canopyPlacements(pines, ground);
+  const fine = buildVegetation({ trees: placed }, ctx);
   const all = drawn(fine.chunks.map((c) => c.mid));
-  const crowns = coarseCrowns(canopyPlacements(pines, ctx), []);
-  const file = unpackCrowns(packCrowns(crowns).buffer as ArrayBuffer) ?? [];
-  const built = sets(buildCoarseCrowns(file, ctx).group);
+  const built = sets(buildCoarseCrowns(coarseCrowns(placed, []), ground).group);
   // only the pine's form: no cone, no lobed crown
   expect(built.every((s) => s.userData.styleCrown === undefined)).toBe(true);
   const lobed = buildCrownGeo(0);

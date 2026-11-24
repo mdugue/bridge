@@ -8,6 +8,7 @@ import {
   toleranceBox,
   treeSets,
 } from "./ask-items";
+import type { AskedTree } from "./ask-items";
 import { hitsInSets, nearestItem } from "./ask-solids";
 import type { AskSolid } from "./ask-solids";
 import type {
@@ -29,6 +30,8 @@ import type { CardCredits } from "./card-lines";
 import { inquiryCard } from "./inquiry";
 import type { FeatureInquiry } from "./inquiry-features";
 import { samplePolyline } from "./polyline";
+import { canopyPlacements } from "./tree-placement";
+import type { RegisterFact } from "./tree-table";
 
 const TILE = "33412_5656_2_sn";
 const read = <F>(kind: string) =>
@@ -58,9 +61,53 @@ const ctx = {
 };
 const down = { x: 0, y: -1, z: 0 };
 
+/** Register features as the tile's tree table hands them over
+ *  (lib/city/tree-table.ts `registerAt`): each on `ground`, its index its
+ *  row in the file. */
+const facts = (
+  features: readonly TreeFeature[],
+  ground = 110
+): RegisterFact[] =>
+  features.flatMap((f, index) =>
+    f.properties
+      ? [
+          {
+            e: f.geometry.coordinates[0],
+            n: f.geometry.coordinates[1],
+            ground,
+            index,
+            props: f.properties,
+            slope: [0, 0] as const,
+          },
+        ]
+      : []
+  );
+
+/** Canopy features as the table's placed trees, each with what its card
+ *  says of it. */
+const askedTrees = (
+  features: readonly CanopyFeature[],
+  source: AskedTree["source"],
+  ground = 110
+): AskedTree[] =>
+  features.flatMap((f) =>
+    canopyPlacements([f], { offset, heightAt: () => ground }).map((p) => {
+      let leaf: AskedTree["leaf"];
+      if (f.properties?.l === "e") {
+        leaf = f.properties.ls === "dop" ? "photo" : "forest";
+      }
+      return {
+        p,
+        source,
+        height: f.properties?.h,
+        ...(leaf ? { leaf } : {}),
+      };
+    })
+  );
+
 test("every tree of the file is askable, by its index there", () => {
   const trees = read<TreeFeature>("trees");
-  const sets = treeSets(trees, ctx);
+  const sets = treeSets(facts(trees), ctx);
   const i = 1234;
   const [ex, ey] = trees[i].geometry.coordinates;
   const w = epsgToWorld(ex, ey, offset);
@@ -82,7 +129,7 @@ test("an orchard tree appended to the file's is askable past its end, as an orch
     geometry: { type: "Point", coordinates: at },
     properties: { a: 0, h: 4.5, d: 4, l: "d", s: "orchard" },
   };
-  const sets = treeSets([...trees, orchard], ctx);
+  const sets = treeSets(facts([...trees, orchard]), ctx);
   const w = epsgToWorld(at[0], at[1], offset);
   const hit = hitsInSets({ x: w.x, y: 200, z: w.z }, down, sets, 500)[0];
   expect(hit?.target).toMatchObject({
@@ -95,7 +142,10 @@ test("an orchard tree appended to the file's is askable past its end, as an orch
     throw new Error("the orchard tree has no properties");
   }
   const measured = treeSets(
-    [...trees, { ...orchard, properties: { ...orchard.properties, m: 1 } }],
+    facts([
+      ...trees,
+      { ...orchard, properties: { ...orchard.properties, m: 1 } },
+    ]),
     ctx
   );
   const again = hitsInSets({ x: w.x, y: 200, z: w.z }, down, measured, 500)[0];
@@ -110,7 +160,7 @@ const tree = (x: number, a: number): TreeFeature => ({
 test("a pine and a yew are needle trees on the card, as the cone's conifers are", () => {
   // round, conifer, pine, bush (tree-inventory.ts TREE_ARCHETYPES)
   const trees = [tree(0, 0), tree(40, 3), tree(80, 6), tree(120, 7)];
-  const sets = treeSets(trees, ctx);
+  const sets = treeSets(facts(trees), ctx);
   const conifer = trees.map((t) => {
     const [ex, ey] = t.geometry.coordinates;
     const w = epsgToWorld(ex, ey, offset);
@@ -197,8 +247,8 @@ const geometry = (dx: number) => ({
 });
 
 test("a lamp, a bench, a canopy and an inventory tree stand on the tile's own ground, a monument on every terrain's", () => {
-  // near a seam the two grounds differ: the tile's own terrain (50) and
-  // every loaded terrain's (110)
+  // near a seam the two grounds differ: the tile's own terrain (50; the
+  // trees come stood on it by the build) and every loaded terrain's (110)
   const grounds = { ...ctx, treeHeightAt: () => 50 };
   const canopy: CanopyFeature = {
     geometry: geometry(0),
@@ -215,8 +265,7 @@ test("a lamp, a bench, a canopy and an inventory tree stand on the tile's own gr
   };
   const sets = moreSets(
     {
-      canopy: [canopy],
-      scan: [],
+      trees: askedTrees([canopy], "dom", 50),
       rows: [],
       hedges: [],
       lamps: [lamp],
@@ -227,7 +276,10 @@ test("a lamp, a bench, a canopy and an inventory tree stand on the tile's own gr
     grounds
   ).concat(
     treeSets(
-      [{ geometry: geometry(80), properties: { a: 0, h: 12, d: 6, l: "d" } }],
+      facts(
+        [{ geometry: geometry(80), properties: { a: 0, h: 12, d: 6, l: "d" } }],
+        50
+      ),
       grounds
     )
   );
@@ -258,9 +310,12 @@ const DRESDEN: CardCredits = {
   provider: "Quelle: GeoSN, dl-de/by-2-0",
 };
 
+const canopyFile = read<CanopyFeature>("canopy");
 const features = {
-  canopy: read<CanopyFeature>("canopy"),
-  scan: read<CanopyFeature>("canopyx"),
+  trees: [
+    ...askedTrees(canopyFile, "dom"),
+    ...askedTrees(read<CanopyFeature>("canopyx"), "lsc"),
+  ],
   rows: read<VegRowFeature>("vegrows"),
   hedges: read<LowVegFeature>("lowveg"),
   lamps: read<LampFeature>("lamps"),
@@ -277,7 +332,7 @@ const askDown = (x: number, y: number): FeatureInquiry | undefined => {
 };
 
 test("a surface-model crown answers with its measured height", () => {
-  const f = features.canopy[100];
+  const f = canopyFile[100];
   const [x, y] = f.geometry.coordinates;
   const asked = askDown(x, y);
   expect(asked?.kind).toBe("canopy");
@@ -300,7 +355,10 @@ test("an evergreen crown is outlined as the cone, a pine's not, and the pine's c
     crown(30, { l: "e" }),
     crown(60, { l: "e", pine: 1 }),
   ];
-  const own = moreSets({ ...features, canopy, scan: [], rows: [] }, ctx);
+  const own = moreSets(
+    { ...features, trees: askedTrees(canopy, "dom"), rows: [] },
+    ctx
+  );
   const asked = canopy.map((f) => {
     const [x, y] = f.geometry.coordinates;
     const w = epsgToWorld(x, y, offset);
@@ -337,21 +395,6 @@ test("an evergreen crown is outlined as the cone, a pine's not, and the pine's c
     ).find((h) => h.target.kind === "canopy")?.distance;
   });
   expect((across[1] ?? 0) - (across[0] ?? 0)).toBeGreaterThan(2);
-});
-
-test("a crown a register's tree stands on is left to the register", () => {
-  const f = features.canopy[100];
-  const [x, y] = f.geometry.coordinates;
-  const vetoed = moreSets(features, ctx, (vx, vy) => vx !== x || vy !== y);
-  const w = epsgToWorld(x, y, offset);
-  const thisCrown = (h: { target: FeatureInquiry }) =>
-    h.target.kind === "canopy" &&
-    h.target.position[0] === Math.round(x * 10) / 10 &&
-    h.target.position[1] === Math.round(y * 10) / 10;
-  const o = { x: w.x, y: 200, z: w.z };
-  // without the veto the same ray finds it, so the match itself holds
-  expect(hitsInSets(o, down, sets, 1000).some(thisCrown)).toBe(true);
-  expect(hitsInSets(o, down, vetoed, 1000).some(thisCrown)).toBe(false);
 });
 
 test("lamps, furniture and tram stops are each askable at their point", () => {
@@ -426,8 +469,7 @@ const pt = (x: number, y: number) => ({
 test("a lamp or a bench on a bridge is asked on its deck, a wall lantern at its head", () => {
   const own = moreSets(
     {
-      canopy: [],
-      scan: [],
+      trees: [],
       rows: [],
       hedges: [],
       river: [],
@@ -465,8 +507,7 @@ test("a lamp or a bench on a bridge is asked on its deck, a wall lantern at its 
 test("a tall mast is asked at its post and at the head on its arm", () => {
   const own = moreSets(
     {
-      canopy: [],
-      scan: [],
+      trees: [],
       rows: [],
       hedges: [],
       river: [],
@@ -499,8 +540,7 @@ test("a flagpole is asked at its mast and at its cloth, downwind of it", () => {
   const at: [number, number] = [412_070, 5_656_020];
   const own = moreSets(
     {
-      canopy: [],
-      scan: [],
+      trees: [],
       rows: [],
       hedges: [],
       river: [],
