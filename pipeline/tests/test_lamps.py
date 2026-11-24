@@ -1,11 +1,13 @@
 """Street lamps on a synthetic street: hung across it where they hang, on
 their posts at the kerb where they were mapped in the lanes."""
 
+import json
+
 import numpy as np
 import pytest
 import shapely
 
-from tests.synthetic import SIZE, line_tree, local, osm_tile, read, tags, way, write_raster
+from tests.synthetic import SIZE, line_tree, local, osm_tile, tags, way, write_raster
 
 
 def _street(tmp_path, monkeypatch):
@@ -50,7 +52,7 @@ def _lamps(tile):
     lamps.run(tile)
     return {
         local(f["geometry"]["coordinates"]): f["properties"]
-        for f in read(tile, "lamps")["features"]
+        for f in json.loads(tile.work("lamps_t.geojson").read_text())["features"]
     }
 
 

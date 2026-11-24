@@ -101,7 +101,6 @@ from __future__ import annotations
 import colorsys
 import dataclasses
 import functools
-import json
 import math
 import re
 
@@ -118,6 +117,7 @@ from .bridge import STEP, Axis
 from .classes import RAILWAY, ROAD, WATER
 from .common import (
     OSM_ATTRIBUTION,
+    SITE,
     Tile,
     column,
     feature,
@@ -506,15 +506,11 @@ class Decks:
     @classmethod
     def of(cls, tile: Tile) -> Decks:
         decks = []
-        for tid, _ in tile.neighbours():
-            path = tile.data / "dlm" / f"bridge_{tid}.geojson"
-            if not path.exists():
-                continue
-            for f in json.loads(path.read_text())["features"]:
-                p = f.get("properties") or {}
-                if p.get("kind") in DECK_KINDS and p.get("axis") and len(p.get("line") or []) >= 2:
-                    deck = shapely.geometry.shape(f["geometry"])
-                    decks.append((deck, Axis(p["axis"]), p["line"]))
+        for f in tile.features("bridge", SITE):
+            p = f.get("properties") or {}
+            if p.get("kind") in DECK_KINDS and p.get("axis") and len(p.get("line") or []) >= 2:
+                deck = shapely.geometry.shape(f["geometry"])
+                decks.append((deck, Axis(p["axis"]), p["line"]))
         geoms, fields = read_ways(tile, "highway IS NOT NULL", ["highway", "other_tags"])
         kinds, tags = column(fields, "highway", geoms), column(fields, "other_tags", geoms)
         ways = [
@@ -653,13 +649,7 @@ class Gate:
         if cls is None:
             raise FileNotFoundError(f"{tile.id}: no class raster — bake landcover first")
         self.cls = cls
-        bridge = tile.out("dlm", f"bridge_{tile.id}.geojson")
-        decks = []
-        if bridge.exists():
-            decks = [
-                shapely.geometry.shape(f["geometry"])
-                for f in json.loads(bridge.read_text())["features"]
-            ]
+        decks = [shapely.geometry.shape(f["geometry"]) for f in tile.features("bridge")]
         self.decks = shapely.STRtree(decks) if decks else None
 
     def cls_at(self, x: float, y: float) -> int | None:
@@ -1433,13 +1423,7 @@ def _green(tile: Tile) -> np.ndarray | None:
 
 
 def _canopy_points(tile: Tile) -> shapely.STRtree | None:
-    path = tile.out("dlm", f"canopy_{tile.id}.geojson")
-    if not path.exists():
-        return None
-    pts = [
-        shapely.Point(f["geometry"]["coordinates"][:2])
-        for f in json.loads(path.read_text())["features"]
-    ]
+    pts = [shapely.Point(f["geometry"]["coordinates"][:2]) for f in tile.features("canopy")]
     return shapely.STRtree(pts) if pts else None
 
 
