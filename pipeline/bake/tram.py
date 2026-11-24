@@ -57,7 +57,6 @@ by the tile that owns its midpoint (a mast: its point).
 
 from __future__ import annotations
 
-import json
 import math
 import re
 from collections import defaultdict
@@ -322,17 +321,13 @@ class Ground:
             self.tiles.append((tile.id, tile.bounds))
         self.rasters: dict[str, np.ndarray | None] = {}
         lamps = []
-        for tid, _ in self.tiles:
-            path = tile.data / "dlm" / f"lamps_{tid}.geojson"
-            if not path.exists():
-                continue
-            for f in json.loads(path.read_text())["features"]:
-                props, geom = f.get("properties") or {}, f.get("geometry") or {}
-                if geom.get("type") != "Point" or "wire" in props or "wall" in props:
-                    continue  # hung on a wire or a facade: no post to share
-                x, y = geom["coordinates"][:2]
-                if near[0] <= x <= near[2] and near[1] <= y <= near[3]:
-                    lamps.append(shapely.Point(x, y))
+        for f in tile.features("lamps", near):
+            props, geom = f.get("properties") or {}, f.get("geometry") or {}
+            if geom.get("type") != "Point" or "wire" in props or "wall" in props:
+                continue  # hung on a wire or a facade: no post to share
+            x, y = geom["coordinates"][:2]
+            if near[0] <= x <= near[2] and near[1] <= y <= near[3]:
+                lamps.append(shapely.Point(x, y))
         self.lamps = lamps
         self.lamp_tree = shapely.STRtree(lamps) if lamps else None
 
@@ -714,18 +709,13 @@ def taken(tile: Tile, margin: float = PLATFORM_M + SIGN_DEDUP_M) -> list[shapely
     seam is in the neighbour's)."""
     xmin, ymin, xmax, ymax = tile.bounds
     near = (xmin - margin, ymin - margin, xmax + margin, ymax + margin)
-    ids = [tile.id] + [tid for tid, b in tile.neighbours() if tid != tile.id and overlaps(b, near)]
     out = []
-    for tid in ids:
-        path = tile.data / "dlm" / f"furniture_{tid}.geojson"
-        if not path.exists():
+    for f in tile.features("furniture", near):
+        if f["properties"].get("k") not in ("shelter", "stop"):
             continue
-        for f in json.loads(path.read_text())["features"]:
-            if f["properties"].get("k") not in ("shelter", "stop"):
-                continue
-            x, y = f["geometry"]["coordinates"][:2]
-            if near[0] <= x <= near[2] and near[1] <= y <= near[3]:
-                out.append(shapely.Point(x, y))
+        x, y = f["geometry"]["coordinates"][:2]
+        if near[0] <= x <= near[2] and near[1] <= y <= near[3]:
+            out.append(shapely.Point(x, y))
     return out
 
 

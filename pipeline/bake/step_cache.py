@@ -17,9 +17,8 @@ What the step reads is watched where Python opens files (an audit hook:
 files) and where it asks whether a file is there (`os.stat`, behind
 `Path.exists` and friends). Only paths under the working directory and the
 site's data and raw folders count; the OSM index's files stand for the
-extract they are built from, which is read instead. A file one step
-writes and a later one rewrites (`islands`, `lamp-heights`) is judged by
-what a full run would have there at each step (`Ledger`)."""
+extract they are built from, which is read instead. A file has one writer:
+no step writes into another step's file (`unchanged`)."""
 
 from __future__ import annotations
 
@@ -38,7 +37,7 @@ import rasterio
 
 # Bumped when the manifest's meaning changes, or this module in a way that
 # changes what a step writes (`code_hash` leaves this module out).
-VERSION = 3
+VERSION = 4
 PACKAGE = Path(__file__).resolve().parent
 LOCK = PACKAGE.parent / "uv.lock"
 # A shapefile's other files, read by GDAL with it.
@@ -58,8 +57,6 @@ class Recorder:
         # memo's), else None (taken when the run is saved)
         self.reads: dict[str, list | None] = {}
         self.writes: set[str] = set()
-        # read, then written: what it held before the first write
-        self.before: dict[str, list | None] = {}
         self.probes: dict[str, str] = {}
         self.listed: set[str] = set()
 
@@ -102,9 +99,6 @@ class Recorder:
         p = self._norm(path)
         if p is None:
             return
-        if p in self.reads and p not in self.writes:
-            # the write has not happened yet: the file is as it was read
-            self.before[p] = self.reads[p] or _file_entry(p)
         self.writes.add(p)
 
     def probe(self, path, kind: str) -> None:
@@ -332,12 +326,6 @@ def _same_file(path: str, entry: list | None) -> bool:
         return st.st_size == entry[0] and digest(path) == entry[2]
 
 
-def _same_entry(a: list | None, b: list | None) -> bool:
-    if a is None or b is None:
-        return a is b
-    return a[0] == b[0] and a[2] == b[2]
-
-
 def _kind(path: str) -> str:
     st = _stat(path)
     if st is None:
@@ -485,7 +473,6 @@ def save(path: Path, key: dict, rec: Recorder) -> None:
         "inputs": {
             p: e or _file_entry(p) for p, e in sorted(rec.reads.items()) if p not in rec.writes
         },
-        "before": dict(sorted(rec.before.items())),
         "probes": {p: _kind(p) for p in sorted(set(rec.probes) - rec.writes - set(rec.reads))},
         "listed": {p: _listing(p) for p in sorted(rec.listed)},
         "outputs": {p: _file_entry(p) for p in sorted(rec.writes)},
@@ -496,124 +483,21 @@ def save(path: Path, key: dict, rec: Recorder) -> None:
     part.replace(path)
 
 
-class Ledger:
-    """Every recorded run of a site's steps, and which ran in this bake.
-
-    Some steps rewrite what an earlier one wrote (`islands` the land
-    cover's class raster, `lamp-heights` the lamps'), so the file on disk
-    is the last writer's, not the earlier step's. A run that skips what is
-    unchanged is judged against what a full run would see: before step k a
-    file holds what its last writer before k wrote (recorded in that
-    writer's manifest) — what is there now if a writer ran in this bake or
-    none comes before k — and the output a step recorded must lead,
-    through the later writers' recorded runs (each read what the one before
-    it wrote), to what is there now. A step that runs while a file it reads
-    holds a later writer's output instead first has that file's earlier
-    writers run again (`restore`)."""
-
-    def __init__(self, raw: Path, site: str, order: list[str]) -> None:
-        self.raw, self.site = raw, site
-        self.order = {s: i for i, s in enumerate(order)}
-        self.runs: dict[tuple[str, str], dict] = {}
-        self.writers: dict[str, set[tuple[int, str, str]]] = {}
-        self.ran: set[tuple[str, str]] = set()
-        for step in order:
-            folder = raw / ".bake-cache" / site / step
-            if folder.is_dir():
-                for f in folder.glob("*.json"):
-                    self._load(step, f.stem)
-
-    def _load(self, step: str, tile: str) -> None:
-        old = self.runs.pop((step, tile), None)
-        if old is not None:
-            for p in old["outputs"]:
-                self.writers[p].discard((self.order[step], step, tile))
-        try:
-            m = json.loads(manifest_path(self.raw, self.site, step, tile).read_text())
-        except (OSError, ValueError):
-            return
-        if m.get("version") != VERSION:
-            return
-        self.runs[(step, tile)] = m
-        for part in ("inputs", "before", "outputs"):
-            for p, e in m[part].items():
-                _known(p, e)
-        for p in m["outputs"]:
-            self.writers.setdefault(p, set()).add((self.order[step], step, tile))
-
-    def done(self, step: str, tile: str) -> None:
-        """`step` ran on `tile` in this bake (its manifest saved, if any)."""
-        self.ran.add((step, tile))
-        self._load(step, tile)
-
-    def _held(self, p: str, k: int) -> tuple[bool, list | None]:
-        """What `p` holds before step k in a full run: (True, None) for
-        what is there now, else (False, the last earlier writer's output)."""
-        earlier = sorted(w for w in self.writers.get(p, ()) if w[0] < k)
-        if not earlier or any((s, t) in self.ran for _, s, t in earlier):
-            return True, None
-        _, s, t = earlier[-1]
-        return False, self.runs[(s, t)]["outputs"][p]
-
-    def _lasts(self, p: str, k: int, entry: list | None) -> bool:
-        """Whether `p` as step k wrote it is, through the later writers'
-        runs, what is there now."""
-        state = entry
-        for _, s, t in sorted(w for w in self.writers.get(p, ()) if w[0] > k):
-            run = self.runs[(s, t)]
-            if p not in run["before"] or not _same_entry(run["before"][p], state):
-                return False
-            state = run["outputs"][p]
-        return _same_file(p, state)
-
-    def unchanged(self, step: str, tile: str, key: dict) -> bool:
-        """Whether the recorded run of `step` on `tile` would come out the
-        same now."""
-        m = self.runs.get((step, tile))
-        if m is None or m["key"] != key:
-            return False
-        k = self.order[step]
-        for p, e in (*m["inputs"].items(), *m["before"].items()):
-            now, held = self._held(p, k)
-            if not (_same_file(p, e) if now else _same_entry(held, e)):
-                return False
-        return (
-            all(_kind(p) == kind for p, kind in m["probes"].items())
-            and all(_listing(p) == h for p, h in m["listed"].items())
-            and all(self._lasts(p, k, e) for p, e in m["outputs"].items())
-        )
-
-    def restore(self, step: str, tile: str) -> list[tuple[str, str]]:
-        """The earlier steps to run again before `step` runs on `tile`, in
-        order: the writers of a file it read last time whose output a later
-        writer has replaced on disk."""
-        found: set[tuple[int, str, str]] = set()
-        todo = [(step, tile)]
-        while todo:
-            s0, t0 = todo.pop()
-            m = self.runs.get((s0, t0))
-            if m is None:
-                continue
-            k = self.order[s0]
-            for p in (*m["inputs"], *m["before"]):
-                now, held = self._held(p, k)
-                if now or _same_file(p, held):
-                    continue
-                for w in self.writers[p]:
-                    if w[0] < k and w not in found:
-                        found.add(w)
-                        todo.append((w[1], w[2]))
-        return [(s, t) for _, s, t in sorted(found)]
-
-    def after(self, restored: list[tuple[str, str]], step: str) -> list[tuple[str, str]]:
-        """The later writers to run again once `step` is done, in order:
-        those after it of the files the `restored` runs write, which a
-        restore put back to an earlier writer's output (`lamp-heights` after
-        a restored `lamps`) — a bake of `step` alone would leave them so."""
-        k = self.order[step]
-        found: set[tuple[int, str, str]] = set()
-        for s0, t0 in restored:
-            m = self.runs.get((s0, t0))
-            for p in m["outputs"] if m else ():
-                found |= {w for w in self.writers.get(p, ()) if w[0] > k}
-        return [(s, t) for _, s, t in sorted(found)]
+def unchanged(raw: Path, site: str, step: str, tile: str, key: dict) -> bool:
+    """Whether the recorded run of `step` on `tile` would come out the same
+    now: its key, what it read, looked for and listed, and what it wrote
+    (no other step writes a step's file) are as recorded."""
+    try:
+        m = json.loads(manifest_path(raw, site, step, tile).read_text())
+    except (OSError, ValueError):
+        return False
+    if m.get("version") != VERSION or m["key"] != key:
+        return False
+    for part in ("inputs", "outputs"):
+        for p, e in m[part].items():
+            _known(p, e)
+    return (
+        all(_same_file(p, e) for p, e in (*m["inputs"].items(), *m["outputs"].items()))
+        and all(_kind(p) == kind for p, kind in m["probes"].items())
+        and all(_listing(p) == h for p, h in m["listed"].items())
+    )

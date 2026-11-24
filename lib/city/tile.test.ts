@@ -43,6 +43,8 @@ test("the cadastre, hedges and scan crowns are optional side files", () => {
   expect(a.trees).toEqual({
     file: "trees_33412_5656_2_sn.geojson",
     required: false,
+    // a source of the tile's tree files, never served itself
+    source: true,
   });
   expect(a.lowveg.file).toBe("lowveg_33412_5656_2_sn.geojson");
   // Only tiles with a laser scan have them; prepare-data names the file in

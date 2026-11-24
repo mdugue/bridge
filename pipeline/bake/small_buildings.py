@@ -52,7 +52,6 @@ Measurement and the gate: docs/plans/completed.md (plan 034).
 
 from __future__ import annotations
 
-import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -309,10 +308,6 @@ def _union(geoms: list) -> shapely.Geometry | None:
     return union
 
 
-def _features(path: Path) -> list:
-    return json.loads(path.read_text())["features"] if path.exists() else []
-
-
 def area_tiles(tile: Tile, grid: Grid) -> list[Tile]:
     """The tile and every committed neighbour (`Tile.neighbours`)
     the grid reaches into."""
@@ -330,14 +325,13 @@ def layer_mask(tiles: list[Tile], grid: Grid) -> np.ndarray:
     bld = np.zeros((grid.n, grid.n), bool)
     geoms = []
     for t in tiles:
-        dlm = t.data / "dlm"
         bld |= building_mask(grid, t.data / "cityjson" / f"lod2_{t.id}.city.json")
         geoms += [
             shape(f["geometry"]).buffer(WALL_BUF_M)
-            for f in _features(dlm / f"walls_{t.id}.geojson")
+            for f in t.features("walls")
             if f["properties"].get("kind") not in ("fence", "gate")
         ]
-        geoms += [shape(f["geometry"]) for f in _features(dlm / f"bridge_{t.id}.geojson")]
+        geoms += [shape(f["geometry"]) for f in t.features("bridge")]
     mask = ndi.binary_dilation(bld, structure=disk(BLD_BUF_PX))
     return mask | grid.burn(geoms)
 
@@ -346,11 +340,10 @@ def drawn_elsewhere(tiles: list[Tile]) -> shapely.Geometry | None:
     """Monuments and stop shelters: other layers draw them."""
     geoms = []
     for t in tiles:
-        dlm = t.data / "dlm"
-        geoms += [shape(f["geometry"]) for f in _features(dlm / f"monuments_{t.id}.geojson")]
+        geoms += [shape(f["geometry"]) for f in t.features("monuments")]
         geoms += [
             shape(f["geometry"])
-            for f in _features(dlm / f"furniture_{t.id}.geojson")
+            for f in t.features("furniture")
             if f["properties"].get("k") == "shelter"
         ]
     return _union([g.buffer(NEAR_M) for g in geoms])

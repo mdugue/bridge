@@ -2,10 +2,14 @@ import { expect, test } from "bun:test";
 import { Matrix4, Vector3 } from "three/webgpu";
 import type { Object3D } from "three/webgpu";
 import type { CanopyFeature, TreeFeature } from "@/lib/city/features";
-import { PINE_CROWN_BASE } from "@/lib/city/tree-inventory";
+import {
+  canopyPlacements,
+  inventoryTrees,
+} from "@/lib/city/__fixtures__/place-trees";
+import { inventoryCovers, PINE_CROWN_BASE } from "@/lib/city/tree-inventory";
 import { pineSilhouette } from "./conifer-crown";
 import { isInstances } from "./instancing";
-import { buildTreeInventory } from "./tree-inventory-layer";
+import { buildTreeInventory as buildPlaced } from "./tree-inventory-layer";
 import {
   buildVegetation,
   createVegetationLod,
@@ -25,9 +29,18 @@ function census(root: Object3D): { instances: number; meshes: number } {
   return out;
 }
 
-const ctx: VegetationContext = {
-  offset: { cx: 0, cy: 0 },
-  heightAt: () => 100,
+/** The ground the build stood the trees on. */
+const ground = { offset: { cx: 0, cy: 0 }, heightAt: () => 100 };
+const ctx: VegetationContext = {};
+
+/** The layer over the register's features, placed as the build places them. */
+const buildTreeInventory = (features: TreeFeature[], on: VegetationContext) =>
+  buildPlaced(inventoryTrees(features, ground), on);
+
+/** The build's veto: false where a register tree stands. */
+const vetoOf = (features: TreeFeature[]) => {
+  const covers = inventoryCovers(features);
+  return (x: number, y: number, h?: number) => !covers(x, y, h);
 };
 
 const tree = (x: number, a: number, h = 12, d = 8): TreeFeature => ({
@@ -85,7 +98,10 @@ test("the reshaped silhouettes get meshes; trunks and broadleaf crowns join the 
   expect(inv.instances).toHaveLength(6);
   expect(inv.instances.filter((t) => t.crown)).toHaveLength(3);
   const veg = buildVegetation(
-    { rows: [], canopy: [canopy(100)], extraTrees: inv.instances },
+    {
+      trees: canopyPlacements([canopy(100)], ground),
+      extraTrees: inv.instances,
+    },
     ctx
   );
   const merged = census(veg.group);
@@ -158,11 +174,18 @@ test("crowns stand on the ground, never NaN (a NaN matrix culls the chunk)", () 
 });
 
 test("keepTree vetoes the canopy points inside an inventory crown", () => {
-  const inv = buildTreeInventory([tree(0, 0, 12, 10)], ctx);
-  expect(inv.keepTree(3, 0)).toBe(false);
-  expect(inv.keepTree(30, 0)).toBe(true);
+  const keepTree = vetoOf([tree(0, 0, 12, 10)]);
+  expect(keepTree(3, 0)).toBe(false);
+  expect(keepTree(30, 0)).toBe(true);
   const veg = buildVegetation(
-    { rows: [], canopy: [canopy(2), canopy(40)], keepTree: inv.keepTree },
+    {
+      trees: canopyPlacements(
+        [canopy(2), canopy(40)],
+        ground,
+        undefined,
+        keepTree
+      ),
+    },
     ctx
   );
   // only the far canopy point survives: trunk + mid, rich and far crown
@@ -175,7 +198,7 @@ test("a tree in forest/copse (f = 1) vetoes no canopy tree", () => {
     properties: { a: 0, d: 10, h: 12, l: "d", f: 1 },
   };
   const inv = buildTreeInventory([woodland], ctx);
-  expect(inv.keepTree(3, 0)).toBe(true);
+  expect(vetoOf([woodland])(3, 0)).toBe(true);
   expect(inv.instances).toHaveLength(1);
 });
 
@@ -183,7 +206,7 @@ test("empty input builds nothing and vetoes nothing; the control still works", (
   const inv = buildTreeInventory([], ctx);
   expect(inv.control.group.children).toHaveLength(0);
   expect(inv.instances).toHaveLength(0);
-  expect(inv.keepTree(0, 0)).toBe(true);
+  expect(vetoOf([])(0, 0)).toBe(true);
   const built = buildTreeInventory([tree(5, 2)], ctx);
   // its silhouettes are planned with the canopy's chunks: rich near the
   // camera, the next pass changes nothing, and with no rich budget left

@@ -5,6 +5,7 @@ import {
 } from "3d-tiles-renderer/core";
 import { TilesRenderer } from "3d-tiles-renderer/three";
 import { createLookState } from "@/lib/city/look-state";
+import { packTreeFile } from "@/lib/city/tree-table";
 import {
   BoxGeometry,
   BufferAttribute,
@@ -43,6 +44,7 @@ import {
   handOverWaitMs,
   PHONE_STREAM,
   STREAM_DOWNLOADS,
+  fetchTrees,
   setStreamDownloads,
   orderStreaming,
   takesOver,
@@ -1709,4 +1711,51 @@ test("an ask builder that throws in idle time is reported and lets the tile go",
   expect(failures).toHaveLength(1);
   expect(d.buildAsks).toBeUndefined();
   expect(asksOf(d)).toEqual([]);
+});
+
+test("a tree file that does not come or is not one is said, and the rest still draws", async () => {
+  const real = globalThis.fetch;
+  const said: string[] = [];
+  const ctx = {
+    onDressingFailed: (error: unknown, tile: string) => {
+      said.push(`${tile}: ${(error as Error).message}`);
+    },
+  };
+  const fetched = async (body: () => Response) => {
+    // reason: the stub answers any URL the same
+    globalThis.fetch = (async () =>
+      await Promise.resolve(body())) as unknown as typeof fetch;
+    return await fetchTrees(
+      "trees.drs.gz",
+      (name) => `/data/${name}`,
+      ctx,
+      "t1"
+    );
+  };
+  try {
+    // a deploy without the file, then bytes that are no tree file
+    expect(await fetched(() => new Response(null, { status: 404 }))).toEqual(
+      []
+    );
+    expect(
+      await fetched(() => new Response(new Uint8Array(64).fill(7)))
+    ).toEqual([]);
+    expect(said).toEqual([
+      "t1: Bäume: Tabelle nicht lesbar",
+      "t1: Bäume: Tabelle nicht lesbar",
+    ]);
+    // a good file is one pack, and nothing is said
+    const file = packTreeFile({
+      origin: [1, 2, 3],
+      trees: new Uint16Array(6),
+      register: new Uint16Array(0),
+    });
+    const good = await fetched(() => new Response(new Uint8Array(file)));
+    expect(good).toHaveLength(1);
+    expect(said).toHaveLength(2);
+    // a level that names no file asks for none
+    expect(await fetchTrees(undefined, String, ctx, "t1")).toEqual([]);
+  } finally {
+    globalThis.fetch = real;
+  }
 });

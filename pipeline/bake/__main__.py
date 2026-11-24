@@ -66,7 +66,6 @@ from .spec import parse
 
 STEPS = {
     "landcover": landcover.run,
-    "islands": landcover.run_islands,
     # Before the canopy (no tree on a deck; without a DLM the decks are
     # OSM's, rail_osm.py), the furniture (it keeps benches off the decks),
     # the tram, lowveg and small-buildings (masks).
@@ -109,9 +108,6 @@ STEPS = {
     "markings": markings.run,
     # After the NDVI: an untagged surface is read off the orthophoto.
     "sport": sport.run,
-    # After land cover, NDVI and the furniture (the stop signs skip a stop
-    # that already has a shelter).
-    "tram": tram.run,
     "riverside": riverside.run,
     # The site's counted motor traffic (its source, cached by the fetch).
     "traffic": traffic.run,
@@ -128,6 +124,10 @@ STEPS = {
     # lamps see the water past the buildings, and its level there, for the
     # river's mirror of them.
     "lamp-water": lamp_water.run,
+    # After land cover, NDVI, the furniture (the stop signs skip a stop that
+    # already has a shelter) and the lamps as lamp-water leaves them (a
+    # mast shares a lamp's post).
+    "tram": tram.run,
     # Last: thinned against the canopy and the cadastre, masked by the walls
     # and the bridges.
     "lowveg": lowveg.run,
@@ -281,7 +281,7 @@ def warm(spec, step: str, tiles, jobs: int) -> None:
 
 
 class Bake:
-    """The bake's run settings and the site's recorded runs."""
+    """The bake's run settings and what ran in it."""
 
     def __init__(
         self, spec, jobs: int, research: bool, spec_hash: str, mode: str, osm=None
@@ -293,8 +293,6 @@ class Bake:
         # "cache": skip what is unchanged; "force": run all, record it;
         # "off": run all, record nothing
         self.mode = mode
-        self.ledger = step_cache.Ledger(spec.raw, spec.site, list(STEPS))
-        self.tiles = {t.id: t for t in spec.tiles}
         # each (step, tile) that ran in this bake and finished → whether
         # it read the OSM extract, and whether it wrote anything
         self.ran: dict[tuple[str, str], tuple[bool, bool]] = {}
@@ -315,7 +313,6 @@ class Bake:
         if self.jobs <= 1 or len(tiles) <= 1:
             for tile in tiles:
                 self.ran[(step, tile.id)] = recorded_tile(self.spec, step, tile, *args)
-                self.ledger.done(step, tile.id)
             return
         warm(self.spec, step, tiles, self.jobs)
         # fork: the workers share the parent's loaded modules (and what
@@ -328,7 +325,6 @@ class Bake:
                 # every tile that finished counts, whichever failed first
                 try:
                     self.ran[(step, t.id)] = done.result()
-                    self.ledger.done(step, t.id)
                 except (Exception, SystemExit) as exc:
                     failed = failed or exc
         if failed is not None:
@@ -340,31 +336,16 @@ class Bake:
         tiles of one step run side by side; the next step starts once all
         are done. Every tile is judged before any runs: a step's tiles read
         each other's files as the step found them."""
-        if self.mode != "cache":
-            self._run(step, tiles)
-            return
-        key = self._key(step)
-        todo = []
-        for tile in tiles:
-            if self.ledger.unchanged(step, tile.id, key):
-                print(f"{tile.id}: {step} unchanged — skipped (--force runs it)")
-            else:
-                todo.append(tile)
-        again = sorted(
-            {r for t in todo for r in self.ledger.restore(step, t.id)},
-            key=lambda r: self.ledger.order[r[0]],
-        )
-        then = self.ledger.after(again, step)
-        for s, tid in again:
-            print(f"{tid}: {s} runs again — {step} reads its output, which a later step replaced")
-            self._run(s, [self.tiles[tid]])
+        todo = list(tiles)
+        if self.mode == "cache":
+            key, todo = self._key(step), []
+            for tile in tiles:
+                if step_cache.unchanged(self.spec.raw, self.spec.site, step, tile.id, key):
+                    print(f"{tile.id}: {step} unchanged — skipped (--force runs it)")
+                else:
+                    todo.append(tile)
         if todo:
             self._run(step, todo)
-        # what the restores put back is then rewritten as before (a lamp's
-        # height), judged as any step: unchanged inputs skip it
-        for s, tid in then:
-            print(f"{tid}: {s} runs again — a restore before {step} put back its input")
-            self.step(s, [self.tiles[tid]])
 
 
 # The steps whose code reaches osm.py (for a helper: `tag`, a footprint

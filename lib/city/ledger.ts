@@ -171,13 +171,14 @@ export function tileSet(
 ): string[] {
   const coarse = tile.terrain[1];
   const fine = tile.terrain[0];
-  // the dressing build fetches the sports table on every tier and samples
-  // the NDVI (tile-stream.ts `buildDressing`)
+  // the dressing build fetches the sports table on every tier; the coarse
+  // level's tree file it reads too is the set `far`'s, fetched once
+  // (tile-stream.ts `buildDressing`)
   const fineAt = (reach: Reach): string[] => [
     fine.uri,
     ...reads(fine.extras, 0, phone, reach),
     ...names(fine.extras.dressing),
-    ...names({ t: fine.extras.sportTable, n: fine.extras.ndvi }),
+    ...names({ t: fine.extras.sportTable }),
   ];
   switch (set) {
     case "far": {

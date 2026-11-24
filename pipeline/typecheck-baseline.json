@@ -63,7 +63,7 @@
     },
     "bake/furniture.py": {
       "reportArgumentType": 6,
-      "reportAssignmentType": 2,
+      "reportAssignmentType": 1,
       "reportAttributeAccessIssue": 30,
       "reportOptionalMemberAccess": 1,
       "reportReturnType": 1

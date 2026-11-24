@@ -26,7 +26,7 @@ const level = (t: string, n: 0 | 1): TerrainFiles => ({
         surfaceFar: `surface_${t}.r1024.png`,
         dressing: { lamps: `lamps_${t}.geojson` },
       }
-    : { coarse: { crowns: `crowns_${t}.json` } }),
+    : { coarse: { dressingCoarse: `crowns_${t}.json` } }),
 });
 
 const baked = (t: string, x: number): BakedTile => ({
@@ -228,7 +228,7 @@ test("the figures of a fixture site, each from the files it names", () => {
       coarse: {
         bytes: gz(root, "crowns_a.json"),
         files: 1,
-        kinds: { crowns: gz(root, "crowns_a.json") },
+        kinds: { dressingCoarse: gz(root, "crowns_a.json") },
       },
     },
   });

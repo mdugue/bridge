@@ -175,10 +175,10 @@ visual-variable codebook is in
   `area:highway` (footway, pedestrian, traffic island) areas and fountain
   basins become built-up (4), `leisure=park|garden` and
   `landuse=grass|village_green|meadow|flowerbed` meadow (1), the lawn
-  winning inside a pedestrian area. Idempotent, so `bun run bake <site> --step
-  islands` applies it to the committed raster without the raw DLM
-  (2026-09-25: ≈ 0.2–0.7 M texels per tile, Prager Straße and the Altmarkt
-  among them). The legend then carries the OSM credit.
+  winning inside a pedestrian area (2026-09-25: ≈ 0.2–0.7 M texels per
+  tile, Prager Straße and the Altmarkt among them; until 2026-11-24 a
+  step of its own, `islands`, also applied it to the committed raster
+  without the raw DLM). The legend then carries the OSM credit.
   `pipeline/bake/landcover.py` `carve_islands`.
 - **Surface colours** `❝ taken` `= computed` — Basis-DLM land-cover → a 4096² **class-id raster**
   (8-bit, ids 0–9 — 9 arable since 2026-10-21, below —, burned lowest priority first so water wins;
@@ -2533,10 +2533,14 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   (2026-10-21, P7, `canopy.py` `row_trees`): DOM1's crown peaks within 3 m
   of the line (nDOM smoothed 1 m, over 3 m, off LoD2 and the traffic),
   projected onto it, as tall as measured, thinned tallest-first 3 m apart,
-  none within 4.5 m of a canopy or scan crown; written into
-  `canopy_<t>.geojson` as `row: 1` with a `rows` member, which the pack
-  carries as `ROWS_MEASURED` (`lib/city/point-pack.ts`), and the viewer
-  then draws only the hedges from `vegrows`. Without DOM1 the trees stand
+  none within 4.5 m of a canopy point (until 2026-11-24 nor of a scan
+  crown, read from the last bake's `canopyx`: now the scan crown gives
+  way — `lowveg` writes none within 5 m of a canopy point, a row's tree
+  among them, so a first bake and a second agree; Grimma's row trees
+  16 → 91 and 15 → 122, each where a scan crown stood); written into
+  `canopy_<t>.geojson` as `row: 1` with a `rows` member; the build then
+  plants no trees of its own along the rows (`scripts/bake-trees.ts`,
+  `plantedRows`), and the viewer draws only the hedges from `vegrows`. Without DOM1 the trees stand
   every 9 m along the line as before. Row trees: Dresden's 33408_5656
   1 176 → 540 (doubles 26 % → 2 trees, standing on a crown 80 → 97 %),
   33412_5656 927 → 274, Leipzig's 33316_5688 1 378 → 408, Unna 904 → 85
@@ -2710,7 +2714,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   tiles. The DOM's form (a cone's peak over
   its shoulders) does not part them (J 0.17) and is not used. An
   evergreen crown keeps its leaves and colour all year (no season
-  jitter) on both terrain levels (`lib/city/coarse-crowns.ts` byte 10),
+  jitter) on both terrain levels (`lib/city/coarse-crowns.ts`),
   and the card says *Nadelbaum, immergrün* with the source that told it.
   It stands as a conifer (2026-10-21, `app/_components/conifer-crown.ts`):
   a three-tier lathe cone in the lobed crown's box, on the same trunk, its
@@ -2719,8 +2723,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   conifers' deeper blue-green (`evergreenColor`; before, the NDVI's
   lush↔dry green), outlined as its cone when asked; the coarse level draws
   it as a six-sided cone of one skirt, and the register's conifers carry
-  their cone there too (`lib/city/coarse-crowns.ts`, the code byte's
-  0x80). A canopy evergreen is a needle forest's crown or a mixed forest's
+  their cone there too (`lib/city/coarse-crowns.ts`, `coarseForm`). A canopy evergreen is a needle forest's crown or a mixed forest's
   green in March, so a pine, spruce or fir — an evergreen broadleaf
   (holly, box, cherry laurel) is a shrub under the canopy's 3 m — and a
   larch in a needle forest is drawn as one (the data tells no larch
@@ -2772,17 +2775,26 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   evergreen, a register tree whose crown is the cone — as a six-sided
   cone of one skirt in a set of their own (`coarseConifer`, 2026-10-21),
   and its pines with the pine's crown in a third set (`coarseForm`). A
-  canopy or row crown's record carries its crown base in millimetres (the
-  third `uint16`; 2026-10-21), so a distant crown starts where its near one
-  does (`crownBase` above); a coarse crown had ignored it.
-  The build step runs the fine
-  level's own placement over each tile's tree files (the packed canopy as
-  the browser unpacks it, the scan crowns, the rows, the register and the
-  orchards, its veto, on the fine level's ground;
-  `lib/city/tree-placement.ts`, `lib/city/tree-inventory.ts`,
-  `scripts/coarse-crowns.ts`) and packs that third, 20 bytes a crown
-  (`crowns_<t>.crw.gz`, ≈ 136 000 crowns and 1.5 MB gzipped for
-  Dresden's fifteen tiles). The coarse level fetches it with its other
+  distant crown starts where its near one does (`crownBase` above).
+  **The build places every tree** (2026-11-24, plan 090;
+  `scripts/bake-trees.ts`): the canopy off the sheds, the roofs and the
+  monuments, the scan crowns, the rows, the register and the orchards,
+  its veto, each on the fine level's ground, written as a record of what
+  was measured there — easting, northing, the ground, the height, the
+  scan's radius, NDVI, the slope at the foot: twelve bytes a canopy tree,
+  twenty a surveyed one (`lib/city/tree-table.ts`). The third the coarse
+  level draws is that level's file (`dressing_<t>.c.drs.gz`), the rest
+  the fine level's (`dressing_<t>.drs.gz`), which reads both; the viewer
+  runs the same arithmetic over the records (`canopyPlacement`,
+  `inventoryTree`) and reads no ground, no NDVI raster and no GeoJSON
+  for a tree — the packed canopy, the scan crowns, the register's
+  GeoJSON and the crowns' file are no longer published. What moved: a
+  tree's foot is up to 3.1 cm under the fine ground, never over it, its
+  NDVI one of 32 steps, the slope at its foot one of 31 a side (a bank
+  steeper than 43° keeps its side at the steepest). Dresden's spawn
+  tile: a fine level's visit fetches 325.0 → 239.8 kB of dressing in
+  19 → 17 requests, the forest tile 894.3 → 704.7 kB. The coarse level
+  fetches its file with its other
   side files and builds it with its dressing, whatever the mode or scale,
   so a tree stays where it stood when the level changes and no scale and
   no device is left without trees. A level that takes over from the
@@ -2980,7 +2992,7 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   first, 854 / 252 / 368 / 346; `s: "osm"`, 298 with a genus) — courts, the Zwinger,
   Free-State and private ground. Their height/crown/circumference tags are read (53 / 1 /
   2 in the four first tiles), the gaps filled from the cadastre's own statistics
-  for the tile. They join the cadastre's veto path (`keepTree`), so an OSM
+  for the tile. They join the cadastre's veto in the build (`scripts/bake-trees.ts`), so an OSM
   tree replaces the canopy or laser-scan crown it stands in. The re-bake
   left the cadastre trees unchanged (same set, positions, properties);
   features are now sorted by position so a re-bake diffs by content.

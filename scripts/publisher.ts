@@ -37,11 +37,11 @@ function writeWhole(dest: string, content: Uint8Array | string): void {
   renameSync(part, dest);
 }
 
-/** `name.ext` → `name.<8 hex of sha1>.ext` (`.glb.gz`, `.pts.gz`, `.crw.gz`
- *  keep both). */
+/** `name.ext` → `name.<8 hex of sha1>.ext` (`.glb.gz`, `.drs.gz` keep
+ *  both). */
 export function hashedName(file: string, content: Uint8Array): string {
   const hash = createHash("sha1").update(content).digest("hex").slice(0, 8);
-  const ext = /(?:\.(?:glb|pts|crw)\.gz|\.[^.]+)$/u.exec(file)?.[0] ?? "";
+  const ext = /(?:\.(?:glb|drs)\.gz|\.[^.]+)$/u.exec(file)?.[0] ?? "";
   return `${path.basename(file, ext)}.${hash}${ext}`;
 }
 

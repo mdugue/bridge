@@ -3,7 +3,6 @@ import type { TreeFeature } from "./features";
 import { epsgToWorld } from "./ground-clamp";
 import type { RecenterOffset } from "./ground-clamp";
 import { clamp } from "./math";
-import type { RasterSampler } from "./raster-sampler";
 import { BASE_TREE_H, hash } from "./tree-placement";
 import type { Placement } from "./tree-placement";
 import { seasonJitter } from "./tree-season";
@@ -350,54 +349,45 @@ export interface InventoryTree {
   ndvi?: number;
   rot: number;
   shape: CrownShape;
+  /** the ground's slope at its foot, two signed bytes (as a canopy tree's,
+   *  lib/city/tree-placement.ts `Placement.slope`), where the build baked
+   *  it */
+  slope?: readonly [number, number];
   /** the float32 the instance matrices hold (as tree-placement.ts) */
   x: number;
   z: number;
 }
 
 /**
- * The register's trees placed on the ground (EPSG → world), in file order;
- * one off the ground is left out. The tree layer draws them
- * (app/_components/tree-inventory-layer.ts); the build step reads the same
- * to choose a small-scale picture's trees (lib/city/coarse-crowns.ts).
+ * One register tree at EPSG (ex, ey) standing on `ground`: the one owner
+ * of how its properties become what is drawn — the build's tree table
+ * (lib/city/tree-table.ts) and the viewer's reading of it both come
+ * through here.
  */
-export function inventoryTrees(
-  features: TreeFeature[],
-  ctx: {
-    heightAt: (x: number, y: number) => number | null;
-    offset: RecenterOffset;
-  },
-  ndviAt?: RasterSampler,
-  year = new Date().getFullYear()
-): InventoryTree[] {
-  const out: InventoryTree[] = [];
-  for (const f of features) {
-    if (f.geometry?.type !== "Point" || !f.properties) {
-      continue;
-    }
-    const [ex, ey] = f.geometry.coordinates;
-    const ground = ctx.heightAt(ex, ey);
-    if (ground === null) {
-      continue;
-    }
-    const p = f.properties;
-    const archetype = archetypeOf(p.a);
-    const w = epsgToWorld(ex, ey, ctx.offset);
-    out.push({
-      x: Math.fround(w.x),
-      z: Math.fround(w.z),
-      ground,
-      rot: hash(ex * 0.13 + ey * 0.07) * Math.PI * 2,
-      ext: treeExtents(p.h, p.d, archetype, p.g === 1),
-      shape: ARCHETYPE_SHAPE[archetype],
-      leaf: p.l === "e" ? "e" : "d",
-      genus: p.gn ?? 0,
-      jitter: seasonJitter(hash(ex * 0.29 + ey * 0.53 + 3.7)),
-      colour: p.c ?? 0,
-      dbh: p.t,
-      ndvi: ndviAt?.(ex, ey),
-      age: treeAge(p.y, year),
-    });
-  }
-  return out;
+export function inventoryTree(
+  ex: number,
+  ey: number,
+  ground: number,
+  p: NonNullable<TreeFeature["properties"]>,
+  offset: RecenterOffset,
+  ndvi: number | undefined,
+  year: number
+): InventoryTree {
+  const archetype = archetypeOf(p.a);
+  const w = epsgToWorld(ex, ey, offset);
+  return {
+    x: Math.fround(w.x),
+    z: Math.fround(w.z),
+    ground,
+    rot: hash(ex * 0.13 + ey * 0.07) * Math.PI * 2,
+    ext: treeExtents(p.h, p.d, archetype, p.g === 1),
+    shape: ARCHETYPE_SHAPE[archetype],
+    leaf: p.l === "e" ? "e" : "d",
+    genus: p.gn ?? 0,
+    jitter: seasonJitter(hash(ex * 0.29 + ey * 0.53 + 3.7)),
+    colour: p.c ?? 0,
+    dbh: p.t,
+    ndvi,
+    age: treeAge(p.y, year),
+  };
 }
