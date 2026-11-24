@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { canopyPlacements } from "./__fixtures__/place-trees";
 import type { CanopyFeature, VegRowFeature } from "./features";
 import {
   BASE_TREE_H,
   CARRIAGEWAY_CLEARANCE_M,
   CROWN_TO_HEIGHT,
   canopyCrownWidth,
-  canopyPlacements,
   crownBase,
   GENERIC_CROWN_W,
   plantedRows,

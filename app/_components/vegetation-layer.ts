@@ -47,14 +47,7 @@ import {
   vec4,
 } from "three/tsl";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import type { CanopyFeature, VegRowFeature } from "@/lib/city/features";
-import { groundSlope } from "@/lib/city/ground-clamp";
-import type { GroundContext } from "@/lib/city/ground-clamp";
 import { srgbToLinear } from "@/lib/city/landcover";
-import { decodeGreyPng } from "@/lib/city/png-raster";
-import { maxWindowSampler } from "@/lib/city/raster-sampler";
-import type { RasterSampler } from "@/lib/city/raster-sampler";
-import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import {
   pineBase,
   TRUNK_FOOT_R,
@@ -66,13 +59,11 @@ import {
 } from "@/lib/city/tree-inventory";
 import {
   BASE_TREE_H,
-  canopyPlacements,
   cellKey,
   GENERIC_CROWN_FOOT,
   hash,
-  rowPlacements,
 } from "@/lib/city/tree-placement";
-import type { Placement, TreeVeto } from "@/lib/city/tree-placement";
+import type { Placement } from "@/lib/city/tree-placement";
 import { seasonJitter } from "@/lib/city/tree-season";
 import {
   CROWN_BASE_COLOR,
@@ -99,10 +90,8 @@ import {
   buildPineGeo,
   CONE_SEGMENTS,
 } from "./conifer-crown";
-import { finished, inRuns } from "@/lib/city/build-steps";
+import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
-import { isAbortError } from "./fetch-optional";
-import { fetchRasterBytes, inRasterTurn } from "./raster-upload";
 import {
   instanceFloat,
   Instances,
@@ -128,7 +117,7 @@ import {
 } from "./tree-foot";
 import type { FootGeos, FootMaterials } from "./tree-foot";
 
-export { bucketByCell, hash, type TreeVeto } from "@/lib/city/tree-placement";
+export { bucketByCell, hash } from "@/lib/city/tree-placement";
 
 /**
  * A tree placed by precomputed transforms rather than a uniform scale — the
@@ -148,27 +137,23 @@ export interface TreeInstance {
   };
   /** the bark as a tint of the trunk material (absent = its own colour) */
   bark?: Color;
+  /** the ground's slope at its foot (`Placement.slope`) */
+  slope?: readonly [number, number];
   trunk: Matrix4;
   /** Y-up world position, for the chunk bucketing */
   x: number;
   z: number;
 }
 
-/** One tile's decoded vegetation inputs. */
+/** One tile's trees, placed by the build (lib/city/tree-table.ts). */
 export interface VegetationFeatures {
-  /** DOM1-derived canopy points (trees scaled to their measured height) */
-  canopy: CanopyFeature[];
   /** precomputed trees drawn in the same chunk meshes (TreeInstance) */
   extraTrees?: TreeInstance[];
-  /** optional TreeVeto; hedges are never vetoed */
-  keepTree?: TreeVeto;
-  /** the DOP NDVI sampler (loadNdviSampler), for lush↔dry crown colour */
-  ndviAt?: RasterSampler;
-  /** ATKIS veg04 tree rows (its hedges are low-vegetation-layer.ts's) */
-  rows: VegRowFeature[];
+  /** the canopy's, the scan's and the rows' trees */
+  trees: Placement[];
 }
 
-export interface VegetationContext extends GroundContext {
+export interface VegetationContext {
   /**
    * Shared world-space sun direction (surface→sun), updated by the sun rig.
    * The crown uniforms' `sunDirection` node holds it by reference for the
@@ -1506,7 +1491,6 @@ function buildTreeCell(
   geos: TreeGeos,
   trunkMat: Material,
   crownMats: CrownMaterials,
-  ground: GroundContext,
   footMat?: FootMaterials
 ): {
   chunk: VegetationChunk | null;
@@ -1528,7 +1512,7 @@ function buildTreeCell(
     }
     paintBark(trunks, 0, extras);
     finishInstances(trunks);
-    const feet = feetOf(trunks, geos, ground, footMat, false);
+    const feet = feetOf(trunks, geos, extras, footMat, false);
     return {
       chunk: null,
       loose: feet ? { feet, trunks } : undefined,
@@ -1579,8 +1563,14 @@ function buildTreeCell(
   trunks.castShadow = true;
   const feet = [
     // a cell of cones or pines: needle trees' feet
-    ...(feetOf(trunks, geos, ground, footMat, cell.form !== "broad") ?? []),
-    ...((own && feetOf(own, geos, ground, footMat, false)) ?? []),
+    ...(feetOf(
+      trunks,
+      geos,
+      trees.length > 0 ? trees : extras,
+      footMat,
+      cell.form !== "broad"
+    ) ?? []),
+    ...((own && feetOf(own, geos, extras, footMat, false)) ?? []),
   ];
   // The far tier: every other tree of a dense chunk, drawn wider (see
   // keepInFarTier), so a forest stays a closed canopy far away.
@@ -1633,36 +1623,26 @@ function buildTreeCell(
 function feetOf(
   trunks: Instances,
   geos: TreeGeos,
-  ground: GroundContext,
+  stood: Parameters<typeof footSlopes>[0],
   footMat: FootMaterials | undefined,
   needle: boolean
 ): Instances[] | undefined {
   return footMat && geos.foot
-    ? treeFeet(geos.foot, footMat, trunks, footSlopes(trunks, ground), needle)
+    ? treeFeet(geos.foot, footMat, trunks, footSlopes(stood), needle)
     : undefined;
 }
 
 /**
- * The ground's slope at each trunk's foot (`groundSlope`), two signed
- * bytes a tree: the feet lie on it instead of flat (tree-foot.ts). The
- * foot is where the trunk material puts it, its matrix's origin lowered
- * by its drop.
+ * The ground's slope at each trunk's foot, two signed bytes a tree, as the
+ * build read it where the tree stands (lib/city/tree-table.ts): the feet
+ * lie on it instead of flat (tree-foot.ts).
  */
 function footSlopes(
-  trunks: Instances,
-  ground: GroundContext
+  trees: readonly { slope?: readonly [number, number] }[]
 ): InstancedBufferAttribute {
-  const slopes = new Int8Array(trunks.capacity * 2);
-  const m = trunks.instanceMatrix.array as Float32Array;
-  const drops = trunks.geometry.getAttribute(TRUNK_DROP);
-  for (let i = 0; i < trunks.drawCount; i += 1) {
-    const at = i * 16;
-    const drop = drops ? drops.getX(i) : 0;
-    const x = m[at + 12] - m[at + 4] * drop;
-    const z = m[at + 14] - m[at + 6] * drop;
-    const [sx, sz] = groundSlope(ground, x, z);
-    slopes[i * 2] = Math.round(sx * 127);
-    slopes[i * 2 + 1] = Math.round(sz * 127);
+  const slopes = new Int8Array(trees.length * 2);
+  for (const [i, t] of trees.entries()) {
+    slopes.set(t.slope ?? [0, 0], i * 2);
   }
   return new InstancedBufferAttribute(slopes, 2, true);
 }
@@ -1748,7 +1728,6 @@ function* buildTrees(
   trees: Placement[],
   extras: TreeInstance[],
   crownMats: CrownMaterials,
-  ground: GroundContext,
   footMat?: FootMaterials,
   sun?: UniformNode<"vec3", Vector3>
 ): Steps<{
@@ -1805,7 +1784,6 @@ function* buildTrees(
       geosOf(cell),
       trunkMatOf(cell),
       crownMats,
-      ground,
       footMat
     );
     meshes.push(...built.meshes);
@@ -1836,35 +1814,6 @@ export interface LooseFeet {
 }
 
 /**
- * Loads the DOP NDVI PNG into a CPU sampler (EPSG → 0..1). The bytes are
- * inflated as written (lib/city/png-raster.ts), never through the browser's
- * image decoder, which colour-manages untagged greyscale on WebKit. Returns
- * null on any failure (no raster, a decode error, a network failure past
- * an optional file's retries) so crowns fall back to the hash-only sage —
- * graceful degradation, see docs/portability.md. Rethrows an abort.
- */
-export async function loadNdviSampler(
-  url: string,
-  bounds: TerrainBounds,
-  signal?: AbortSignal
-): Promise<RasterSampler | null> {
-  // retried like any raster; decoded in the site's raster turn, so on a
-  // phone it never overlaps another raster's decode (raster-upload.ts)
-  try {
-    const png = await fetchRasterBytes(url, signal);
-    return await inRasterTurn(
-      async () => maxWindowSampler(await decodeGreyPng(png), bounds),
-      signal
-    );
-  } catch (error) {
-    if (isAbortError(error)) {
-      throw error;
-    }
-    return null;
-  }
-}
-
-/**
  * Builds stylized vegetation from the ATKIS veg04 rows GeoJSON (the tree
  * rows) and, when given, the DOM1-derived canopy GeoJSON (area trees scaled to
  * their measured height). Everything is drawn with `Instances` sets so tens of
@@ -1879,10 +1828,6 @@ export function buildVegetation(
 ): VegetationControl {
   return finished(vegetationSteps(features, ctx));
 }
-
-/** Canopy points and rows placed per step (build-steps.ts). */
-const PLACEMENT_RUN = 256;
-const ROW_RUN = 16;
 
 /** `buildVegetation` in steps: per run of rows and canopy points, per
  *  250 m cell of trees (build-steps.ts).
@@ -1902,30 +1847,13 @@ export function* vegetationSteps(
   let seasons: SeasonalCrowns[] = [];
   let loose: LooseFeet[] = [];
 
-  const { ndviAt, keepTree } = features;
-  // whole rows per run: a row's trees are seeded by their place along it
-  // The DLM's hedge rows are not planted here: low-vegetation-layer.ts
-  // draws them with the OSM hedges, as one kind of hedge.
-  const treeRows = features.rows.filter((f) => f.properties?.kind !== "hedge");
-  const rows = yield* inRuns(treeRows, ROW_RUN, (run) => [
-    rowPlacements(run, ctx, ndviAt, keepTree),
-  ]);
-  // concat, never push(...): a dense canopy places tens of thousands of
-  // trees, past what a worker's smaller stack takes as arguments
-  const trees = rows
-    .flatMap((r) => r.trees)
-    .concat(
-      yield* inRuns(features.canopy, PLACEMENT_RUN, (run) =>
-        canopyPlacements(run, ctx, ndviAt, keepTree)
-      )
-    );
+  const { trees } = features;
   const extras = features.extraTrees ?? [];
   if (trees.length + extras.length > 0) {
     const built = yield* buildTrees(
       trees,
       extras,
       crownMats,
-      ctx,
       ctx.footMaterial?.(crownMats.uniforms.sunDirection),
       crownMats.uniforms.sunDirection
     );

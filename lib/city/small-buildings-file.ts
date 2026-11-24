@@ -2,8 +2,8 @@
  * `data/<site>/dlm/smallbuild_<tile>.geojson`: the small structures the
  * laser scan saw and LoD2 lacks. Written by pipeline/bake/small_buildings.py
  * (step `small-buildings`); a city-mesh bake input, not served, read by
- * scripts/prepare/city.ts, scripts/prepare/side-bakes.ts,
- * scripts/coarse-crowns.ts and scripts/ground-joins.ts (lib/city/features.ts
+ * scripts/prepare/city.ts, scripts/bake-trees.ts and
+ * scripts/ground-joins.ts (lib/city/features.ts
  * `SmallBuildingFeature`, whose ranges features.test.ts holds). The one
  * schema of the file (ADR 0059).
  */

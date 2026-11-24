@@ -28,11 +28,8 @@ import { isInstances } from "../../app/_components/instancing";
 import type { Instances } from "../../app/_components/instancing";
 import { sceneCensus } from "../../app/_components/scene-census";
 import { buildLowVegetation } from "../../app/_components/low-vegetation-layer";
-import { buildTreeInventory } from "../../app/_components/tree-inventory-layer";
-import {
-  buildVegetation,
-  createVegetationLod,
-} from "../../app/_components/vegetation-layer";
+import { placedInventory, placedVegetation } from "./placed-layers";
+import { createVegetationLod } from "../../app/_components/vegetation-layer";
 import type { VegetationControl } from "../../app/_components/vegetation-layer";
 import type {
   CanopyExtraFeature,
@@ -130,23 +127,23 @@ for (const tile of tileIds(evalSite)) {
   const scan = features<CanopyExtraFeature>(`canopyx_${tile}.geojson`);
   const hedges = features<LowVegFeature>(`lowveg_${tile}.geojson`);
   let t0 = performance.now();
-  controls.canopy.push(buildVegetation({ rows, canopy }, ctx));
+  controls.canopy.push(placedVegetation({ rows, canopy }, ctx));
   buildMs.canopy += performance.now() - t0;
   t0 = performance.now();
-  const inv = buildTreeInventory(trees, ctx);
+  const inv = placedInventory(trees, ctx);
   controls.kataster.push(
     inv.control,
-    buildVegetation(
+    placedVegetation(
       { rows, canopy, keepTree: inv.keepTree, extraTrees: inv.instances },
       ctx
     )
   );
   buildMs.kataster += performance.now() - t0;
   t0 = performance.now();
-  const inv2 = buildTreeInventory(trees, ctx);
+  const inv2 = placedInventory(trees, ctx);
   controls.shipped.push(
     inv2.control,
-    buildVegetation(
+    placedVegetation(
       {
         rows,
         canopy: [...canopy, ...scan],

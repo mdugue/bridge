@@ -6,10 +6,7 @@ import {
   coarseCrownsStandIn,
   coarseForm,
   drawnCoarse,
-  packCrowns,
-  unpackCrowns,
 } from "./coarse-crowns";
-import type { CoarseCrown } from "./coarse-crowns";
 import type { InventoryTree } from "./tree-inventory";
 import type { Placement } from "./tree-placement";
 
@@ -84,10 +81,9 @@ describe("which trees the coarse level draws", () => {
     const register = Array.from({ length: 300 }, (_, i) =>
       registerTree(i * 3.7)
     );
+    // every tree handed over: the level's file is the selection
     const crowns = coarseCrowns([], register);
-    expect(crowns).toHaveLength(
-      register.filter((t) => drawnCoarse(t.x, t.z)).length
-    );
+    expect(crowns).toHaveLength(register.length);
     expect(crowns[0]).toMatchObject({
       kind: "register",
       colour: "golden",
@@ -143,104 +139,6 @@ describe("which trees the coarse level draws", () => {
     );
     expect(crowns.length).toBeGreaterThan(0);
     expect(crowns.every((c) => coarseForm(c) === "pine")).toBe(true);
-  });
-});
-
-describe("the file", () => {
-  const crowns: CoarseCrown[] = [
-    {
-      kind: "canopy",
-      x: 1234.5,
-      z: -77.25,
-      rot: 2.5,
-      s: 3.21,
-      w: 2.1,
-      ndvi: 0.42,
-      base: 2.3456,
-    },
-    { kind: "canopy", x: -0.125, z: 1999.75, rot: 0, s: 0.5 },
-    { kind: "canopy", x: 5, z: 6, rot: 1, s: 2, evergreen: true },
-    { kind: "canopy", x: 7, z: 8, rot: 1, s: 3, evergreen: true, pine: true },
-    {
-      kind: "register",
-      x: Math.fround(10.1),
-      z: Math.fround(-20.2),
-      rot: 5.9,
-      colour: "evergreen",
-      ext: { crownBase: 2.34, crownTop: 17.5, crownWidth: 9.99 },
-      genus: 12,
-      jitter: 3.4,
-      ndvi: 0.1,
-    },
-    {
-      kind: "register",
-      x: 3,
-      z: 4,
-      rot: 1,
-      colour: "evergreen",
-      cone: true,
-      ext: { crownBase: 1.5, crownTop: 21, crownWidth: 7 },
-      genus: 12,
-      jitter: 0,
-    },
-    {
-      kind: "register",
-      x: 5,
-      z: 4,
-      rot: 1,
-      colour: "evergreen",
-      pine: true,
-      ext: { crownBase: 11, crownTop: 20, crownWidth: 9 },
-      genus: 12,
-      jitter: 0,
-    },
-  ];
-
-  test("keeps the positions exact and the rest to its units", () => {
-    const back = unpackCrowns(packCrowns(crowns).buffer as ArrayBuffer);
-    expect(back).toHaveLength(crowns.length);
-    for (const [i, c] of crowns.entries()) {
-      const b = back?.[i];
-      expect(b?.kind).toBe(c.kind);
-      expect(b?.x).toBe(Math.fround(c.x));
-      expect(b?.z).toBe(Math.fround(c.z));
-      expect(b?.rot).toBeCloseTo(c.rot, 3);
-      if (c.ndvi === undefined) {
-        expect(b?.ndvi).toBeUndefined();
-      } else {
-        expect(b?.ndvi).toBeCloseTo(c.ndvi, 2);
-      }
-      if (c.kind === "canopy" && b?.kind === "canopy") {
-        expect(b.s).toBeCloseTo(c.s, 3);
-        expect(b.w).toBeCloseTo(c.w ?? c.s, 3);
-        expect(b.evergreen).toBe(c.evergreen);
-        expect(b.pine).toBe(c.pine);
-        if (c.base === undefined) {
-          expect(b.base).toBeUndefined();
-        } else {
-          expect(b.base).toBeCloseTo(c.base, 3);
-        }
-      }
-      if (c.kind === "register" && b?.kind === "register") {
-        expect(b.colour).toBe(c.colour);
-        expect(b.cone).toBe(c.cone);
-        expect(b.pine).toBe(c.pine);
-        expect(b.genus).toBe(c.genus);
-        expect(b.jitter).toBeCloseTo(c.jitter, 1);
-        expect(b.ext.crownBase).toBeCloseTo(c.ext.crownBase, 2);
-        expect(b.ext.crownTop).toBeCloseTo(c.ext.crownTop, 2);
-        expect(b.ext.crownWidth).toBeCloseTo(c.ext.crownWidth, 2);
-      }
-    }
-  });
-
-  test("reads nothing that is not one", () => {
-    expect(unpackCrowns(new ArrayBuffer(4))).toBeNull();
-    expect(
-      unpackCrowns(new TextEncoder().encode("PTS1xxxx").buffer)
-    ).toBeNull();
-    const short = packCrowns(crowns).slice(0, 20);
-    expect(unpackCrowns(short.buffer)).toBeNull();
   });
 });
 

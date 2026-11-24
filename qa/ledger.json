@@ -3,17 +3,17 @@
   "site": "dresden",
   "tiles": 15,
   "published": {
-    "files": 700,
+    "files": 670,
     "boot": {
-      "bytes": 39818,
+      "bytes": 39230,
       "files": 3
     },
     "tiles": {
-      "bytes": 193620659,
-      "files": 641
+      "bytes": 192287261,
+      "files": 611
     },
     "site": {
-      "bytes": 3514754,
+      "bytes": 3514729,
       "files": 39
     },
     "server": {
@@ -28,7 +28,7 @@
       },
       "manifest": {
         "class": "boot",
-        "bytes": 9200,
+        "bytes": 8824,
         "files": 1
       },
       "minimap": {
@@ -73,12 +73,12 @@
       },
       "tileset": {
         "class": "boot",
-        "bytes": 9354,
+        "bytes": 9142,
         "files": 1
       },
       "tileset-spawn": {
         "class": "site",
-        "bytes": 2044,
+        "bytes": 2019,
         "files": 1
       },
       "trams": {
@@ -102,105 +102,105 @@
     "far": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 4685390,
+        "bytes": 4664304,
         "files": 10
       },
       "median": {
         "tile": "33410_5654_2_sn",
-        "bytes": 4593643,
+        "bytes": 4572883,
         "files": 10
       },
       "largest": {
-        "tile": "33416_5656_2_sn",
-        "bytes": 5828229,
+        "tile": "33414_5654_2_sn",
+        "bytes": 5773712,
         "files": 10
       },
       "site": {
-        "bytes": 67041172,
+        "bytes": 66352884,
         "files": 150
       }
     },
     "fine": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 5448502,
-        "files": 29
+        "bytes": 5384348,
+        "files": 27
       },
       "median": {
         "tile": "33410_5656_2_sn",
-        "bytes": 5620119,
-        "files": 29
+        "bytes": 5575708,
+        "files": 27
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 7456536,
-        "files": 29
+        "bytes": 7446033,
+        "files": 27
       },
       "site": {
-        "bytes": 84044307,
-        "files": 433
+        "bytes": 83399197,
+        "files": 403
       },
       "phone": {
         "spawn": {
           "tile": "33412_5656_2_sn",
-          "bytes": 5307652,
-          "files": 28
+          "bytes": 5243498,
+          "files": 26
         },
         "median": {
           "tile": "33410_5656_2_sn",
-          "bytes": 5425454,
-          "files": 28
+          "bytes": 5381043,
+          "files": 26
         },
         "largest": {
           "tile": "33416_5656_2_sn",
-          "bytes": 7296929,
-          "files": 28
+          "bytes": 7286426,
+          "files": 26
         },
         "site": {
-          "bytes": 81811715,
-          "files": 418
+          "bytes": 81166605,
+          "files": 388
         }
       }
     },
     "approached": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 7915007,
-        "files": 34
+        "bytes": 7850853,
+        "files": 32
       },
       "median": {
         "tile": "33410_5658_2_sn",
-        "bytes": 8102507,
-        "files": 34
+        "bytes": 8062474,
+        "files": 32
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 9986129,
-        "files": 34
+        "bytes": 9975626,
+        "files": 32
       },
       "site": {
-        "bytes": 118404471,
-        "files": 506
+        "bytes": 117759361,
+        "files": 476
       },
       "phone": {
         "spawn": {
           "tile": "33412_5656_2_sn",
-          "bytes": 7520658,
-          "files": 30
+          "bytes": 7456504,
+          "files": 28
         },
         "median": {
           "tile": "33410_5656_2_sn",
-          "bytes": 7589137,
-          "files": 30
+          "bytes": 7544726,
+          "files": 28
         },
         "largest": {
           "tile": "33416_5656_2_sn",
-          "bytes": 9625447,
-          "files": 30
+          "bytes": 9614944,
+          "files": 28
         },
         "site": {
-          "bytes": 112281794,
-          "files": 448
+          "bytes": 111636684,
+          "files": 418
         }
       }
     },
@@ -249,22 +249,22 @@
     "all": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 13786870,
-        "files": 43
+        "bytes": 13701630,
+        "files": 41
       },
       "median": {
         "tile": "33410_5658_2_sn",
-        "bytes": 13766237,
-        "files": 43
+        "bytes": 13694602,
+        "files": 41
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 17452843,
-        "files": 43
+        "bytes": 17387294,
+        "files": 41
       },
       "site": {
-        "bytes": 193620659,
-        "files": 641
+        "bytes": 192287261,
+        "files": 611
       }
     },
     "unvisited": {
@@ -293,13 +293,12 @@
     "spawn": {
       "tile": "33412_5656_2_sn",
       "fine": {
-        "bytes": 249125,
-        "files": 18,
+        "bytes": 184971,
+        "files": 16,
         "kinds": {
           "bridge": 1053,
-          "canopy": 40495,
-          "canopyx": 43036,
           "cultivated": 772,
+          "dressing": 103527,
           "furniture": 25898,
           "lamps": 3733,
           "lowveg": 4252,
@@ -312,16 +311,15 @@
           "sportTable": 1332,
           "traffic": 8015,
           "tram": 16963,
-          "trees": 84150,
           "vegrows": 1531
         }
       },
       "coarse": {
-        "bytes": 84944,
+        "bytes": 63858,
         "files": 3,
         "kinds": {
           "bridge": 1053,
-          "crowns": 75876,
+          "dressingCoarse": 54790,
           "traffic": 8015
         }
       }
@@ -329,13 +327,12 @@
     "forest": {
       "tile": "33416_5658_2_sn",
       "fine": {
-        "bytes": 496855,
-        "files": 18,
+        "bytes": 466844,
+        "files": 16,
         "kinds": {
           "bridge": 162,
-          "canopy": 468887,
-          "canopyx": 22869,
           "cultivated": 162,
+          "dressing": 462280,
           "furniture": 345,
           "lamps": 162,
           "lowveg": 191,
@@ -348,16 +345,15 @@
           "sportTable": 620,
           "traffic": 614,
           "tram": 162,
-          "trees": 535,
           "vegrows": 730
         }
       },
       "coarse": {
-        "bytes": 398235,
+        "bytes": 238669,
         "files": 3,
         "kinds": {
           "bridge": 162,
-          "crowns": 397459,
+          "dressingCoarse": 237893,
           "traffic": 614
         }
       }
@@ -365,13 +361,12 @@
     "yards": {
       "tile": "33410_5656_2_sn",
       "fine": {
-        "bytes": 275994,
-        "files": 18,
+        "bytes": 231583,
+        "files": 16,
         "kinds": {
           "bridge": 5311,
-          "canopy": 56529,
-          "canopyx": 25106,
           "cultivated": 557,
+          "dressing": 87171,
           "furniture": 29202,
           "lamps": 5544,
           "lowveg": 1730,
@@ -384,16 +379,15 @@
           "sportTable": 1906,
           "traffic": 7761,
           "tram": 35801,
-          "trees": 49947,
           "vegrows": 1192
         }
       },
       "coarse": {
-        "bytes": 78626,
+        "bytes": 58205,
         "files": 3,
         "kinds": {
           "bridge": 5311,
-          "crowns": 65554,
+          "dressingCoarse": 45133,
           "traffic": 7761
         }
       }
@@ -401,11 +395,11 @@
   },
   "code": {
     "product": {
-      "total": 154533,
-      "app": 60932,
-      "lib": 41355,
+      "total": 154501,
+      "app": 60857,
+      "lib": 41373,
       "components": 3007,
-      "scripts": 13798,
+      "scripts": 13823,
       "pipeline/bake": 35441
     }
   },
@@ -413,10 +407,10 @@
     "readWith": "chromium 153.0.8010.12, google / swiftshader",
     "firstLoad": {
       "files": 42,
-      "gzip": 1099792,
+      "gzip": 1098323,
       "workerOnly": {
         "files": 8,
-        "gzip": 34798
+        "gzip": 34658
       }
     },
     "phoneLiteSpawnCache": {

@@ -173,8 +173,8 @@ ADR 0041).
   mismatch; `bake-files.test.ts` parses every committed file, and
   `features.test.ts` keeps the value rules a shape does not say. The
   viewer imports a schema module by type only. Excused until a later
-  schema pass, still cast: the crown and canopy layers
-  (`scripts/coarse-crowns.ts`, `scripts/prepare/side-bakes.ts`), the lines
+  schema pass, still cast: the trees' sources (`scripts/bake-trees.ts`),
+  the lines
   and areas (`scripts/prepare/lines.ts`), the land-cover legend's
   `water`, and the sports and markings tables the viewer packs
   (`tile-rasters.ts`). A new file takes a schema.

@@ -4,8 +4,8 @@
  * water tower, communications tower, lighthouse) as its axis point, or a
  * whole building or a roof on posts (`roof`: a platform roof, a carport) as
  * its outline. Written by pipeline/bake/structures.py (step `structures`);
- * a city-mesh bake input, not served, read by scripts/prepare/city.ts,
- * scripts/prepare/side-bakes.ts and scripts/coarse-crowns.ts
+ * a city-mesh bake input, not served, read by scripts/prepare/city.ts
+ * and scripts/bake-trees.ts
  * (lib/city/features.ts `StructureFeature`, whose ranges features.test.ts
  * holds). The one schema of the file (ADR 0059).
  */

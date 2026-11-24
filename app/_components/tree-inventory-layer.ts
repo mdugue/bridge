@@ -1,17 +1,10 @@
-import type { RasterSampler } from "@/lib/city/raster-sampler";
 import { Color, Group, Matrix4, Quaternion, Vector3 } from "three/webgpu";
 import type { BufferGeometry } from "three/webgpu";
-import type { TreeFeature } from "@/lib/city/features";
 import { familyLook, TRUNK_BASE } from "@/lib/city/tree-family";
 import { ageLook } from "@/lib/city/tree-age";
 import { buildTreeStakes } from "./tree-stakes";
 import { buildTreePlan } from "./tree-plan";
-import {
-  CROWN_SHAPES,
-  inventoryCovers,
-  inventoryTrees,
-  trunkGirth,
-} from "@/lib/city/tree-inventory";
+import { CROWN_SHAPES, trunkGirth } from "@/lib/city/tree-inventory";
 import type {
   CrownShape,
   InventoryTree,
@@ -30,7 +23,7 @@ import {
   reshapeCrown,
 } from "./conifer-crown";
 import type { SilhouetteMap } from "./conifer-crown";
-import { finished, inRuns } from "@/lib/city/build-steps";
+import { finished } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
 import { Instances } from "./instancing";
 import {
@@ -48,7 +41,6 @@ import {
 import type {
   CrownCell,
   TreeInstance,
-  TreeVeto,
   VegetationContext,
   VegetationControl,
 } from "./vegetation-layer";
@@ -202,9 +194,6 @@ export function barkTint(genus: number, evergreen: boolean): Color {
 
 const Y_AXIS = new Vector3(0, 1, 0);
 
-/** Register trees placed per step (build-steps.ts). */
-const INVENTORY_RUN = 256;
-
 /** Crown matrices: the geometry's local box fitted to the tree's crown. */
 function writeCrowns(
   mesh: Instances,
@@ -281,6 +270,7 @@ function canopyInstances(
       x: t.x,
       z: t.z,
       trunk: trunkMatrix(t),
+      slope: t.slope,
       bark: barkTint(t.genus, t.leaf === "e"),
     };
     if (t.shape === "broad") {
@@ -405,32 +395,25 @@ export interface TreeInventory {
   /** every trunk and the broadleaf crowns, for the canopy's chunk meshes
    *  (VegetationFeatures.extraTrees) */
   instances: TreeInstance[];
-  /** false where an inventory tree stands (VegetationFeatures.keepTree);
-   *  a canopy point that clearly overtops it is kept, and a tree in DLM
-   *  forest/copse (`f`) vetoes nothing (tree-inventory.ts) */
-  keepTree: TreeVeto;
 }
 
 /**
- * Builds one tile's inventory trees. Empty input yields an empty group, no
- * instances and a `keepTree` that vetoes nothing. The group is added to the
+ * Builds one tile's inventory trees. Empty input yields an empty group and no
+ * instances. The group is added to the
  * Y-up `scene`, like every tree; the instances go to buildVegetation.
  */
 export function buildTreeInventory(
-  features: TreeFeature[],
-  ctx: VegetationContext,
-  ndviAt?: RasterSampler
+  trees: InventoryTree[],
+  ctx: VegetationContext
 ): TreeInventory {
-  return finished(treeInventorySteps(features, ctx, ndviAt));
+  return finished(treeInventorySteps(trees, ctx));
 }
 
-/** `buildTreeInventory` in steps: per run of register trees, per cell of
- *  silhouettes (build-steps.ts).
+/** `buildTreeInventory` in steps: per cell of silhouettes (build-steps.ts).
  *  @yields {void} once per step of the build. */
 export function* treeInventorySteps(
-  features: TreeFeature[],
-  ctx: VegetationContext,
-  ndviAt?: RasterSampler
+  trees: InventoryTree[],
+  ctx: VegetationContext
 ): Steps<TreeInventory> {
   const group = new Group();
   group.name = "tree-inventory";
@@ -441,12 +424,6 @@ export function* treeInventorySteps(
     number
   >;
 
-  // A tree in DLM forest/copse vetoes nothing (inventoryCovers).
-  const covers = inventoryCovers(features);
-  yield;
-  const trees = yield* inRuns(features, INVENTORY_RUN, (run) =>
-    inventoryTrees(run, ctx, ndviAt)
-  );
   const cells: CrownCell[] = [];
   const seasons: SeasonalCrowns[] = [];
   let instances: TreeInstance[] = [];
@@ -485,7 +462,6 @@ export function* treeInventorySteps(
   return {
     counts,
     instances,
-    keepTree: (x, y, h) => !covers(x, y, h),
     control: {
       group,
       // Its trunks and broadleaf crowns ride in the canopy's chunks

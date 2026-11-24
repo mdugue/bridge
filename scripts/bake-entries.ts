@@ -68,14 +68,6 @@ const GROUND = [
 export const BAKE_ENTRIES = {
   /** a tile's colony raster, cropped to its colonies, and its phone twin */
   colonies: ["scripts/prepare/side-bakes.ts", "scripts/crop-raster.ts"],
-  /** the canopy points packed (and thinned under roofs and sheds) */
-  canopy: [
-    "scripts/prepare/side-bakes.ts",
-    "lib/city/point-pack.ts",
-    "lib/city/roof-trees.ts",
-    "lib/city/small-buildings.ts",
-    "lib/city/site.ts",
-  ],
   /** the site's line levels (ADR 0041) */
   lineLevels: ["scripts/prepare/lines.ts", "scripts/line-levels.ts"],
   /** a tile's platforms, cut back from the site's drawn tracks */
@@ -109,12 +101,8 @@ export const BAKE_ENTRIES = {
   ],
   /** a tile's fine ground (its TIN and heights) */
   ground: GROUND,
-  /** a tile's coarse crowns */
-  coarseCrowns: [
-    "scripts/prepare/terrain.ts",
-    "scripts/coarse-crowns.ts",
-    ...GROUND,
-  ],
+  /** a tile's two dressing files: its trees on the fine ground */
+  dressing: ["scripts/prepare/dressing.ts", "scripts/bake-trees.ts", ...GROUND],
   /** a terrain level's glTF (fineChildren: the gates cut the walls) */
   terrain: [
     "scripts/prepare/terrain.ts",

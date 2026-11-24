@@ -1,7 +1,7 @@
 /**
  * The one fetch policy for the viewer's files. The scene's requests — the
  * manifest, the tileset and every tile, their side files and rasters
- * (raster-upload.ts `fetchRasterBytes`), the trees' NDVI sampler — go
+ * (raster-upload.ts `fetchRasterBytes`) — go
  * through `fetchBytes`: a network failure (or a 408/429/5xx) is retried
  * with backoff for a budget of the page's visible time
  * (lib/city/fetch-retry.ts, net-gate.ts), the body read inside the
@@ -32,7 +32,7 @@ export function isAbortError(err: unknown): boolean {
 
 /**
  * Whether `bytes` are still gzipped. The pre-gzipped artifacts (`.glb.gz`,
- * `.pts.gz`) are judged on the magic, not the URL: a host that serves `.gz`
+ * `.drs.gz`) are judged on the magic, not the URL: a host that serves `.gz`
  * with `Content-Encoding: gzip` has the browser inflate them already.
  */
 export function isGzipped(bytes: Uint8Array): boolean {
