@@ -2534,9 +2534,9 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   of the line (nDOM smoothed 1 m, over 3 m, off LoD2 and the traffic),
   projected onto it, as tall as measured, thinned tallest-first 3 m apart,
   none within 4.5 m of a canopy or scan crown; written into
-  `canopy_<t>.geojson` as `row: 1` with a `rows` member, which the pack
-  carries as `ROWS_MEASURED` (`lib/city/point-pack.ts`), and the viewer
-  then draws only the hedges from `vegrows`. Without DOM1 the trees stand
+  `canopy_<t>.geojson` as `row: 1` with a `rows` member; the build then
+  plants no trees of its own along the rows (`scripts/bake-trees.ts`,
+  `plantedRows`), and the viewer draws only the hedges from `vegrows`. Without DOM1 the trees stand
   every 9 m along the line as before. Row trees: Dresden's 33408_5656
   1 176 → 540 (doubles 26 % → 2 trees, standing on a crown 80 → 97 %),
   33412_5656 927 → 274, Leipzig's 33316_5688 1 378 → 408, Unna 904 → 85
@@ -2772,17 +2772,26 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   evergreen, a register tree whose crown is the cone — as a six-sided
   cone of one skirt in a set of their own (`coarseConifer`, 2026-10-21),
   and its pines with the pine's crown in a third set (`coarseForm`). A
-  canopy or row crown's record carries its crown base in millimetres (the
-  third `uint16`; 2026-10-21), so a distant crown starts where its near one
-  does (`crownBase` above); a coarse crown had ignored it.
-  The build step runs the fine
-  level's own placement over each tile's tree files (the packed canopy as
-  the browser unpacks it, the scan crowns, the rows, the register and the
-  orchards, its veto, on the fine level's ground;
-  `lib/city/tree-placement.ts`, `lib/city/tree-inventory.ts`,
-  `scripts/coarse-crowns.ts`) and packs that third, 20 bytes a crown
-  (`crowns_<t>.crw.gz`, ≈ 136 000 crowns and 1.5 MB gzipped for
-  Dresden's fifteen tiles). The coarse level fetches it with its other
+  distant crown starts where its near one does (`crownBase` above).
+  **The build places every tree** (2026-11-24, plan 090;
+  `scripts/bake-trees.ts`): the canopy off the sheds, the roofs and the
+  monuments, the scan crowns, the rows, the register and the orchards,
+  its veto, each on the fine level's ground, written as a record of what
+  was measured there — easting, northing, the ground, the height, the
+  scan's radius, NDVI, the slope at the foot: twelve bytes a canopy tree,
+  twenty a surveyed one (`lib/city/tree-table.ts`). The third the coarse
+  level draws is that level's file (`dressing_<t>.c.drs.gz`), the rest
+  the fine level's (`dressing_<t>.drs.gz`), which reads both; the viewer
+  runs the same arithmetic over the records (`canopyPlacement`,
+  `inventoryTree`) and reads no ground, no NDVI raster and no GeoJSON
+  for a tree — the packed canopy, the scan crowns, the register's
+  GeoJSON and the crowns' file are no longer published. What moved: a
+  tree's foot is up to 3.1 cm under the fine ground, never over it, its
+  NDVI one of 32 steps, the slope at its foot one of 31 a side (a bank
+  steeper than 43° keeps its side at the steepest). Dresden's spawn
+  tile: a fine level's visit fetches 325.0 → 239.8 kB of dressing in
+  19 → 17 requests, the forest tile 894.3 → 704.7 kB. The coarse level
+  fetches its file with its other
   side files and builds it with its dressing, whatever the mode or scale,
   so a tree stays where it stood when the level changes and no scale and
   no device is left without trees. A level that takes over from the

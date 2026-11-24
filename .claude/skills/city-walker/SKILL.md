@@ -124,12 +124,15 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   alpha (water coverage), animated normal wobble.
 - `vegetation-layer.ts` — instanced trees (`Instances`; rows + DOM1 canopy + the
   laser-scan extra trees + the cadastre's trunks and broadleaf crowns, passed
-  in as precomputed `TreeInstance`s), chunked for culling.
+  in as precomputed `TreeInstance`s), chunked for culling. The build
+  places every tree (`scripts/bake-trees.ts`, the register's veto and the
+  ground under each included) and ships a record of what was measured
+  (`lib/city/tree-table.ts`, one file a level); the viewer reads no
+  ground, raster or GeoJSON for a tree.
   Lives in the **Y-up frame** (a tile's content root), never inside the
   rotated `world` group itself. `tree-inventory-layer.ts` draws only the
-  cadastre's reshaped silhouettes (flame / cone / dome) and vetoes canopy
-  trees inside its crowns (not in forest/copse); `tile-stream.ts`
-  (`buildTileVegetation`) joins both into the tile's one vegetation
+  cadastre's reshaped silhouettes (flame / cone / dome); `tile-stream.ts`
+  (`tileVegetationSteps`) joins both into the tile's one vegetation
   control. `low-vegetation-layer.ts` draws every hedge (OSM's and the
   DLM's), its lumps pushed out by a world-space noise so pieces agree.
   The trunk's foot bulges into roots and turns to earth
@@ -280,8 +283,9 @@ disposes with the tile. Every tile change re-renders the shadow map. The layers:
   `figure`; the ground's `paperGroundOn` = 1, 2, 3).
   Each terrain level carries its trees, in every mode: the fine one
   all of them, the coarse one a fixed third (`drawnCoarse`, a hash of
-  where each stands), √3 wider, baked by the build from the fine level's
-  placement (`crowns_<t>.crw.gz`, `coarse-crowns-layer.ts`) — the coarse
+  where each stands), √3 wider, from the build's own placement of every
+  tree (`scripts/bake-trees.ts`: that third is the coarse level's tree
+  file, `coarse-crowns-layer.ts`) — the coarse
   level shows past 2.5 m/px and wherever the memory governor or a load
   leaves the fine one out, at any scale, so never tie a layer's trees to
   Modell's scale; anything else on the fine level vanishes there at
