@@ -410,11 +410,7 @@ and therefore what keeps builds out of frames:
   is widened to 32 bits on upload (r187, `WebGPUAttributeUtils`): two or
   four times its bytes. An interleaved buffer is uploaded as it is, has
   ONE typed array, and every view of it takes its format from that
-  array — so a compact record is an interleaved `Uint16Array` whose
-  fields are words (not normalized: `vec4<u32>` in the shader, exact), a
-  byte taken out of its word in the shader (`lib/city/stand-record.ts`,
-  measured by `scripts/eval/stand-record-probe.ts`; plan 090's
-  *Findings*).
+  array (plan 090's *Findings*).
 - **Eight vertex buffers a draw on WebGPU** (the device's default limit;
   three requests no more). Each non-interleaved attribute is one buffer,
   `position` and `normal` included (an interleaved instance matrix is
@@ -427,9 +423,7 @@ and therefore what keeps builds out of frames:
   three's vertex stage names, by the geometry's distinct buffers); a
   layer the lite scene does not draw — traffic, the very one that
   vanished, the data layers, the designs — tests its own count
-  (`traffic-layer.test.ts`), and the ledger's census (`bun run ledger
-  -- --census`, by hand) reads the whole site's builds with the same
-  probe, data layers on and a design loaded.
+  (`traffic-layer.test.ts`).
 - **Points are 1 px on WebGPU**, whatever their size. The lamp halos are
   billboard quads: an `Instances` set under a `PointsNodeMaterial`.
 - **No tone mapping.** The output node is `renderOutput(…, NoToneMapping,

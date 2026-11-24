@@ -1,7 +1,5 @@
 import { expect, test } from "bun:test";
 import {
-  CompressedTexture,
-  RED_RGTC1_Format,
   DataArrayTexture,
   DataTexture,
   FloatType,
@@ -109,26 +107,6 @@ test("a stub has its texture's kind, not its size", () => {
   const layered = stubLike(layers);
   expect(layered).toBeInstanceOf(DataArrayTexture);
   expect(imageOf(layered).depth).toBe(3);
-  // a block-compressed raster (the sky view's blocks): one block of its
-  // format, never a 1 × 1 texel no GPU can hold; freed, one block again
-  const blocks = new CompressedTexture(
-    [{ data: new Uint8Array(8 * 64), width: 32, height: 32 }],
-    32,
-    32,
-    RED_RGTC1_Format
-  );
-  const compressed = stubLike(blocks);
-  expect(compressed).toBeInstanceOf(CompressedTexture);
-  expect(compressed.format).toBe(RED_RGTC1_Format);
-  expect(compressed.mipmaps).toHaveLength(1);
-  expect([imageOf(compressed).width, imageOf(compressed).height]).toEqual([
-    4, 4,
-  ]);
-  setSlots(new MeshStandardNodeMaterial(), { svf: blocks });
-  blocks.dispose();
-  expect(blocks.mipmaps.map((m) => [m.width, m.height, m.data.length])).toEqual(
-    [[4, 4, 8]]
-  );
 });
 
 test("a slot texture shrinks to a texel once freed; its bytes may be gone", () => {

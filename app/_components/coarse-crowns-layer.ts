@@ -1,18 +1,8 @@
 import { Color, Group, Matrix4, Quaternion, Vector3 } from "three/webgpu";
 import type { BufferGeometry } from "three/webgpu";
-import {
-  coarseForm,
-  COARSE_TREE_WIDEN,
-  crownBytes,
-} from "@/lib/city/coarse-crowns";
+import { coarseForm, COARSE_TREE_WIDEN } from "@/lib/city/coarse-crowns";
 import type { CoarseCrown, CoarseForm } from "@/lib/city/coarse-crowns";
 import type { RecenterOffset } from "@/lib/city/ground-clamp";
-import {
-  standOrigin,
-  STAND_RECORD_WORDS,
-  writeStand,
-} from "@/lib/city/stand-record";
-import type { Stand } from "@/lib/city/stand-record";
 import { pineBase } from "@/lib/city/tree-inventory";
 import { bucketByCell, hash } from "@/lib/city/tree-placement";
 import {
@@ -25,7 +15,7 @@ import {
 import type { CrownBox } from "./conifer-crown";
 import type { CrownSeasonKey, SeasonalCrowns } from "./crown-season";
 import { seasonCrowns } from "./crown-season";
-import { Instances, standTable } from "./instancing";
+import { Instances } from "./instancing";
 import { finished, inRuns } from "@/lib/city/build-steps";
 import type { Steps } from "@/lib/city/build-steps";
 import { inventoryColor, registerCrownMatrix } from "./tree-inventory-layer";
@@ -57,10 +47,6 @@ export interface CoarseCrownContext {
   /** the coarse ground the crowns stand on (EPSG) */
   heightAt: (x: number, y: number) => number | null;
   offset: RecenterOffset;
-  /** draw the crowns from stand records (lib/city/stand-record.ts), the
-   *  vertex stage composing each matrix, instead of writing matrices —
-   *  plan 090's phase-0 spike, behind `?stands=record` */
-  standRecord?: boolean;
   sunDirection?: Vector3;
 }
 
@@ -84,26 +70,6 @@ function crownMatrix(c: CoarseCrown, ground: number, out: Matrix4): Matrix4 {
     new Quaternion().setFromAxisAngle(Y_AXIS, c.rot),
     new Vector3((c.w ?? c.s) * W, scale, (c.w ?? c.s) * W)
   );
-}
-
-/** A crown as a stand record's fields: its matrix (`crownMatrix`) taken
- *  apart again — the place, the turn about the vertical and the scale are
- *  all it is made of. The bytes are what a shader would paint it from. */
-export function crownStand(c: CoarseCrown, ground: number, m: Matrix4): Stand {
-  const position = new Vector3();
-  const turn = new Quaternion();
-  const scale = new Vector3();
-  crownMatrix(c, ground, m).decompose(position, turn, scale);
-  const [code, ndvi, genus, jitter] = crownBytes(c);
-  return {
-    x: position.x,
-    y: position.y,
-    z: position.z,
-    turn: 2 * Math.atan2(turn.y, turn.w),
-    scale: [scale.x, scale.y, scale.z],
-    kind: [code, ndvi],
-    more: [genus, jitter],
-  };
 }
 
 /** One crown's colour, as the fine level paints it. */
@@ -228,39 +194,8 @@ export function* coarseCrownSteps(
       return list.length > 0 ? [{ list, form }] : [];
     })
   );
-  // The spike's way in (`standRecord`): every crown of the tile as one
-  // table of records over one buffer, sorted by cell and form — as a
-  // published file would be — and each set a view of its run.
-  const stands = ctx.standRecord
-    ? cells.map(({ list }) => list.map((c) => crownStand(c, c.ground, m)))
-    : null;
-  const origin = standOrigin(stands?.flat() ?? []);
-  // (nothing is allocated for the spike off its knob)
-  const words = stands
-    ? new Uint16Array(standing.length * STAND_RECORD_WORDS)
-    : null;
-  let run = 0;
-  for (const [index, { list: cell, form }] of cells.entries()) {
-    const records = stands?.[index];
-    let set: Instances;
-    if (records && words) {
-      const view = words.subarray(
-        run * STAND_RECORD_WORDS,
-        (run + cell.length) * STAND_RECORD_WORDS
-      );
-      for (let i = 0; i < records.length; i += 1) {
-        writeStand(view, i, records[i], origin);
-      }
-      run += cell.length;
-      set = Instances.ofStands(
-        geoOf(form),
-        mats.leafy,
-        standTable(view, origin)
-      );
-      set.name = "coarse-crowns-records";
-    } else {
-      set = new Instances(geoOf(form), mats.leafy, cell.length);
-    }
+  for (const { list: cell, form } of cells) {
+    const set = new Instances(geoOf(form), mats.leafy, cell.length);
     set.castShadow = true;
     set.receiveShadow = true;
     // a cone or a pine keeps its form in a styled frame, as on the fine
@@ -270,15 +205,11 @@ export function* coarseCrownSteps(
     }
     for (let i = 0; i < cell.length; i += 1) {
       const c = cell[i];
-      if (!records) {
-        set.setMatrixAt(i, crownMatrix(c, c.ground, m));
-      }
+      set.setMatrixAt(i, crownMatrix(c, c.ground, m));
       paintCrown(c, c.ground, col);
       set.setColorAt(i, col);
     }
-    if (!records) {
-      set.instanceMatrix.needsUpdate = true;
-    }
+    set.instanceMatrix.needsUpdate = true;
     set.computeBoundingSphere();
     group.add(set);
     seasons.push(

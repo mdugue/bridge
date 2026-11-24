@@ -498,6 +498,18 @@ compressed, the container is pre-gzipped like the packs it replaces.
 
 ## Findings
 
+> **Slimmed before milestone 1 (2026-11-24; plan 086, ruling 5).** Phase
+> 0's spikes and probes were removed from `rewrite` once measured: the
+> stand record (`lib/city/stand-record.ts`, `Instances.ofStands`,
+> `?stands=record`), the rails' segment table (`lib/city/rail-table.ts`,
+> `rail-segments.ts`, `?rails=table`), `dressing-figures.ts` with the
+> handle's `getDressingFigures`, `e2e/dressing-ledger.spec.ts`, the
+> probes under `scripts/eval/` and the ledger's `dressing.recorded`.
+> They are history at commit `b00b08c2`; a phase that builds on one
+> starts from there. The figures below are the record, and the ledger
+> still gates the watched tiles' dressing bytes and requests
+> (`dressing`).
+
 ### Phase 0 (2026-11-16) — the baseline, the stand record, the rails' home
 
 Every figure is in `qa/ledger.json`: `dressing` (gated) and

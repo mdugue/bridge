@@ -173,21 +173,15 @@ OSM driver reads `.osm` as well as `.osm.pbf`). CI's `pipeline` job runs it
 with ruff after `uv sync --locked`, and then type-checks `bake/` with
 pyright (pinned in the dev group, set in `pyproject.toml`) against
 `pipeline/typecheck-baseline.json` (plan 089): `typecheck.py` keys each
-finding by file, rule, the function it stands in and its message (never
-by line) and fails on any count above the baseline — a new finding, or a
-new escape: `type: ignore`, `pyright: ignore`, a `# pyright:` directive,
-`@no_type_check`, `typing.cast` — and on any below it, so that a fix
-lowers the baseline in the same PR: `cd pipeline && uv run python
-typecheck.py --update` writes the lower counts and refuses to raise one.
-It also fails when pyright did not read every module of `bake/` or a
-setting beyond the known ones relaxes it, and in CI when the baseline
-holds what the base branch's does not, unless the PR's description says
-why in a line `Typecheck-baseline-raise: …`.
-Where a library leaves the bakes' calls untyped, `pipeline/typings/`
-holds partial stub packages for pyright alone — scipy's `ndimage` and
-`fft`, rasterio's package and `windows`, pyogrio's package, laspy's point
-records — each typed from the installed library's source and checked
-against it when that library is bumped (`typings/README.md`).
+finding by file, rule and message (never by line) and fails on any count
+above the baseline and on any below it, so that a fix lowers the baseline
+in the same PR: `cd pipeline && uv run python typecheck.py --update`
+writes the lower counts and refuses to raise one. It also fails when
+pyright did not read every module of `bake/`.
+Where scipy leaves the bakes' calls untyped, `pipeline/typings/` holds a
+partial stub package for pyright alone (`ndimage` and `fft`), typed from
+the installed library's source and checked against it when scipy is
+bumped (`typings/README.md`).
 Neither the checker, the script nor the stubs re-key a bake: all live
 outside `bake/` and the dev group is not in `locked_runtime`. Fetch and bakes
 need the network and the raw downloads and run on the maintainer's
@@ -824,16 +818,7 @@ tileset under `public/data/<site>/`
    (`downsampleInterleaved`: no image resize, which would step through
    the channels as if they were pixels), read by a fine level beyond the
    ground detail's reach (`lib/city/ground-reach.ts`; the markings and
-   the colonies have their phone twins for it). And, only in a build
-   with `SVF_BLOCKS=1`, the sky view's **GPU blocks** (plan 091 phase
-   2's trial, read only behind `?svf=blocks`; a default build publishes
-   none): `svf_<t>.bc4.gz` and `svf_<t>.eac.gz`, the committed
-   PNG encoded as BC4 and as EAC R11 with a box-filtered mip chain
-   (`scripts/block-encode.ts`, integer arithmetic, byte-stable; the file
-   `lib/city/block-raster.ts`; `publishSvfBlocks`, bake entry
-   `svfBlocks`), pre-gzipped, named in both levels' and the buildings'
-   extras as `svfBc4` and `svfEac`. Lossy: only a soft field goes this
-   way. A twin exists only beside its source. Which files a tile has, where the
+   the colonies have their phone twins for it). A twin exists only beside its source. Which files a tile has, where the
    viewer finds each (`dressing`, `coarse`, `ask`) and which
    carry the ODbL credit (`osm`, checked by `features.test.ts`) is one
    table, `tileArtifacts` in `lib/city/tile.ts`; the extras' types derive
@@ -1252,41 +1237,6 @@ offers to try again — it no longer falls back to
 and each `/data/<site>/manifest.json` and `/data/sites.json` as `no-cache`
 ([ADR 0024](./adr/0024-site-streams-as-3d-tiles.md)).
 
-**Comparing two published sites.** While a change keeps the bakes'
-bytes, "the build publishes 0 new files" is its proof. Where it gives
-them up (plan 092 moves the hand-over format and cuts tiles at
-publishing), `bun scripts/compare-tilesets.ts <site-a> <site-b>` compares
-two sites by content: a `public/data/<site>` folder (its manifest and
-every file beside it; the manifest alone says which file a logical name
-is, so a stray file never stands in for one) or one manifest (what it
-names); files are matched by logical name. Everything is compared exactly, and a file that cannot
-be read as its kind is an error (exit 2) even where both sides hold the
-same bytes. A glb's storage is content — every accessor's, whoever
-reads it (a primitive, an animation, an instancing extension): its
-component type,
-normalisation, count, `min` and `max`, the node transforms — and so are
-its stored integers, morph targets and nodes outside any scene; another
-quantisation is a difference. A tolerance is the caller's, never the
-file's: `--within <m>` (and `--within-unit <d>` for normals and
-tangents) compares POSITION, NORMAL and TANGENT placed in the world,
-checks the winding, a tangent's handedness and a normal's length (all
-exact or within the same tolerances), and prints the largest deviation
-found, which the
-PR that accepts it names. The order of a JSON object's keys is free; the
-order of every array is content, a GeoJSON's features included
-(`treefacts_<tile>.json` is a column over the trees' features, a
-markings or sports raster names its table's `1 + row`); a pure
-reordering is reported as such. Rasters compare by decoded value
-(`png-raster.ts`, sharp for WebP; a PNG of another bit depth than 8 is
-refused); `.pts`, `.crw`, `.fpr` and the plate through their readers in
-`lib/city/`; a JSON string naming a served file reads as that file's
-logical name, so a tileset that names a changed file is not itself
-named. A kind without a reader compares as bytes — a new kind of
-published file gets one there (`scripts/compare-tilesets.ts`, with
-`compare-glb.ts` and `compare-json.ts`). What a change derives follows
-it: a tree moved 1 m changes the coarse crowns too when its new place
-falls into the share the coarse level draws.
-
 A `required` side file that is missing fails the build
 (`prepare-data: missing source file data/<site>/dlm/… — run bun run fetch <site> and bun run bake <site>`) rather than becoming a
 404 on every client; so do a missing DGM GeoTIFF or CityJSON. A missing
@@ -1359,19 +1309,16 @@ polygons on a tile for lack of it).
 ## Measuring what the browser downloads
 
 The figures live in [`qa/ledger.json`](../qa/ledger.json), the rewrite
-series' ledger (plan 087). `bun run ledger` writes it from the published
-files — the reference site's (`public/data/dresden/`) for the bytes and
-counters, every site whose data git tracks for the rasters (a site only
-on the disk is none of the ledger's), so after a build or
-`bun scripts/prepare-sites.ts`; it writes the file formatted as committed
-— and `bun run ledger -- --check`
-names each figure that differs and exits 1; CI's build-check shard runs the
-check after its build. Any other argument is refused (exit 2) and nothing
-is written. Every figure is a function of the tree: a pull request that
-moves one commits the new file, and its diff is what the reviewer reads —
-a figure that shrank as much as one that grew. The shapes and the
-arithmetic are `lib/city/ledger.ts` and `lib/city/ledger-counters.ts`; the
-script finds the files through one function, `publishedFiles`.
+series' ledger (plan 087): a narrow guard of what a visit downloads and
+how much code the product is. `bun run ledger` writes it from the
+reference site's published files (`public/data/dresden/`, so after a build
+or `bun scripts/prepare-sites.ts`) and the tracked sources, and
+`bun run ledger -- --check` names each figure that differs and exits 1;
+CI's build-check shard runs the check after its build. Any other argument
+is refused (exit 2) and nothing is written. A pull request that moves a
+figure commits the new file, and its diff is what the reviewer reads — a
+figure that shrank as much as one that grew. The shapes and the
+arithmetic are `lib/city/ledger.ts`, the script `scripts/ledger.ts`.
 
 **Every published file is counted, in exactly one class** (`published`).
 The script lists the site's directory, not the manifest alone:
@@ -1391,15 +1338,12 @@ The script lists the site's directory, not the manifest alone:
 The site-wide rows are one table, `SITE_FILES`; `published.kinds` has each
 row's bytes. A published file that no tile and no row names is an
 **error**: whoever publishes a new file adds its row and says who fetches
-it. So bytes cannot leave the gate by moving — a side file inlined into
-the tileset shows as the boot growing by what the file held — nor by a
-name the ledger does not read: a tile that names a file the set *all*
-does not hold (a new extras key, a third content) is an error too, and so
-is any name in the tileset or the lite profile's — at its root, under its
-extras, in a content — that ends like a file and is not served from the
-site's directory (`../common/huge.png`). Beside the sites' directories lies
-`public/data/sites.json`, the build's index of its sites, which the
-server reads and no visitor fetches: it is in no class.
+it. So bytes cannot leave the gate by moving: a side file inlined into
+the tileset shows as the boot growing by what the file held, and a file a
+tile names under a key the set *all* does not read is in no class. Beside
+the sites' directories lies `public/data/sites.json`, the build's index
+of its sites, which the server reads and no visitor fetches: it is in no
+class.
 
 The rule for a file's bytes on the wire: `.png`, `.webp` and `.gz` at face
 value; `.json` and `.geojson` gzipped at level 6; any other extension is an
@@ -1436,40 +1380,26 @@ the ledger reads the tileset's names in seven sets:
 Which rasters a level reads is the viewer's own rule: `rasterFiles`
 (`app/_components/tile-rasters.ts`) over the kinds a level acquires, with
 the far twin for `REACH_KINDS` beyond the reach. The ledger states no
-second rule, and `scripts/ledger.test.ts` holds it against the viewer's
-code: the kinds `loadTerrainRasters` and `loadReachSet` acquire, and the
-side files `buildDressing` fetches. On a phone the class raster's, the
+second rule. On a phone the class raster's, the
 markings' and the colonies' twins are read at either reach, and no sports
 raster. A set where a phone reads other files has a `phone` row beside the
 desktop's. Each set is recorded as the spawn tile, the median tile (the
 lower of an even count), the largest tile and the site (each file once);
 tiles of the same weight are told apart by their id.
 
-Every figure is gated, the buildings' among them: `buildings` holds each
-tile's vertices, triangles and decoded bytes, near and far, and the sets
-count the buildings' glTF and the boot's JSONs (which name every file by
-its content hash) at their full bytes. That holds because a bake's bytes do
-not depend on the machine ("Cache and publish"): CI's check passing on a
-runner that did not bake the committed file is the standing proof.
+Every figure is gated: the sets count the buildings' glTF and the boot's
+JSONs (which name every file by its content hash) at their full bytes.
+That holds because a bake's bytes do not depend on the machine ("Cache
+and publish"): CI's check passing on a runner that did not bake the
+committed file is the standing proof.
 
-**The dressing** has a section of its own (`dressing`, plan 090;
-`lib/city/ledger-dressing.ts`): for three watched tiles — the spawn, a
-forest (`33416_5658_2_sn`) and the Neustadt yards (`33410_5656_2_sn`) —
-each level's side files kind by kind, bytes and requests, gated like the
-sets. On 2026-11-16 a fine level's dressing was 249 kB in 18 requests on
-the spawn tile, 497 kB on the forest (its canopy alone 469 kB) and 276 kB
-on the yards: 3–7 % of the level's bytes and eighteen of its twenty-nine
-requests. Beside it `dressing.recorded`, a part `--check` never
-compares: München's heaviest tile, what a browser measured (the scene
-thread's milliseconds by builder and the bytes a dressing weighs in the
-tile cache: `DRESSING_LEDGER=1 bunx playwright test
-e2e/dressing-ledger.spec.ts`), and the figures of plan 090's two spikes
-(`bun scripts/eval/stand-record-probe.ts --out
-.cache/ledger-dressing/stand-probe.json`,
-`bun scripts/eval/stand-record-bytes.ts`,
-`bun scripts/eval/lines-three-ways.ts`). Those tools leave what they read
-in `.cache/ledger-dressing/`, and `bun run ledger` folds it in; a machine
-that measured nothing writes the section back as it was.
+**The dressing** has a section of its own (`dressing`, plan 090): for
+three watched tiles — the spawn, a forest (`33416_5658_2_sn`) and the
+Neustadt yards (`33410_5656_2_sn`) — each level's side files kind by
+kind, bytes and requests, gated like the sets. On 2026-11-16 a fine
+level's dressing was 249 kB in 18 requests on the spawn tile, 497 kB on
+the forest (its canopy alone 469 kB) and 276 kB on the yards: 3–7 % of
+the level's bytes and eighteen of its twenty-nine requests.
 
 Baseline, 2026-11-16 (Dresden, fifteen tiles; MB = 10⁶ bytes on the wire;
 files in brackets):
@@ -1498,238 +1428,41 @@ it is in view, and a far tile stops at its far set. Sources on disk that
 are never served: the DGM GeoTIFF (12.9–15.6 MB a tile) and the CityJSON
 (2.7–13.6 MB a tile).
 
-**The complexity counters** (`counters`; each rule and what it cannot see
-is at its function in `lib/city/ledger-counters.ts`) count code, never
-where a file lies or how its text is wrapped — a move, a comment, a blank
-line or a wrapper function moves no count (`longestFunction.path` names
-the module, and follows a move). They read the working tree: an untracked
-source file counts, as it would once committed. The sources are read by
-two small lexers (`lib/city/ts-lexer.ts`, which reads a `.tsx` file's JSX
-as text, and `lib/city/source-lexer.ts` for the bakes' Python), and a file
-whose brackets do not close as read is an error, not a figure:
+**The product's code lines** (`code.product`): the lines that are
+neither blank nor comment-only in the git-tracked `.ts` and `.tsx` under
+`app/`, `lib/`, `components/` and `scripts/` and the `.py` under
+`pipeline/bake/` — without tests, `__fixtures__/`, `scripts/eval/` and
+the measuring tools themselves (`MEASURING_TOOLS` in `lib/city/ledger.ts`
+names them) — by area and in total. A line counts unless it opens as a
+comment (`//`, `/*`, `*`, `{/*`; `#` in Python): one regular expression
+a language, read by `git grep`, no parser. Gated like the bytes: the
+rewrite series exists to make the code smaller (plan 086, ruling 5), and
+a pull request shows what it added. `bun run ledger -- --against <ref>`
+prints the figure here and at a ref, with the delta: what a milestone
+quotes.
 
-| Counter | Counts | Dresden's tree, 2026-11-16 |
-|---|---|---|
-| `dressingKinds`, `coarseDressingKinds`, `askKinds` | the artifact table's kinds | 17, 3, 1 |
-| `publishedExtensions` | the distinct extensions among the published files | 9 |
-| `layerModules` | the modules named `*-layer.ts` anywhere under `app/`, `lib/` or `packages/`, and their lines of code (no comment, no blank line) | 27 with 14 420 |
-| `longestFunction` | the longest top-level function of the sources in lines of code — declared, an arrow or a function expression, alone or as a call's argument — or class: the boot, however it is written or wrapped | `bootApp`, 2 354 |
-| `bakeSeamModules` | the modules under `pipeline/bake/` whose code handles a tile's edge — plan 092's five ways by their calls, and any other read with a `margin` | 58 of 84 |
-| `upstreamWorkarounds` | the entries of `docs/rendering.md`, "Workarounds for upstream bugs", and the comments that say *upstream workaround* | 10 entries, 8 sites |
+**What a browser reads** (`browser`): `bun run ledger -- --browser` runs
+`e2e/ledger.spec.ts` against the `NEXT_PUBLIC_POC_DEBUG=1` production
+build at `/dresden?scene=lite` on SwiftShader, and CI does where its e2e
+half runs. Without `--browser` the committed figures stand, and the check
+says it did not compare them.
 
-### What the bakes hand over
+- `firstLoad`: every `/_next/static/*.js` the page or the workers
+  `ground`, `niches` and `scene` fetched themselves, cut at ready, those
+  workers running, then 5 s without a new script; each raw body gzipped
+  at level 9 by the pinned Bun. The BVH worker's own scripts are left
+  out: it starts only if the spawn's buildings have no BVH yet.
+  `workerOnly` is what the page did not fetch itself.
+- `phoneLiteSpawnCache`: the tile cache's own accounting
+  (`calculateBytesUsed`) on an emulated phone, the scene's tier asserted
+  mobile, once two reads 4 s apart agree with no compile queued. It is
+  not the phone's memory: what a tile holds on the GPU that never reaches
+  `calculateBytesUsed` moves nothing here.
 
-The ledger's `bakeStore` section (plan 092; the counting in
-`lib/city/ledger-bake-store.ts`, the reading in
-`scripts/ledger-bake-store.ts`) is read from the tree alone — the bake
-modules and the baked files git tracks under `data/<site>/dlm/` and
-`dop/`, so a site that is fetched but not committed and a file an
-interrupted bake left behind are none —, needs no build and no bake, and
-falls as plan 092's phases land:
-
-| Figure | Counts | The tree, 2026-11-16 |
-|---|---|---|
-| `fileKinds` | the distinct `<kind>.<format>` among the files named for a tile, in all and by format — the union over the committed sites (Leipzig, München and Unna have 50 of them, Hamburg 49); `formats` is how many formats | 51 in 3: 28 GeoJSON, 13 JSON, 10 PNG |
-| `mixedKeyOrder` | the feature kinds whose rows, over all sites, have no single key order (two keys turned round between rows, or more in a circle): a reader that returns rows in a schema's order does not return these as written. `furniture` is mixed within single files; `traffic` has one order in each site, Dresden's another than the others' | `furniture`, `traffic` |
-| `stepCacheCodeLines` | `pipeline/bake/step_cache.py`'s lines of code (no comment, no blank line): the ledger of rewrites lives there | 503 |
-| `neighboursModules` | the bake modules that call `Tile.neighbours()` | 14 |
-
-The bake modules that call `owns` are `counters.bakeSeamModules.ways.owns`
-(17), counted there. Which step writes into another step's file is in a
-bake's manifests only, so it is no figure here: plan 092's *Findings* hold
-it.
-
-### The rasters, every site
-
-The ledger's `rasters` section (plan 091 phase 0; the arithmetic in
-`lib/city/ledger-rasters.ts`, the reading in `scripts/ledger-rasters.ts`)
-holds, for every site whose data git tracks (`data/<site>/`,
-`trackedSites`), what a terrain level's rasters weigh. The sites come from
-the tree, not the disk: a site fetched and baked here but never committed
-(Berlin's `data/berlin/`, ignored by git) is no site of the ledger and
-moves no figure; a tracked site must be built, and one that is not fails
-the run with its name (`build first`). The list is git's index
-(`scripts/git-tracked.ts`, as for the bake store), so a site staged but not
-yet committed counts; the ledger runs at the repository's top (its `root`),
-with git's own variables (`GIT_DIR`, `GIT_INDEX_FILE`) dropped, and a git
-that fails there is an error in git's words, never an empty list — only a
-root that is no work tree (a test's fixture) has no sites. The test that
-holds the committed ledger's sites to the tree needs the checkout's `.git`. It decodes each published raster with the viewer's decoder and asks
-the viewer's own rules which file a level reads on a tier (`rasterFiles`),
-how its texture is laid out (the kinds table's looks) and what it weighs on
-the GPU (`textureBytes`, and `splatScaleFor` for the colour splat painted
-from the classes). Per site: each raster and table artifact's files, wire
-bytes and texture shapes; each kind's GPU bytes on the spawn tile and the
-largest, per tier and level — the fine level near the camera (`fine`) and
-beyond the ground detail's reach (`fineFar`, the far twins), and the coarse
-level (the float tables are not weighed, as in the viewer); the fine level
-by sort at both reaches — **exact** ids (class,
-paving, sports grounds, markings), **measured** fields (edges, colonies),
-**soft** fields (NDVI, sky view, horizon) and the splat; the share of
-texels that carry anything in the sparse rasters (paving, sports grounds,
-markings, colonies) and of their bounding box, against the full tile
-raster, over the tiles whose fine level holds the raster on a desktop; and the ground programs (`splatVariant` keys) the levels ask for.
-`cpuDecodes` names what the viewer decodes on the CPU without uploading —
-today the NDVI, for the crowns' greenness (`vegetation-layer.ts`); a new
-caller of the PNG decoder fails the ledger until it is named there. Every
-figure is gated: all are functions of the published files and the code.
-
-Baseline, 2026-11-16 (MiB on the GPU; the largest tile; *programs* over
-both levels; *cover* the mean share of carrying texels, the sports
-grounds' bounding box in brackets):
-
-| Site (tiles) | Phone, fine level: exact / measured / soft / splat = total | Soft | Phone, fine, beyond reach | Desktop, fine | Coarse level | Programs desktop / phone | Cover: paving / markings / sport (box) / colonies |
-|---|---|---|---|---|---|---|---|
-| Dresden (15) | 24.0 / 9.9 / 4.7 / 21.3 = 59.9 | 7.8 % | 41.9 | 105.7 | 11.0 | 4 / 3 | 35.5 % / 11.6 % / 1.2 % (66 %) / 4.8 % |
-| Grimma (2) | 24.0 / 9.8 / 4.7 / 21.3 = 59.8 | 7.8 % | 41.8 | 105.0 | 11.0 | 2 / 2 | 46.7 % / 8.0 % / 0.4 % (17 %) / 5.6 % |
-| Hamburg (4) | 24.0 / 8.0 / 4.7 / 21.3 = 58.0 | 8.0 % | 40.0 | 98.0 | 11.0 | 2 / 2 | 33.5 % / 17.3 % / 0.5 % (30 %) / — |
-| Leipzig (4) | 24.0 / 10.0 / 4.7 / 21.3 = 60.0 | 7.8 % | 42.0 | 106.0 | 11.0 | 2 / 2 | 43.7 % / 16.8 % / 0.9 % (73 %) / 2.3 % |
-| Meißen (1) | 24.0 / 10.0 / 4.7 / 21.3 = 60.0 | 7.8 % | 42.0 | 105.9 | 11.0 | 2 / 2 | 31.2 % / 12.2 % / 0.7 % (75 %) / 6.1 % |
-| München (4) | 24.0 / 8.3 / 4.7 / 21.3 = 58.3 | 8.0 % | 40.3 | 99.2 | 11.0 | 3 / 3 | 39.2 % / 14.9 % / 1.1 % (82 %) / 0.4 % |
-| Unna (2) | 24.0 / 8.3 / 4.7 / 21.3 = 58.3 | 8.0 % | 40.3 | 99.1 | 11.0 | 3 / 3 | 46.4 % / 12.1 % / 0.7 % (77 %) / 0.3 % |
-
-A coarse level is the 1024² class raster (1.0), its splat (5.3) and the
-three soft fields (4.7, 42.4 %), which both levels of a tile share.
-Beyond the ground detail's reach a phone's fine level reads the 1024²
-twins of the paving and markings (4 MiB each) and the edges (2 MiB).
-
-### The sky view as blocks (the trial)
-
-The ledger's `blocks` section (plan 091 phase 2; `lib/city/ledger-blocks.ts`,
-read by `scripts/ledger-blocks.ts`) holds, for every site git tracks (as
-the rasters),
-its tiles' sky views as the PNG the viewer reads and as the two block
-files a build with `SVF_BLOCKS=1` publishes beside it — encoded here from
-the published PNG by the build's own call (`publishedBlockFile`), so a
-default build serves: the wire bytes, the GPU bytes (the PNG's as laid
-out with the GPU's mips, a third more; the blocks' as uploaded, the chain
-in the file) and the error of what the shader reads from the blocks
-against the PNG's byte, in byte steps — over level 0 the mean over the
-site's texels, the largest tile p99 and the largest texel; over levels 1
-on the largest texel against the box-filtered chain — by the formats'
-nominal decode, not a GPU's read (SwiftShader reads up to 0.86 below it
-for BC4, truncating to whole bytes, and 0.12 for EAC, widening its eleven
-bits without repeating them: `scripts/eval/block-raster-probe.ts`). The
-encodes take about two minutes for the seven sites, so the section is
-read anew only with `bun run ledger -- --blocks`; without it the
-committed section stands and `--check` does not compare it, as with
-`--browser`. The rasters' table above does not count the blocks: no tier
-reads them by default.
-
-| Site (tiles) | PNG wire / GPU, MiB | BC4 wire / GPU | BC4 error mean / p99 / max | EAC wire / GPU | EAC error mean / p99 / max |
-|---|---|---|---|---|---|
-| Dresden (15) | 7.86 / 20.00 | 8.75 / 10.00 | 0.74 / 4.57 / 14.6 | 8.66 / 10.00 | 0.77 / 4.89 / 16.9 |
-| Grimma (2) | 0.89 / 2.67 | 1.03 / 1.33 | 0.61 / 4.86 / 12.9 | 1.02 / 1.33 | 0.64 / 4.93 / 17.1 |
-| Hamburg (4) | 1.82 / 5.33 | 2.14 / 2.67 | 0.58 / 4.00 / 13.6 | 2.13 / 2.67 | 0.62 / 3.97 / 14.0 |
-| Leipzig (4) | 2.24 / 5.33 | 2.51 / 2.67 | 0.80 / 4.14 / 12.0 | 2.49 / 2.67 | 0.83 / 4.14 / 15.8 |
-| Meißen (1) | 0.58 / 1.33 | 0.62 / 0.67 | 0.91 / 4.71 / 13.1 | 0.62 / 0.67 | 0.92 / 4.90 / 15.8 |
-| München (4) | 2.24 / 5.33 | 2.52 / 2.67 | 0.76 / 4.00 / 11.3 | 2.50 / 2.67 | 0.80 / 4.06 / 12.1 |
-| Unna (2) | 1.05 / 2.67 | 1.16 / 1.33 | 0.86 / 4.86 / 13.4 | 1.15 / 1.33 | 0.88 / 4.93 / 14.8 |
-
-Levels 1 on, the largest texel against the box-filtered chain: BC4
-14.0–15.7, EAC 15.0–22.0. Baseline 2026-11-16. On the wire the blocks are 7–18 % above the PNG
-(gzip; brotli would take about half that back: plan 088's transport); on
-the GPU half, 0.67 MiB a tile for 1.33.
-
-### What a browser reads
-
-`bun run ledger -- --browser` (plan 087, phase 2) adds what only a
-browser can say, read by `e2e/ledger.spec.ts` (ignored unless `LEDGER=1`,
-never retried) at `/dresden?scene=lite` from a `NEXT_PUBLIC_POC_DEBUG=1`
-production build on SwiftShader — a running `next start` is reused, else
-Playwright builds and starts one. The spec hands what it read to
-`scripts/ledger-browser.ts`, which weighs it with the pinned Bun — and
-refuses a build environment that inlines what CI does not set
-(`NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_RELEASE`, `VERCEL_GIT_COMMIT_SHA`, …)
-or a running server that does not serve `.next`'s current build; the
-shapes are `lib/city/ledger-browser.ts`, and each gated figure carries a
-`note` saying what it is. Both are gated exactly. CI's build-check shard
-runs the check with `--browser` wherever its e2e half runs; without the
-flag the committed figures stand and `--check` says they were not
-compared.
-
-- **The first load's JavaScript** (`browser.firstLoad`): every
-  `/_next/static/*.js` the page and its workers fetch until the set is
-  cut — `ready`, the named workers `scene`, `ground` and `niches`
-  running, then five seconds without a new script — and a second read
-  five seconds later must name the same files (the BVH worker is not in
-  it: it starts at the first move near buildings). Each raw body is
-  gzipped at level 9 by the pinned Bun (plan 074's method, the same
-  `scene=lite` page). `workerOnly` is the files no page fetch named (the
-  page's resource timing), whichever worker fetched them: not the scene's
-  JavaScript, which the page shares. The chunks' names, content hashes
-  that move with any change, are in `timings.firstLoad`.
-- **A phone's tile cache** (`browser.phoneLiteSpawnCache`): a context
-  with `isMobile` and `hasTouch`, the scene's own tier asserted `mobile`;
-  the cache's own accounting (`calculateBytesUsed`, as its budget counts
-  it) of its loaded contents, each by the manifest's logical name, once
-  two reads four seconds apart (more than a late part's compile wait)
-  agree with no compile queued. Under the lite profile that is the
-  spawn tile alone, one of fifteen. It is not the phone's memory: what a
-  tile holds on the GPU that never reaches `calculateBytesUsed` moves
-  nothing here, and three's `info.memory` at `ready`
-  (`timings.phoneHeld`) is recorded only, since two reads of one build
-  differ by a few geometries, textures and programs that come and go.
-- **The timings** (`timings`): `getTimings()` — the scene's
-  `streamTimings.summary()` (`app/_components/stream-timing.ts`) — at
-  `ready` on both pages: the `boot:*` marks, `dressing:build`,
-  `tile:compile`, and `longtask` where the scene counts it (`?trace=1`).
-  Recorded with the machine and the day, never compared: on SwiftShader
-  a timing depends on the runner drawn. `browser.readWith` names the
-  browser and adapter beside the figures, uncompared too.
-- **The builds against WebGPU's limits** (`browser.pipelines`, plan
-  094): on the phone page, once its cache has settled with no compile
-  queued (on the desktop page the wait for that cost a minute), every
-  build the lite spawn draws with, from `handle.getPipelineBudget()` (the e2e
-  "limits" test's probe), named `key [draw: layout] shadowed camera`,
-  each with the vertex buffers, attributes and inter-stage variables it
-  takes of WebGPU's 8, 16 and 16 and the variables it has spare
-  (`lib/city/ledger-census.ts` `pipelineFigures`). Gated exactly: a row
-  that moves is a layer coming nearer a limit, and the diff says which.
-
-### The census of builds
-
-`bun run ledger -- --census` (plan 094, phase 2; implies `--browser`)
-also flies every built site, one test of `e2e/ledger.spec.ts` each
-(`LEDGER_CENSUS`), and writes the `census` section — recorded, never
-compared (it is in `UNCOMPARED` whole): what lands when is the machine's
-frame rate's. Each site in the whole-site profile
-(`?scene=lite&block=1`, 400×300) reads its counters at `ready`, switches
-on every data layer it has — Dresden's bicycle counts answered by the
-spec (`e2e/scene-fixtures.ts`), a design block loaded there — and reads
-them again once the spawn has settled (`dressed`); the flight's window
-is `dressed` → end. It then flies `censusFlight`: an overview from
-2.5 km over the site's middle (the far building level), and low oblique
-stops over up to four tiles, the spawn and those farthest from the ones
-seen. A stop waits for the view to rest, the stream to be quiet and no
-compile queued in two reads two seconds apart (at most four minutes;
-`settled` says whether it got there) and reads `getPipelineBudget` —
-every build the scene holds, so the whole site's builds are held to the
-limits too (`probeBuilt`: programs the read itself made; `left`, `unread`:
-what it could not read). Dresden is then entered in Modell (`M`) from
-its spawn and read once more. Per site: every build met by name with
-what it takes of the limits (`builds.rows`; two rows of one name keep
-the tighter), the distinct builds (key × draw × layout × shadow receipt
-× camera), the distinct keys and each key family with more than one key
-(`keyFamily`: what comes before the first value — the sets made from
-data), `framedBuilds` and `programs` at `ready`, `dressed` and the
-flight's end, the compile timings over the window (`tile:compile` is
-what a landing tile waited for, capped at 3 s; `compile:turn-wait` is a
-compile's place in a burst's queue, not a landing's wait), the tightest
-builds by each limit, and the errors met. SwiftShader's WGSL and limits
-only. Tens of minutes on SwiftShader, so never on CI; run it on
-linux-x64 after building every site.
-
-Baseline, 2026-11-16 (linux-x64 cloud container, Bun 1.4.4, Chromium 153
-on SwiftShader): the first load fetches 42 scripts, 1 103 124 bytes gzip
--9 (1.10 MB; plan 074 counted 904 619 on 2026-10-10, gzipped elsewhere),
-8 of them, 34 829 bytes, by the three workers alone. A phone's cache at
-the spawn holds four loaded contents — the tile's two terrain levels,
-94.6 MB and 24.7 MB with what they carry, its near and far buildings,
-27.0 MB and 12.6 MB — 159.0 MB in all. Its boot on SwiftShader:
-`boot:spawn-wait` 3.6–4.5 s, `boot:veil-to-loaded` 4.2–4.3 s,
-`dressing:build` 0.9–1.1 s for two tiles, `tile:compile` 9–12 s over four
-compiles (each capped at 3 s).
+What the series measured once and no longer gates — every site's
+rasters, the census of builds over a flight, the timings, the bakes'
+hand-over, the complexity counters, the sky view's block trial — is in
+the *Findings* of plans 087, 090, 091, 092 and 094.
 
 ## Provenance
 

@@ -118,18 +118,9 @@ jobs:
       - run: uv run pytest -q tests
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      # The bakes' types, against a baseline that only shrinks (plan 089); on
-      # a pull request also against the base's baseline, so that a count
-      # raised by hand fails unless the description says why
-      # (`Typecheck-baseline-raise: …`; an edited description needs a re-run).
+      # The bakes' types, against a baseline that only shrinks (plan 089).
       - name: Types
-        run: |
-          if [ -n "$GITHUB_BASE_REF" ]; then
-            git fetch --depth=1 --no-tags origin "$GITHUB_BASE_REF"
-            uv run python typecheck.py --against FETCH_HEAD
-          else
-            uv run python typecheck.py
-          fi
+        run: uv run python typecheck.py
 
   # Build and e2e share a job: its build step is the build check, and the
   # Playwright step serves the artifact it just produced instead of
@@ -335,17 +326,14 @@ jobs:
           name: playwright-traces-${{ strategy.job-index }}
           path: test-results/
           retention-days: 7
-      # The ledger (plan 087): the reference site's bytes, requests and
-      # complexity counters, recomputed from the build above and compared with
-      # qa/ledger.json. A PR that moves a figure commits the new file
-      # (`bun run ledger`); the job summary names what moved. Last, and after
-      # a failed e2e too, so that neither hides the other. Where the e2e half
-      # runs (Playwright is installed), `--browser` adds what a browser reads
-      # from the same build (e2e/ledger.spec.ts, ~1.5 min, never retried): the
-      # first load's JavaScript, a phone's tile cache and the lite spawn's
-      # builds against WebGPU's limits (browser.pipelines, plan 094), gated
-      # exactly; the timings, recorded only. The census (`--census`, every
-      # site flown) is never run here: its committed figures stand.
+      # The ledger (plan 087): the reference site's bytes and requests and
+      # the product's code lines, recomputed from the build above and
+      # compared with qa/ledger.json. A PR that moves a figure commits the
+      # new file (`bun run ledger`); the job summary names what moved. Last,
+      # and after a failed e2e too, so that neither hides the other. Where
+      # the e2e half runs (Playwright is installed), `--browser` adds what a
+      # browser reads from the same build (e2e/ledger.spec.ts, never
+      # retried): the first load's JavaScript and a phone's tile cache.
       - name: Ledger
         if: ${{ !cancelled() && matrix.shard.buildCheck && steps.build.outcome == 'success' }}
         shell: bash

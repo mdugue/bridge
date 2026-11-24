@@ -15,6 +15,37 @@
 
 ## Status
 
+> **Slimmed before milestone 1 (2026-11-24; plan 086, ruling 5).** What
+> this plan built is on `rewrite` as a narrow guard, and the rest of it
+> is history at commit `b00b08c2`:
+>
+> - **The ledger** is one module, one script and one browser spec
+>   (`lib/city/ledger.ts`, `scripts/ledger.ts`, `e2e/ledger.spec.ts`):
+>   `published`, `bytes`, the watched tiles' `dressing`, the first load's
+>   JavaScript and a phone's tile cache, and one new figure,
+>   `code.product` (the product's code lines, gated;
+>   `bun run ledger -- --against <ref>` prints the delta a milestone
+>   quotes). Gone, their figures kept in the *Findings* of the plans
+>   that took them: the complexity counters and their lexers, the
+>   buildings' geometry, every site's rasters (091), the census of builds
+>   and `browser.pipelines` (094), the timings, the dressing's recorded
+>   part (090), the bakes' hand-over (092), the block trial (091).
+> - **The comparison of published tilesets** (`scripts/compare-tilesets.ts`,
+>   `compare-glb.ts`, `compare-json.ts`, phase 5) proved the determinism
+>   fix and left `rewrite`: it is on the branch `tools/compare-tilesets`,
+>   to be fetched when plan 088 publishes or plan 092 changes the
+>   hand-over format.
+> - **The plates** (`bun run plates`, `lib/city/plate-diff.ts`) stay as
+>   scaffolding while the series' plans move pixels: they render and
+>   compare, and fail on a differing view, which the report names. The
+>   claims read from a PR's `## Snapshots`, the noise-floor command
+>   (`pairs`), the kept base plates and the `diff` command are gone; the
+>   workflow runs on the label `plates` or by hand, not on every pull
+>   request.
+>
+> Below, a sentence that names one of those tools describes the state at
+> that commit.
+
 - **Priority**: P1 — the first plan of the series; 088–096 write into
   what it builds
 - **Effort**: M, plus a machine with a GPU that keeps running

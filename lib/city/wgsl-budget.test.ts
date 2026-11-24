@@ -1,6 +1,4 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import nodePath from "node:path";
 import {
   budgetBreaches,
   budgetSpare,
@@ -245,50 +243,4 @@ test("eight vertex buffers pass, a ninth does not; sixteen attributes too", () =
       { ...DEFAULT_PIPELINE_LIMITS, maxVertexBuffers: 12 }
     )
   ).toEqual([]);
-});
-
-/**
- * The spike's fixtures (plan 094, phase 0): the clay's WGSL as three r187
- * built it for the spawn tile's buildings, read in the headless e2e
- * through `renderer.debug.getShaderAsync` — `clay|niches` under the
- * walk/fly camera, `clay` under Modell's parallel one.
- */
-const fixture = (name: string) =>
-  readFileSync(
-    nodePath.join(import.meta.dir, "__fixtures__", "wgsl-budget", name),
-    "utf-8"
-  );
-
-test("the clay as three r187 built it: thirteen passed, two spare", () => {
-  const vertex = fixture("clay.vertex.wgsl");
-  const budget = wgslBudget(vertex, fixture("clay.fragment.wgsl"));
-  expect(vertexAttributeNames(vertex)).toEqual([
-    "featureId",
-    "facade",
-    "position",
-    "normal",
-  ]);
-  expect(budget.interStageOut).toBe(13);
-  expect(budget.interStageIn).toBe(13);
-  expect(budget.builtins.fragmentIn).toEqual(["front_facing", "position"]);
-  expect(budget.interStageBuiltins).toEqual(["front_facing"]);
-  expect(budgetSpare(budget, { vertexBuffers: 4 })).toEqual({
-    fragmentInputs: 2,
-    interStage: 2,
-    outLocations: 3,
-    vertexAttributes: 12,
-    vertexBuffers: 4,
-    vertexOutputs: 3,
-  });
-});
-
-test("a parallel camera's clay passes one variable fewer", () => {
-  // the direction to the eye is one for the whole view: no varying
-  const budget = wgslBudget(
-    fixture("clay-parallel.vertex.wgsl"),
-    fixture("clay-parallel.fragment.wgsl")
-  );
-  expect(budget.interStageOut).toBe(12);
-  expect(budget.interStageIn).toBe(12);
-  expect(budgetSpare(budget, { vertexBuffers: 4 }).interStage).toBe(3);
 });

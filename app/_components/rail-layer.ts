@@ -876,18 +876,8 @@ function addLine(
     );
     const bed = run.map((p) => ({ ...p, y: p.y - raise + SLEEPER_TOP }));
     for (const lateral of offsets) {
-      if (ctx.railTable) {
-        ctx.railTable.runs.push({
-          gauge: line.gauge,
-          lateral,
-          look: "rail",
-          pts: run,
-          web: RAIL_WEB,
-        });
-      } else {
-        addRail(out.rail, run, lateral + line.gauge / 2);
-        addRail(out.rail, run, lateral - line.gauge / 2);
-      }
+      addRail(out.rail, run, lateral + line.gauge / 2);
+      addRail(out.rail, run, lateral - line.gauge / 2);
       if (!line.paved) {
         addSleepers(out.sleepers, bed, d, lateral, opens);
       }

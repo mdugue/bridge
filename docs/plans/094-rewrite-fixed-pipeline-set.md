@@ -396,6 +396,15 @@ Whether or not phase 4 applies:
 
 ## Findings
 
+> **Slimmed before milestone 1 (2026-11-24; plan 086, ruling 5).** The
+> counting test stays (the e2e "limits" test, `lib/city/wgsl-budget.ts`,
+> `app/_components/pipeline-budget.ts`); its unit tests read a small
+> hand-made fixture in place of the clay's dumped WGSL. Phase 2's census
+> (`bun run ledger -- --census`, `lib/city/ledger-census.ts`, the
+> ledger's `census` and `browser.pipelines`, the materials'
+> `userData.sceneKey`) was removed from `rewrite` once read: history at
+> commit `b00b08c2`. The figures below are the record.
+
 ### Phase 0 — the spike (2026-11-16, three r187, headless Chromium on SwiftShader)
 
 **The counts can be had on public API.**

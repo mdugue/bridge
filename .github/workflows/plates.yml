@@ -14,49 +14,17 @@ name: Plates
 # every other tile, the full profile's shadows, AO and resolution, the
 # data layers and a view's page query are tier 2's.
 #
-# A pull request names the views it means to change under a `## Snapshots`
-# section of its description: those are reported. A differing view that
-# is not named there fails the job, with or without the section. Not a
-# required check.
+# Scaffolding while the rewrite series' plans move pixels (plan 087): it
+# runs where a pull request carries the label `plates`, or by hand — not
+# on every pull request. A differing view fails the job; the summary
+# names it, and the pull request's `## Snapshots` says whether it was meant.
 
 on:
   pull_request:
-    # Not while a draft: the job renders for a quarter of an hour, and a
-    # draft is pushed to often. Marking it ready runs it.
-    types: [opened, synchronize, reopened, ready_for_review]
-    # What can move a pixel: the viewer, what it is built and baked from,
-    # the views and the harness itself.
-    paths:
-      - app/**
-      - components/**
-      - hooks/**
-      - lib/**
-      - public/**
-      - types/**
-      - scripts/**
-      - data/**
-      - sites/**
-      - patches/**
-      - qa/views/**
-      - e2e/snapshot-shot.spec.ts
-      - e2e/swiftshader-webgpu.ts
-      - playwright.config.ts
-      - next.config.ts
-      - package.json
-      - bun.lock
-      - .github/workflows/plates.yml
+    types: [labeled, synchronize]
   # By hand, a branch's tip against main's tip (not its merge base: the
   # clone is shallow, so what landed on main since counts too).
   workflow_dispatch:
-    inputs:
-      claims:
-        description: The views the branch means to change, comma-separated (reported, not failed)
-        type: string
-        default: ""
-      pairs:
-        description: Instead, measure this runner's noise floor over so many same-commit pairs (0 = compare)
-        type: number
-        default: 0
 
 concurrency:
   group: plates-${{ github.ref }}
@@ -64,7 +32,6 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   tier1:
@@ -74,7 +41,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.head.repo.full_name == github.repository &&
-      !github.event.pull_request.draft)
+      contains(github.event.pull_request.labels.*.name, 'plates'))
     runs-on: ubuntu-latest
     # Measured on this runner, 2026-11-16 (plan 087, Findings): 16 min
     # 17 s with the base's bake warm; the base bakes cold since, which
@@ -82,7 +49,7 @@ jobs:
     # by its name after three minutes and a side's render after ten
     # (e2e/snapshot-shot.spec.ts), so a hung run ends with its summary
     # inside this budget, not by being cancelled.
-    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.pairs > 0 && 180 || 30 }}
+    timeout-minutes: 30
     steps:
       # A pull request's checkout is its merge with the base's tip, so the
       # base's tip against HEAD is exactly what the pull request changes.
@@ -101,26 +68,6 @@ jobs:
             git fetch --no-tags --depth=1 origin "$BASE_SHA"
           fi
           echo "sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
-      # The description as it is now, not as the event carried it: a re-run
-      # after naming a view passes. Its text is only read for view names
-      # (scripts/plates.ts, `claimedViews`).
-      - name: Read the pull request's description
-        id: claim
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-          CLAIMS: ${{ inputs.claims }}
-        run: |
-          mkdir -p plates
-          if [ -n "$PR" ]; then
-            gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '.body // ""' > plates/description.md
-            echo "flags=--claims-file plates/description.md" >> "$GITHUB_OUTPUT"
-          elif [ -n "$CLAIMS" ]; then
-            printf '## Snapshots\n%s\n' "$CLAIMS" | tr ',' ' ' > plates/description.md
-            echo "flags=--claims-file plates/description.md" >> "$GITHUB_OUTPUT"
-          else
-            echo "flags=" >> "$GITHUB_OUTPUT"
-          fi
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
@@ -153,22 +100,10 @@ jobs:
       # with the debug hook and the reference site alone, serves each and
       # renders it with the head's harness.
       - name: Render the base and the head, and compare
-        if: github.event_name != 'workflow_dispatch' || inputs.pairs == 0
-        run: bun run plates -- --base "$BASE_SHA" --summary "$GITHUB_STEP_SUMMARY" $CLAIM_FLAGS
+        run: bun run plates -- --base "$BASE_SHA" --summary "$GITHUB_STEP_SUMMARY"
         env:
           SHOTS_SMALL: "1"
           BASE_SHA: ${{ steps.base.outputs.sha }}
-          CLAIM_FLAGS: ${{ steps.claim.outputs.flags }}
-      # Plan 087's gate for this tier, on the runner it runs on: n + 1
-      # renders of the head, every pair of neighbours compared. Eleven
-      # renders took an hour in the cloud container, hence the budget.
-      - name: Measure the noise floor
-        if: github.event_name == 'workflow_dispatch' && inputs.pairs > 0
-        timeout-minutes: 170
-        run: bun run plates -- pairs "$PAIRS" --summary "$GITHUB_STEP_SUMMARY"
-        env:
-          SHOTS_SMALL: "1"
-          PAIRS: ${{ inputs.pairs }}
       # Base, head and difference image of each differing view, and the
       # report; every plate of both sides beside them.
       - name: Upload the report

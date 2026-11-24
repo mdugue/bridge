@@ -496,6 +496,16 @@ allowed at all. And alone nobody would ask for the cut at publishing;
 
 ## Findings
 
+> **Slimmed before milestone 1 (2026-11-24; plan 086, ruling 5).** Phase
+> 0's tools left `rewrite`: the ledger's `bakeStore` section, the
+> built-out `scripts/eval/compare-bakes.py` with its test (the file is
+> main's again: the hand-over format stays GeoJSON, decision 4 of plan
+> 086's list), and `scripts/compare-tilesets.ts`, which is on the branch
+> `tools/compare-tilesets`. All are history at commit `b00b08c2`: a
+> phase above that says "compare with `compare-bakes.py`" or
+> "`compare-tilesets.ts`: equal" fetches them from there first. The
+> figures below are the record.
+
 ### Phase 0 (2026-11-16): counted, compared, the format tried
 
 Done in a cloud session: the comparer and the trial on the committed
