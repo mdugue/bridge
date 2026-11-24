@@ -855,11 +855,8 @@ def rebuilt_parts(tile: Tile) -> dict[str, list[Face]]:
     the file's order (the build draws them in place of the LoD2 roof): one
     LoD2 face often spans a whole block of roofs, red tiles, zinc and
     courtyards, where the rebuilt parts follow the scan's."""
-    path = tile.out("dlm", f"roofs_{tile.id}.geojson")
-    if not path.exists():
-        return {}
     out: dict[str, list[Face]] = {}
-    for f in json.loads(path.read_text()).get("features", []):
+    for f in tile.features("roofs"):
         props = f.get("properties") or {}
         geom = f.get("geometry") or {}
         if geom.get("type") != "Polygon" or "id" not in props:
@@ -916,11 +913,8 @@ def appended_roofs(tile: Tile) -> dict[str, list[tuple[int, float, list[Face], f
     in its file, its `z` — the build checks both —, its faces, its foot)."""
     out: dict[str, list] = {}
     for key, name in APPENDED.items():
-        path = tile.data / "dlm" / f"{name}_{tile.id}.geojson"
         out[key] = []
-        if not path.exists():
-            continue
-        for i, f in enumerate(json.loads(path.read_text()).get("features", [])):
+        for i, f in enumerate(tile.features(name)):
             props = f.get("properties") or {}
             if key == "gaps" and props.get("kind") not in APPENDED_KINDS:
                 continue

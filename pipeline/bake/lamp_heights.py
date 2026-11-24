@@ -19,8 +19,8 @@ this, 6.8 m with it; a post's arm and head stay under it) and the ground
 RING_M around it stands clear (median under CLEAR_M): no tree, roof or bus
 over it. A lamp's street is the nearest OSM highway within STREET_M, by its
 name (else the way) and its class. Hung lamps keep their wire's height; the lamps of `lamps.py` and
-Mapillary's (`mapillary.py`) are measured together and both files
-rewritten (`h`, `hs`: "street" or "class", and `arm`). A lamp on a bridge
+Mapillary's (`mapillary.py`) are measured together and both handed on to
+lamp_water.py (`h`, `hs`: "street" or "class", and `arm`). A lamp on a bridge
 (`deck`, lamps.py) is read over its deck's top, not the ground below.
 
 Where the scan rarely shows a post (Grimma: six readings on one street),
@@ -46,7 +46,6 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from pathlib import Path
 
 import numpy as np
 import rasterio
@@ -235,9 +234,12 @@ def arm_of(p: shapely.Point, h: float, bent: bool, roads: Carriageways) -> int |
 
 
 def run(tile: Tile) -> None:
-    files = [(tile.out("dlm", f"lamps_{tile.id}.geojson"), False)]
-    files.append((tile.out("dlm", f"mly_{tile.id}.geojson"), True))
+    files = [(tile.work(f"lamps_{tile.id}.geojson"), False)]
+    files.append((tile.work(f"mly_{tile.id}.geojson"), True))
     docs = [(p, json.loads(p.read_text()), m) for p, m in files if p.exists()]
+    # what an earlier run handed on is not this run's
+    for path, _ in files:
+        tile.work(f"h_{path.name}").unlink(missing_ok=True)
     if not docs:
         print(f"{tile.id}: no lamps — skipping their heights")
         return
@@ -254,14 +256,13 @@ def run(tile: Tile) -> None:
     roads = carriageways(tile)
     for f in posts:
         props = f["properties"]
-        props.pop("arm", None)
         at = shapely.Point(f["geometry"]["coordinates"][:2])
         arm = arm_of(at, props.get("h", LAMP_H), bool(props.get("bent")), roads)
         if arm is not None:
             props["arm"] = arm
             counts["arms"] += 1
     for path, doc, _ in docs:
-        _write(path, doc)
+        tile.work(f"h_{path.name}").write_text(json.dumps(doc))
     print(f"{tile.id}: lamp heights {dict(counts)}")
 
 
@@ -271,14 +272,9 @@ def _measure(tile: Tile, posts: list[dict], counts: dict[str, int]) -> None:
     found = heights(points, Surface(tile), Streets(tile))
     for f, h in zip(posts, found, strict=True):
         props = f["properties"]
-        props.pop("hs", None)
         if h is None:
             props["h"] = LAMP_H
             counts["kept"] += 1
             continue
         props["h"], props["hs"] = h
         counts[h[1]] += 1
-
-
-def _write(path: Path, doc: dict) -> None:
-    path.write_text(json.dumps(doc))

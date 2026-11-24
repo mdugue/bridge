@@ -23,8 +23,6 @@ kerb or the ballast's edge at least."""
 
 from __future__ import annotations
 
-import json
-
 import shapely
 import shapely.geometry
 
@@ -38,15 +36,13 @@ MARGIN_M = 0.5
 
 def track_beds(tile: Tile) -> list[shapely.Geometry]:
     out = []
-    baked = tile.out("dlm", f"rail_{tile.id}.geojson")
-    if baked.exists():
-        for f in json.loads(baked.read_text())["features"]:
-            # a monorail's beam (rail_osm.py `monorails`) has no bed
-            if (f["properties"] or {}).get("mono"):
-                continue
-            tracks = int((f["properties"] or {}).get("tracks") or 1)
-            line = shapely.geometry.shape(f["geometry"])
-            out.append(rail_osm.bed(line, tracks))
+    for f in tile.features("rail"):
+        # a monorail's beam (rail_osm.py `monorails`) has no bed
+        if (f["properties"] or {}).get("mono"):
+            continue
+        tracks = int((f["properties"] or {}).get("tracks") or 1)
+        line = shapely.geometry.shape(f["geometry"])
+        out.append(rail_osm.bed(line, tracks))
     if has_extract(tile, "the track beds"):
         kinds = ", ".join(f"'{k}'" for k in OSM_TRACKS)
         geoms, fields = read_osm(tile, "lines", f"railway IN ({kinds})", ["other_tags"])

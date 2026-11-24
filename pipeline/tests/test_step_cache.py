@@ -1,5 +1,5 @@
 """The step cache skips a step only while what it read, looked for and wrote
-is as a full run would leave it."""
+is as it recorded."""
 
 from __future__ import annotations
 
@@ -36,10 +36,6 @@ def _record(raw, root, step: str, body, key=KEY) -> None:
     step_cache.save(step_cache.manifest_path(raw, SITE, step, TILE), key, rec)
 
 
-def _ledger(raw, order=("s",)) -> step_cache.Ledger:
-    return step_cache.Ledger(raw, SITE, list(order))
-
-
 def _step(root):
     """Reads a JSON file and a raster, looks for an optional file, lists a
     folder, writes one file."""
@@ -62,8 +58,8 @@ def _setup(tmp_path):
     return root, raw
 
 
-def _unchanged(raw, step="s", key=KEY, order=("s",)) -> bool:
-    return _ledger(raw, order).unchanged(step, TILE, key)
+def _unchanged(raw, step="s", key=KEY) -> bool:
+    return step_cache.unchanged(raw, SITE, step, TILE, key)
 
 
 def test_unchanged_until_an_input_changes(tmp_path):
@@ -106,20 +102,6 @@ def test_an_edited_output_runs_again(tmp_path):
     assert not _unchanged(raw)
 
 
-def test_a_step_that_feeds_on_its_own_output_runs_again(tmp_path):
-    root = tmp_path / "data"
-    root.mkdir()
-    raw = tmp_path / "raw"
-    (root / "log.txt").write_text("a")
-
-    def body():
-        text = (root / "log.txt").read_text()
-        (root / "log.txt").write_text(text + "a")
-
-    _record(raw, root, "s", body)
-    assert not _unchanged(raw)
-
-
 def test_paths_outside_the_roots_are_not_recorded(tmp_path):
     root = tmp_path / "data"
     root.mkdir()
@@ -130,83 +112,17 @@ def test_paths_outside_the_roots_are_not_recorded(tmp_path):
     assert not rec.reads
 
 
-ORDER = ("a", "m", "b")
-
-
-def _chain(tmp_path):
-    """`a` writes x from in.txt, `m` reads x into y, `b` rewrites x in place
-    (as `islands` does the land cover's raster)."""
+def test_a_step_that_rewrites_its_own_last_output_to_the_same_is_unchanged(tmp_path):
+    """`shopfronts` without its photo cache filters its committed file anew:
+    the file it read is the file it wrote, and no input of the run."""
     root = tmp_path / "data"
     root.mkdir()
     raw = tmp_path / "raw"
-    (root / "in.txt").write_text("1")
-
-    def a():
-        (root / "x.txt").write_text((root / "in.txt").read_text() + "a")
-
-    def m():
-        (root / "y.txt").write_text((root / "x.txt").read_text() + "m")
-
-    def b():
-        (root / "x.txt").write_text((root / "x.txt").read_text() + "b")
-
-    steps = {"a": a, "m": m, "b": b}
-    for s in ORDER:
-        _record(raw, root, s, steps[s], {**KEY, "step": s})
-    return root, raw, steps
-
-
-def test_a_step_whose_output_a_later_one_rewrote_is_unchanged(tmp_path):
-    root, raw, _ = _chain(tmp_path)
-    assert (root / "x.txt").read_text() == "1ab"
-    ledger = _ledger(raw, ORDER)
-    for s in ORDER:
-        assert ledger.unchanged(s, TILE, {**KEY, "step": s}), s
-
-
-def test_the_rewriter_runs_again_after_the_writer(tmp_path):
-    root, raw, steps = _chain(tmp_path)
-    (root / "in.txt").write_text("2")
-    ledger = _ledger(raw, ORDER)
-    assert not ledger.unchanged("a", TILE, {**KEY, "step": "a"})
-    _record(raw, root, "a", steps["a"], {**KEY, "step": "a"})
-    ledger.done("a", TILE)
-    assert not ledger.unchanged("m", TILE, {**KEY, "step": "m"})
-    assert not ledger.unchanged("b", TILE, {**KEY, "step": "b"})
-
-
-def test_a_reader_of_a_rewritten_file_restores_it_first(tmp_path):
-    """`m` reads x as `a` wrote it; on disk is `b`'s: before `m` runs, `a`
-    runs again (and `b` after `m`, its input rewritten)."""
-    root, raw, steps = _chain(tmp_path)
-    ledger = _ledger(raw, ORDER)
-    assert ledger.restore("m", TILE) == [("a", TILE)]
-    assert ledger.restore("a", TILE) == []
-    _record(raw, root, "a", steps["a"], {**KEY, "step": "a"})
-    ledger.done("a", TILE)
-    assert ledger.restore("m", TILE) == []
-    assert not ledger.unchanged("b", TILE, {**KEY, "step": "b"})
-
-
-def test_the_rewriter_of_a_restored_file_runs_after_the_reader(tmp_path):
-    """A bake of `m` alone restores x to `a`'s output; `b` then rewrites it
-    again, or x would stay as `a` left it (lamps without their heights)."""
-    root, raw, steps = _chain(tmp_path)
-    ledger = _ledger(raw, ORDER)
-    again = ledger.restore("m", TILE)
-    assert ledger.after(again, "m") == [("b", TILE)]
-    assert ledger.after([], "m") == []
-    for s in ("a", "m"):
-        _record(raw, root, s, steps[s], {**KEY, "step": s})
-        ledger.done(s, TILE)
-    assert (root / "x.txt").read_text() == "1a"
-    assert not ledger.unchanged("b", TILE, {**KEY, "step": "b"})
-    _record(raw, root, "b", steps["b"], {**KEY, "step": "b"})
-    ledger.done("b", TILE)
-    assert (root / "x.txt").read_text() == "1ab"
-    # the next bake finds every step as it left it
-    nxt = _ledger(raw, ORDER)
-    assert all(nxt.unchanged(s, TILE, {**KEY, "step": s}) for s in ORDER)
+    (root / "own.txt").write_text("a")
+    _record(raw, root, "s", lambda: (root / "own.txt").write_text((root / "own.txt").read_text()))
+    assert _unchanged(raw)
+    (root / "own.txt").write_text("b")
+    assert not _unchanged(raw)
 
 
 def test_a_memo_is_recorded_as_it_was_read(tmp_path):

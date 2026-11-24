@@ -44,8 +44,9 @@ line, facades closing both sides) hangs across the street as they do
 The fetch caches the tile's street lights under `<raw>/mapillary/<tile>.v2.json`
 (it needs `MAPILLARY_TOKEN` in the environment), each with the images that
 saw it as `[lon, lat, captured_at ms]` (v2: the first fetch's `<tile>.json`
-had no images and is not read). The bake writes `dlm/mly_<tile>.geojson`
-— its own file, credited to Mapillary, never merged into the OSM files: the
+had no images and is not read). The lamps end in `dlm/mly_<tile>.geojson`
+(written by lamp_water.py, as OSM's are) — their own file, credited to
+Mapillary, never merged into the OSM files: the
 two licences (ODbL, CC BY-SA) do not mix in one database. Without a cache
 the file is empty and the lamps are OSM's alone."""
 
@@ -250,17 +251,11 @@ def detections(tile: Tile, doc: dict) -> dict[str, np.ndarray]:
     return {k: np.array(v, float).reshape(-1, 2) for k, v in by_kind.items()}
 
 
-def _osm_points(tile: Tile, name: str, kind: str | None) -> np.ndarray:
-    path = tile.out("dlm", f"{name}_{tile.id}.geojson")
-    if not path.exists():
-        return np.zeros((0, 2))
-    feats = json.loads(path.read_text())["features"]
-    pts = [
-        f["geometry"]["coordinates"][:2]
-        for f in feats
-        if f["geometry"]["type"] == "Point" and (kind is None or f["properties"].get("k") == kind)
-    ]
-    return np.array(pts, float).reshape(-1, 2)
+def _osm_lamps(tile: Tile) -> np.ndarray:
+    """Where the lamps step stood OSM's lamps."""
+    path = tile.work(f"lamps_{tile.id}.geojson")
+    feats = json.loads(path.read_text())["features"] if path.exists() else []
+    return np.array([f["geometry"]["coordinates"][:2] for f in feats], float).reshape(-1, 2)
 
 
 def placed(p: shapely.Point, gate: Gate, buildings: shapely.STRtree) -> shapely.Point | None:
@@ -314,10 +309,14 @@ class Hangers:
 
 
 def run(tile: Tile) -> None:
-    out = tile.out("dlm", f"mly_{tile.id}.geojson")
+    # lamp-heights and lamp-water finish the lamps: the tile's file is
+    # lamp-water's, and stands where this step hands on nothing
+    final = tile.out("dlm", f"mly_{tile.id}.geojson")
+    out = tile.work(final.name)
+    out.unlink(missing_ok=True)
     path = cache_path(tile)
     if not tile.mapillary_objects or not path.exists():
-        if tile.mapillary_objects and tile.raw_absent(out, "no Mapillary cache (v2) here"):
+        if tile.mapillary_objects and tile.raw_absent(final, "no Mapillary cache (v2) here"):
             return
         if tile.mapillary_objects:
             print(f"{tile.id}: no Mapillary cache (v2) — the lamps are OSM's alone")
@@ -327,13 +326,13 @@ def run(tile: Tile) -> None:
     # tunnels, the streets they hang across) there is nothing to weigh them
     # against, so the committed file stays, as every OSM step leaves its own
     if not has_extract(tile, "Mapillary's lamps"):
-        if not tile.raw_absent(out, "no OSM extract here"):
+        if not tile.raw_absent(final, "no OSM extract here"):
             write_geojson(out, [], tile.epsg, ATTRIBUTION)
         return
     gate = Gate(tile)
     _, polys = footprints(json.loads(tile.cityjson.read_text()))
     buildings = shapely.STRtree(polys)
-    osm = {"lamp": _osm_points(tile, "lamps", None)}
+    osm = {"lamp": _osm_lamps(tile)}
     hangers, tunnels = Hangers(tile, gate), Tunnels(tile)
     features, counts = [], {}
     for kind, pts in detections(tile, json.loads(path.read_text())).items():

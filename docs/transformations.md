@@ -175,10 +175,10 @@ visual-variable codebook is in
   `area:highway` (footway, pedestrian, traffic island) areas and fountain
   basins become built-up (4), `leisure=park|garden` and
   `landuse=grass|village_green|meadow|flowerbed` meadow (1), the lawn
-  winning inside a pedestrian area. Idempotent, so `bun run bake <site> --step
-  islands` applies it to the committed raster without the raw DLM
-  (2026-09-25: ≈ 0.2–0.7 M texels per tile, Prager Straße and the Altmarkt
-  among them). The legend then carries the OSM credit.
+  winning inside a pedestrian area (2026-09-25: ≈ 0.2–0.7 M texels per
+  tile, Prager Straße and the Altmarkt among them; until 2026-11-24 a
+  step of its own, `islands`, also applied it to the committed raster
+  without the raw DLM). The legend then carries the OSM credit.
   `pipeline/bake/landcover.py` `carve_islands`.
 - **Surface colours** `❝ taken` `= computed` — Basis-DLM land-cover → a 4096² **class-id raster**
   (8-bit, ids 0–9 — 9 arable since 2026-10-21, below —, burned lowest priority first so water wins;
@@ -2533,7 +2533,11 @@ the pointer), it answers in a card ([ADR 0042](./adr/0042-inquiry-cards-on-deman
   (2026-10-21, P7, `canopy.py` `row_trees`): DOM1's crown peaks within 3 m
   of the line (nDOM smoothed 1 m, over 3 m, off LoD2 and the traffic),
   projected onto it, as tall as measured, thinned tallest-first 3 m apart,
-  none within 4.5 m of a canopy or scan crown; written into
+  none within 4.5 m of a canopy point (until 2026-11-24 nor of a scan
+  crown, read from the last bake's `canopyx`: now the scan crown gives
+  way — `lowveg` writes none within 5 m of a canopy point, a row's tree
+  among them, so a first bake and a second agree; Grimma's row trees
+  16 → 91 and 15 → 122, each where a scan crown stood); written into
   `canopy_<t>.geojson` as `row: 1` with a `rows` member; the build then
   plants no trees of its own along the rows (`scripts/bake-trees.ts`,
   `plantedRows`), and the viewer draws only the hedges from `vegrows`. Without DOM1 the trees stand
