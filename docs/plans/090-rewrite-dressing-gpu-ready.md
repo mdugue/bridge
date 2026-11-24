@@ -27,7 +27,8 @@
   less code in the viewer
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: IN PROGRESS — phase 0 built 2026-11-16 (Findings)
+- **Status**: IN PROGRESS — phase 0 built 2026-11-16; the trees,
+  simplified, built 2026-11-24 (Findings)
 
 ## Why this matters
 
@@ -649,3 +650,75 @@ neighbours stand in for within 1 cm across and 5 mm in height keeps
 
 The milestone's counters are read against the figures before the spikes:
 `layerModules.codeLines` 14 420 and `longestFunction.lines` 2 354.
+
+### Phase 1, reduced (2026-11-24) — the trees, simplified
+
+Built under ruling 5 of plan 086 (less code, in the end and on the way)
+on the slimmed `rewrite`: not the container and not the stand record,
+but the one thing of this phase that pays without either — **the build
+places the trees**.
+
+- `scripts/bake-trees.ts` (it was `scripts/coarse-crowns.ts`, which
+  already ran the fine level's placement to choose the coarse level's
+  third) stands every canopy, scan, row and surveyed tree on the fine
+  level's ground and writes what was measured there: twelve bytes a
+  canopy tree, twenty a surveyed one (`lib/city/tree-table.ts`: place,
+  ground, height, the scan's radius, flags, NDVI, the slope at the foot).
+  One small file a level, no generic container: a magic, two counts, an
+  origin, two tables. The coarse level's third is in that level's file
+  alone; the fine level reads both.
+- The viewer runs the same arithmetic over the records (`canopyPlacement`,
+  `inventoryTree`, one owner each) and draws through the sets it had:
+  matrices, as before. It reads no ground, no NDVI raster and no GeoJSON
+  for a tree.
+- Deleted with it: the packed canopy (`lib/city/point-pack.ts` and its
+  bake in `side-bakes.ts`), the coarse crowns' file format (`packCrowns`,
+  `unpackCrowns`), the viewer's runtime placement, veto and row planting
+  (`tileVegetationSteps`' feature path, `canopyPlacements`,
+  `inventoryTrees`, the register layer's `keepTree`), `loadNdviSampler`,
+  the feet's ground read (`footSlopes` over `groundSlope`), the tree
+  parts of the ask sets that re-placed every tree. `canopy`, `canopyx`,
+  `trees` and `crowns` are no longer published.
+
+**Why the file is not the GPU's layout** (measured in the first attempt
+at this phase, PR #330 before its rework): a record of derived values —
+turn, jittered scales — is noise to gzip. The forest tile's trees as
+twenty-byte stand records were 1 319 kB against 492 kB as published
+then; as records of what was measured they are 462 kB. And a tree
+shipped once, not in both levels' files, is what makes a visit smaller.
+
+**Figures, `rewrite` → this phase** (`qa/ledger.json`; gzip):
+
+| Tile | a fine level's dressing, requests | the coarse level's | a fine level's visit (both) |
+|---|---|---|---|
+| spawn | 249.1 → 185.0 kB, 18 → 16 | 84.9 → 63.9 kB | 325.0 → 239.8 kB, 19 → 17 |
+| forest | 496.9 → 466.8 kB, 18 → 16 | 398.2 → 238.7 kB | 894.3 → 704.7 kB, 19 → 17 |
+| yards | 276.0 → 231.6 kB, 18 → 16 | 78.6 → 58.2 kB | 341.5 → 276.7 kB, 19 → 17 |
+
+The site's tiles 193.62 → 192.29 MB in 641 → 611 files;
+`browser.firstLoad.gzip` 1 099 792 → 1 098 456;
+`browser.phoneLiteSpawnCache.bytes` 158 979 087, **unchanged** — the
+trees are drawn from the same matrices, so the tile cache holds what it
+held (the first attempt's 55 % off the vegetation's instance data came
+from the stand record, which costs more lines than this phase removes);
+`code.product` 154 726 → 154 698 (app −74, lib +22, scripts +24).
+
+**What moved in the picture.** A tree's place, turn, size, crown width
+and crown base are the runtime's to the bit for canopy and surveyed
+trees on the spawn tile (`scripts/bake-trees.test.ts`); a mapped row's
+tree, on tiles without a surface model, is kept to the decimetre and to
+a 255th of a half turn. A foot stands up to 3.1 cm under the fine
+ground and never over it (was: on it); the NDVI is one of 32 steps; the
+slope at a foot one of 31 a side, a bank steeper than 43° kept at the
+steepest on its side; the trees of a tile are bucketed in the order of
+the two files, so which half of a dense chunk the far tier keeps is
+another half. Each tree's own growth (the lean and crook of its trunk,
+its roots' turn) hashes the instance's place, whose height moved by up
+to those 3.1 cm: it may be drawn anew. Not looked at on a real GPU.
+
+**For the next phase.** "The viewer places nothing" and a phone's
+smaller tile cache stay unmet for trees until the vertex stage derives
+turn and scale from a record's bytes; that is a rewrite of the crown and
+trunk materials' instance path, to be measured in lines before it is
+begun.
+
