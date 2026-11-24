@@ -316,10 +316,7 @@ def tree_points(tile: Tile) -> np.ndarray:
     wrote, as (x, y)."""
     pts: list[tuple[float, float]] = []
     for name in ("canopy", "canopyx", "trees", "lowveg"):
-        path = tile.data / "dlm" / f"{name}_{tile.id}.geojson"
-        if not path.exists():
-            continue
-        for f in json.loads(path.read_text()).get("features", []):
+        for f in tile.features(name):
             g = f.get("geometry") or {}
             if g.get("type") == "Point":
                 pts.append(tuple(g["coordinates"][:2]))

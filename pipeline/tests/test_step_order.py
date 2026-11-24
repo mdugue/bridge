@@ -1,7 +1,6 @@
 """The bake's step order: each step after the steps whose files it reads.
 
-The order is the insertion order of `STEPS` (__main__.py); the step cache's
-`Ledger` keys its rewriter pairs on it too. Each pair below is a constraint
+The order is the insertion order of `STEPS` (__main__.py). Each pair below is a constraint
 the table's comments state — a step moved above its prerequisite would read
 a missing or stale file and bake a poorer one without failing.
 """
@@ -24,10 +23,10 @@ AFTER = {
     "lamp-heights": ["lamps", "mapillary"],
     "markings": ["surface", "edges"],
     "sport": ["ndvi"],
-    "tram": ["landcover", "ndvi", "furniture", "rail"],
+    "tram": ["landcover", "ndvi", "furniture", "rail", "lamp-water"],
     "landmarks": ["osm-buildings"],
     "roofs": ["ndvi", "landmarks"],
-    "lamp-water": ["landcover", "islands", "lamps", "mapillary", "lamp-heights", "roofs"],
+    "lamp-water": ["landcover", "lamps", "mapillary", "lamp-heights", "roofs"],
     "lowveg": ["canopy", "trees", "walls", "rail"],
     "cultivated": ["lowveg", "canopy", "trees"],
     "skyview": ["canopy", "trees", "lowveg", "roofs"],

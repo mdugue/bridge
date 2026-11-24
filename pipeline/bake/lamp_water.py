@@ -31,8 +31,8 @@ toward the eye at the water's level only that far out, so the mirror of a
 pond above the town does not float over the lower ground past its banks,
 and an eye on the side where the lamp sees no water gets none.
 
-The lamps' own files are rewritten (OSM's `lamps_`, Mapillary's lamps in
-`mly_`), so this runs after lamp_heights.py, whose heights it reads."""
+This step writes the lamps' files (OSM's `lamps_`, Mapillary's lamps in
+`mly_`) from what lamp_heights.py hands on, whose heights it reads."""
 
 from __future__ import annotations
 
@@ -219,14 +219,15 @@ def _lamps(doc: dict, mapillary: bool) -> list[dict]:
 
 
 def run(tile: Tile) -> None:
-    files = [(tile.out("dlm", f"lamps_{tile.id}.geojson"), False)]
-    files.append((tile.out("dlm", f"mly_{tile.id}.geojson"), True))
-    docs = [(p, json.loads(p.read_text()), m) for p, m in files if p.exists()]
+    names = [(f"lamps_{tile.id}.geojson", False), (f"mly_{tile.id}.geojson", True)]
+    docs = [
+        (tile.out("dlm", n), json.loads(p.read_text()), m)
+        for n, m in names
+        if (p := tile.work(f"h_{n}")).exists()
+    ]
     lamps = [f for _, doc, m in docs for f in _lamps(doc, m)]
     for f in lamps:
         f["properties"] = dict(f["properties"] or {})
-        f["properties"].pop("w", None)
-        f["properties"].pop("wr", None)
     if not lamps or not tile.dgm.exists():
         for path, doc, _ in docs:
             _write(path, doc)

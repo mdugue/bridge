@@ -35,8 +35,9 @@ The tree rows' trees (the land-cover step's `vegrows`, the DLM's veg04 or
 OSM's tree rows) are the canopy's too (`row: 1`, `row_trees`): one at each
 crown peak the surface model shows along the row — at least ROW_SPACING_M
 apart, over MIN_H, stood on the row's line, as tall as measured —, none
-within ROW_CLEAR_M of a canopy point or a laser-scan crown (`canopyx`),
-which is that tree already. The viewer plants a row on its 9 m grid only on
+within ROW_CLEAR_M of a canopy point, which is that tree already (a
+laser-scan crown, `canopyx`, gives way to a row's tree: lowveg.py). The
+viewer plants a row on its 9 m grid only on
 a tile without a canopy (no DOM1). On the grid a Dresden row tree stood
 every 9 m where DOM1 shows one every 10 m (7.5–14), 35 % of them beside a
 canopy or scan crown (Unna 61 %) and a fifth to three quarters over no tree
@@ -130,7 +131,7 @@ LEAF_OFF_MIN = 200
 # ROW_SIGMA_M within ROW_REACH_M of the row's line is one, stood on the line
 # (the row's geometry is where the trunks stand; a crown leans off it);
 # peaks closer than ROW_SPACING_M along the rows are one crown; one within
-# ROW_CLEAR_M of a canopy point or a scan crown is that crown.
+# ROW_CLEAR_M of a canopy point is that crown.
 ROW_REACH_M = 3.0
 ROW_SIGMA_M = 1.0
 ROW_SPACING_M = 3.0
@@ -169,11 +170,8 @@ def bridge_mask(tile: Tile, px: int) -> np.ndarray:
         *read_layer(tile.dlm / "ver06_l.shp", tile.bounds, where=BRIDGE)[0],
         *read_layer(tile.dlm / "ver06_f.shp", tile.bounds, where=BRIDGE)[0],
     ]
-    baked = tile.out("dlm", f"bridge_{tile.id}.geojson")
-    if not tile.products.dlm and baked.exists():
-        geoms += [
-            shapely.geometry.shape(f["geometry"]) for f in json.loads(baked.read_text())["features"]
-        ]
+    if not tile.products.dlm:
+        geoms += [shapely.geometry.shape(f["geometry"]) for f in tile.features("bridge")]
     mask = np.zeros((px, px), dtype=np.uint8)
     if geoms:
         grown = (shapely.buffer(g, BRIDGE_REACH) for g in geoms)
@@ -372,11 +370,8 @@ def leaf_types(
 def row_lines(tile: Tile) -> list[shapely.LineString]:
     """The tile's tree rows (the land-cover step's `vegrows`, its hedges
     left out); none before that step has run."""
-    path = tile.out("dlm", f"vegrows_{tile.id}.geojson")
-    if not path.exists():
-        return []
     out = []
-    for f in json.loads(path.read_text())["features"]:
+    for f in tile.features("vegrows"):
         if (f.get("properties") or {}).get("kind") != "treerow" or not f.get("geometry"):
             continue
         g = shapely.geometry.shape(f["geometry"])
@@ -407,8 +402,8 @@ def row_trees(
     (n × 2, EPSG) and measured heights, and how many rows there were. A
     crown peak is a local maximum of the `eligible` nDOM smoothed by
     ROW_SIGMA_M (1 m texels) within ROW_REACH_M of a row, its height the
-    unsmoothed 3 × 3 maximum; `taken` (m × 2) are the canopy's and the
-    scan's crowns, which stand in for a peak within ROW_CLEAR_M."""
+    unsmoothed 3 × 3 maximum; `taken` (m × 2) are the canopy's crowns,
+    which stand in for a peak within ROW_CLEAR_M."""
     lines = row_lines(tile)
     none = (np.zeros((0, 2)), np.zeros(0), len(lines))
     if not lines:
@@ -475,20 +470,6 @@ def over_carriageway(
     return dist[rows, cols] <= CLEAR_SHARE * tops + CLEAR_MARGIN_M
 
 
-def scan_crowns(tile: Tile) -> np.ndarray:
-    """The laser scan's crowns outside the canopy mask (`canopyx`, the
-    lowveg step's), n × 2; none before that step has run."""
-    path = tile.out("dlm", f"canopyx_{tile.id}.geojson")
-    if not path.exists():
-        return np.zeros((0, 2))
-    pts = [
-        f["geometry"]["coordinates"][:2]
-        for f in json.loads(path.read_text())["features"]
-        if f.get("geometry")
-    ]
-    return np.asarray(pts, np.float64).reshape(-1, 2)
-
-
 def grid_peaks(heights: np.ndarray, cell: int) -> list[tuple[int, int, float]]:
     """The tallest texel of every `cell` × `cell` block with one (heights
     below 0 are none): (row, col, height)."""
@@ -531,7 +512,7 @@ def canopy_points(tile: Tile, cell: int) -> tuple[list[dict], dict]:
     # 2 m across). Not off the bare planes: a leaf-off street lime reads
     # bare and smooth.
     eligible = ndi.binary_opening(tree & ~built & ~traffic, np.ones((2, 2), bool))
-    rxy, rtops, n_lines = row_trees(tile, ndom, eligible, np.vstack([grid, scan_crowns(tile)]))
+    rxy, rtops, n_lines = row_trees(tile, ndom, eligible, grid)
     rr = np.clip((ymax - rxy[:, 1]).astype(int), 0, h - 1)
     rc = np.clip((rxy[:, 0] - xmin).astype(int), 0, w - 1)
     rows = np.concatenate([np.array([p[0] for p in peaks], int), rr])

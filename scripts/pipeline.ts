@@ -16,14 +16,14 @@
  *                                     provider's adapter reads one (≈380 MB
  *                                     a tile)
  *   bun run bake <site> --step canopy one step, in the order `all` runs them
- *                                     (landcover, islands, rail, ndvi,
- *                                     canopy, trees, osm-buildings, doors,
+ *                                     (landcover, rail, ndvi, canopy,
+ *                                     trees, osm-buildings, doors,
  *                                     passages, plinths, lamps, monuments,
  *                                     furniture, mapillary, lamp-heights,
  *                                     facades, shopfronts, windows, walls,
  *                                     stairs, surface, edges, markings,
- *                                     sport, tram, riverside, traffic,
- *                                     landmarks, roofs, lamp-water,
+ *                                     sport, riverside, traffic,
+ *                                     landmarks, roofs, lamp-water, tram,
  *                                     lowveg, cultivated, skyview,
  *                                     small-buildings, structures,
  *                                     roof-colour, dormers;

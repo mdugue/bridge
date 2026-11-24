@@ -45,7 +45,9 @@ def test_a_committed_file_stays_when_its_raw_input_is_not_here(tmp_path, capsys,
 def test_a_tile_without_the_file_still_gets_its_empty_one(tmp_path, run, name, said):
     tile = _tile(tmp_path)
     run(tile)
-    assert '"features": []' in (tile.data / "dlm" / name).read_text().replace("[ ]", "[]")
+    # (Mapillary's lamps are handed on: lamp-water writes the tile's file)
+    out = tile.work(name) if run is mapillary.run else tile.data / "dlm" / name
+    assert '"features": []' in out.read_text().replace("[ ]", "[]")
 
 
 def test_mapillary_without_the_osm_extract_skips_and_keeps_its_file(tmp_path, capsys):
@@ -66,4 +68,4 @@ def test_mapillary_without_the_osm_extract_skips_and_keeps_its_file(tmp_path, ca
     # a tile without the file gets its empty one (every tile carries it)
     out.unlink()
     mapillary.run(tile)
-    assert '"features": []' in out.read_text().replace("[ ]", "[]")
+    assert '"features": []' in tile.work(out.name).read_text().replace("[ ]", "[]")

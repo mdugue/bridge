@@ -21,20 +21,26 @@ ADR 0037 (fetch → bake → build). Deep reference: the `city-walker` skill,
    register it in `STEPS` in `pipeline/bake/__main__.py`, in order: a
    comment says what it must run after and why. A site-wide step goes in
    `SITE_STEPS`.
-3. **Every tile, the same files.** A step that finds nothing writes an empty
+3. **A file has one step that writes it**, and a step reads only what
+   earlier steps wrote (the step cache judges a step by its own record).
+   What a later step finishes is handed on with `Tile.work`, not written
+   under `data/` twice. Read another step's features with
+   `Tile.features(kind)` — with an extent, the neighbours' that reach
+   into it too.
+4. **Every tile, the same files.** A step that finds nothing writes an empty
    file. `lib/city/tile-data.test.ts` fails when one tile lacks a kind of
    file another has: bake the step on every tile of every committed site.
-4. **A Land without the source** gets a named stand-in or the layer is off
+5. **A Land without the source** gets a named stand-in or the layer is off
    with a note; never an invented substitute. Gate the step on
    `Provider.products` where the source is optional, and add the row or
    footnote in `lib/city/source-matrix.ts`, then `bun run docs:matrix`.
-5. **A new feature file** gets a contract row in `lib/city/features.ts`
+6. **A new feature file** gets a contract row in `lib/city/features.ts`
    (checked against every committed file by its test) and an entry in
    `lib/city/tile.ts` (`ARTIFACTS`). A JSON file the build reads gets a
    schema module `lib/city/<name>-file.ts`, a row in `bake-files.test.ts`
    and `parseBakeFile` where it is read (ADR 0059); a key the bake renames
    changes the schema in the same commit.
-6. **If the build reads it**, list the module that bakes it in the artifact's
+7. **If the build reads it**, list the module that bakes it in the artifact's
    row of `scripts/bake-entries.ts` (a missing entry leaves a stale cache;
    `bake-entries.test.ts` catches a module `prepare-data.ts` imports that
    no bake's key holds, not one filed under the wrong artifact). The code
@@ -42,15 +48,15 @@ ADR 0037 (fetch → bake → build). Deep reference: the `city-walker` skill,
    into `prepare-data.ts`, which no key carries. Its maths is `PMath`
    (`lib/city/portable-math.ts`), never `Math`'s C-library functions: a
    bake's bytes are the same on every machine.
-7. **OSM output** carries an `attribution` member; a new source's licence
+8. **OSM output** carries an `attribution` member; a new source's licence
    and credit go into the guide's licence table (both languages) and, for a
    new provider, `NOTICE`.
-8. **Things on the ground** take their feet and edges from
+9. **Things on the ground** take their feet and edges from
    `lib/city/ground-join.ts` and are listed in `JOIN_PARTS` (ADR 0030).
-9. **Tests:** a pytest in `pipeline/tests/`; `bun run test:pipeline`
+10. **Tests:** a pytest in `pipeline/tests/`; `bun run test:pipeline`
    (pytest + ruff + the types: a new module starts with no finding) and
    `bun run verify`.
-10. **Docs:** follow the `docs-upkeep` skill (ledger row, data-flow,
+11. **Docs:** follow the `docs-upkeep` skill (ledger row, data-flow,
     data-sources page in both languages).
 
 ## Traps

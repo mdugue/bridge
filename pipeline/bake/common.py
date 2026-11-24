@@ -4,6 +4,7 @@ layers without geopandas, and the GeoJSON the viewer reads."""
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -126,6 +127,14 @@ class Tile:
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
+    def work(self, name: str) -> Path:
+        """A file one step hands a later one that the build never reads (the
+        lamps before their heights), beside the raw data: a file under
+        `data/` has one step that writes it."""
+        path = self.raw / "work" / self.data.name / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
     def raw_absent(self, out: Path, what: str) -> bool:
         """A raw input its provider publishes is not on this machine, and the
         step's file is committed: the file stays, as with a missing Basis-DLM
@@ -160,6 +169,23 @@ class Tile:
         baked yet. Read with `value_at` / `pixel_of`."""
         path = self.data / "dlm" / f"landcover_{tile_id or self.id}.png"
         return np.asarray(Image.open(path).convert("L")) if path.exists() else None
+
+    def features(
+        self, kind: str, near: tuple[float, float, float, float] | None = None
+    ) -> list[dict]:
+        """The features of the `<kind>_<tile>.geojson` an earlier step wrote:
+        this tile's, or with `near` (an extent) those of every tile of the
+        site that reaches into it (`SITE`: all), in the tiles' order. None
+        where a file is not baked."""
+        ids = [] if near is None else [t for t, b in self.neighbours() if overlaps(b, near)]
+        if self.id not in ids:
+            ids.append(self.id)
+        found: list[dict] = []
+        for tid in ids:
+            path = self.data / "dlm" / f"{kind}_{tid}.geojson"
+            if path.exists():
+                found += json.loads(path.read_text()).get("features", [])
+        return found
 
     def neighbours(self) -> list[tuple[str, tuple[float, float, float, float]]]:
         """Every committed tile of the site (its DGM on disk), this one
@@ -203,6 +229,10 @@ def owns(bounds: tuple[float, float, float, float], x: float, y: float) -> bool:
     `ownsPoint`, lib/city/tileset.ts)."""
     xmin, ymin, xmax, ymax = bounds
     return xmin <= x < xmax and ymin <= y < ymax
+
+
+# The extent every tile reaches into (`Tile.features`: the whole site).
+SITE = (-math.inf, -math.inf, math.inf, math.inf)
 
 
 def overlaps(a: tuple[float, float, float, float], b: tuple[float, float, float, float]) -> bool:

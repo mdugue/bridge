@@ -1,38 +1,10 @@
 """The low vegetation and the hedges (pipeline/bake/lowveg.py, hedges.py): the
 hedges drawn once at their measured height, the scan's trees thinned."""
 
-import json
-
 import numpy as np
 import shapely
 
 from bake import hedges, lowveg
-from bake.common import Tile
-
-
-def test_a_committed_scan_tree_a_new_tree_stands_on_is_dropped(tmp_path):
-    # a tile without its laser scan keeps its scan trees, but one the trees
-    # step now places a tree on goes, as lowveg's own thinning drops it
-    from bake.common import write_geojson
-    from bake.lowveg import rethin_scan_trees
-
-    tile = Tile("t", (0.0, 0.0, 200.0, 200.0), 25833, tmp_path / "raw", tmp_path / "data")
-    assert rethin_scan_trees(tile) is None
-
-    def point(x, y, **props):
-        geometry = {"type": "Point", "coordinates": [x, y]}
-        return {"type": "Feature", "properties": props, "geometry": geometry}
-
-    dlm = tmp_path / "data" / "dlm"
-    scan = [point(10, 10, h=12, r=3), point(50, 50, h=9, r=2), point(120, 80, h=15, r=4)]
-    write_geojson(tile.out("dlm", "canopyx_t.geojson"), scan, 25833, "scan credit")
-    write_geojson(tile.out("dlm", "trees_t.geojson"), [point(52, 51, d=6)], 25833)
-    assert rethin_scan_trees(tile) == 1
-    doc = json.loads((dlm / "canopyx_t.geojson").read_text())
-    assert [f["geometry"]["coordinates"] for f in doc["features"]] == [[10, 10], [120, 80]]
-    assert doc["attribution"] == "scan credit"
-    # nothing more to drop: the file stays as it is
-    assert rethin_scan_trees(tile) == 0
 
 
 def test_a_dlm_hedge_osm_maps_too_is_left_to_osm():
