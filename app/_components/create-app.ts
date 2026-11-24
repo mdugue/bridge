@@ -171,6 +171,7 @@ import {
   pocVeil,
   tickPocFrame,
 } from "./poc-scene";
+import { pipelineBudget } from "./pipeline-budget";
 import type { PipelineBudget, PipelineBudgetQuery } from "./pipeline-budget";
 import { createPostStack } from "./post-stack";
 import type { FocusInfo, PostStack } from "./post-stack";
@@ -4442,17 +4443,8 @@ async function bootApp(
       gpuBytes: gpuBytesWith(estimateGeometryBytes(scene)),
       memory: { ...renderer.info.memory },
     }),
-    // loaded when asked for: a spec's read, never a visitor's download
-    getPipelineBudget: async (query) => {
-      const { pipelineBudget } = await import("./pipeline-budget");
-      return await pipelineBudget(
-        renderer,
-        postStack,
-        scene,
-        activeCamera(),
-        query
-      );
-    },
+    getPipelineBudget: async (query) =>
+      await pipelineBudget(renderer, postStack, scene, activeCamera(), query),
     getGpuDebug: () => {
       const cache = stream.tiles.lruCache as unknown as {
         cachedBytes: number;

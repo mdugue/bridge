@@ -495,16 +495,15 @@ export const CODE_AREAS = [
   "pipeline/bake",
 ] as const;
 
-/** The measuring tools themselves: the ledger, the compared plates and
- *  the limits test's count (plans 087 and 094). */
+/** The measuring tools themselves: the ledger and the compared plates
+ *  (plan 087). The limits test's count (`wgsl-budget.ts`,
+ *  `pipeline-budget.ts`) is the product's: the scene imports it. */
 const MEASURING_TOOLS = new Set([
   "lib/city/ledger.ts",
   "scripts/ledger.ts",
   "scripts/plates.ts",
   "lib/city/plate-diff.ts",
   "lib/city/plate-pose.ts",
-  "lib/city/wgsl-budget.ts",
-  "app/_components/pipeline-budget.ts",
 ]);
 
 /** Not the product: tests, fixtures, one-off probes and the tools above. */

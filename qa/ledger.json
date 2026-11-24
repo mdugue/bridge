@@ -401,9 +401,9 @@
   },
   "code": {
     "product": {
-      "total": 154334,
-      "app": 60769,
-      "lib": 41126,
+      "total": 154726,
+      "app": 60932,
+      "lib": 41355,
       "components": 3007,
       "scripts": 13798,
       "pipeline/bake": 35634
