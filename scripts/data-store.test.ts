@@ -17,8 +17,9 @@ import { createPublisher } from "./publisher";
 
 const made: string[] = [];
 const fresh = (name: string) => {
-  made.push(mkdtempSync(path.join(tmpdir(), `${name}-`)));
-  return made.at(-1) ?? "";
+  const dir = mkdtempSync(path.join(tmpdir(), `${name}-`));
+  made.push(dir);
+  return dir;
 };
 const bytes = (text: string) => new TextEncoder().encode(text);
 

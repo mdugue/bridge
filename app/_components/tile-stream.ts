@@ -1279,8 +1279,7 @@ async function buildDressing(
     // its coarse level's, which holds the third of them that level draws
     // and is loaded before this one shows.
     treePacks: Promise.all([
-      // (a coarse file that is none was said when the coarse level was built)
-      fetchTrees(extras.coarseDressing, url, {}, tile, signal),
+      fetchTrees(extras.coarseDressing, url, ctx, tile, signal),
       fetchTrees(d.dressing, url, ctx, tile, signal),
     ]),
     lamps: get<LampFeature>("lamps"),

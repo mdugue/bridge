@@ -645,8 +645,13 @@ neighbours stand in for within 1 cm across and 5 mm in height keeps
   3 meshes. An offset across the line past ±32.7 m is a clamp. The
   wires already expand on the GPU and take the same table.
 - Seen beside it: today's street rails stand a median 4.8 cm over the
-  drawn ground, not the 2 cm the builder adds — the line's baked profile
-  (`lz`, on the DGM) against the fine level's triangles.
+  drawn ground (5th / 95th percentile 2.9 / 6.4 cm). That is by design
+  (read 2026-11-24): the rail head is 2 cm over the line's profile
+  (`RAIL_TOP_M.street`, `lib/city/tram.ts`), and the terrain bake lays
+  the ground 3 cm under that profile (`PAVED_DROP_M`,
+  `lib/city/track-beds.ts`: the groove, deeper than the TIN's error
+  under a bed). The spread is the TIN, `lz` in whole centimetres and
+  the 16-bit positions. A height check compares against 5 cm, not 2.
 
 The milestone's counters are read against the figures before the spikes:
 `layerModules.codeLines` 14 420 and `longestFunction.lines` 2 354.
