@@ -1170,6 +1170,8 @@ def run(tile: Tile) -> None:
     out = tile.out("dlm", f"facades_{tile.id}.json")
     path = measured_path(tile)
     if not tile.mapillary or not path.exists():
+        if tile.mapillary and tile.raw_absent(out, "no facade measurements here"):
+            return
         if tile.mapillary:
             print(f"{tile.id}: no facade measurements — no building has a facade reading")
         write_readings(out, {})

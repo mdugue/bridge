@@ -790,28 +790,29 @@ def run(tile: Tile, research: bool = False) -> None:
         write_geojson(out, feats, tile.epsg, attribution)
         print(f"{tile.id}: every candidate → {out}")
     hedges = shipped(feats)
-    write_geojson(tile.out("dlm", f"lowveg_{tile.id}.geojson"), hedges, tile.epsg, attribution)
-    scan = sum(f["properties"]["src"] == "lsc" for f in hedges)
-    print(f"{tile.id}: {len(hedges)} hedges shipped ({scan} the scan's) of {len(feats)} candidates")
+    file = tile.out("dlm", f"lowveg_{tile.id}.geojson")
+    # the provider's scan is not on this machine: the file's hedges, measured
+    # and found in it, are not rewritten from OSM alone
+    scanless = tile.products.lsc and not inputs["has_lsc"]
+    if not (scanless and tile.raw_absent(file, "no laser scan here")):
+        write_geojson(file, hedges, tile.epsg, attribution)
+        scan = sum(f["properties"]["src"] == "lsc" for f in hedges)
+        print(f"{tile.id}: {len(hedges)} hedges ({scan} the scan's) of {len(feats)} candidates")
     dlm = tile.data / "dlm"
     out, trees = tile.out("dlm", f"canopyx_{tile.id}.geojson"), dlm / f"trees_{tile.id}.geojson"
     if inputs["has_lsc"]:
         extra, peaks = canopy_extra(inputs, dlm / f"canopy_{tile.id}.geojson", trees)
     elif out.exists():
         # the scan is not on this machine: its trees stand, but for one a
-        # row's tree covers (as `canopy_extra` leaves it out) or a register
+        # canopy tree covers (as `canopy_extra` leaves it out) or a register
         # or OSM tree has since been placed on (Dresden 2026-10-21: 5 of
         # 5 734 on one tile)
         extra = json.loads(out.read_text())["features"]
         peaks = len(extra)
-        rows = [
-            f["geometry"]["coordinates"][:2]
-            for f in tile.features("canopy")
-            if f["properties"].get("row")
-        ]
-        if extra and rows:
+        canopy = _points(dlm / f"canopy_{tile.id}.geojson")
+        if extra and len(canopy):
             at = [f["geometry"]["coordinates"][:2] for f in extra]
-            far = cKDTree(rows).query(at)[0] > CANOPY_DEDUP_M
+            far = cKDTree(canopy).query(at)[0] > CANOPY_DEDUP_M
             extra = [f for f, keep in zip(extra, far, strict=True) if keep]
     else:
         return

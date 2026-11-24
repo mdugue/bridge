@@ -734,6 +734,9 @@ def run_site(spec) -> None:
         print(f"{spec.site}: no OSM extract — murals left as they are (`bun run fetch`)")
         return
     cache = cache_dir(spec.raw)
+    if not cache.exists() and (out_dir / "murals.json").exists():
+        print(f"{spec.site}: no murals cache here — murals left as they are (`bun run fetch`)")
+        return
     items, photos = _read(cache / "items.json"), _read(cache / "photos.json")
     found = candidates(pbf, site_extent(spec.tiles), spec.epsg)
     loaded: dict[str, Buildings | None] = {}
