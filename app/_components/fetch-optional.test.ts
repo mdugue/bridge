@@ -127,20 +127,20 @@ test("a binary artifact comes back as bytes, a pre-gzipped one inflated", async 
     (url) =>
       new Response(url.endsWith(".gz") ? Bun.gzipSync(bytes) : bytes.slice())
   );
-  const plain = await fetchOptionalBinary("/x.pts");
-  const inflated = await fetchOptionalBinary("/x.pts.gz");
+  const plain = await fetchOptionalBinary("/x.drs");
+  const inflated = await fetchOptionalBinary("/x.drs.gz");
   expect(new Uint8Array(plain ?? new ArrayBuffer(0))).toEqual(bytes);
   expect(new Uint8Array(inflated ?? new ArrayBuffer(0))).toEqual(bytes);
 });
 
 test("a missing binary artifact is off; an abort is rethrown", async () => {
   stubFetch(() => new Response(null, { status: 404 }));
-  expect(await fetchOptionalBinary("/x.pts.gz")).toBeNull();
+  expect(await fetchOptionalBinary("/x.drs.gz")).toBeNull();
   const abort = new DOMException("aborted", "AbortError");
   stubFetch(async () => {
     throw abort;
   });
-  await expect(fetchOptionalBinary("/x.pts.gz")).rejects.toBe(abort);
+  await expect(fetchOptionalBinary("/x.drs.gz")).rejects.toBe(abort);
 });
 
 test("fetchBytes answers a status no retry fixes as it is, without a body", async () => {
@@ -167,7 +167,7 @@ test("a gzip read whole that does not inflate is a corrupt file, not the network
   expect(isNetworkFailure(error)).toBe(false);
   expect((error as Error).message).toStartWith("Corrupt gzip: ");
   // an optional one is off, at once
-  expect(await fetchOptionalBinary("/x.pts.gz")).toBeNull();
+  expect(await fetchOptionalBinary("/x.drs.gz")).toBeNull();
   expect(stub.calls()).toBe(2);
 });
 

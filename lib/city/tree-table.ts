@@ -52,6 +52,8 @@
  *
  * No THREE, no DOM.
  */
+import { finished } from "./build-steps";
+import type { Steps } from "./build-steps";
 import type { TreeFeature } from "./features";
 import type { RecenterOffset } from "./ground-clamp";
 import type { InventoryTree } from "./tree-inventory";
@@ -61,6 +63,8 @@ import type { CanopyFacts, Placement } from "./tree-placement";
 
 /** Words a record. */
 export const TREE_WORDS = 6;
+/** The trees the viewer places between two steps of a tile's build. */
+export const TREE_RUN = 256;
 export const REGISTER_WORDS = 10;
 
 /** One step of a record's easting and northing (m): the decimetre the
@@ -490,18 +494,32 @@ export function registerFacts(packs: readonly TreePack[]): RegisterFact[] {
   return out;
 }
 
-/** The canopy's, the scan's and the rows' trees of `packs`, each with
- *  what its card says of it (`treeAt`). */
-export function placedTrees(
+/**
+ * The canopy's, the scan's and the rows' trees of `packs`, each with what
+ * its card says of it (`treeAt`), as `as` takes it.
+ * @yields {void} after every `TREE_RUN` trees, to hand the thread back.
+ */
+export function* placedTreeSteps<T>(
   packs: readonly TreePack[],
-  offset: RecenterOffset
-): ReturnType<typeof treeAt>[] {
-  const out: ReturnType<typeof treeAt>[] = [];
+  offset: RecenterOffset,
+  as: (tree: ReturnType<typeof treeAt>) => T
+): Steps<T[]> {
+  const out: T[] = [];
   for (const pack of packs) {
     const words = pack.trees;
     for (let i = 0; i < words.length / TREE_WORDS; i += 1) {
-      out.push(treeAt(words, i, pack.origin, offset));
+      out.push(as(treeAt(words, i, pack.origin, offset)));
+      if (i % TREE_RUN === TREE_RUN - 1) {
+        yield;
+      }
     }
   }
   return out;
 }
+
+/** The same in one go: the coarse level's third, a test. */
+export const placedTrees = (
+  packs: readonly TreePack[],
+  offset: RecenterOffset
+): ReturnType<typeof treeAt>[] =>
+  finished(placedTreeSteps(packs, offset, (tree) => tree));

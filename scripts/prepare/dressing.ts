@@ -26,6 +26,10 @@ export async function publishDressing(
   inputs: readonly string[],
   keyed: string
 ): Published {
+  const memo = published.get(tile);
+  if (memo) {
+    return await memo;
+  }
   const sources = treeSources(SITE, tile, process.cwd());
   const key = cacheKey(
     [...Object.values(sources).filter((p) => p !== undefined), ...inputs],
@@ -52,12 +56,9 @@ export async function publishDressing(
     });
     return publish(file, bytes);
   };
-  let files = published.get(tile);
-  if (!files) {
-    files = Promise.all([level("dressing"), level("dressingCoarse")]).then(
-      ([dressing, dressingCoarse]) => ({ dressing, dressingCoarse })
-    );
-    published.set(tile, files);
-  }
+  const files = Promise.all([level("dressing"), level("dressingCoarse")]).then(
+    ([dressing, dressingCoarse]) => ({ dressing, dressingCoarse })
+  );
+  published.set(tile, files);
   return await files;
 }

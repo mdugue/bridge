@@ -11,8 +11,9 @@
  * dressing already fetched. No THREE, no DOM.
  *
  * Two grounds: a monument and a deck stand on every loaded terrain's
- * (`AskContext.heightAt`); a tree, a lamp, a bench, a hedge, a stop and a
- * landing on the tile's own (`treeHeightAt`), as their layers stand them.
+ * (`AskContext.heightAt`); a lamp, a bench, a hedge, a stop and a landing
+ * on the tile's own (`treeHeightAt`), as their layers stand them; a tree
+ * brings its ground (lib/city/tree-table.ts).
  */
 import { askSets, cylindersBox, rayCylinder } from "./ask-solids";
 import type {
@@ -76,10 +77,10 @@ export interface AskContext {
 }
 
 /**
- * What the things on the tile's own ground are placed with: a tree, a
- * lamp, a bench, a hedge, a stop, a landing stand on `treeHeightAt` (the
- * tile's own terrain), never on `AskContext.heightAt` — near a seam the
- * two differ.
+ * What the things on the tile's own ground are placed with: a lamp, a
+ * bench, a hedge, a stop, a landing stand on `treeHeightAt` (the tile's
+ * own terrain), never on `AskContext.heightAt` — near a seam the two
+ * differ.
  */
 export type OwnGroundContext = Pick<AskContext, "offset" | "tile"> & {
   /** ground of the tile's own terrain */
