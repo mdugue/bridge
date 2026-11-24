@@ -87,28 +87,12 @@ export function treeSources(site: Site, tile: string, root: string) {
   };
 }
 
-/** Whether a canopy file holds its tile's tree rows' trees (canopy.py's
- *  `rows` member). */
-function rowsMeasured(path: string | undefined): boolean {
-  if (!(path && existsSync(path))) {
-    return false;
-  }
-  const doc = JSON.parse(readFileSync(path, "utf-8")) as { rows?: unknown };
-  return doc.rows !== undefined;
-}
+/** A source of `treeSources`, read: undefined where the tile has none. */
+const json = (path: string | undefined): unknown =>
+  path ? JSON.parse(readFileSync(path, "utf-8")) : undefined;
 
-const readJsonFile = (path: string): unknown =>
-  JSON.parse(readFileSync(path, "utf-8"));
-
-function features<T>(path: string | undefined): T[] {
-  if (!(path && existsSync(path))) {
-    return [];
-  }
-  return (
-    (JSON.parse(readFileSync(path, "utf-8")) as FeatureCollection<T>)
-      .features ?? []
-  );
-}
+const features = <T>(path: string | undefined): T[] =>
+  (json(path) as FeatureCollection<T> | undefined)?.features ?? [];
 
 /**
  * A canopy file's points off the sheds and the roofs, their coordinates
@@ -116,12 +100,11 @@ function features<T>(path: string | undefined): T[] {
  * the same float back (`treeAt`), which seeds a tree's turn and size.
  */
 function thinned(
-  path: string | undefined,
+  raw: CanopyFeature[],
   sheds: SmallBuildingFeature[],
   roofs: RoofFootprint[],
   origin: readonly [number, number]
 ): CanopyFeature[] {
-  const raw = features<CanopyFeature>(path);
   const offSheds = sheds.length > 0 ? treesOffStructures(raw, sheds) : raw;
   const kept = roofs.length > 0 ? treesOffRoofs(offSheds, roofs) : offSheds;
   return kept.map((f) => ({
@@ -140,7 +123,7 @@ async function ndviSampler(
   path: string | undefined,
   bounds: TerrainBounds
 ): Promise<RasterSampler | undefined> {
-  if (!(path && existsSync(path))) {
+  if (!path) {
     return undefined;
   }
   return maxWindowSampler(
@@ -171,30 +154,28 @@ export async function standTrees(
   sources: ReturnType<typeof treeSources>,
   ground: TreeGround
 ): Promise<{ register: Stood<RegisterFact>[]; trees: Stood<TreeFact>[] }> {
-  const sheds =
-    sources.sheds && existsSync(sources.sheds)
-      ? parseBakeFile(
-          SMALL_BUILDINGS_FILE,
-          readJsonFile(sources.sheds),
-          sources.sheds
-        ).features
-      : [];
+  const sheds = sources.sheds
+    ? parseBakeFile(SMALL_BUILDINGS_FILE, json(sources.sheds), sources.sheds)
+        .features
+    : [];
+  const city = json(sources.city) as CityJsonDocument | undefined;
   const roofs = [
-    ...(sources.city && existsSync(sources.city)
-      ? lod2Roofs(
-          JSON.parse(readFileSync(sources.city, "utf-8")) as CityJsonDocument
-        )
-      : []),
+    ...(city ? lod2Roofs(city) : []),
     ...gapRoofs(
-      sources.structures && existsSync(sources.structures)
+      sources.structures
         ? parseBakeFile(
             STRUCTURES_FILE,
-            readJsonFile(sources.structures),
+            json(sources.structures),
             sources.structures
           ).features
         : []
     ),
   ];
+  // the canopy's points and, where a surface model measured them, the
+  // tree rows' trees among them (canopy.py's `rows` member)
+  const canopy = json(sources.canopy) as
+    | (FeatureCollection<CanopyFeature> & { rows?: unknown })
+    | undefined;
   const surveyed = [
     ...features<TreeFeature>(sources.trees),
     ...orchardTrees(features<CultivatedFeature>(sources.cultivated)),
@@ -206,8 +187,8 @@ export async function standTrees(
   const trees: Stood<TreeFact>[] = [];
   const measured = offMonuments(
     [
-      ...thinned(sources.canopy, sheds, roofs, ground.origin),
-      ...thinned(sources.canopyx, sheds, roofs, ground.origin),
+      ...thinned(canopy?.features ?? [], sheds, roofs, ground.origin),
+      ...thinned(features(sources.canopyx), sheds, roofs, ground.origin),
     ],
     features<MonumentFeature>(sources.monuments)
   );
@@ -239,7 +220,7 @@ export async function standTrees(
   const rows = rowPlacements(
     plantedRows(
       features<VegRowFeature>(sources.vegrows),
-      rowsMeasured(sources.canopy)
+      canopy?.rows !== undefined
     ),
     ctx,
     ndviAt,
