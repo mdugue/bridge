@@ -26,6 +26,8 @@ HUD, three.js the canvas (ADR 0002), which the scene draws from a worker
 bun install
 bun dev                 # prepare every ready site's data, then next dev
 bun run build           # the same, then next build
+bun run build:web       # the host's build: pulls the sites CI published,
+                        # bakes nothing (scripts/data-store.ts)
 bun run verify          # lint + typecheck + unit tests — the pre-push gate
 bun run fix             # format + safe autofixes; run before verify
 bun lint                # oxlint (type-aware) + oxfmt --check

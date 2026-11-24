@@ -2,13 +2,11 @@
  * The bake cache's entries (scripts/prepare-data.ts `cached`): one file per
  * artifact name and key, `<key>.<name>`, so a changed input or bake takes
  * a new key. A name keeps its newest `generations()` entries and the older
- * ones are dropped: one on Vercel and in CI, whose caches are carried from
- * build to build (and Vercel's shared cache holds every branch's entries,
- * shared-cache.ts), three elsewhere — a checkout of another branch and
+ * ones are dropped: one in CI, whose cache is carried from build to
+ * build, three elsewhere — a checkout of another branch and
  * back, across a bake module, finds both branches' entries instead of
  * baking each way. Several processes write the cache at once —
- * prepare-sites.ts bakes the sites side by side and a large site's tiles
- * over several warmers — so an entry is written to a part file and renamed
+ * prepare-sites.ts bakes the sites side by side — so an entry is written to a part file and renamed
  * into place: a reader never sees half an entry, and two processes writing
  * the same entry leave one whole file.
  */
@@ -32,7 +30,7 @@ export function generations(
   if (Number.isInteger(asked) && asked >= 1) {
     return asked;
   }
-  return env.VERCEL || env.CI ? 1 : 3;
+  return env.CI ? 1 : 3;
 }
 
 /** Where the entry for `name` under `key` lies. */

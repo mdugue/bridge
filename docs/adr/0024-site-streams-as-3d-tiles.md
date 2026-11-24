@@ -16,7 +16,9 @@ they do.
 - **Everything heavy is baked at build time** by `scripts/prepare-data.ts`:
   the browser decodes no GeoTIFF and parses no CityJSON. The build caches
   each artifact by content (inputs, the modules that bake it, the locked
-  package versions).
+  package versions). CI and a desk bake; the host's web build pulls what CI
+  published for the same checkout
+  ([ADR 0037](./0037-sites-providers-and-per-site-data.md)).
 - **The city is an OGC 3D Tiles 1.1 tileset of glTF 2.0 content**
   (meshopt, quantised, pre-gzipped), streamed by 3DTilesRendererJS. Per
   site tile: the buildings (one mesh, a feature id per vertex, a property

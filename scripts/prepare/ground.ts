@@ -126,9 +126,7 @@ async function bakeFineGround(tile: string): Promise<FineGround> {
 /**
  * Where a tile's fine ground lies in the cache (ground-pack.ts), baked first
  * when it is not there. Cached apart from the fine level's glTF, which
- * stands its walls, kerbs, stairs and fences on every tile's fine ground:
- * a process baking some of the site's tiles (prepare-sites.ts' warmers)
- * reads the others' grounds instead of refining their TINs again.
+ * stands its walls, kerbs, stairs and fences on every tile's fine ground.
  */
 const groundFiles = new Map<string, Promise<string>>();
 export async function groundFile(tile: string): Promise<string> {

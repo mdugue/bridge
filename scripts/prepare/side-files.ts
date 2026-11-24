@@ -11,18 +11,7 @@ import { FACADES_FILE } from "../../lib/city/facades-file";
 import { sideFileSource, tileArtifacts } from "../../lib/city/tile";
 import type { TileArtifact, TileArtifactKind } from "../../lib/city/tile";
 import type { ColonyCrop } from "../crop-raster";
-import {
-  HINT,
-  MODE,
-  OWN,
-  SITE,
-  TILES,
-  at,
-  fail,
-  log,
-  publish,
-  since,
-} from "./context";
+import { HINT, SITE, TILES, at, fail, log, publish, since } from "./context";
 import { publishLevels, publishPlatforms } from "./lines";
 import { publishClassRaster, publishColonies } from "./side-bakes";
 
@@ -73,13 +62,10 @@ async function bakedTwin(artifact: TileArtifact): Promise<string | undefined> {
   return undefined;
 }
 
-/** Publishes every side file of the tiles this run bakes, into `sideFiles`.
- *  A ground warmer needs none; a tile warmer its own tiles'. */
+/** Publishes every tile's side files, into `sideFiles`. */
 export async function publishSideFiles(): Promise<void> {
   const sidesStarted = performance.now();
-  for (const tile of MODE.kind === "ground"
-    ? []
-    : TILES.filter((t) => OWN.has(t))) {
+  for (const tile of TILES) {
     const names: Published = {};
     const artifacts = Object.entries(tileArtifacts(tile)) as [
       TileArtifactKind,

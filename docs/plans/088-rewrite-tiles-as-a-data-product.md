@@ -27,9 +27,11 @@
   gain); beside the aims: the repository's size and the build's time
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: IN PROGRESS — phase 0: step 1 measured (brotli clears
-  the 3 % line), decisions 1–3 prepared in *Findings*, waiting for the
-  maintainer (2026-11-16)
+- **Status**: IN PROGRESS — built in its simple variant (ruling 5 of
+  086; *Findings*, 2026-11-24): CI publishes the baked sites under a key
+  computed from the checkout, the web build pulls them and bakes
+  nothing. The phases below are the plan as first written and are not
+  built; `data/` leaving git is the one step still open.
 
 ## Why this matters
 
@@ -658,3 +660,99 @@ that trial must answer.
   `Cache-Control`, a missing object, HTTP/2 or 3, and for forwarding the
   edge cache and the bill;
 - the curl on the production host (above).
+
+### The simple variant, decided and built (2026-11-24)
+
+**Decided by the maintainer, 2026-11-24.** The store is Vercel Blob (a
+trial of his: `.gz` files served byte for byte, a missing object 404,
+CORS `*`, range requests; the team is on Pro, so the DPA and the
+limits of decision 1's table hold). The variant is **A′: CI
+publishes** ("A′, CI veröffentlicht"). The browser keeps reading
+`/data/*` from the site's own host, so decision 2 needs no line on the
+privacy page.
+
+**What is built** (`scripts/data-store.ts`; `docs/data-pipeline.md`,
+"The store"; ADR 0037, item 6):
+
+- CI's build-check shard bakes every site as before and uploads
+  `public/data/<site>/`: hashed files under their names, the manifest
+  and the stats under the **site key**, a hash each side computes from
+  its checkout (the site's `data/`, every module `prepare-data.ts`
+  reaches, their locked packages, `patches/`).
+- The web build (`bun run build:web`, `prepare-sites.ts --pull`) asks
+  for the manifest under that key, for up to 15 min, and pulls every
+  file, checked against the hash in its name.
+- Gone with the builder's bake: `scripts/shared-cache.ts`,
+  `scripts/warmers.ts`, the `.next/cache` branch of the bake cache, the
+  `--if-cached` and warmer modes of `prepare-data.ts`, and the knobs
+  `PREPARE_WARMERS`, `PREPARE_MEMORY_GB`, `BAKE_SHARED_CACHE` and
+  `BAKE_SHARED_CACHE_API`. `code.product`: 154 501 → 154 158 (−343, all
+  in `scripts`).
+
+**Measured in a cloud session** (4 cores, 15 GB, Bun 1.4.4): all seven
+sites cold, one process a site, two at a time: 291 s (Dresden 260 s,
+peak 2.30 GiB; München 94 s, 1.66 GiB) — the peaks are half of what
+`warmers.ts` counted on 2026-10-31, so sites now run side by side at
+4 GB each. Against a store in a folder: publishing all seven (1 513
+files, 481 MB) and pulling them back gave `diff -r` no difference in
+`public/data` and `.stadtwissen`.
+
+**Measured against the store, 2026-11-24** (pull request #342). CI's
+first upload: all seven sites, 1 453 files, in 93 s, no request
+refused; the next run found every key, compared the manifests and sent
+nothing in 5 s. The host's first pull (4 cores, 8 GB, Bun 1.3.14 —
+the keys agreed with CI's on Bun 1.4.4): seven sites in 13 s, the
+whole deployment in 72 s, where the same branch baking cold took 6:15
+to 9:50 min.
+
+**Rejected, each with its reason:**
+
+- **A — a lock file in git, published by hand** (this plan's phases
+  1–3 without the job): every pull request that changes a bake's
+  output needs someone with the token to publish and commit the lock,
+  and two such pull requests conflict on its lines. Most pull requests
+  here are written by agents and many change `scripts/prepare/*`.
+- **B — only the sources leave git, the web build pulls them and
+  bakes:** every crutch of the builder keeps its reason, and
+  `code.product` rises by about 110. It buys the repository's size
+  alone.
+- **C — the browser reads the store:** saves the pull and the 481 MB
+  each deployment carries, for a request to a second host (ADR 0043)
+  and transfer billed per visit. Not built; the choice stays open.
+- **D — the crutches gone and no store.** Put to the maintainer on
+  2026-11-24 with what this pull request's own previews showed: with
+  `warmers.ts` and `shared-cache.ts` deleted and the bake cache not
+  kept, the host's builder baked all seven sites cold and deployed in
+  6:15, 6:20 and 9:30 min (three builds, read off the deployments'
+  timestamps), since a site's peak is 2.3 GiB and no longer 4.5. D
+  would be smaller by `data-store.ts` and its couplings. The maintainer
+  kept A′: a web build that never bakes, and the step `data/` leaving
+  git stands on.
+- **Transport encoding (phase 5):** not in this variant. The 6.4–6.7 %
+  measured above stand; the files are published as they are.
+
+**What the variant costs, knowingly.**
+
+- A deployment depends on CI: where a push changes a key it waits for
+  CI's bake, and it fails where CI's build-check shard fails.
+- A pull request without CI's secret (a fork, Dependabot) publishes
+  nothing; its preview builds only while its keys were published
+  before.
+- The e2e job checks out a pull request's head, not GitHub's merge
+  with its base, so that its keys are the host's.
+- A gap in the key serves stale tiles. CI fails when a key it finds in
+  the store names another manifest than it just baked;
+  `scripts/data-store.test.ts` holds what moves the key.
+- The store only grows; no command deletes from it.
+
+**How `data/` leaving git composes (not built, its own pull request,
+held for the maintainer).** The site key already hashes `data/<site>/`
+by content, not by git. CI's job would pull each site's sources — one
+archive a site in the same store, named by its hash in a small file in
+git that changes only on a re-bake by the one person who bakes — cache
+them by that hash, and bake and publish as now. The host never needs
+the sources, only a key: the key would then be computed from that
+file's hash in place of the folder's contents, on both sides. A
+fixture (Dresden's spawn tile and the site's small files) stays for
+the unit tests and a fresh clone; phase 4 above lists what has to be
+sorted.
