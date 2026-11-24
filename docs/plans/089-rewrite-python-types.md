@@ -343,6 +343,17 @@ and pay a re-bake for each batch. In the series:
 
 ## Findings
 
+> **Slimmed before milestone 1 (2026-11-24; plan 086, ruling 5).** The
+> gate is halved to its job: `typecheck.py` counts findings by file and
+> rule, fails on a count above or below the baseline and when
+> pyright did not read every module; the escapes' count, the settings
+> check and `--against` with `Typecheck-baseline-raise` are gone (a
+> raised baseline shows in the PR's diff). Of phase 2's stubs scipy's
+> stay; rasterio's, pyogrio's and laspy's were dropped, which put back
+> the 31 findings they had covered: the baseline holds **436** (405
+> before, the escapes not counted). The text below describes the gate
+> and the stubs as they were at commit `b00b08c2`.
+
 ### Phase 0: the checker (2026-11-16)
 
 **Decision A: pyright 1.1.414**, pinned as `pyright[nodejs]==1.1.414` in

@@ -30,7 +30,7 @@
   files, fewer shader variants)
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: IN PROGRESS — phase 0 measured (the table is in `qa/ledger.json`, `rasters`); phases 2, 3 and 5 decided below; phase 2's trial built behind a build flag (`SVF_BLOCKS=1`) and a page knob (`?svf=blocks`) and measured (`qa/ledger.json`, `blocks`): it passes its criteria except the plates (four views move slightly), it halves the sky view's GPU bytes and grows its wire bytes by 11–12 %; a real GPU's look and the reference phone's features stand between it and the default
+- **Status**: IN PROGRESS — phase 0 measured (*Findings*); phases 2, 3 and 5 decided below; phase 2's trial was built behind a build flag and a page knob, measured, and removed again before milestone 1 (*Findings*; the code is at commit `b00b08c2`): it passes its criteria except the plates (four views move slightly), it halves the sky view's GPU bytes and grows its wire bytes by 11–12 %; a real GPU's look and the reference phone's features stand between it and the default
 
 ## Why this matters
 
@@ -407,6 +407,15 @@ files, bindings, distinct ground variants, frame time.
   weight has moved to phases 1 and 5.
 
 ## Findings
+
+> **Slimmed before milestone 1 (2026-11-24; plan 086, ruling 5).** The
+> measuring and the trial were removed from `rewrite` once their figures
+> were taken: the ledger's `rasters` and `blocks` sections with their
+> modules, and phase 2's sky-view blocks (`scripts/block-encode.ts`,
+> `block-known.ts`, `lib/city/block-raster.ts`, the build flag
+> `SVF_BLOCKS`, the page knob `?svf=blocks`, the probes under
+> `scripts/eval/`). They are history at commit `b00b08c2`; whoever builds
+> phase 2 for good starts from there. The figures below are the record.
 
 ### Phase 0 — the table (2026-11-16, every committed site)
 

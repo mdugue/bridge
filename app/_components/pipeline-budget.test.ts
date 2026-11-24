@@ -77,15 +77,6 @@ test("a ninth plain attribute is a ninth buffer, and a breach", () => {
   ]);
 });
 
-test("an attribute the geometry lacks is named, and counted as a buffer", () => {
-  const geometry = new BufferGeometry();
-  geometry.setAttribute("position", plain());
-  expect(vertexBuffersOf(geometry, ["position", "aGone"])).toEqual({
-    buffers: 2,
-    unmatched: ["aGone"],
-  });
-});
-
 const fixture = (name: string) =>
   readFileSync(
     nodePath.join(
@@ -173,27 +164,4 @@ test("a tile that left while the rows were read is not asked for", async () => {
   expect(budget.rows).toHaveLength(1);
   expect(budget.left).toBe(1);
   expect(budget.unread).toBe(0);
-});
-
-test("one that left during its own read is left, one unreadable is unread", async () => {
-  const root = new Group();
-  const leaving = clayMesh();
-  const held = clayMesh();
-  root.add(leaving, held);
-  const budget = await budgetRows(
-    {
-      shadersOf: async (object) => {
-        if (object === leaving) {
-          root.remove(leaving);
-        }
-        return null;
-      },
-    },
-    root,
-    new PerspectiveCamera(),
-    DEFAULT_PIPELINE_LIMITS
-  );
-  expect(budget.rows).toEqual([]);
-  expect(budget.left).toBe(1);
-  expect(budget.unread).toBe(1);
 });

@@ -40,8 +40,8 @@ export interface PipelineBudgetRow {
   camera: "parallel" | "perspective";
   /** the object's type: Mesh, LineSegments, Points … */
   draw: string;
-  /** the shared build the material names (`setGraph`), else its
-   *  scene-wide key (`sceneMaterial`), else its name, else its type */
+  /** the shared build the material names (`setGraph`), else its name,
+   *  else its type */
   key: string;
   /** the geometry's attribute names (`layoutOf`) */
   layout: string;
@@ -132,13 +132,8 @@ export function vertexBuffersOf(
   return { buffers: buffers.size + unmatched.length, unmatched };
 }
 
-const keyOf = (material: Material): string => {
-  const scene: unknown = material.userData.sceneKey;
-  return (
-    graphOf(material) ??
-    (typeof scene === "string" ? scene : material.name || material.type)
-  );
-};
+const keyOf = (material: Material): string =>
+  graphOf(material) ?? (material.name || material.type);
 
 /** What tells two representatives' builds apart: a material that shares a
  *  build (a graph, a scene-wide material) by its key, any other by itself. */

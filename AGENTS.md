@@ -38,15 +38,14 @@ bun run test:e2e        # playwright against a production build
 bun run shots           # real-GPU plates of shots/*.json (headed)
 bun run plates          # the QA views of the merge base against the head's,
                         # diffed (SHOTS_SMALL=1: CI's tier on SwiftShader)
-bun run ledger          # qa/ledger.json: bytes, requests, counters (-- --check: CI;
-                        # -- --browser: first-load JS, a phone's tiles, timings,
-                        # the lite builds' limits; -- --census: every site
-                        # flown, its builds counted, by hand, not on CI)
+bun run ledger          # qa/ledger.json: bytes, requests, the product's code
+                        # lines (-- --check: CI; -- --browser: first-load JS, a
+                        # phone's tile cache; -- --code: the code lines alone,
+                        # no build; -- --against <ref>: them here and there)
 bun run site <site>     # where a site stands (--all: every site)
 bun run fetch <site>    # downloads → data/_raw/<provider>/, sources → data/<site>/
 bun run bake <site>     # offline bakes [tile…] [--step X] [--jobs N] [--force]
 bun run osm-coverage <site>  # OSM's built things no bake decided about
-bun scripts/compare-tilesets.ts <a> <b> [--within m]  # two published sites by content
 bun run test:pipeline   # pytest + ruff + types for pipeline/
 bun run docs:diagrams   # render docs/ Mermaid blocks to docs/diagrams/*.svg
 bun run docs:matrix     # regenerate the guide's sources-by-city pages
@@ -114,9 +113,8 @@ itself). See ADR 0005.
   vanishes (the headless e2e draws WebGPU too, ADR 0027). The e2e
   "limits" test counts both for the main pass of what the lite scene
   draws (not traffic, the data layers or a picture style's swap: a
-  layer outside it tests its own count, and the ledger's `--census`
-  reads the whole site's, data layers on, by hand); the clay's two are
-  a number in it, changed only on purpose.
+  layer outside it tests its own count); the clay's two are a number in
+  it, changed only on purpose.
 - A TSL `select` and a `Loop` body are scopes: in per-pixel graphs use
   `mix`/`step`, and take what a loop reads into a `toVar()` before it.
   A packed word or a hash seed reaches the fragment as a FLAT varying.
@@ -197,15 +195,21 @@ uploaded; nothing it names is fetched (ADR 0054).
 ## QA: self-verify, don't ask for screenshots
 
 - A PR that changes what the viewer shows carries JSON snapshots in its
-  description (`pr-snapshots` skill). CI compares a PR with its base on
-  the runner's software renderer (the *Plates* job, ADR 0018) and fails
-  on a differing view the PR does not name under `## Snapshots`. It
-  says *changed*, never *good*, and it sees little: 8 of the 50 QA
-  views, all on the spawn tile, in `lite` at 400 × 250 drawn pixels, on
-  PRs that are not drafts and touch what can move a pixel. The other
-  views, every other tile, the full profile's shadows, AO and
-  resolution, the data layers and a view's page query it never sees: a
-  green job is no licence to skip the snapshots or the GPU.
+  description (`pr-snapshots` skill). On a PR labelled `plates`, or by
+  hand, CI compares it with its base on the runner's software renderer
+  (the *Plates* job, ADR 0018; scaffolding while the rewrite series
+  moves pixels) and names each differing view. It says *changed*, never
+  *good*, and it sees little: 8 of the 50 QA views, all on the spawn
+  tile, in `lite` at 400 × 250 drawn pixels. The other views, every
+  other tile, the full profile's shadows, AO and resolution, the data
+  layers and a view's page query it never sees: a green job is no
+  licence to skip the snapshots or the GPU.
+- `qa/ledger.json` is gated by CI (`bun run ledger -- --check`): a PR
+  that moves a published byte or a request commits the new file, and its
+  diff is what the reviewer reads. The product's code lines
+  (`code.product`) may fall freely; a PR that raises their total commits
+  the number (`bun run ledger -- --code`, no build) and says what the
+  lines buy.
 - What holds a frame still for a plate is a probe of the debug hook
   (`__poc.still`, `poc-scene.ts`): something new that animates takes its
   time through `pocPhase` or TSL `time`, or the plates flake.
@@ -217,9 +221,7 @@ uploaded; nothing it names is fetched (ADR 0054).
   index has each one's link); `bun run shots` renders them too.
 - URL knobs: `?scene=lite`, `?thread=main`, `?safety=0…3`, `?trail=1`,
   `?trace=1`, `?inspect=1`, `?depth=standard`, `?at=lat,lng`, `?snap=…`
-  (a view link); plan 090's spikes: `?stands=record`, `?rails=table`;
-  plan 091's trial: `?svf=blocks` (on a build with `SVF_BLOCKS=1`).
-  URL parameters go in the query, never the fragment; one
+  (a view link). URL parameters go in the query, never the fragment; one
   that carries a place is named on the privacy page.
 
 ## Conventions

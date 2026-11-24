@@ -1,6 +1,6 @@
 /** A settled camera against its snapshot: what counts as not there. */
 import { describe, expect, test } from "bun:test";
-import { POSE_SLACK, poseFault, turnBetween } from "./plate-pose";
+import { poseFault, turnBetween } from "./plate-pose";
 import type { CameraStateJson } from "./snapshot";
 
 const FLY: CameraStateJson = {
@@ -55,42 +55,6 @@ describe("poseFault", () => {
     expect(poseFault(FLY, WALK)).toBe("mode walk, not fly");
   });
 
-  test("each axis has its slack, and no more", () => {
-    const { m } = POSE_SLACK;
-    for (const axis of ["x", "y", "z"] as const) {
-      expect(poseFault(FLY, at(FLY, { [axis]: FLY.pos[axis] + m }))).toBeNull();
-      expect(
-        poseFault(FLY, at(FLY, { [axis]: FLY.pos[axis] - m - 0.01 }))
-      ).not.toBeNull();
-    }
-  });
-
-  test("the walker's eye may settle onto the ground, not wander", () => {
-    const { eyeM, m } = POSE_SLACK;
-    expect(poseFault(WALK, at(WALK, { y: WALK.pos.y - eyeM }))).toBeNull();
-    expect(
-      poseFault(WALK, at(WALK, { y: WALK.pos.y + eyeM + 0.01 }))
-    ).not.toBeNull();
-    expect(
-      poseFault(WALK, at(WALK, { x: WALK.pos.x + m + 0.01 }))
-    ).not.toBeNull();
-    // (flying has no such room)
-    expect(poseFault(FLY, at(FLY, { y: FLY.pos.y + eyeM }))).not.toBeNull();
-  });
-
-  test("heading and pitch", () => {
-    const { deg } = POSE_SLACK;
-    expect(poseFault(FLY, { ...FLY, headingDeg: 350 + deg - 360 })).toBeNull();
-    expect(poseFault(FLY, { ...FLY, headingDeg: 351 })).not.toBeNull();
-    expect(poseFault(FLY, { ...FLY, pitchDeg: -30 - deg })).toBeNull();
-    expect(poseFault(FLY, { ...FLY, pitchDeg: -29 })).not.toBeNull();
-  });
-
-  test("Modell on one side only", () => {
-    expect(poseFault(MODEL, FLY)).toBe("Modell off, not iso");
-    expect(poseFault(FLY, MODEL)).toBe("Modell iso, not off");
-  });
-
   test("Modell is its preset, pivot, scale, turn and tilt", () => {
     expect(poseFault(MODEL, model({ preset: "plan" }))).toBe(
       "Modell plan, not iso"
@@ -105,9 +69,5 @@ describe("poseFault", () => {
     expect(poseFault(MODEL, model({ turnDeg: 46 }))).toContain("turned 46°");
     expect(poseFault(MODEL, model({ tiltDeg: 60 }))).toContain("tilted 60°");
     expect(poseFault(MODEL, model({ turnDeg: 45.4, tiltDeg: 35 }))).toBeNull();
-  });
-
-  test("in Modell the eye is the rig's: it is not compared", () => {
-    expect(poseFault(MODEL, at(MODEL, { x: 9999, y: 9 }))).toBeNull();
   });
 });

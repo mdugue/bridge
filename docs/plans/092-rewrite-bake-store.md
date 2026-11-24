@@ -496,286 +496,78 @@ allowed at all. And alone nobody would ask for the cut at publishing;
 
 ## Findings
 
+> **Slimmed before milestone 1 (2026-11-24; plan 086, ruling 5).** Phase
+> 0's tools left `rewrite`: the ledger's `bakeStore` section, the
+> built-out `scripts/eval/compare-bakes.py` with its test (the file is
+> main's again: the hand-over format stays GeoJSON, decision 4 of plan
+> 086's list), and `scripts/compare-tilesets.ts`, which is on the branch
+> `tools/compare-tilesets`. All are history at commit `b00b08c2`: a
+> phase above that says "compare with `compare-bakes.py`" or
+> "`compare-tilesets.ts`: equal" fetches them from there first. The
+> figures below are the record.
+
 ### Phase 0 (2026-11-16): counted, compared, the format tried
 
-Done in a cloud session: the comparer and the trial on the committed
-files, the manifests from a bake of Grimma run there (fetched with the
-BBBike extract of PR #315; nothing of it committed). Drift since
-`5dfa300d` in the paths of the drift check, at this PR's head: #315
-changed `__main__.py`, `fetch.py`, `mapillary.py` and `step_cache.py`
-(a step without its extract skips; ten lines more) and added
-`osm_source.py`; 089 added `test_typecheck.py` and `test_typings.py`;
-this PR the comparer and its test. Every symbol this plan names is
-where it says; `SITE_STEPS`, the `Ledger` and the four rewrites are as
-described.
-
-Whose figures these are: the counts over the committed files (all
-seven sites), the grep counts, the missing Parquet driver, `pyarrow`'s
-size and the exact float64 round trip through Parquet were repeated by
-the PR's reviewer. FlatGeobuf, GeoPackage, every time, the forked
-workers, DuckDB and the Grimma re-bake are single runs of this
-session.
-
-**Numbers for 087's ledger.** Those that are a function of the tree
-alone are gated in `qa/ledger.json`'s `bakeStore` section
-(`lib/city/ledger-bake-store.ts`): the file kinds and formats, the
-kinds with no single key order, the step cache's lines of code (503 of
-its 619 lines) and the modules calling `.neighbours()`; the modules
-calling `owns(` are `counters.bakeSeamModules.ways.owns` there already.
-The steps that write another's path are in a bake's manifests only and
-stay here:
+Counted over the committed files of all seven sites (32 tiles) and by
+grep; who wrote and read what is from the manifests of a Grimma bake
+(two tiles, 37 steps). The other formats, every time and the Grimma
+re-bake are single runs.
 
 | Counter | At phase 0 |
 |---|---|
 | File kinds a tile hands over (`dlm/` and `dop/`) | 51: 28 GeoJSON, 13 JSON, 10 PNG (Dresden, Grimma, Meißen; Leipzig, München and Unna 50, Hamburg 49) |
 | Formats | 3 |
 | Dresden's fifteen tiles by format | GeoJSON 103.3 MB, PNG 70.9 MB, JSON 12.5 MB |
-| `wc -l pipeline/bake/step_cache.py` | 619 (609 at `5dfa300d`; #315 added ten) |
+| `wc -l pipeline/bake/step_cache.py` | 619, 503 of them code (609 at `5dfa300d`; #315 added ten) |
 | Modules matching `\.neighbours()` | 14 |
 | Modules matching `owns(` | 20 by the plan's grep; 17 call `owns` — `canopy.py`, `roof_planes.py` and `skyview.py` only match in "cr**owns(**" |
-| Steps that write a path another step wrote | 4 (`islands`, `lamp-heights`, `lamp-water`, `trees`) |
-| Kinds with no single key order | 2 over all sites (`furniture` within a file, `traffic` between sites) |
+| Steps that write a path another step wrote | 4: `islands` (`landcover.png` and `.json`), `lamp-heights` and `lamp-water` (`lamps`, `mly`), `trees` (`canopyx`) |
+| Kinds with no single key order | 2 over all sites: `furniture` within a file; `traffic` between sites (Dresden `t, f, hf, b, …`, the others `t, f, b, sp, hf, …`). The other 26 feature kinds have one order each |
+| Exact duplicates, rows equal in geometry and every property | furniture 14, trees 13, lamps 9, walls 5, structures 4 |
+| Rings that do not close | 214 of the 623 bridge outlines; no other kind has one |
+| Properties written as `null` | 2: `bridge.name` and `passages.h`; everywhere else a missing value is a missing key |
 
-**The comparers.** `scripts/compare-tilesets.ts` is plan 087's, used
-as it is. `scripts/eval/compare-bakes.py` now takes two folders (or
-`--ref`, the work tree against a git ref) and reads every kind:
-feature collections and the JSON tables by row — matched by identity,
-order ignored, rows that share an identity as a multiset —, CityJSON
-by city object through its vertices, any other JSON whole, rasters cell
-by cell, the rest as bytes; `--order` makes the order of rows and of
-keys count, and each row as it is written; exit 0, 1 or 2
-(unreadable). The kinds whose rows another file names by their place
-(below: `trees`, `markings`, `sport`, `smallbuild`, `structures`,
-`roofs`, `rail`, `tram`, `walls`) are compared in place whatever the
-flag — stricter than `rail`, `tram` and `walls` need (the levels are
-solved again in the same build, and only the terrain study reads the
-walls by number): noise only if the store reorders them, which phase 5
-decides. Negative zero is not zero, `null` is not absent, a linked folder
-is read through, `_raw/` is no side. Its tests are
-`pipeline/tests/test_compare_bakes.py` (66: a tree against itself, a
-seeded difference of every sort, a test a join by place). First use: Meißen against itself,
-61 files, 0 differences in 12 s; Grimma as committed against the
-re-bake of this session, 114 files, 103 the same, 11 differ in 522
-places — all of them newer street photos and a newer OSM extract
-(`mly`, `facades`, `windows`, `shopfronts`, `osmbuild`,
-`roofcolor`) or the missing laser scan (`lowveg`, below).
+Grimma as committed against its re-bake, order ignored: 114 files, 103
+the same, 11 differ in 522 places — all newer street photos, a newer
+OSM extract or the missing laser scan (`lowveg`, below).
 
 ### The inventory
 
-Two tables, a row a kind, in the order the steps write them. The
-first is read from the committed files of all seven sites. In the
-second, *written by* and *read by* are **Grimma's manifests**
-(`data/_raw/sn/.bake-cache/grimma/<step>/<tile>.json`, two tiles, 37
-steps): what each step really opened. The owner, the halo and the
-TypeScript readers are **from the code, not from a manifest**. What
-Grimma could not show, and is filled from the modules, is marked †:
-it has no laser scan on this machine, so `small-buildings` skipped
-and `lowveg` wrote no `canopyx` (and `trees` had none to
-rewrite); it has no tram, no monorail and no mural, so `transit`
-skipped and those rows are empty; the three site steps write no
-manifest at all. Every file kind Dresden has, Grimma has too (51).
+The two tables, a row a kind (rows, geometry, nested properties,
+identity; writer, readers, owner, halo, TypeScript readers), are in
+this file at `b00b08c2`. What they say to the phases that follow:
 
-| Kind | Rows, seven sites (32 tiles) | Geometry | Nested properties | What makes a row the same row |
-|---|---|---|---|---|
-| `landcover.png` | 32 rasters | raster | — | the cell |
-| `landcover.json` | — | none (a legend) | — | `water.bodies`: its place in the list (the tint grid names it) |
-| `vegrows.geojson` | 639 | lines | — | geometry: unique in every file |
-| `rail.geojson` | 1 987 | lines | `bz`, `m` | geometry; a row's place in the file names its solved level in the build |
-| `railarea.geojson` | 191 | areas | — | geometry: unique in every file |
-| `platform.geojson` | 518 | areas 281, lines 237 | — | geometry: unique in every file |
-| `bridge.geojson` | 623 | areas | `axis`, `deck`, `line`, `piers`, `ribs`, `under`, `water` | geometry; the same deck in two tiles' files is two rows with the same geometry |
-| `ndvi.png` | 32 rasters | raster | — | the cell |
-| `canopy.geojson` | 518 319 | points | —; head: `rows` | geometry: unique in every file |
-| `trees.geojson` | 105 029 | points | —; head: `archetypes`, `genera` | geometry — 27 rows share one, 13 equal in everything; its place in the file names its `treefacts` |
-| `treefacts.json` | — | none (columns) | — | none of its own: columns in the order of `trees`' rows |
-| `osmbuild.json` | 118 278 | none (table `objects`) | — | the map's key: the LoD2 object |
-| `doors.geojson` | 12 404 | points | — | geometry (`of` names its building, many doors a building) |
-| `passages.geojson` | 1 865 | lines | `of`, `osm`, `z` | geometry (`osm` is shared by 13 rows) |
-| `plinths.geojson` | 85 103 | multi-lines | `g`, `top` | `of`, the LoD2 object: unique |
-| `lamps.geojson` | 7 201 | points | `masts`, `wall`, `wire`, `wr` | geometry — 9 rows twice, equal in everything |
-| `mly.geojson` | 6 629 | points | `wire`, `wr` | geometry: unique in every file |
-| `monuments.geojson` | 1 490 | points 1 313, areas 177 | `relief` | geometry: unique in every file |
-| `furniture.geojson` | 39 699 | points 38 899, areas 800 | — | geometry — 77 rows share one, 14 are equal in everything |
-| `facades.json` | 7 588 (30 tiles) | none (table `buildings`) | — | the map's key: the LoD2 object |
-| `shopfronts.json` | 4 060 | none (table `buildings`) | `a`, `b`, `bays`, `canopy`, `n`, `sign`, `z` | the map's key: the LoD2 object (a list of fronts each) |
-| `windows.json` | 8 045 | none (table `buildings`) | `a`, `b`, `glass`, `model`, `n`, `traits`, `z` | the map's key: the LoD2 object (a list of walls each) |
-| `walls.geojson` | 12 707 | lines 10 190, points 2 517 | — | geometry — 11 rows share one, 5 equal in everything; a wall's place in the file is read by the build |
-| `stairs.geojson` | 2 694 | lines | `rail`, `walled`, `z` | geometry: unique in every file |
-| `terraces.geojson` | 5 | areas | — | geometry: unique in every file |
-| `surface.png` | 32 rasters | raster | — | the cell |
-| `surface.json` | — | none (a legend) | — | — |
-| `edges.png` | 32 rasters | raster | — | the cell |
-| `edges.json` | — | none (a legend) | — | — |
-| `kerbs.geojson` | 6 906 | lines | `low` | geometry: unique in every file |
-| `markings.png` | 32 rasters | raster | — | the cell |
-| `markings_low.png` | 32 rasters | raster | — | the cell |
-| `markings.json` | 4 224 | none (table `markings`) | — | its place in the list: `markings.png` holds 1 + it |
-| `sport.png` | 32 rasters | raster | — | the cell |
-| `sport.json` | 873 | none (table `grounds`) | — | its place in the list: `sport.png` holds 1 + it |
-| `tram.geojson` | 10 029 | points 5 454, lines 4 575 | `s`, `x` | geometry; a row's place in the file names its solved level in the build |
-| `riverside.geojson` | 237 | areas 201, lines 36 | `bank` | geometry: unique in every file |
-| `traffic.geojson` | 2 471 (24 tiles) | lines | — | geometry: unique in every file |
-| `landmarks.json` | 524 | none (table `landmarks`) | `objects` | `id`, the Wikidata item: unique in a file |
-| `roofs.geojson` | 7 158 | areas | `surface` | geometry (`id` names its building, several rows a building) |
-| `lowveg.geojson` | 3 641 | lines | — | geometry: unique in every file |
-| `canopyx.geojson` | 158 182 (28 tiles) | points | — | geometry: unique in every file |
-| `cultivated.geojson` | 1 183 | lines 874, areas 296, points 10, multi-areas 3 | — | geometry: unique in every file |
-| `cultivated.png` | 32 rasters | raster | — | the cell |
-| `svf.png` | 32 rasters | raster | — | the cell |
-| `horizon.png` | 32 rasters | raster | — | the cell |
-| `horizon.json` | — | none (a legend) | — | — |
-| `smallbuild.geojson` | 10 796 (28 tiles) | areas | `hc` | geometry: unique in every file |
-| `structures.geojson` | 1 679 | areas 1 341, points 338 | `grid`, `parts` | geometry — 14 rows share one, 4 equal in everything |
-| `roofcolor.json` | 117 860 | none (table `roofs`) | — | the map's key: the LoD2 object or part |
-| `dormers.geojson` | 85 194 | points | — | geometry (`of` names its building) |
-
-| Kind | Written by | Read by (bake steps; * also a neighbour's) | Who owns a row | Halo it reads | TypeScript |
-|---|---|---|---|---|---|
-| `landcover.png` | landcover; **rewritten by islands** | landcover*, rail, canopy, trees, lamps, furniture, mapillary, walls, surface, edges, markings*, sport*, tram, riverside, lamp-water*, lowveg, cultivated, roof-colour* | raster of the tile | DLM by the tile's bbox; OSM 0.001°; the site's road tone (`dop_balance.gains`, memo) | build: published with two NEAREST twins, stats, plate, minimap, hero; viewer: `tile-rasters.ts` |
-| `landcover.json` | landcover; **rewritten by islands** | — | the raster's legend; `water.bodies` are this raster's bodies, with `edges` where one meets the tile's edge | as the raster | build: `tile-sources.ts` `waterMember` (cast); not served |
-| `vegrows.geojson` | landcover | canopy, lowveg, skyview* | whole where it touches (DLM, unclipped); clipped on an OSM-only site | OSM hedges 0.0005° | build: `coarse-crowns.ts` (cast); viewer: vegetation, low vegetation |
-| `rail.geojson` | rail | canopy, edges | OSM tracks clipped; DLM lines whole where they touch; monorail clipped | OSM 0.001°; monorail 0.05° and the DGM mosaic along its chain | build: `line-levels.ts`, `prepare/lines.ts` (cast; levels merged in by row index); viewer: rail |
-| `railarea.geojson` | rail | — | clipped | OSM 0.001° | viewer: rail (as baked) |
-| `platform.geojson` | rail | — | whole, by its representative point — `box.contains`, not `owns`: a point on the edge is in neither tile | OSM 0.0005°, tracks 0.002° | build: `line-levels.ts`, `prepare/lines.ts` (cast; outlines cut back); viewer: rail |
-| `bridge.geojson` | rail | lamps*, furniture*, mapillary, traffic*, lowveg; from the code also canopy and trees on a site without a Basis-DLM, and small-buildings† | whole where it touches: a deck across a seam is in both tiles (no `owns` in `rail.py`) | DGM and DOM mosaic 700 m; the neighbours' class rasters; OSM 0.001°, network 0.012°, fairway 0.01° | build: `line-levels.ts` (cast), minimap (a hand guard); viewer: rail, tram, traffic, overlays |
-| `ndvi.png` | ndvi | canopy, trees, monuments*, furniture, walls*, edges, sport, tram, roofs*, lowveg, structures*, dormers* | raster of the tile | the site's anchors (every tile's DOP, memo) | build: `coarse-crowns.ts`; viewer: `tile-rasters.ts`, vegetation |
-| `canopy.geojson` | canopy | monuments*, furniture, cultivated*, skyview*, dormers | points of the tile's own nDOM grid; row trees on its `vegrows` lines | OSM 0.001°; its own `canopyx` — written 26 steps later, so the last bake's | build: `side-bakes.ts`, `coarse-crowns.ts`, stats (cast; packed to `.pts`); viewer: the packed points |
-| `trees.geojson` | trees | cultivated*, skyview*, dormers | `owns(tree)` | the cadastre cache (fetched with 10 m); OSM 0.001° | build: `coarse-crowns.ts` (cast); viewer: tree inventory |
-| `treefacts.json` | trees | — | columns in the order of `trees`' rows | as `trees` | served as bytes; viewer: `card-fetch.ts` (a hand guard) |
-| `osmbuild.json` | osm-buildings | landmarks | a record a LoD2 object of the tile's CityJSON | OSM 0.0005°; look outlines 0.005° | build: `prepare/city.ts`, stadtwissen (schema) |
-| `doors.geojson` | doors | — | `owns(door)`, on a wall of the tile's LoD2 | OSM 0.0005° | build: `prepare/city.ts` (schema) |
-| `passages.geojson` | passages | — | by LoD2 object of the tile | OSM 0.001° | build: `prepare/city.ts` (schema) |
-| `plinths.geojson` | plinths | — | a row a LoD2 object of the tile | none | build: `prepare/city.ts` (schema) |
-| `lamps.geojson` | lamps; **rewritten by lamp-heights and lamp-water** | mapillary | `owns(mapped point)` and `owns(placed point)`: a lamp moved across a seam is in neither tile | OSM 0.0005–0.001°; every tile's `bridge` file; lamp-water: DGM, LoD2, `roofs`, class rasters within 300 m | viewer: lamps (as baked) |
-| `mly.geojson` | mapillary; **rewritten by lamp-heights and lamp-water** | — | `owns(placed point)` | the photo cache's cells (+1 m); told apart from its own tile's `lamps` only | viewer: lamps, furniture (as baked) |
-| `monuments.geojson` | monuments | — | `owns(representative point)`, after conflation | DLM bbox + 50 m; OSM 0.0005°; the site's leaf-off flight (memo) | build: stadtwissen (schema), `coarse-crowns.ts` (cast); viewer: monuments |
-| `furniture.geojson` | furniture | — | `owns` of the mapped and the placed point; of a bench way's middle; of an area's representative point (the area whole) | OSM 0.0005–0.001°; every tile's `bridge` file; the site's bin tone (memo) | viewer: furniture (as baked) |
-| `facades.json` | facades | — | a record a LoD2 object | the photo caches (fetched within 30 m) | build: checked against its schema, served as read; viewer: `tile-stream.ts` (cast) |
-| `shopfronts.json` | shopfronts | — | a record a LoD2 object | OSM 0.001° | build: `prepare/city.ts` (schema) |
-| `windows.json` | windows | dormers | a record a LoD2 object | the photo caches (60 m at fetch) | build: `prepare/city.ts` (schema) |
-| `walls.geojson` | walls | lowveg | walls and fences clipped; quays where they meet the tile; gates `owns(gate)` plus a neighbour's gate whose gap reaches in (`seam: true`) | OSM 0.001°, buildings 0.003°; DGM, DOM, scan and `ndvi` of the neighbours within 150 m; the site's material (read over the site, no memo) | build: `tile-sources.ts` (schema; walls addressed by row index) |
-| `stairs.geojson` | stairs | — | whole where it meets the tile; the viewer draws it in the tile that owns its middle | DGM mosaic 50 m; OSM 0.001°; the site's stair material | build: `tile-sources.ts` (schema) |
-| `terraces.geojson` | stairs | — | whole, with every flight that reaches it (so in both tiles) | as `stairs` | build: `tile-sources.ts` (schema) |
-| `surface.png` | surface | edges | raster of the tile | OSM 0.001°; DLM bbox | build: a NEAREST twin; viewer: `tile-rasters.ts` |
-| `surface.json` | surface | — | the raster's legend | — | none (tests only) |
-| `edges.png` | edges | — | raster of the tile: distances on its own raster, none across the edge | none | build: a twin; viewer: `tile-rasters.ts`, `tree-foot.ts` |
-| `edges.json` | edges | — | the raster's legend | — | none |
-| `kerbs.geojson` | edges | markings | contours of the tile's raster (so clipped) | kerb drops: OSM 0.001° | build: `tile-sources.ts` (schema) |
-| `markings.png` | markings | — | raster of the tile; R/A hold 1 + a row of `markings.json` | the neighbours' class rasters within 64 m; OSM ways 0.003° | viewer: `tile-rasters.ts` |
-| `markings_low.png` | markings | — | as `markings.png` | as `markings.png` | viewer: `tile-rasters.ts` |
-| `markings.json` | markings | — | `owns(node)` plus a neighbour's node within 64 m whose marking reaches in (a seam copy) | as the raster | served unparsed; viewer: `tile-rasters.ts` (cast) |
-| `sport.png` | sport | — | raster of the tile; holds 1 + a row of `sport.json`, 255 at most | OSM 0.001°; the site's road tone (memo) | build: a twin; viewer: `tile-rasters.ts` |
-| `sport.json` | sport | — | whole where it touches | as the raster | served unparsed; viewer: `tile-rasters.ts`, `tile-stream.ts` (cast, twice) |
-| `tram.geojson` | tram | — | tracks clipped; masts and poles `owns(point)`; spans `owns(middle)`; arms `owns(first vertex)`; stop signs `owns(sign)` | decided over the tile + 30 m; OSM 0.001°; the neighbours' class rasters and `lamps` within 54 m, `furniture` within 33 m | build: `line-levels.ts`, `prepare/lines.ts` (cast; levels by row index); viewer: tram |
-| `riverside.geojson` | riverside | — | piers whole by `owns(representative point)`; groynes and ferries clipped | OSM 0.001° | viewer: riverside (as baked) |
-| `traffic.geojson` | traffic | — | clipped (pieces under 2 m dropped) | the count's cache a tile; every tile's `bridge` file | viewer: traffic (as baked) |
-| `landmarks.json` | landmarks | roofs*, structures | `owns(the Wikidata item's point)`; its objects only from the tile's own CityJSON | OSM 0.002° | build: `prepare/landmarks.ts` (schema): city, stats, stadtwissen |
-| `roofs.geojson` | roofs | lamp-water*, skyview*, structures*, roof-colour, dormers* | by LoD2 object of the tile | the neighbours' DOM1, `ndvi`, `landmarks` within 250 m | build: `prepare/city.ts` (schema) |
-| `lowveg.geojson` | lowveg | dormers | OSM hedges and scrub clipped; the scan's hedges of the tile's scan | OSM 0.0005° | viewer: low vegetation (as baked) |
-| `canopyx.geojson` | lowveg; **rewritten by trees** (`rethin_scan_trees`)† | canopy, trees, cultivated*, skyview*, dormers | peaks of the tile's own scan raster | none | build: as `canopy` (cast; packed) |
-| `cultivated.geojson` | cultivated | — | areas and vine rows clipped; orchard trees `owns(tree)` | OSM 0.001°; a vineyard's whole extent: the neighbours' DGM and DOP; their crown files within 20 m | build: `coarse-crowns.ts` (cast); viewer: cultivated, tree inventory |
-| `cultivated.png` | cultivated | — | raster of the tile | as the features | build: cropped, a twin; viewer: `tile-rasters.ts` |
-| `svf.png` | skyview | — | raster of the tile | the neighbours' DGM, LoD2, `roofs` and crowns within 150 m | viewer: `tile-rasters.ts`, facades, `sky-light.ts` |
-| `horizon.png` | skyview | — | raster of the tile | the same within 1 500 m; GLO-30 beyond | viewer: as `svf` |
-| `horizon.json` | skyview | — | the raster's legend and the valley's rim | — | build: `prepare-data.ts` `valleyRims` (schema); not served |
-| `smallbuild.geojson` | small-buildings† | roof-colour | `owns(the rectangle's centroid)` | 40 m: the neighbours' scan, DGM, class raster, `ndvi`, DOP, LoD2, `walls`, `bridge`, `monuments`, `furniture`; OSM 0.001° | build: `prepare/city.ts`, `side-bakes.ts`, `coarse-crowns.ts` (schema) |
-| `structures.geojson` | structures | roof-colour | columns `owns(centroid)`; outlines `owns(representative point)`; a landmark's relief by LoD2 object | 60 m: the neighbours' DGM, DOM, LoD2, `roofs`; OSM 0.001° | build: `prepare/city.ts`, `side-bakes.ts`, `coarse-crowns.ts` (schema) |
-| `roofcolor.json` | roof-colour | — | a record a LoD2 object; `scan` and `gaps` by the row index of `smallbuild` and `structures` | the site's road tone and the flight's sun readings (memos) | build: `prepare/city.ts` (schema) |
-| `dormers.geojson` | dormers | — | by LoD2 object, and `owns` of the dormer moved back into LoD2's frame | 60 m (the structures' surfaces) | build: `prepare/city.ts` (schema) |
-
-
-Not in the tables: every step also reads the fetch's two files — the
-tile's CityJSON (18 steps; `lamp-water`, `skyview`, `structures`
-and `dormers` also a neighbour's) and its DGM1 (24 steps; eight also
-a neighbour's). The site steps: `landmark-facts` joins every tile's
-`landmarks` (sorted by id), `murals` hangs each mural in the tile
-that owns its centre or, failing that, one whose LoD2 holds the wall,
-`transit` joins every tile's clipped tram tracks (snapped within
-0.3 m across seams).
-
-What the inventory says to the phases that follow:
-
-- **A row's identity is its geometry** in 27 of 28 feature kinds; only
-  the plinths have a name of their own (`of`). `id`, `of` and
-  `osm` elsewhere name the building or the way, not the row. The
-  store's "each row once" therefore compares geometry, and a clipped
-  kind has no identity across a seam at all (two tiles hold two
-  different pieces).
-- **Eight joins go by a row's place in its file**, which no key
-  says: `treefacts` to `trees`; `markings.png` and `sport.png` to
-  their tables; the land cover's tint grid to `water.bodies`;
-  `roofcolor`'s `scan` and `gaps` to `smallbuild` and `structures`,
-  and a rebuilt roof's parts to a building's rows in `roofs`; the
-  build's solved levels to `rail` and `tram`; the terrain study to the
-  walls. "Order ignored" stops at these — the comparer compares them
-  in place —, and phase 3's `write` keeps the order it is given, or
-  these get keys first.
-- **One file, several owner rules.** `rail`, `tram`, `walls`,
-  `furniture`, `cultivated`, `riverside` and `lowveg` hold
-  clipped rows beside point-owned ones, and the point is the point, a
-  middle, a first vertex, a representative point or a centroid.
-  `KINDS`' anchor rule is a rule a kind of *row*, not a file.
-- **Whole where it touches** — in both tiles' files by design:
-  `bridge`, `stairs`, `terraces`, the sports grounds, the DLM's
-  rail lines and tree rows, and the seam copies of gates and markings.
-  A deck's readers (`lamps`, `furniture`, `traffic`) open every
-  tile's `bridge` file and meet it twice.
-- **In no tile's file**: a lamp or a piece of furniture mapped in one
-  tile and moved to the kerb in the next (both points must be owned);
-  a platform whose representative point lies on the edge
-  (`box.contains`, where every other step uses `owns`).
-- **`Tile.neighbours()` is the whole site**, not the eight around:
-  most callers cut it down with `overlaps`, the decks' readers do
-  not.
-- **Halos are given in three units**: degrees on the OSM read (0.0005
-  to 0.05), metres on rasters and files (20 to 1 500), and "the site"
-  (five memos, and two reads over the site that are not memoised:
-  `walls.site_material`, `stairs.site_stair_material`). Four more
-  were fixed when the data was fetched (the cadastre 10 m, the photo
-  cells 1 m, the panoramas 30 and 60 m, the bridges' Wikidata 500 m):
-  a `read(kind, extent)` cannot widen those.
-- **A step reads a file written after it**: `canopy` reads
-  `canopyx`, which `lowveg` writes 26 steps later — the last
-  bake's, so a first bake and a second differ; and `landcover` reads
-  the last bake's class rasters, its own among them, for the site's
-  road tone before it writes its own. `shopfronts` rewrites its own
-  last output where its photo cache is not on the machine
-  (`refilter`; `traffic`'s `reflag` is the same, from the code). All
-  of these belong to phase 2's list beside the four rewrites.
-- **Two legends nobody reads in TypeScript** (`edges.json`,
-  `surface.json`); three served tables published unparsed
-  (`sport.json`, `markings.json`, `treefacts.json`); and the
-  kinds 090 still serves as baked are read by a cast in the viewer.
+| Finding | What it is |
+|---|---|
+| A row's identity is its geometry | in 27 of 28 feature kinds; only the plinths have a name of their own (`of`). "Each row once" compares geometry, and a clipped kind has no identity across a seam |
+| Eight joins go by a row's place in its file | `treefacts` to `trees`; `markings.png` and `sport.png` to their tables; the land cover's tint grid to `water.bodies`; `roofcolor`'s `scan` and `gaps` to `smallbuild` and `structures`, and a rebuilt roof's parts to a building's rows in `roofs`; the build's solved levels to `rail` and `tram`; the terrain study to the walls. Phase 3's `write` keeps the order it is given, or these get keys first |
+| One file, several owner rules | `rail`, `tram`, `walls`, `furniture`, `cultivated`, `riverside` and `lowveg` hold clipped rows beside point-owned ones (the point, a middle, a first vertex, a representative point or a centroid). `KINDS`' anchor rule is a rule a kind of *row*, not a file |
+| Whole where it touches, in both tiles' files by design | `bridge`, `stairs`, `terraces`, the sports grounds, the DLM's rail lines and tree rows, the seam copies of gates and markings. A deck's readers (`lamps`, `furniture`, `traffic`) open every tile's `bridge` file and meet it twice |
+| In no tile's file | a lamp or a piece of furniture mapped in one tile and moved to the kerb in the next (both points must be owned); a platform whose representative point lies on the edge (`box.contains`, where every other step uses `owns`) |
+| `Tile.neighbours()` is the whole site | not the eight around: most callers cut it down with `overlaps`, the decks' readers do not |
+| Halos come in three units | degrees on the OSM read (0.0005 to 0.05), metres on rasters and files (20 to 1 500), and "the site" (five memos; `walls.site_material` and `stairs.site_stair_material` are not memoised). Four were fixed at the fetch (the cadastre 10 m, the photo cells 1 m, the panoramas 30 and 60 m, the bridges' Wikidata 500 m): a `read(kind, extent)` cannot widen those |
+| A step reads a file written after it | `canopy` reads `canopyx`, which `lowveg` writes 26 steps later — the last bake's, so a first bake and a second differ; `landcover` reads the last bake's class rasters, its own among them, for the site's road tone. `shopfronts` rewrites its own last output where its photo cache is not on the machine (`refilter`; `traffic`'s `reflag` is the same). All belong to phase 2's list beside the four rewrites |
+| Read without a schema | two legends nobody reads in TypeScript (`edges.json`, `surface.json`); three served tables published unparsed (`sport.json`, `markings.json`, `treefacts.json`); the kinds 090 still serves as baked are read by a cast in the viewer |
 
 ### The format trial
 
-Run on 2026-11-16 in a cloud container (4 cores, Bun 1.4.4, Python
-3.13), on Meißen's committed `bridge` (17 rows, nested), `lamps` (715
-points) and `osmbuild` (5 012 records, no geometry), on 1 335 made-up
-rows of awkward float64 (0.1 + 0.2, the smallest and the largest
-double, 2 000 random bit patterns, 2 000 UTM-sized coordinates, alone
-and nested), and for the times on the largest kind of a Dresden tile:
-`canopy_33416_5658_2_sn.geojson`, 81 383 points, 10.9 MB. Written from
-the pinned Python stack (`pyogrio.raw.write`, as the OSM index does) and
-for Parquet with `pyarrow` 26.0.1 in a throwaway `uv run --with`; read
-back in Bun with `hyparquet` 1.33.0, `flatgeobuf` 4.6.1 (its GeoJSON
-reader) and `bun:sqlite` with `lib/city/wkb.ts`'s header, from a
-scratch folder. Nothing of it is installed here: `pyproject.toml`,
-`uv.lock`, `package.json` and `bun.lock` are as they were. The rows read
-back in TypeScript were compared with the source as a multiset of
-canonical JSON.
+Run on 2026-11-16 (4 cores, Bun 1.4.4, Python 3.13) on Meißen's
+`bridge` (17 rows, nested), `lamps` (715 points) and `osmbuild` (5 012
+records, no geometry), on 1 335 made-up rows of awkward float64, and
+for the times on the largest kind of a Dresden tile, a canopy file of
+81 383 points and 10.9 MB. Nothing of it was installed.
 
 | Criterion | GeoParquet | FlatGeobuf | GeoPackage | GeoJSON under the schema |
 |---|---|---|---|---|
 | Typed columns | yes | scalars only | scalars only | none in the file: the schema is beside it |
-| Nested ones | yes: `ribs` is `list<struct<offset: double, rise: list<double>>>`, `axis` `list<list<double>>`; DuckDB shows the same types | no: a text column holding JSON | no: a text column holding JSON | as JSON, checked by the schema |
-| float64 round trip, Python → TypeScript | exact, all 1 335 rows and the three kinds | exact | exact | exact (Python writes the shortest text that reads back, `JSON.parse` reads it) |
-| What does not round-trip as it is | `null` against absent; int64 comes back as `BigInt` unless the column is declared int32; an unclosed ring only if the writer builds its WKB with shapely (below) | the same `null` and ring; **row order** (the spatial index sorts the rows; `SPATIAL_INDEX=NO` or a sequence column as in `osm_index.py`) | the same `null` and ring | nothing |
-| A table without geometry (`osmbuild`) | yes | written only with `SPATIAL_INDEX=NO`; the package's GeoJSON reader throws on it (`geometry.type` of null) | yes | yes |
-| TypeScript reader | `hyparquet`: 303 KB installed, no dependency, 61 KB bundled (18 KB gzip), MIT; snappy built in, zstd needs `hyparquet-compressors` (549 KB and four packages in all, 176 KB bundled) | `flatgeobuf`: 3.7 MB installed with four dependencies, 55 KB bundled, BSD-3 | none to add: `bun:sqlite` and `lib/city/wkb.ts` | none |
-| Writer from the pinned Python stack | **no** — the wheel's GDAL 3.12.4 lists GeoJSON, GeoJSONSeq, GPKG and FlatGeobuf, no Parquet, no Arrow; needs `pyarrow` (166–171 MB installed): a heavy dependency, the maintainer's to grant | yes | yes | yes |
-| Forked workers | a file a kind and window | a file a kind and window | a file a kind and window works; eight workers writing a layer each into **one** file: seven failed, one layer was there | a file a kind and window |
-| Opens for a look | DuckDB reads it as it is (tried); QGIS where its GDAL has the Parquet driver (not tried here) | GDAL, so QGIS; DuckDB's `st_read` (tried) | the same (tried) | the same (tried) |
+| Nested ones | yes (`list<struct<…>>`; DuckDB shows the same types) | no: a text column holding JSON | no: a text column holding JSON | as JSON, checked by the schema |
+| float64, Python → TypeScript | exact, all 1 335 rows and the three kinds | exact | exact | exact |
+| What does not round-trip as it is | `null` against absent; int64 comes back as `BigInt` unless the column is declared int32 | the same `null`; **row order** (the spatial index sorts the rows; `SPATIAL_INDEX=NO` or a sequence column) | the same `null` | nothing |
+| A table without geometry (`osmbuild`) | yes | written only with `SPATIAL_INDEX=NO`; the package's GeoJSON reader throws on it | yes | yes |
+| TypeScript reader | `hyparquet` 1.33.0: 303 KB installed, no dependency, 61 KB bundled (18 KB gzip), MIT; snappy built in, zstd needs `hyparquet-compressors` (549 KB and four packages in all, 176 KB bundled) | `flatgeobuf` 4.6.1: 3.7 MB installed with four dependencies, 55 KB bundled, BSD-3 | none to add: `bun:sqlite` and `lib/city/wkb.ts` | none |
+| Writer from the pinned Python stack | **no**: the wheel's GDAL 3.12.4 has no Parquet and no Arrow driver; needs `pyarrow` (26.0.1; 166–171 MB installed) | yes | yes | yes |
+| Forked workers | a file a kind and window | a file a kind and window | the same; eight workers writing a layer each into **one** file: seven failed | a file a kind and window |
+| Opens for a look | DuckDB (tried); QGIS where its GDAL has the Parquet driver (not tried) | GDAL, so QGIS; DuckDB's `st_read` (tried) | the same (tried) | the same (tried) |
 | An empty table | 475 B | 2 208 B | 98 304 B — fifty kinds a tile are 4.9 MB of empty tables | 184 B |
 | Size: `bridge` / `lamps` / `osmbuild` (as committed 14.0 / 104.7 / 363.1 KB; gzip 3.5 / 8.5 / 93.0) | 11.8 / 13.2 / 93.5 KB (zstd); 12.4 / 16.0 / 143.4 (snappy) | 15.1 / 110.9 / 461.5 KB | 110.6 / 192.5 / 397.3 KB | as committed |
 | Size: Dresden's canopy tile (10 862 KB; gzip 545) | 417 KB (zstd), 744 (snappy), 2 248 (none) | 10 947 KB (gzip 1 307) | 9 470 KB (gzip 1 830) | 10 862 KB |
@@ -783,43 +575,15 @@ canonical JSON.
 | Read, Python | 0.06–0.07 s (to rows) | 0.14–0.17 s (arrays, WKB undecoded) | 0.18–0.19 s (the same) | 0.18–0.20 s |
 | Read, Bun, to rows | 57–74 ms (snappy), 117–194 ms (zstd) | 172–187 ms | 155–170 ms | 68–112 ms |
 
-The times were taken beside a running download and are good to a
-factor of about 1.5: they say that no candidate is slow, and nothing
-finer.
-
-What the trial found beside the table:
-
-- **214 of the 623 committed bridge outlines are rings that do not
-  close** (first point ≠ last; over all seven sites, no other kind has
-  one). GeoJSON carries them as written. The trial's writer built its
-  WKB with shapely, which closes a ring when it makes the polygon, so
-  the rows read back with one vertex more. That is the writer's doing,
-  not the format's: the same outlines packed as WKB by hand (and, as
-  the reviewer found, in a list column) come back exactly — all 17 of
-  Meißen's, 16 of them unclosed. A binary store therefore packs its
-  own WKB or keeps coordinates in a typed list; it does not need
-  `rail.py` changed.
-- **`null` and absent are two things in two properties**: `bridge.name`
-  and `passages.h` are written as `null`; everywhere else a missing
-  value is a missing key. A column knows only null. The schema of
-  phase 1 has to say which of the two a key is, whatever the format.
-- **The files have no single key order in two kinds**, over all
-  sites: `furniture` writes the same keys in different orders in
-  different rows of one file; `traffic` has one order in each site, but
-  Dresden's (`t, f, hf, b, …`) is another than the other sites'
-  (`t, f, b, sp, hf, …`). The other 26 feature kinds agree with one
-  order each. Phase 4's "rows in the schema's key order, which is the
-  files' order today" does not hold for those two until their writers
-  are put in one order (which changes their bytes, not their content:
-  `compare-bakes.py --order` shows exactly that).
-- **Exact duplicates are in the committed files**: rows equal in
-  geometry and every property — furniture 14, trees 13, lamps 9, walls
-  5, structures 4, over all seven sites. A store that keeps "a row
-  once, by its identity" drops them; phase 5's comparison must expect
-  that.
-- FlatGeobuf's strength is the read by extent through its R-tree (why
-  the OSM index is one); none of the trial's criteria counts it, and a
-  window's file is small enough to be read whole.
+The times are good to a factor of about 1.5: no candidate is slow, and
+nothing finer. Whatever the format: a writer that builds its WKB with
+shapely closes the unclosed rings, so a binary store packs its own WKB
+or keeps coordinates in a typed list; phase 1's schema says whether a
+key is `null` or absent; phase 4's "the files' order today" holds for
+`furniture` and `traffic` only once their writers are put in one order
+(their bytes change, not their content); and a store that keeps "a row
+once, by its identity" drops the exact duplicates, which phase 5's
+comparison must expect.
 
 ### The recommendation, and the question for the maintainer
 
@@ -829,72 +593,44 @@ them and can be changed later in one place. If a binary format is
 wanted all the same, **GeoParquet is the only candidate that meets the
 criteria**, at the price of `pyarrow` in the bakes' environment.
 
-The reasons, from the numbers:
-
 - FlatGeobuf and GeoPackage fail the first criterion for the 14 of 28
-  feature kinds that have nested properties and for every record map
-  (`osmbuild`, `windows`, `shopfronts`, `facades`, `roofcolor`): a
-  nested value is a string of JSON in a text column, which is GeoJSON
-  with a detour. Neither is smaller than the GeoJSON it replaces;
-  GeoPackage costs 98 KB a table before the first row; FlatGeobuf
-  loses the row order and its stock reader cannot read a table without
-  geometry.
-- GeoParquet gives typed nested columns, exact numbers and a small
-  reader with no dependency. Its files are 1.2 (`bridge`), 3.9
-  (`osmbuild`), 8 (`lamps`) and 26 (the canopy) times smaller than the
-  GeoJSON as written; against the GeoJSON gzipped, which is how 088's
-  store would hold either, it is larger for `bridge` (3.4 times) and
-  `lamps` (1.6), the same for `osmbuild` and 1.3 times smaller for the
-  canopy. Reading in the build is no faster (the same tens of
-  milliseconds); reading in Python is three times faster on a kind
-  that takes 0.2 s.
-- What it costs: `pyarrow`, 166–171 MB, pinned exactly and in every
-  bake's key; a migration a site (phase 4); a WKB packer of our own
-  (the unclosed rings); the files no longer readable in an editor or a
-  diff, and in QGIS only where its GDAL has the driver.
-- What the series counts — a kind's shape written once, a step that
-  names no file and no neighbour, tiles cut at publishing — comes from
-  phases 1, 2, 3 and 5, with the format unchanged. The trial found no
-  number of the three aims that the encoding moves: the browser reads
-  none of these files after 090, and the build's read of the largest
-  one is 0.1 s.
-- The one number that could change this is phase 5's: a read by extent
-  parses up to nine windows' files of a kind, 9 × 0.19 s for the canopy
-  in Python against 9 × 0.065 s from Parquet (less with a column
-  selection). If the bake's time grows by that (the STOP at a quarter),
-  the format is the lever, and the store is where it is pulled.
-
-What the table does not hold, none of which turns the recommendation
-(each could only add to the binary format's cost or to its one
-advantage, the read in Python): the memory a read takes; the time of a
-nested kind or of a record map (only the flat canopy was timed);
-phase 5's read by extent, which is named above and not measured; and
-what checking a document against its schema costs at the write in
-Python, which GeoJSON under the schema pays and a typed file partly
-does not.
+  feature kinds that have nested properties and for every record map,
+  and neither is smaller than the GeoJSON it replaces.
+- GeoParquet's files are 1.2 (`bridge`), 3.9 (`osmbuild`), 8 (`lamps`)
+  and 26 (the canopy) times smaller than the GeoJSON as written;
+  against the GeoJSON gzipped, which is how 088's store would hold
+  either, it is larger for `bridge` (3.4 times) and `lamps` (1.6), the
+  same for `osmbuild` and 1.3 times smaller for the canopy.
+- It costs `pyarrow` in every bake's key, a migration a site, a WKB
+  packer of our own, and files no longer readable in an editor or a
+  diff.
+- What the series counts comes from phases 1, 2, 3 and 5 with the
+  format unchanged: the browser reads none of these files after 090,
+  and the build's read of the largest one is 0.1 s.
+- The one number that could change this is phase 5's, not measured: a
+  read by extent parses up to nine windows' files of a kind, 9 ×
+  0.19 s for the canopy in Python against 9 × 0.065 s from Parquet. If
+  the bake's time grows by that (the STOP at a quarter), the format is
+  the lever, and the store is where it is pulled.
 
 The question: **(a)** GeoJSON under the schema, no new dependency,
 phase 4 skipped (recommended); or **(b)** GeoParquet — then granted
 are `pyarrow` (26.0.1 today; bakes only) and `hyparquet` (1.33.0;
 `scripts/` only), both pinned exactly, snappy so that the reader stays
-one package.
-Phase 1's own question stays open beside it: a small validator of our
-own for the exported schema, or `jsonschema` pinned.
+one package. Phase 1's own question stays open beside it: a small
+validator of our own for the exported schema, or `jsonschema` pinned.
 
 ### For phase 2: a step without its raw input
 
 Two cases where a bake wrote less instead of leaving its last output
-standing, against "`Tile.raw_absent` keeps its meaning":
-
-- **Without the OSM extract** (found by PR #315's session, fixed
-  there): a bake rewrote the committed `trees`, `rail`,
-  `monuments`, `edges` and `ndvi`, and the canopy and the land
-  cover after them, with what the official data alone gives. Since
-  #315 such a step skips.
-- **Without the laser scan** (seen in this session's Grimma bake, not
-  fixed): `small-buildings` skips and `canopyx` stays, but
-  `lowveg` rewrites `lowveg_<tile>.geojson` from OSM alone — the
-  committed hedges lost the heights the scan had measured (2 of 2 rows
-  on `33340_5678`: `h`, `w`, `src`). It is the documented "No
-  LAZ: OSM only" of a tile that never had a scan, applied to one whose
-  scan is merely not on this machine.
+standing, against "`Tile.raw_absent` keeps its meaning". **Without the
+OSM extract** a bake rewrote the committed `trees`, `rail`,
+`monuments`, `edges` and `ndvi`, and the canopy and the land cover
+after them, with what the official data alone gives; since PR #315
+such a step skips. **Without the laser scan** (seen in phase 0's
+Grimma bake, not fixed) `small-buildings` skips and `canopyx` stays,
+but `lowveg` rewrites `lowveg_<tile>.geojson` from OSM alone: the
+committed hedges lost the heights the scan had measured (2 of 2 rows
+on `33340_5678`: `h`, `w`, `src`). It is the documented "No LAZ: OSM
+only" of a tile that never had a scan, applied to one whose scan is
+merely not on this machine.

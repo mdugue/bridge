@@ -58,15 +58,7 @@ tile's object texture, while the live look uniforms are shared nodes
 crowns, trunks, hedges, fountains, furniture, wires — is one node material
 for the whole scene (`three-utils.ts` `sceneMaterial`), and instanced layers
 draw through `Instances` (`instancing.ts`) so every set with the same
-material shares one node build. A set is placed by sixteen floats an
-instance, written on the CPU; plan 090's phase 0 gave it a second way in,
-behind QA knobs only: a table of twenty-byte stand records
-(`lib/city/stand-record.ts`, `Instances.ofStands`) whose bytes are the
-instance buffer and whose matrix the vertex stage composes
-(`?stands=record`: a coarse level's crowns), and rails as a table of
-segments an instanced profile expands (`lib/city/rail-table.ts`,
-`rail-segments.ts`; `?rails=table`). What three's public API does with
-such a record, and the numbers, are in plan 090's *Findings*. Everything a tile adds —
+material shares one node build. Everything a tile adds —
 material, object texture, BVH, splat, water, dressing — is disposed with it
 (`disposeTile` in `tile-stream.ts`).
 
@@ -1070,24 +1062,6 @@ stays their measure; the tile cache counts true bytes.
   kept only where a tile's numbers equal the site's: −6 MiB per coarse
   tile after the first, on the GPU and the CPU), and it carries only its
   coarse crowns, traffic and bridges.
-- **The sky view as GPU blocks — a trial behind `SVF_BLOCKS=1` and
-  `?svf=blocks`** (plan 091 phase 2). A build with the flag publishes
-  each tile's sky view beside its PNG
-  as BC4 and as EAC R11 blocks with their mip chain
-  (`lib/city/block-raster.ts`, encoded by `scripts/block-encode.ts`),
-  half a byte a texel: 0.67 MiB a tile instead of 1.33, shared by both
-  levels and the buildings as the PNG is. With the knob a page reads BC4
-  where the GPU has `texture-compression-bc`, else EAC where it has
-  `-etc2`, else the PNG (`scene-profile.ts` `blockFormatFor`), and
-  uploads it as a `CompressedTexture` at once on every tier
-  (`raster-upload.ts` `loadBlockRaster`: no decode, no mips made on the
-  GPU), falling back to the PNG where the blocks fail; a material
-  slot's stand-in for it is one block of its format
-  (`material-slots.ts` `stubLike`). three's `info.memory` counts a
-  compressed texture as one byte: the tracked bytes are its weight.
-  Without the knob, or on a build without the flag, nothing changes.
-  The figures and what a real GPU must still show are in plan 091's
-  *Findings* and the ledger's `blocks` section.
 - **The close-range rasters follow the view** (`lib/city/ground-reach.ts`,
   `ground-reach-follow.ts`, since 2026-11-12). The kerb lines, paving
   patterns and lawn edges fade out by the metres a pixel spans (gone at
@@ -1931,10 +1905,7 @@ the table once loaded and 20 s later (`console.table`). The long tasks
 (`longtask`) and the crash trail's `heapMB` are the page's alone: a
 worker reports neither, so they are counted only with `?thread=main`
 (Chromium; Safari reports no long tasks). The names are a contract for
-later perf work: add one rather than rename one. A dressing's builders
-are counted apart (`dressing:trees`, `dressing:rail`, `dressing:tram`, …;
-`dressing-figures.ts`): the time inside each builder's own slices, the
-pauses between them left out. None of it reaches the
+later perf work: add one rather than rename one. None of it reaches the
 crash trail or the reports — a tile's id names where the player was.
 
 **The renderer itself: `?inspect=1`** (`inspector.ts`) puts three's own
@@ -1950,10 +1921,7 @@ the stream, not the passes.
 
 Each entry is a bug in a dependency, the code that works around it and
 what to undo once a release fixes it. The comments at those sites say
-*upstream workaround* (`grep -rni "upstream workaround" app lib`), and
-the ledger counts both, the entries here (each opens its paragraph in
-bold) and the comments (`qa/ledger.json`, `counters.upstreamWorkarounds`):
-an entry added or dropped is a figure a pull request commits. On a
+*upstream workaround* (`grep -rni "upstream workaround" app lib`). On a
 bump of the dependency, check each entry against its release notes, and
 drop the entry with its workaround.
 
@@ -2093,7 +2061,7 @@ reference image is stored. Two tiers share that code:
 
 | | Tier 1 | Tier 2 |
 |---|---|---|
-| Where | CI, every pull request of this repository (`.github/workflows/plates.yml`); `SHOTS_SMALL=1 bun run plates` by hand | a machine with a GPU: `bun run plates` (headed) — not in CI; where it runs is the maintainer's choice |
+| Where | CI, on a pull request that carries the label `plates`, or by hand (`.github/workflows/plates.yml`); `SHOTS_SMALL=1 bun run plates` locally | a machine with a GPU: `bun run plates` (headed) — not in CI; where it runs is the maintainer's choice |
 | Renderer | WebGPU on SwiftShader's Vulkan, 800 × 500, `?scene=lite` (the spawn tile alone) | the browser's own adapter, the full profile, 1600 × 1000 @2× |
 | Views | eight that stand on the spawn tile (`TIER1_VIEWS`): 25–55 s each there | all of `qa/views/` |
 | Says | *changed*, as a tripwire — never *good* | *changed*, in the light a visitor sees |
@@ -2103,14 +2071,14 @@ In a view it renders, tier 1's numbers let through a change of 4 pixels
 or fewer at any contrast, a step of 3 of 255 or less over less than
 about 3 % of the frame, and one step over less than 10 %. A run that
 flakes is re-run by hand or answered by naming the view; nothing
-retries.
+retries. The plates are scaffolding: kept while the rewrite series'
+plans move pixels (plan 087), not a permanent gate.
 
 Tier 1 draws at `lite`'s pixel ratio of 0.5: a plate is 400 × 250 drawn
 pixels shown twice as large. It never sees the other 42 views, any tile
 but the spawn's, the full profile's shadows, AO and resolution, the data
 layers, a view's page query, or late parts landing after the scene
-reports itself settled; and it does not run on a draft or on a PR
-outside the workflow's `paths`.
+reports itself settled; and it runs only where it is asked for.
 
 A frame repeats because the harness holds it. `__poc.still` lets no time
 pass in what animates: the scene's phase clock (water, crowns, flags,
@@ -2125,11 +2093,11 @@ scene to have heard it (`handle.sync()`), and takes the plate once the
 stream, the shadow rings and the lens have been quiet for three frames
 on end and the camera stands where the snapshot says.
 
-A PR names the views it means to change under `## Snapshots` in its
-description: those are reported. A differing view that is not named
-fails the job, as does a side that was not held still, a view that does
-not settle in three minutes, a pose that was not applied, a blank plate
-or two views with the same pixels (the `pr-snapshots` skill).
+A differing view fails the run and its report names it: the PR's
+`## Snapshots` says whether it was meant (the `pr-snapshots` skill). So
+does a side that was not held still, a view that does not settle in
+three minutes, a pose that was not applied, a blank plate or two views
+with the same pixels.
 
 **WebGPU's per-pipeline limits are counted** (plan 094). A pipeline with
 a ninth vertex buffer, a seventeenth attribute or more inter-stage
@@ -2158,10 +2126,9 @@ it is:
 - what the lite scene does not draw: the traffic bodies (the layer that
   once vanished past eight buffers: `traffic-layer.test.ts` counts its
   attributes), tram cars, the data layers, a visitor's design, and
-  whatever only another tile of the site has. The ledger's census
-  (`bun run ledger -- --census`, `docs/data-pipeline.md`, "The census of
-  builds") reads those with the same probe over a flight of every site
-  with its data layers on and a design loaded — by hand, not on CI;
+  whatever only another tile of the site has. Plan 094's census read
+  those once, over a flight of every site with its data layers on and a
+  design loaded (its *Findings*);
 - the clay under a held Ausschnitt: three's hook looks a drawable up
   outside its `ClippingGroup`, so the probe answers nothing while a cut
   is held, and the clip distances' variable on the vertex side is not

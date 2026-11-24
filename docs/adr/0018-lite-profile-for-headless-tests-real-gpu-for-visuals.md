@@ -30,8 +30,11 @@ renderer can answer, since it only has to agree with itself.
    scene held still, diffed against that adapter's own noise floor.
    *Tier 1* is CI's software renderer: a tripwire that says *changed*,
    never *good*, over the few views that fit a job there — eight of
-   fifty, on the spawn tile, in `lite`. *Tier 2* is a real GPU and every
-   view; it gates nothing until the maintainer has chosen where it runs.
+   fifty, on the spawn tile, in `lite`. It runs where it is asked for (a
+   pull request's label `plates`, or by hand), as scaffolding while the
+   rewrite series moves pixels (plan 087): not on every pull request.
+   *Tier 2* is a real GPU and every view; it gates nothing until the
+   maintainer has chosen where it runs.
 6. **No reference image is stored.** The base is rendered in the same
    run, so a driver or browser bump moves both sides alike.
 7. **The Snapshot is a validated contract** (`lib/city/snapshot.ts`): the
@@ -43,9 +46,9 @@ renderer can answer, since it only has to agree with itself.
    not controls. Tuning one is a code change judged by snapshots of place
    and time against production.
 9. **A PR that changes what the viewer shows carries snapshots** in its
-   description (the `pr-snapshots` skill) and names there the compared
-   views it means to change: those are reported. **A differing view
-   nobody named fails the check.**
+   description (the `pr-snapshots` skill) and names there the views it
+   means to change. A compared run fails on a differing view and names
+   it; the description says whether it was meant.
 
 ## Consequences
 
