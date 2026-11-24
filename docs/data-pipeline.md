@@ -800,7 +800,8 @@ layout). A fresh clone (and CI) has every committed site's data —
 Dresden, Grimma, Hamburg, Leipzig, Meißen, München, Unna — so all seven
 are served; Berlin, configured but not fetched, is left out.
 
-**The web build bakes nothing.** The host builds with `bun run build:web`,
+**The web build bakes nothing.** The host builds with `bun run build:web`
+(`vercel.json`),
 which runs `prepare-sites.ts --pull`: each site comes from the store as
 CI baked it for the same checkout (*The store* below), and the index is
 written from that. `bun dev`, `bun run build` and CI bake.
