@@ -433,4 +433,5 @@ its row in [README.md](./README.md)):
   from less (`docs/data-pipeline.md`, "What a re-bake runs"); the
   steps that emptied a file, and `lowveg`, leave it since 2026-11-25.
 - Entering Modell before any inquiry logs a failed pipeline
-  (`nameplate-shadow`) in a headless run: under investigation.
+  (`nameplate-shadow`) in a headless run, as plan 094's findings
+  record it: not reproduced on 2026-11-24, the cause not known.

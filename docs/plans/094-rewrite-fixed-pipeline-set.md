@@ -474,6 +474,13 @@ Seen beside the work, recorded and not fixed: entering Modell before
 any inquiry logs three's `Async render pipeline creation failed
 (renderPipeline_nameplate-shadow_…)` once, with and without the probe;
 the spec's error watch fails on it, so `--grep "Modell"` alone is red.
+Not reproduced on 2026-11-24: 10 headless runs at main's head
+(Chromium 158 on SwiftShader; the spec once, nine scripted entries on
+Dresden and Meißen) logged nothing, and the spec was green. The cause
+is not known. A pointer: Sentry issue CITY-WALK-S (production, two
+events on 2 and 3 November, in flight, not Modell) shows an invalid
+`nameplate-shadow` pipeline reaching a frame; whether it is the same
+fault is open.
 
 ### Phase 2 — the census (2026-11-16, three r187, headless Chromium 153 on SwiftShader, four cores)
 
