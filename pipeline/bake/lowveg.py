@@ -541,7 +541,8 @@ def canopy_extra(inputs, canopy_path, trees_path=None):
     tree = cKDTree(cxy) if len(cxy) else None
     out = []
     for (r, c), radius in zip(pk, radii, strict=True):
-        x, y = grid.xy(r, c)
+        # (as written: a standing crown is thinned from where its file has it)
+        x, y = (round(float(v), 1) for v in grid.xy(r, c))
         if tree is not None and tree.query([x, y])[0] <= CANOPY_DEDUP_M:
             continue
         out.append(
@@ -551,7 +552,7 @@ def canopy_extra(inputs, canopy_path, trees_path=None):
                     "h": round(float(ndom[r, c]), 1),
                     "r": round(float(min(max(radius, CROWN_MIN_R), CROWN_MAX_R)), 1),
                 },
-                "geometry": {"type": "Point", "coordinates": [round(x, 1), round(y, 1)]},
+                "geometry": {"type": "Point", "coordinates": [x, y]},
             }
         )
     return out, len(pk)
@@ -791,10 +792,11 @@ def run(tile: Tile, research: bool = False) -> None:
         print(f"{tile.id}: every candidate → {out}")
     hedges = shipped(feats)
     file = tile.out("dlm", f"lowveg_{tile.id}.geojson")
-    # the provider's scan is not on this machine: the file's hedges, measured
-    # and found in it, are not rewritten from OSM alone
-    scanless = tile.products.lsc and not inputs["has_lsc"]
-    if not (scanless and tile.raw_absent(file, "no laser scan here")):
+    # the scan is not on this machine and the file is the scan's (its credit
+    # says so): its hedges are not rewritten from OSM alone
+    credit = json.loads(file.read_text()).get("attribution", "") if file.exists() else ""
+    scans = lsc_credit(tile) in credit and not inputs["has_lsc"]
+    if not (scans and tile.raw_absent(file, "no laser scan here")):
         write_geojson(file, hedges, tile.epsg, attribution)
         scan = sum(f["properties"]["src"] == "lsc" for f in hedges)
         print(f"{tile.id}: {len(hedges)} hedges ({scan} the scan's) of {len(feats)} candidates")
@@ -804,9 +806,10 @@ def run(tile: Tile, research: bool = False) -> None:
         extra, peaks = canopy_extra(inputs, dlm / f"canopy_{tile.id}.geojson", trees)
     elif out.exists():
         # the scan is not on this machine: its trees stand, but for one a
-        # canopy tree covers (as `canopy_extra` leaves it out) or a register
-        # or OSM tree has since been placed on (Dresden 2026-10-21: 5 of
-        # 5 734 on one tile)
+        # canopy tree covers (as `canopy_extra` leaves it out: where the
+        # canopy was baked again since, 3 260 of the 158 182 committed on
+        # 2026-11-25, 766 of 5 410 on a tile of Grimma's) or a register or
+        # OSM tree has since been placed on
         extra = json.loads(out.read_text())["features"]
         peaks = len(extra)
         canopy = _points(dlm / f"canopy_{tile.id}.geojson")

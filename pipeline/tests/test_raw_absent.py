@@ -84,7 +84,7 @@ def test_the_murals_stay_without_their_cache_and_are_written_with_an_empty_one(
     out.write_text(KEPT)
     murals.run_site(spec)
     assert out.read_text() == KEPT
-    assert "no murals cache here" in capsys.readouterr().out
+    assert "cache is not all here" in capsys.readouterr().out
     # the cache is here and holds nothing: the empty file
     murals.cache_dir(spec.raw).mkdir(parents=True)
     murals.run_site(spec)
@@ -106,18 +106,19 @@ def test_without_the_scan_the_hedges_stay_and_its_trees_give_way_to_every_canopy
     monkeypatch.setattr(lowveg, "has_extract", lambda *_: True)
     monkeypatch.setattr(lowveg, "build", lambda _tile: ({"has_lsc": False}, []))
     hedges = tile.out("dlm", "lowveg_t.geojson")
-    hedges.write_text(KEPT)
+    scanned = json.dumps({"attribution": lowveg.lsc_credit(tile), "features": [1]})
+    hedges.write_text(scanned)
     # a canopy tree that is no row's, 3 m from the first scan tree
     _points(tile.out("dlm", "canopy_t.geojson"), [[400_010.0, 5_600_010.0]])
     extra = tile.out("dlm", "canopyx_t.geojson")
     _points(extra, [[400_013.0, 5_600_010.0], [400_100.0, 5_600_100.0]])
     lowveg.run(tile)
-    assert hedges.read_text() == KEPT
+    assert hedges.read_text() == scanned
     left = [f["geometry"]["coordinates"] for f in json.loads(extra.read_text())["features"]]
     assert left == [[400_100.0, 5_600_100.0]]
-    # a provider without a scan: the hedges are OSM's, written
-    plain = Tile(**{**tile.__dict__, "products": Products(dom=True, dop="rgbi", dlm=True)})
-    lowveg.run(plain)
+    # a file that never saw the scan is OSM's alone: written again
+    hedges.write_text(KEPT)
+    lowveg.run(tile)
     assert json.loads(hedges.read_text())["features"] == []
 
 
