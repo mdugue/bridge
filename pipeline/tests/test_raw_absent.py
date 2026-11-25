@@ -77,7 +77,8 @@ def test_the_murals_stay_without_their_cache_and_are_written_with_an_empty_one(
     )
     spec.osm = tmp_path / "s.osm.pbf"
     spec.osm.write_text("")
-    monkeypatch.setattr(murals, "candidates", lambda *_: [])
+    mural = SimpleNamespace(item="Q1", tags={}, line=False, id="n1", name="m")
+    monkeypatch.setattr(murals, "candidates", lambda *_: [mural])
     monkeypatch.setattr(murals, "site_extent", lambda *_: None)
     out = spec.data / "murals" / "murals.json"
     out.parent.mkdir(parents=True)
@@ -85,8 +86,9 @@ def test_the_murals_stay_without_their_cache_and_are_written_with_an_empty_one(
     murals.run_site(spec)
     assert out.read_text() == KEPT
     assert "cache is not all here" in capsys.readouterr().out
-    # the cache is here and holds nothing: the empty file
+    # the cache is here and its item gives the mural no size: the empty file
     murals.cache_dir(spec.raw).mkdir(parents=True)
+    (murals.cache_dir(spec.raw) / "items.json").write_text('{"Q1": {}}')
     murals.run_site(spec)
     assert json.loads(out.read_text())["murals"] == []
 
