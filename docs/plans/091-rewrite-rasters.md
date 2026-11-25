@@ -30,7 +30,9 @@
   files, fewer shader variants)
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: IN PROGRESS — phase 0 measured (*Findings*); phases 2, 3 and 5 decided below; phase 2's trial was built behind a build flag and a page knob, measured, and removed again before milestone 1 (*Findings*; the code is at commit `b00b08c2`): it passes its criteria except the plates (four views move slightly), it halves the sky view's GPU bytes and grows its wire bytes by 11–12 %; a real GPU's look and the reference phone's features stand between it and the default
+- **Status**: REJECTED (2026-11-24, the series closed): its row in
+  [README.md](./README.md) says what holds. As it stood before:
+  IN PROGRESS — phase 0 measured (*Findings*); phases 2, 3 and 5 decided below; phase 2's trial was built behind a build flag and a page knob, measured, and removed again before milestone 1 (*Findings*; the code is at commit `b00b08c2`): it passes its criteria except the plates (four views move slightly), it halves the sky view's GPU bytes and grows its wire bytes by 11–12 %; a real GPU's look and the reference phone's features stand between it and the default
 
 ## Why this matters
 

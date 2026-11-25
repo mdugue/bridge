@@ -2,13 +2,13 @@ name: CI
 
 on:
   pull_request:
-  # `rewrite` too: the host deploys it, and its tip's site keys are
-  # published by no pull request's run (scripts/data-store.ts).
+  # main's tip is a tree no pull request's run baked: its site keys are
+  # published by this run (scripts/data-store.ts).
   push:
-    branches: [main, rewrite]
+    branches: [main]
 
 # A pull request's new commits cancel its in-flight run: the queued one is
-# almost always stale by the time it starts. A push to main or rewrite is a
+# almost always stale by the time it starts. A push to main is a
 # group of its own (its commit): it neither cancels nor waits behind the
 # run before it, which publishes that commit's sites while its deployment
 # waits for them (scripts/data-store.ts).

@@ -14,7 +14,7 @@ and say that they are SwiftShader. The JSON is the deliverable.
 
 ## The plates say what changed
 
-While the rewrite series moves pixels, CI can compare a pull request
+CI can compare a pull request
 with its base (`.github/workflows/plates.yml`, ADR 0018, tier 1): views
 rendered for both by the same runner's software renderer, and diffed. It
 runs on a pull request that carries the label `plates`, or by hand.
@@ -41,7 +41,7 @@ The same comparison by hand, before pushing:
 
 ```bash
 SHOTS_SMALL=1 bun run plates                  # merge base with origin/main against the head
-SHOTS_SMALL=1 bun run plates -- --base origin/rewrite   # a PR against another branch: its base
+SHOTS_SMALL=1 bun run plates -- --base origin/release   # a PR against another branch: its base
 SHOTS_SMALL=1 bun run plates -- --views rooftops,shore-eye
 bun run plates                                # tier 2: headed, this machine's GPU, every view
 ```

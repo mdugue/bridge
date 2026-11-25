@@ -9,6 +9,12 @@
 > executor reads this file once, then its own plan.
 >
 > **Planned at**: commit `5dfa300d`, 2026-11-16.
+>
+> **Status: CLOSED (2026-11-24).** What was built, what was rejected
+> and what is left open: [Closing the series](#closing-the-series), at
+> the end. Everything between here and there is the series as it was
+> planned and reduced; where it speaks of work to come, of the branch
+> `rewrite` or of a rejected plan, it is history.
 
 ## Where it comes from
 
@@ -358,7 +364,74 @@ again.
 
 ## Closing the series
 
-A plan that is done is condensed into [completed.md](./completed.md)
-as every plan is; its row keeps the `[rewrite]` mark. When the last one
-closes, this file's table goes to completed.md with each plan's ledger
-figures, and this file is deleted.
+**Closed on 2026-11-24.** Nothing of the series is in flight; the
+branch `rewrite` is retired (CI no longer runs on a push to it, and
+deleting it is the maintainer's).
+
+**Built**, in three milestones from `rewrite` to main. The product's
+code lines (`code.product`, `qa/ledger.json`) were 152 960 on main
+before the series:
+
+1. *The measuring stick, slimmed* (#327; plans 087, 089, 094, 095's
+   part B1 and phase 0 of 088, 091 and 092): a narrow ledger that
+   gates CI, the e2e limits test, the buildings' bake the same on
+   every machine, the pyright gate, the BBBike fallback,
+   `lib/city/frames.ts`. `code.product` 154 726.
+2. *The trees and the bake steps* (#344; plans 090, 092): the build
+   places every tree, one small file a level; no bake step writes
+   another's file or reads a later step's last output. `code.product`
+   154 501.
+3. *The web build pulls what CI publishes* (#348; plan 088): the host
+   bakes nothing. `code.product` 154 158.
+
+After the follow-ups of the same day (#350) it is 154 151: 1 191 lines
+over where the series began, where ruling 5 asked for fewer. What the
+lines bought is the first milestone's list (the portable maths, the
+BBBike fallback, the limits test's probe, `frames.ts`); milestones 2
+and 3 lowered the figure.
+
+**Rejected**, by ruling 5 unless said otherwise (the reason in full is
+its row in [README.md](./README.md)):
+
+- 089's phases 3–4, annotations in the bakes: they add lines and
+  re-key every bake.
+- 091, rasters as plain arrays and block compression: 400–900 lines of
+  product code more; the trial halved one raster's GPU bytes for
+  11–12 % more on the wire.
+- 092 beyond its phase 2, a store with typed tables: reduced to "a
+  step's output is its own" and one read helper.
+- 093, the streaming quadtree: 1 500–3 000 lines for a gain no figure
+  asks for yet.
+- 094's phase 3, the register of pipelines: its only customer was 093.
+- 095, packages and frame types: a move deletes nothing.
+- 096, heuristic scores: 600–1 200 lines of scoring.
+- Of 087: the wide ledger, the census and the comparers. Of 088: the
+  lock file published by hand (not by ruling 5: every pull request
+  that changes a bake would need someone with the token, and two such
+  conflict on its lines).
+
+**Left open**, none of it the series' any more:
+
+- The plans' files. 087–096 stay here in full with their findings, and
+  this file with them, until each is condensed into
+  [completed.md](./completed.md) as the README's lifecycle says; that
+  condensing is owed.
+- Whether the plates (`bun run plates`, the *Plates* job) stay: built
+  as scaffolding, kept until the maintainer decides otherwise. Their
+  tier 2, on a real GPU, is not built: it waits for the machine the
+  maintainer chooses (ADR 0018).
+- `data/` leaving git (088): not built, a pull request of its own, the
+  maintainer's; whether the browser reads the store is open with it.
+- 090's other layers: decided anew, a layer at a time, on their lines.
+- 094's phase 4: when three fixes `compileAsync`.
+- The host builds with the Bun its build image ships (1.3.14 on
+  2026-11-24), not the one `packageManager` pins; Vercel documents no
+  way to pin it short of downloading one in the build. Harmless while
+  the host bakes nothing.
+- Without the laser scan on the machine, `lowveg` thins the committed
+  scan crowns against the rows' trees only and writes its hedges from
+  OSM alone; other steps too rewrite their file from less when a raw
+  input is absent. Reported to the maintainer on 2026-11-24, who
+  decides the rule.
+- Entering Modell before any inquiry logs a failed pipeline
+  (`nameplate-shadow`) in a headless run: under investigation.

@@ -27,7 +27,9 @@
   less code in the viewer
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: IN PROGRESS — phase 0 built 2026-11-16; the trees,
+- **Status**: DONE as far as built (2026-11-24, the series closed): its row in
+  [README.md](./README.md) says what holds. As it stood before:
+  IN PROGRESS — phase 0 built 2026-11-16; the trees,
   simplified, built 2026-11-24 (Findings)
 
 ## Why this matters

@@ -31,7 +31,9 @@
   frame), less complexity (the compile choreography)
 - **Series**: [086-rewrite-programme.md](./086-rewrite-programme.md)
 - **Planned at**: commit `5dfa300d`, 2026-11-16
-- **Status**: IN PROGRESS — phases 0–2 done (2026-11-16), see *Findings*;
+- **Status**: DONE as far as it is built (2026-11-24, the series closed): its row in
+  [README.md](./README.md) says what holds. As it stood before:
+  IN PROGRESS — phases 0–2 done (2026-11-16), see *Findings*;
   phase 2 decided that phase 3 stays, before 093
 
 ## Why this matters
