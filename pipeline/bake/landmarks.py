@@ -464,6 +464,10 @@ def run(tile: Tile) -> None:
         (i for i in load_wikidata(tile) if owns(tile.bounds, i["x"], i["y"])),
         key=lambda i: -i["links"],
     )
+    # (the fetch's cache has the file's name)
+    cached = (tile.raw / "wikidata" / out.name).exists()
+    if not cached and tile.raw_absent(out, "no Wikidata cache here"):
+        return
     if not tile.cityjson.exists() or not has_extract(tile, "the landmarks"):
         return
     city = json.loads(tile.cityjson.read_text())

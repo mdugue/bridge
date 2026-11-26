@@ -395,12 +395,12 @@
   },
   "code": {
     "product": {
-      "total": 154151,
+      "total": 154168,
       "app": 60866,
       "lib": 41373,
       "components": 3007,
       "scripts": 13464,
-      "pipeline/bake": 35441
+      "pipeline/bake": 35458
     }
   },
   "browser": {

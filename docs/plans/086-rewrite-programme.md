@@ -428,10 +428,10 @@ its row in [README.md](./README.md)):
   2026-11-24), not the one `packageManager` pins; Vercel documents no
   way to pin it short of downloading one in the build. Harmless while
   the host bakes nothing.
-- Without the laser scan on the machine, `lowveg` thins the committed
-  scan crowns against the rows' trees only and writes its hedges from
-  OSM alone; other steps too rewrite their file from less when a raw
-  input is absent. Reported to the maintainer on 2026-11-24, who
-  decides the rule.
+- The steps that take a default where DOM1, the orthophoto, the
+  Basis-DLM or GLO-30 is not on the machine still write their file
+  from less (`docs/data-pipeline.md`, "What a re-bake runs"); the
+  steps that emptied a file, and `lowveg`, leave it since 2026-11-25.
 - Entering Modell before any inquiry logs a failed pipeline
-  (`nameplate-shadow`) in a headless run: under investigation.
+  (`nameplate-shadow`) in a headless run, as plan 094's findings
+  record it: not reproduced on 2026-11-24, the cause not known.

@@ -636,6 +636,8 @@ def run(tile: Tile) -> None:
     if not tile.mapillary:
         write(out, {}, {})
         return
+    if not path.exists() and tile.raw_absent(out, "no facade traits here"):
+        return
     city = json.loads(tile.cityjson.read_text())
     ws = walls(city)
     lines = gpath.read_text().splitlines() if gpath.exists() else None

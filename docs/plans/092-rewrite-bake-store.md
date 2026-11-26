@@ -647,7 +647,7 @@ no join step, less code.
 | `islands` rewrote the land cover's raster and legend | the step is gone: `landcover` carved the islands itself already, the step only did it again. Gone with it: refreshing the islands of a committed raster from a newer extract on a machine without the raw DLM (`--step islands`), where `landcover` stops |
 | `lamp-heights` and `lamp-water` rewrote `lamps` and `mly` | `lamps` and `mapillary` hand their points on under `data/_raw/<provider>/work/<site>/` (`Tile.work`), `lamp-heights` the two with their heights, and `lamp-water` alone writes the two files. `tram`, which reads the lamps, runs after it |
 | `trees` rewrote `canopyx` (`lowveg.rethin_scan_trees`) | `lowveg`, whose file it is, thins its standing scan trees itself where the scan is not on the machine |
-| `canopy` read the last bake's `canopyx` | it reads none: `lowveg` writes no scan crown within 5 m of a canopy point, a row's tree among them, so the row's tree now stands where a scan crown took its place before |
+| `canopy` read the last bake's `canopyx` | it reads none: `lowveg` writes no scan crown within 5 m of a canopy point, a row's tree among them, so the row's tree now stands where a scan crown took its place before. Without the scan on the machine the standing crowns were thinned against the rows' trees only until 2026-11-25 (3 260 of 158 182 committed crowns stood within 5 m of a canopy point of their tile, 49 of them a row's); since then against every canopy point, as with the scan |
 | the `Ledger`, the `again` / `then` loops, the recorder's `before` | gone: `step_cache.unchanged` is the key, the inputs, the probes, the listings and the outputs as recorded; `VERSION` 4. `step_cache.py` 619 → 503 lines |
 
 **The maintainer's decision (2026-11-24, passed on by the series'
@@ -663,9 +663,10 @@ Not done, and why:
 - `shopfronts` (`refilter`) and `traffic` (`reflag`) still filter their
   own last output where their raw input is not on the machine, as
   `lowveg` now does its scan trees: `Tile.raw_absent`'s meaning.
-- `lowveg` without the laser scan still writes the hedges from OSM
-  alone ("For phase 2", above): the scan is opt-in (`--lsc`), so "not
-  on this machine" cannot be told from "never fetched".
+- `lowveg` without the laser scan wrote the hedges from OSM alone
+  ("For phase 2", above). Since 2026-11-25 it leaves the file where
+  the scan is not on the machine and the file is the scan's — its
+  `attribution` carries the scan's credit (`Tile.raw_absent`).
 - On a machine without the Mapillary cache the tile's `mly` file stands
   as before, but its lamps are no longer measured again with OSM's
   (they are not handed on).

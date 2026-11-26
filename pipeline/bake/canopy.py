@@ -36,7 +36,8 @@ OSM's tree rows) are the canopy's too (`row: 1`, `row_trees`): one at each
 crown peak the surface model shows along the row — at least ROW_SPACING_M
 apart, over MIN_H, stood on the row's line, as tall as measured —, none
 within ROW_CLEAR_M of a canopy point, which is that tree already (a
-laser-scan crown, `canopyx`, gives way to a row's tree: lowveg.py). The
+laser-scan crown, `canopyx`, gives way to every canopy tree, a row's
+among them: lowveg.py). The
 build plants a row on its 9 m grid only on
 a tile without a canopy (no DOM1; scripts/bake-trees.ts). On the grid a Dresden row tree stood
 every 9 m where DOM1 shows one every 10 m (7.5–14), 35 % of them beside a

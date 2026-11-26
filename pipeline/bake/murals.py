@@ -736,13 +736,24 @@ def run_site(spec) -> None:
     cache = cache_dir(spec.raw)
     items, photos = _read(cache / "items.json"), _read(cache / "photos.json")
     found = candidates(pbf, site_extent(spec.tiles), spec.epsg)
+    picks = [(c, pick) for c in found if (pick := pick_photo(c, items, photos))]
+    # what the fetch asks and keeps, an empty answer too: an item of each
+    # mural that names one, each title of a mural with a size, each photo
+    sized = [c for c in found if all(size_of(c, items.get(c.item or "")))]
+    titles = [t for c in sized for t in photo_titles(c, items.get(c.item or ""))]
+    fetched = (
+        all(c.item in items for c in found if c.item)
+        and all(t in photos for t in titles)
+        and all(photo_file(cache, pick[0]).exists() for _, pick in picks)
+    )
+    if not fetched and (out_dir / "murals.json").exists():
+        print(
+            f"{spec.site}: the murals' cache is not all here — left as they are (`bun run fetch`)"
+        )
+        return
     loaded: dict[str, Buildings | None] = {}
     murals, images = [], set()
-    for c in found:
-        pick = pick_photo(c, items, photos)
-        if pick is None:
-            continue
-        photo, width, height, how = pick
+    for c, (photo, width, height, how) in picks:
         source = photo_file(cache, photo)
         if not source.exists():
             print(f"  {c.id} {c.name}: its photo is not fetched (`bun run fetch`)")
