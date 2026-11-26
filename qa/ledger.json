@@ -404,13 +404,13 @@
     }
   },
   "browser": {
-    "readWith": "chromium 153.0.8010.12, google / swiftshader",
+    "readWith": "chromium 159.0.8154.6, google / swiftshader",
     "firstLoad": {
       "files": 42,
-      "gzip": 1098348,
+      "gzip": 1098934,
       "workerOnly": {
         "files": 8,
-        "gzip": 34657
+        "gzip": 34659
       }
     },
     "phoneLiteSpawnCache": {
