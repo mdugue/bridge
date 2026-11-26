@@ -185,8 +185,7 @@ export function withStoppedCallsAnswered<T extends UIMessage | ModelMessage>(
  */
 function withoutEmptyAnswers<T>(rows: readonly T[]): T[] {
   return rows.filter(
-    (row, i) =>
-      !isEmptyAnswer(row) || isReasoningRow(i > 0 ? rows[i - 1] : undefined)
+    (row, i) => !isEmptyAnswer(row) || isReasoningRow(rows[i - 1])
   );
 }
 
@@ -316,21 +315,19 @@ export async function* ended(
   }
 ): AsyncIterable<StreamChunk> {
   let last: StreamChunk | undefined;
-  let before: StreamChunk | undefined;
   try {
     for await (const chunk of stream) {
       // the abort's own error would say less than the deadline's
       if (signal.reason === DEADLINE && chunk.type === EventType.RUN_ERROR) {
         continue;
       }
-      before = last;
       last = chunk;
       yield chunk;
     }
   } finally {
     onEnd();
   }
-  const why = stopText(runEnd(last, before), signal.reason === DEADLINE);
+  const why = stopText(runEnd(last), signal.reason === DEADLINE);
   if (why) {
     yield runError(ASK_FAILURES[why].text, why);
   }
@@ -374,36 +371,24 @@ function stopText(end: RunEnd, late: boolean): AskFailureCode | null {
   }
 }
 
-function runEnd(
-  last: StreamChunk | undefined,
-  before: StreamChunk | undefined
-): RunEnd {
-  if (last?.type === EventType.TOOL_CALL_RESULT) {
-    return "cut";
-  }
+function runEnd(last: StreamChunk | undefined): RunEnd {
   if (last?.type !== EventType.RUN_FINISHED) {
     return "other";
   }
   const c = last as {
-    metadata?: { tanstack?: { finishReason?: unknown } };
+    metadata?: { tanstack?: { finishReason?: unknown; loopStopped?: unknown } };
     outcome?: { type?: unknown };
   };
   if (c.outcome?.type === "interrupt") {
     return "waits";
   }
-  const reason = c.metadata?.tanstack?.finishReason;
-  if (reason === "tool_calls") {
+  // chat() marks the run its loop strategy (the turn cap) ended
+  if (c.metadata?.tanstack?.loopStopped === true) {
     return "cut";
   }
+  const reason = c.metadata?.tanstack?.finishReason;
   if (reason === "length") {
-    // a capped run whose last tool call the length cut: chat() ends it on
-    // `length` right after that call's failed result
-    const state = (before as { metadata?: { tanstack?: { state?: unknown } } })
-      ?.metadata?.tanstack?.state;
-    return before?.type === EventType.TOOL_CALL_RESULT &&
-      state === "output-error"
-      ? "cut"
-      : "length";
+    return "length";
   }
   return reason === "content_filter" ? "refused" : "stop";
 }

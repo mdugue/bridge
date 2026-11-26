@@ -348,38 +348,30 @@ async function* whole() {
 }
 
 describe("an answer that stops says why", () => {
-  test("a run the turn cap ends after a server tool", async () => {
-    const { out, code } = await ends(
-      ended(
-        of(
-          "RUN_STARTED",
-          "TOOL_CALL_START",
-          "RUN_FINISHED",
-          "TOOL_CALL_RESULT"
-        ),
-        new AbortController().signal
-      )
-    );
-    expect(out.at(-1)).toContain("zu viele Schritte");
-    expect(code).toBe("too-many-steps");
+  test("a run the turn cap ends (chat()'s loopStopped)", async () => {
+    for (const finishReason of ["tool_calls", "length"]) {
+      const { out, code } = await ends(
+        ended(
+          list(chunk("TOOL_CALL_START"), chunk("TOOL_CALL_RESULT"), {
+            ...chunk("RUN_FINISHED"),
+            metadata: { tanstack: { finishReason, loopStopped: true } },
+          } as StreamChunk),
+          new AbortController().signal
+        )
+      );
+      expect(out.at(-1)).toContain("zu viele Schritte");
+      expect(code).toBe("too-many-steps");
+    }
   });
 
-  test("a cut run that ends on its RUN_FINISHED after the results", async () => {
-    const { out, code } = await ends(
+  test("a stream that breaks off after a result says nothing more", async () => {
+    const { code } = await ends(
       ended(
-        list(
-          chunk("TOOL_CALL_START"),
-          {
-            ...chunk("TOOL_CALL_RESULT"),
-            metadata: { tanstack: { state: "output-error" } },
-          },
-          finished("length")
-        ),
+        of("RUN_STARTED", "TOOL_CALL_START", "TOOL_CALL_RESULT"),
         new AbortController().signal
       )
     );
-    expect(out.at(-1)).toContain("zu viele Schritte");
-    expect(code).toBe("too-many-steps");
+    expect(code).toBeUndefined();
   });
 
   test("a turn that spends its output before a word is cut, not capped", async () => {

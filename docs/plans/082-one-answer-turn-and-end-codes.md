@@ -155,7 +155,7 @@ today's status fallback.
 | `app/api/frag/route.ts` | `refuse` | the refusal: status + `{ code, message }`, `Cache-Control: no-store`, the log line `[frag] <status> <code>` |
 | `lib/city/ask-run.ts` | `runAsk` | `chat()`'s AG-UI stream |
 | `lib/city/ask-run.ts` | `errorChunk`, `runError` | the `RUN_ERROR` shape the browser gets |
-| `lib/city/ask-run.ts` | `ended`, `runEnd` | `RUN_FINISHED.outcome.type === "interrupt"`, `metadata.tanstack.finishReason`, `TOOL_CALL_RESULT` and its `metadata.tanstack.state` |
+| `lib/city/ask-run.ts` | `ended`, `runEnd` | `RUN_FINISHED.outcome.type === "interrupt"`, `metadata.tanstack.finishReason` and `loopStopped` (since @tanstack/ai 1.3; before, a trailing `TOOL_CALL_RESULT` and its `metadata.tanstack.state`) |
 | `lib/city/ask-run.ts` | `scrubbed` | `RUN_ERROR.message/code`, thrown errors |
 | `lib/city/ask-run.ts` | `withStoppedCallsAnswered`, `roundsSinceQuestion` | the wire rows (assistant `toolCalls`, `tool` rows) and their model conversion |
 | `lib/city/ask-city.ts` | `ASK_KEY_HEADER`, `parseAskProps`, `lastQuestion`, `conversationProblem` | the header name, `forwardedProps`' shape, a message's `parts`/`content` |
