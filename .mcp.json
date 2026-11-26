@@ -6,7 +6,7 @@
     },
     "shadcn": {
       "command": "npx",
-      "args": ["shadcn@4.21.0", "mcp"]
+      "args": ["shadcn@4.23.1", "mcp"]
     },
     "sentry": {
       "type": "http",

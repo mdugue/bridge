@@ -34,15 +34,19 @@ export default defineConfig({
     // A worker's URL stays explicit for the bundler: new URL("./x.ts", …).
     "unicorn/relative-url-style": "off",
 
+    // `then(ok, failed)` keeps a throw in `ok` out of `failed`: a handover
+    // settled either way (`then(settle, settle)`) or a task's own reject.
+    "promise/prefer-catch": "off",
+
     // Takes `typedArray.slice()` for an array: its fix makes a plain one.
     "unicorn/prefer-spread": "off",
 
-    // They fight how this code is written: helpers below their callers, the
-    // key order that reads best, comments beside the line they explain.
+    // They fight how this code is written: helpers below their callers,
+    // comments beside the line they explain (the preset leaves key order
+    // free since ultracite 8.2).
     "func-style": "off",
     "no-inline-comments": "off",
     "no-use-before-define": "off",
-    "sort-keys": "off",
 
     // The work needs what they forbid: packed words and hash seeds, one
     // compile at a time, no array copies on a phone (ADR 0047), promises
