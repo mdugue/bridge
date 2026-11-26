@@ -6,7 +6,7 @@ requires-python = ">=3.12,<3.14"
 dependencies = [
   "laspy[lazrs]==2.7.0",
   "networkx==3.7",
-  "numpy==2.5.4",
+  "numpy==2.5.5",
   "onnxruntime==1.31.1",
   "pillow==13.0.0",
   "pyogrio==0.13.0",
