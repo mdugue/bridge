@@ -8,6 +8,7 @@ import { EventType, uiMessagesToWire } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk, UIMessage } from "@tanstack/ai";
 import { fakeText } from "@tanstack/ai/testing";
 import { describe, expect, test } from "bun:test";
+import { ASK_LIMITS } from "./ask-city";
 import { knowledgeOf } from "./ask-knowledge";
 import type { AskPromptSite } from "./ask-prompt";
 import { answerTurn } from "./ask-run";
@@ -211,10 +212,12 @@ describe("a refused request", () => {
       message: "Der Schlüssel muss neu geprüft werden.",
     },
     {
-      name: "41 messages",
+      name: "one message too many",
       sent: body({
         messages: uiMessagesToWire(
-          Array.from({ length: 41 }, (_, i) => question(`${i}`, "Hallo"))
+          Array.from({ length: ASK_LIMITS.messages + 1 }, (_, i) =>
+            question(`${i}`, "Hallo")
+          )
         ),
       }),
       status: 413,
@@ -378,7 +381,14 @@ test("a scripted answer shows the place, then says so on the resume", async () =
       // the search's hit is in what the model reads next
       expect(JSON.stringify(request.messages)).toContain("Q157229");
       return {
-        toolCalls: [{ name: "zeige", input: { x: 411_803, y: 5_656_355 } }],
+        toolCalls: [
+          {
+            name: "zeige",
+            input: {
+              ziele: [{ name: "Frauenkirche", x: 411_803, y: 5_656_355 }],
+            },
+          },
+        ],
       };
     },
   ]);

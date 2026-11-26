@@ -82,6 +82,13 @@ import type { FeatureInquiry } from "@/lib/city/inquiry-features";
 import { createRegressionState, stepRegression } from "@/lib/city/regression";
 import { spawnViewpoint, tileExtentOf } from "@/lib/city/site";
 import type { Site, ViewpointGeometry } from "@/lib/city/site";
+import { frameTargets } from "@/lib/city/ask-view";
+import type {
+  AskTarget,
+  FrameContext,
+  Framed,
+  SitePoint,
+} from "@/lib/city/ask-view";
 import { beyondExtents } from "@/lib/city/design-placement";
 import type { TerrainBounds } from "@/lib/city/terrain-geometry";
 import { tileTopsOf } from "@/lib/city/tileset";
@@ -752,6 +759,16 @@ export interface SceneApp {
    * so restoring it is the same animated glide as any curated one.
    */
   captureViewpoint: () => ViewpointGeometry;
+  /**
+   * *Frag die Stadt*'s view of `places` (lib/city/ask-view.ts), framed
+   * here, where the loaded buildings and the canvas are: for the walk/fly
+   * camera's shape, with sight lines past the tiles whose BVH is built.
+   */
+  frameView: (
+    places: readonly AskTarget[],
+    from: { x: number; y: number } | null,
+    sun: FrameContext["sun"]
+  ) => Framed;
   /** Captures the full camera pose for a reproducible snapshot. */
   getCameraState: () => CameraState;
   /**
@@ -3230,6 +3247,28 @@ async function bootApp(
     );
   };
 
+  // *Frag die Stadt*'s framing (lib/city/ask-view.ts): its sight lines
+  const sightRaycaster = new Raycaster();
+  sightRaycaster.firstHitOnly = true;
+  // the first loaded building a sight line meets between two points of
+  // the site (EPSG, `z` m a.s.l.); the tiles whose BVH is built only
+  const sightHit = (from3: SitePoint, point: SitePoint): SitePoint | null => {
+    const a = epsgToWorld(from3.x, from3.y, offset);
+    const b = epsgToWorld(point.x, point.y, offset);
+    const from = new Vector3(a.x, from3.z, a.z);
+    const to = new Vector3(b.x, point.z, b.z);
+    const length = from.distanceTo(to);
+    sightRaycaster.set(from, to.sub(from).normalize());
+    sightRaycaster.far = length;
+    // the tiles whose BVH is built: a sight line never builds one
+    const hit = nearestCityHit(sightRaycaster, stream.visibleCities(), false)
+      ?.hit.point;
+    if (!hit) {
+      return null;
+    }
+    const at = worldToEpsg(hit.x, hit.z, offset);
+    return { x: at.x, y: at.y, z: hit.y };
+  };
   // Crosshair autofocus for the photographic DoF (crosshair-focus.ts),
   // throttled like the pose (`tickFocus`).
   const focus = createCrosshairFocus({
@@ -4382,6 +4421,8 @@ async function bootApp(
       return pose.flyToViewpoint(view, glide);
     },
     captureViewpoint: pose.captureViewpoint,
+    frameView: (places, from, sun) =>
+      frameTargets(places, { aspect: camera.aspect, from, sun, sightHit }),
     placeAt: (view) =>
       toSpot(view.epsg.x, view.epsg.y, () => pose.placeAt(view)),
     teleportTo: (x, y) => toSpot(x, y, () => pose.teleportTo(x, y)),

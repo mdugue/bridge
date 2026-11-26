@@ -108,6 +108,7 @@ const ASKED = [
   "captureImage",
   "captureViewpoint",
   "disposeForReload",
+  "frameView",
   "getFocusDebug",
   "getGpuDebug",
   "getPipelineBudget",
