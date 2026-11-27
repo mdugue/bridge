@@ -350,3 +350,13 @@ def test_without_its_photos_cache_a_tile_keeps_its_committed_shopfronts(tmp_path
     shopfronts.run(tile)
     # no extract: nothing crosses, nothing is emptied
     assert json.loads(out.read_text()) == json.loads(before)
+
+
+def test_a_bay_rounded_below_its_width_is_dropped():
+    # 8.925–10.125 m is 1.2 m measured, but 8.93–10.12 once rounded: the
+    # stored width is what the viewer reads, so it counts
+    state = np.zeros(24, dtype=int)
+    state[18:20] = 1
+    share = np.zeros(24)
+    share[17], share[20] = 0.15, 0.25
+    assert bays(state, share, 12.0) == []

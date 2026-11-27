@@ -41,6 +41,278 @@
           "dataAsOf": "2026-11-05 (state.txt timestamp 2026-11-05T01:06:41Z; re-baked 2026-11-05 with every step but facades, windows, transit, landmark-facts and murals)"
         }
       }
+    },
+    "baked": {
+      "canopy": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "cultivated": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "doors": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "edges": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "furniture": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "lamp-heights": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "lamps": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "landcover": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "landmarks": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "lowveg": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "mapillary": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "markings": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "monuments": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "ndvi": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "osm-buildings": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "passages": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "rail": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "riverside": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "shopfronts": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "small-buildings": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "sport": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "stairs": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "structures": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "surface": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "tram": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "trees": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      },
+      "walls": {
+        "32408_5708_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        },
+        "32408_5710_2_nw": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract arnsberg-regbez-latest.osm.pbf, https://download.geofabrik.de/europe/germany/nordrhein-westfalen/arnsberg-regbez-latest.osm.pbf, Last-Modified 2026-11-25T00:29:00+00:00)",
+          "on": "2026-11-26"
+        }
+      }
     }
   },
   "wikidata": {

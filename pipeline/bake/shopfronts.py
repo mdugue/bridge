@@ -289,9 +289,9 @@ def bays(state: np.ndarray, share: np.ndarray, length: float, bridge: int = 1) -
     out = []
     for i, j in runs(s == 1):
         start, end = i * BIN_M - into(i - 1), j * BIN_M + into(j)
-        start, end = max(0.0, start), min(length, end)
-        if end - start >= MIN_BAY_M - 1e-9:
-            out.append([round(start, 2), round(end, 2)])
+        start, end = round(max(0.0, start), 2), round(min(length, end), 2)
+        if end - start >= MIN_BAY_M - 1e-9:  # rounded first: the stored width counts
+            out.append([start, end])
     return out
 
 
@@ -311,6 +311,8 @@ def snap_rhythm(bs: list[list[float]], length: float) -> list[list[float]]:
         out.append([round(max(0.0, c - med / 2), 2), round(min(length, c + med / 2), 2)])
     if any(b[0] - a[1] < MIN_PIER_M for a, b in zip(out, out[1:], strict=False)):
         return bs  # the rhythm would close a measured pier
+    if any(e - s < MIN_BAY_M - 1e-9 for s, e in out):
+        return bs  # rounded, or cut at the wall's end, below a bay's width
     return out
 
 
@@ -411,8 +413,8 @@ def under_canopy(cs: list[dict], closed: list[list[float]]) -> list[list[float]]
                 for q in ([s0, min(s1, c0)], [max(s0, c1), s1])
                 if q[1] - q[0] > 0
             ]
-        out.extend(q for q in pieces if q[1] - q[0] >= MIN_BAY_M - 1e-9)
-    return [[round(a, 2), round(b, 2)] for a, b in sorted(out)]
+        out.extend([round(a, 2), round(b, 2)] for a, b in pieces)
+    return sorted(q for q in out if q[1] - q[0] >= MIN_BAY_M - 1e-9)
 
 
 def canopy_depth(heights: list[float | None], inside: float | None) -> tuple[float, float] | None:
