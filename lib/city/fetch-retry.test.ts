@@ -248,6 +248,25 @@ test("the budget spent, the retries give up with a NetworkError that says how of
   );
 });
 
+test("a try that outlasted the budget before it failed is still retried", async () => {
+  // the first try's body read runs 25 s, then the connection breaks
+  const page = fakePage();
+  let calls = 0;
+  const answer = await withRetry(
+    async () => {
+      calls += 1;
+      if (calls === 1) {
+        await page.env.sleep(25_000);
+        throw new TypeError("network error");
+      }
+      return ok();
+    },
+    { budgetMs: 20_000, env: page.env }
+  );
+  expect(answer.status).toBe(200);
+  expect(calls).toBe(2);
+});
+
 test("time the page is hidden does not count against the budget", async () => {
   // hidden from 1 s to 61 s: the retries wait it out and still have budget
   const page = fakePage([[1000, 61_000]]);

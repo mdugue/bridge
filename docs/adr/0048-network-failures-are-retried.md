@@ -18,7 +18,9 @@ switched off, a failed boot — and a report of it.
    corrupt body are fatal.
 2. **The budget counts the page's visible time only**, offline or not, so a
    phone in a pocket does not use it up and a visible page without a
-   network does end in a decision.
+   network does end in a decision. It starts at a request's first
+   failure, not its first try, so a long download that breaks late is
+   still retried.
 3. **One module is the page's view of the network** (`net-gate.ts`):
    when it is usable, the budgets' clock, and whether the page is leaving.
    While it leaves, nothing is decided or reported.
