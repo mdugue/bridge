@@ -414,12 +414,12 @@
       }
     },
     "phoneLiteSpawnCache": {
-      "bytes": 158979087,
+      "bytes": 159101694,
       "contents": {
-        "city_33412_5656_2_sn_far.glb.gz": 12632382,
-        "city_33412_5656_2_sn.glb.gz": 27015566,
-        "terrain_33412_5656_2_sn_l0.glb.gz": 94610268,
-        "terrain_33412_5656_2_sn_l1.glb.gz": 24720871
+        "city_33412_5656_2_sn_far.glb.gz": 12697358,
+        "city_33412_5656_2_sn.glb.gz": 27079681,
+        "terrain_33412_5656_2_sn_l0.glb.gz": 94607144,
+        "terrain_33412_5656_2_sn_l1.glb.gz": 24717511
       }
     }
   }
