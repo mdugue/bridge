@@ -247,6 +247,1188 @@
         "tram": { "query": "railway=tram lines (bridge, layer); power=catenary_mast points within 15 m of a tram track; building outlines (the facades of the rosette spans); railway=tram_stop points and public_transport=platform / railway=platform (the stop signs, none by a shelter in the furniture of the tile or of its neighbours); all within 30 m of the tile", "dataAsOf": "2026-10-31 (re-baked 2026-11-01 with every step from the BBBike city extract Dresden.osm.pbf, Last-Modified 2026-10-31 16:49 UTC)" },
         "walls": { "query": "barrier in (retaining_wall, city_wall, wall) or man_made=embankment", "dataAsOf": "2026-10-31 (re-baked 2026-11-01 with every step from the BBBike city extract Dresden.osm.pbf, Last-Modified 2026-10-31 16:49 UTC)" }
       }
+    },
+    "baked": {
+      "canopy": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "cultivated": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "doors": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "edges": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "furniture": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "landcover": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "landmarks": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "lowveg": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "markings": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "monuments": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "ndvi": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "osm-buildings": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "passages": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "rail": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "shopfronts": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "sport": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "stairs": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "structures": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "surface": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "tram": {
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "trees": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "walls": {
+        "33408_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33408_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33410_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33412_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5656_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33414_5658_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        },
+        "33416_5654_2_sn": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract sachsen-latest.osm.pbf, https://download.geofabrik.de/europe/germany/sachsen-latest.osm.pbf, Last-Modified 2026-11-25T00:27:29+00:00)",
+          "on": "2026-11-27"
+        }
+      }
     }
   }
 }

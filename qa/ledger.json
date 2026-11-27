@@ -5,35 +5,35 @@
   "published": {
     "files": 670,
     "boot": {
-      "bytes": 39230,
+      "bytes": 39309,
       "files": 3
     },
     "tiles": {
-      "bytes": 192287261,
+      "bytes": 190550891,
       "files": 611
     },
     "site": {
-      "bytes": 3514729,
+      "bytes": 3518669,
       "files": 39
     },
     "server": {
-      "bytes": 3859068,
+      "bytes": 3867449,
       "files": 17
     },
     "kinds": {
       "landmark-facts": {
         "class": "site",
-        "bytes": 4225,
+        "bytes": 4162,
         "files": 1
       },
       "manifest": {
         "class": "boot",
-        "bytes": 8824,
+        "bytes": 8873,
         "files": 1
       },
       "minimap": {
         "class": "site",
-        "bytes": 87334,
+        "bytes": 87274,
         "files": 1
       },
       "mural-drawings": {
@@ -48,17 +48,17 @@
       },
       "plate": {
         "class": "boot",
-        "bytes": 21264,
+        "bytes": 21260,
         "files": 1
       },
       "provenance": {
         "class": "site",
-        "bytes": 555,
+        "bytes": 551,
         "files": 1
       },
       "site-map": {
         "class": "site",
-        "bytes": 98414,
+        "bytes": 98668,
         "files": 1
       },
       "site-stats": {
@@ -68,22 +68,22 @@
       },
       "stadtwissen": {
         "class": "server",
-        "bytes": 3858882,
+        "bytes": 3867263,
         "files": 16
       },
       "tileset": {
         "class": "boot",
-        "bytes": 9142,
+        "bytes": 9176,
         "files": 1
       },
       "tileset-spawn": {
         "class": "site",
-        "bytes": 2019,
+        "bytes": 2041,
         "files": 1
       },
       "trams": {
         "class": "site",
-        "bytes": 144137,
+        "bytes": 147928,
         "files": 1
       },
       "walk-photos": {
@@ -102,62 +102,62 @@
     "far": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 4664304,
+        "bytes": 4672664,
         "files": 10
       },
       "median": {
         "tile": "33410_5654_2_sn",
-        "bytes": 4572883,
+        "bytes": 4572781,
         "files": 10
       },
       "largest": {
-        "tile": "33414_5654_2_sn",
-        "bytes": 5773712,
+        "tile": "33416_5656_2_sn",
+        "bytes": 5771946,
         "files": 10
       },
       "site": {
-        "bytes": 66352884,
+        "bytes": 66328244,
         "files": 150
       }
     },
     "fine": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 5384348,
+        "bytes": 5349827,
         "files": 27
       },
       "median": {
         "tile": "33410_5656_2_sn",
-        "bytes": 5575708,
+        "bytes": 5528848,
         "files": 27
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 7446033,
+        "bytes": 7413040,
         "files": 27
       },
       "site": {
-        "bytes": 83399197,
+        "bytes": 82902352,
         "files": 403
       },
       "phone": {
         "spawn": {
           "tile": "33412_5656_2_sn",
-          "bytes": 5243498,
+          "bytes": 5239766,
           "files": 26
         },
         "median": {
           "tile": "33410_5656_2_sn",
-          "bytes": 5381043,
+          "bytes": 5367335,
           "files": 26
         },
         "largest": {
           "tile": "33416_5656_2_sn",
-          "bytes": 7286426,
+          "bytes": 7279735,
           "files": 26
         },
         "site": {
-          "bytes": 81166605,
+          "bytes": 81102681,
           "files": 388
         }
       }
@@ -165,41 +165,41 @@
     "approached": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 7850853,
+        "bytes": 7720191,
         "files": 32
       },
       "median": {
-        "tile": "33410_5658_2_sn",
-        "bytes": 8062474,
+        "tile": "33412_5658_2_sn",
+        "bytes": 7938363,
         "files": 32
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 9975626,
+        "bytes": 9865465,
         "files": 32
       },
       "site": {
-        "bytes": 117759361,
+        "bytes": 116016372,
         "files": 476
       },
       "phone": {
         "spawn": {
           "tile": "33412_5656_2_sn",
-          "bytes": 7456504,
+          "bytes": 7385409,
           "files": 28
         },
         "median": {
           "tile": "33410_5656_2_sn",
-          "bytes": 7544726,
+          "bytes": 7452026,
           "files": 28
         },
         "largest": {
           "tile": "33416_5656_2_sn",
-          "bytes": 9614944,
+          "bytes": 9552883,
           "files": 28
         },
         "site": {
-          "bytes": 111636684,
+          "bytes": 110664846,
           "files": 418
         }
       }
@@ -207,70 +207,70 @@
     "near": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 3039000,
+        "bytes": 3050670,
         "files": 1
       },
       "median": {
         "tile": "33414_5656_2_sn",
-        "bytes": 2454878,
+        "bytes": 2457333,
         "files": 1
       },
       "largest": {
         "tile": "33414_5654_2_sn",
-        "bytes": 4252759,
+        "bytes": 4252234,
         "files": 1
       },
       "site": {
-        "bytes": 37085658,
+        "bytes": 37085732,
         "files": 15
       }
     },
     "ask": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 38461,
+        "bytes": 38467,
         "files": 1
       },
       "median": {
         "tile": "33410_5658_2_sn",
-        "bytes": 23697,
+        "bytes": 23663,
         "files": 1
       },
       "largest": {
         "tile": "33410_5654_2_sn",
-        "bytes": 41092,
+        "bytes": 41158,
         "files": 1
       },
       "site": {
-        "bytes": 347613,
+        "bytes": 348106,
         "files": 15
       }
     },
     "all": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 13701630,
+        "bytes": 13593072,
         "files": 41
       },
       "median": {
-        "tile": "33410_5658_2_sn",
-        "bytes": 13694602,
+        "tile": "33412_5656_2_sn",
+        "bytes": 13593072,
         "files": 41
       },
       "largest": {
         "tile": "33416_5656_2_sn",
-        "bytes": 17387294,
+        "bytes": 17274755,
         "files": 41
       },
       "site": {
-        "bytes": 192287261,
+        "bytes": 190550891,
         "files": 611
       }
     },
     "unvisited": {
       "spawn": {
         "tile": "33412_5656_2_sn",
-        "bytes": 153059,
+        "bytes": 153077,
         "files": 1
       },
       "median": {
@@ -284,7 +284,7 @@
         "files": 1
       },
       "site": {
-        "bytes": 1961592,
+        "bytes": 1961910,
         "files": 15
       }
     }
@@ -293,46 +293,46 @@
     "spawn": {
       "tile": "33412_5656_2_sn",
       "fine": {
-        "bytes": 184971,
+        "bytes": 183974,
         "files": 16,
         "kinds": {
           "bridge": 1053,
           "cultivated": 772,
-          "dressing": 103527,
-          "furniture": 25898,
-          "lamps": 3733,
+          "dressing": 102491,
+          "furniture": 25919,
+          "lamps": 3780,
           "lowveg": 4252,
-          "mly": 9314,
+          "mly": 9303,
           "monuments": 5973,
           "platform": 796,
           "rail": 188,
           "railarea": 193,
           "riverside": 1431,
-          "sportTable": 1332,
-          "traffic": 8015,
-          "tram": 16963,
+          "sportTable": 1334,
+          "traffic": 7990,
+          "tram": 16968,
           "vegrows": 1531
         }
       },
       "coarse": {
-        "bytes": 63858,
+        "bytes": 63438,
         "files": 3,
         "kinds": {
           "bridge": 1053,
-          "dressingCoarse": 54790,
-          "traffic": 8015
+          "dressingCoarse": 54395,
+          "traffic": 7990
         }
       }
     },
     "forest": {
       "tile": "33416_5658_2_sn",
       "fine": {
-        "bytes": 466844,
+        "bytes": 466419,
         "files": 16,
         "kinds": {
           "bridge": 162,
           "cultivated": 162,
-          "dressing": 462280,
+          "dressing": 461855,
           "furniture": 345,
           "lamps": 162,
           "lowveg": 191,
@@ -349,11 +349,11 @@
         }
       },
       "coarse": {
-        "bytes": 238669,
+        "bytes": 237995,
         "files": 3,
         "kinds": {
           "bridge": 162,
-          "dressingCoarse": 237893,
+          "dressingCoarse": 237219,
           "traffic": 614
         }
       }
@@ -361,46 +361,46 @@
     "yards": {
       "tile": "33410_5656_2_sn",
       "fine": {
-        "bytes": 231583,
+        "bytes": 230052,
         "files": 16,
         "kinds": {
           "bridge": 5311,
           "cultivated": 557,
-          "dressing": 87171,
-          "furniture": 29202,
-          "lamps": 5544,
+          "dressing": 85461,
+          "furniture": 29254,
+          "lamps": 5569,
           "lowveg": 1730,
-          "mly": 10937,
+          "mly": 10994,
           "monuments": 14864,
           "platform": 5515,
           "rail": 12840,
           "railarea": 9839,
           "riverside": 1413,
-          "sportTable": 1906,
-          "traffic": 7761,
-          "tram": 35801,
+          "sportTable": 1904,
+          "traffic": 7755,
+          "tram": 35854,
           "vegrows": 1192
         }
       },
       "coarse": {
-        "bytes": 58205,
+        "bytes": 57164,
         "files": 3,
         "kinds": {
           "bridge": 5311,
-          "dressingCoarse": 45133,
-          "traffic": 7761
+          "dressingCoarse": 44098,
+          "traffic": 7755
         }
       }
     }
   },
   "code": {
     "product": {
-      "total": 154156,
+      "total": 154161,
       "app": 60866,
       "lib": 41359,
       "components": 3007,
       "scripts": 13464,
-      "pipeline/bake": 35460
+      "pipeline/bake": 35465
     }
   },
   "browser": {
@@ -414,12 +414,12 @@
       }
     },
     "phoneLiteSpawnCache": {
-      "bytes": 158979087,
+      "bytes": 159101694,
       "contents": {
-        "city_33412_5656_2_sn_far.glb.gz": 12632382,
-        "city_33412_5656_2_sn.glb.gz": 27015566,
-        "terrain_33412_5656_2_sn_l0.glb.gz": 94610268,
-        "terrain_33412_5656_2_sn_l1.glb.gz": 24720871
+        "city_33412_5656_2_sn_far.glb.gz": 12697358,
+        "city_33412_5656_2_sn.glb.gz": 27079681,
+        "terrain_33412_5656_2_sn_l0.glb.gz": 94607144,
+        "terrain_33412_5656_2_sn_l1.glb.gz": 24717511
       }
     }
   }
