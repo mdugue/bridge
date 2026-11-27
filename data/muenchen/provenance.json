@@ -45,6 +45,476 @@
           "dataAsOf": "2026-10-31 (re-baked 2026-11-01 with every step from the BBBike city extract Muenchen.osm.pbf, Last-Modified 2026-10-31 16:37 UTC)"
         }
       }
+    },
+    "baked": {
+      "canopy": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "cultivated": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "doors": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "edges": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "furniture": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "lamp-heights": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "lamps": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "landcover": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "landmarks": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "lowveg": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "markings": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "monuments": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "ndvi": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "osm-buildings": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "passages": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "rail": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "riverside": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "shopfronts": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "small-buildings": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "sport": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "stairs": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "structures": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "surface": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "tram": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "trees": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "walls": {
+        "32690_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32690_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5332_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        },
+        "32692_5334_2_by": {
+          "dataAsOf": "2026-11-25 (Geofabrik extract oberbayern-latest.osm.pbf, https://download.geofabrik.de/europe/germany/bayern/oberbayern-latest.osm.pbf, Last-Modified 2026-11-25T00:29:35+00:00)",
+          "on": "2026-11-27"
+        }
+      }
     }
   },
   "wikidata": {
