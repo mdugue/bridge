@@ -268,7 +268,8 @@ span, length, the number of spans `P1314`) into
 `"version": 2`, and one without it is fetched again);
 and **Wikidata's landmarks**: one SPARQL query per tile (`wikibase:box`
 over the tile, instances of a subclass of *architectural structure*
-`Q811979` with at least two sitelinks, the top 80 by sitelinks; their
+`Q811979` with at least two sitelinks, all of them, ties ordered by the
+item so a re-fetch answers alike; their
 German label, position, height `P2048`, materials `P186` and whether they
 are a building, `Q41176`) into `wikidata/landmarks_<tile>.json`
 (`landmarks.fetch_wikidata`), and whether each still stands — `P576`,

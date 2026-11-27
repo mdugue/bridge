@@ -92,7 +92,7 @@ SELECT ?i ?label ?coord ?links (SAMPLE(?h) AS ?height)
   OPTIONAL { ?i wdt:P2048 ?h . }
   OPTIONAL { ?i wdt:P186 ?m . ?m rdfs:label ?mat . FILTER(LANG(?mat) = "en") }
   ?i rdfs:label ?label . FILTER(LANG(?label) = "de")
-} GROUP BY ?i ?label ?coord ?links ORDER BY DESC(?links) LIMIT 80
+} GROUP BY ?i ?label ?coord ?links ORDER BY DESC(?links) ?i LIMIT %(limit)d
 """
 # Wikidata's material labels (en) → the clay's wall materials, in the order
 # the one a facade shows wins (a glass hall on a brick warehouse: glass)
@@ -102,6 +102,12 @@ MATERIAL_ORDER = ("glass", "brick", "stone", "metal", "concrete", "wood", "plast
 # A dense centre's box can time out at the endpoint (a 504 after 60 s):
 # then the box is asked again in quarters, down to this depth.
 MAX_SPLIT = 2
+# The rows one box may answer: well above a tile's, so the answer is the
+# whole box and not the endpoint's pick among equals. A cap of 80 ordered
+# by sitelinks alone cut Dresden's station quarter (116 items, most of two
+# sitelinks) somewhere else at each fetch: its landmarks fell 38 → 21.
+# Ties are ordered by the item as well.
+ROW_LIMIT = 2000
 
 
 def query_box(
@@ -116,6 +122,7 @@ def query_box(
         "e": lons[1],
         "n": lats[1],
         "min": MIN_SITELINKS,
+        "limit": ROW_LIMIT,
     }
     req = urllib.request.Request(
         f"{SPARQL}?{urllib.parse.urlencode({'query': query})}",
@@ -126,7 +133,10 @@ def query_box(
     )
     try:
         with urllib.request.urlopen(req, timeout=180) as res:
-            return json.load(res)["results"]["bindings"]
+            rows = json.load(res)["results"]["bindings"]
+            if len(rows) >= ROW_LIMIT:
+                print(f"WARNING Wikidata: a box answered {ROW_LIMIT} rows — some are left out")
+            return rows
     except OSError:
         if depth >= MAX_SPLIT:
             raise

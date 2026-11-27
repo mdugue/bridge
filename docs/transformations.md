@@ -2088,7 +2088,8 @@ visual-variable codebook is in
   the facade profiles' openings share had read a stucco house at 0.99.
 - **Landmarks from Wikidata** `◎ detected` `❝ taken` (HUD *Erkunden* → *Orte*; plan 050)
   — `bun run fetch` asks Wikidata per tile (`wikibase:box`, instance of a
-  subclass of *architectural structure* Q811979, ≥ 2 sitelinks, top 80;
+  subclass of *architectural structure* Q811979, ≥ 2 sitelinks, all of
+  them — a top 80 left the pick among equal sitelinks to the endpoint;
   height P2048, material P186, building = subclass of Q41176; a box that
   times out is asked again in quarters) → `data/_raw/<provider>/wikidata/
   landmarks_<tile>.json` (CC0). `pipeline/bake/landmarks.py` matches each

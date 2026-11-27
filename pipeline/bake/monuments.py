@@ -600,7 +600,7 @@ SELECT ?i ?label ?coord (GROUP_CONCAT(DISTINCT ?mat; separator="|") AS ?material
   MINUS { ?i wdt:P31 wd:Q26703203 }
   ?i wdt:P186 ?m . ?m rdfs:label ?mat . FILTER(LANG(?mat) = "en")
   ?i rdfs:label ?label . FILTER(LANG(?label) = "de")
-} GROUP BY ?i ?label ?coord LIMIT 500
+} GROUP BY ?i ?label ?coord ORDER BY ?i LIMIT %(limit)d
 """
 
 
