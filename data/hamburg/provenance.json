@@ -44,6 +44,458 @@
           "dataAsOf": "2026-10-31 (re-baked 2026-11-01 with every step from the BBBike city extract Hamburg.osm.pbf, Last-Modified 2026-10-31 16:45 UTC)"
         }
       }
+    },
+    "baked": {
+      "canopy": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "cultivated": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "doors": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "edges": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "furniture": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "lamp-heights": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "lamps": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "landcover": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "landmarks": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "lowveg": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "markings": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "monuments": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "ndvi": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "osm-buildings": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "passages": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "rail": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "riverside": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "shopfronts": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "sport": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "stairs": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "structures": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "surface": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "tram": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "trees": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      },
+      "walls": {
+        "32564_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32564_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5932_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        },
+        "32566_5934_2_hh": {
+          "dataAsOf": "2026-11-27 (Geofabrik extract hamburg-latest.osm.pbf, https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf, Last-Modified 2026-11-27T00:46:16+00:00)",
+          "on": "2026-11-27"
+        }
+      }
     }
   },
   "wikidata": {
