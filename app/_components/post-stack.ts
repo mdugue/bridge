@@ -63,7 +63,11 @@ import type { LookValues } from "@/lib/city/look-controls";
 import { NAMEPLATE_TYPES } from "@/lib/city/nameplate-type";
 import { RENDER_STYLE_BY_ID } from "@/lib/city/render-style";
 import type { PaperKind, RenderStyleDef } from "@/lib/city/render-style";
-import { compileInLanes, compileInTurn } from "./compile-lanes";
+import {
+  compileInLanes,
+  compileInTurn,
+  resizeCompileTarget,
+} from "./compile-lanes";
 import { streamTimings } from "./stream-timing";
 import type { Compiling } from "./compile-lanes";
 import { crownsPrinted } from "./crown-season";
@@ -1564,13 +1568,14 @@ export function createPostStack(
     }),
     setSize: () => {
       renderer.getDrawingBufferSize(size);
-      target.setSize(size.x, size.y);
+      // (the target every tile's compile is made against)
+      resizeCompileTarget(renderer, target, size.x, size.y);
       beforeAa.setSize(size.x, size.y);
       // the lens blur's targets, its copy among them (the motion blur
       // draws there while the lens rests)
       lensBlur?.setSize(size.x, size.y);
       antialiasing.setSize(size);
-      outline.setSize(size.x, size.y);
+      outline.setSize(renderer, size.x, size.y);
     },
     setSelection: (selection, flash) => outline.set(selection, flash),
     sceneDepth: depthTexture,

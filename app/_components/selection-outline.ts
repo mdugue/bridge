@@ -54,7 +54,7 @@ import {
   outlineKernel,
   outlineSpread,
 } from "@/lib/city/outline";
-import { compileInTurn } from "./compile-lanes";
+import { compileInTurn, resizeCompileTarget } from "./compile-lanes";
 import type { F, V3, V4 } from "./shader-chunks";
 import { TRAFFIC_ATTRIBUTES, trafficPositionNode } from "./traffic-flow";
 import type { ViewLens } from "./view-lens";
@@ -133,7 +133,7 @@ export interface SelectionOutline {
     line: readonly [number, number, number],
     halo: readonly [number, number, number]
   ) => void;
-  setSize: (width: number, height: number) => void;
+  setSize: (renderer: WebGPURenderer, width: number, height: number) => void;
   /** builds the mask's and the blur's programs off the frame */
   compile: (renderer: WebGPURenderer, camera: Camera) => Promise<void>;
   dispose: () => void;
@@ -491,11 +491,12 @@ export function createSelectionOutline(deps: {
       lineColour.value.setRGB(line[0], line[1], line[2], SRGBColorSpace);
       haloColour.value.setRGB(halo[0], halo[1], halo[2], SRGBColorSpace);
     },
-    setSize: (width, height) => {
+    setSize: (renderer, width, height) => {
       // a new size frees the old textures: the blur is cleared again
-      mask.setSize(width, height);
-      across.setSize(halved(width), halved(height));
-      blurred.setSize(halved(width), halved(height));
+      // (and a compile in flight against them gets them back at once)
+      resizeCompileTarget(renderer, mask, width, height);
+      resizeCompileTarget(renderer, across, halved(width), halved(height));
+      resizeCompileTarget(renderer, blurred, halved(width), halved(height));
       texel.value.set(1 / halved(width), 1 / halved(height));
       clean = false;
     },

@@ -346,7 +346,10 @@ function noHelloMessage(failed: "unloaded" | "threw" | "silent"): string {
  * The scene's worker, once it said it draws: a WebGPU adapter, an
  * offscreen canvas, an animation frame. Rejects where it cannot.
  */
-async function workerChannel(signal: AbortSignal): Promise<Channel> {
+async function workerChannel(
+  signal: AbortSignal,
+  trail?: CrashTrail
+): Promise<Channel> {
   const worker = new Worker(new URL("./scene-worker.ts", import.meta.url), {
     type: "module",
     name: "scene",
@@ -360,6 +363,9 @@ async function workerChannel(signal: AbortSignal): Promise<Channel> {
   }
   if ("failed" in outcome) {
     worker.terminate();
+    // which of the three it was: the boot's message is the same for a
+    // worker that threw and one that never named its adapter
+    trail?.note("worker", `no hello: ${outcome.failed}`);
     throw new Error(noHelloMessage(outcome.failed));
   }
   const hello = outcome.said;
@@ -634,7 +640,7 @@ export async function startScene(
   try {
     let channel: Channel;
     if (sceneThreadOf(location.search) === "worker") {
-      channel = await workerChannel(signal);
+      channel = await workerChannel(signal, opts.trail);
       if (signal.aborted) {
         channel.end();
         throw bootAborted();
