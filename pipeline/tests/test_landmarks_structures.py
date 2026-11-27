@@ -5,12 +5,13 @@ on posts and the buildings newer than the surface model, the shaped roofs
 of missing buildings and the lattices."""
 
 import json
+import urllib.parse
 from types import SimpleNamespace
 
 import numpy as np
 import shapely
 
-from bake import landmarks, structures
+from bake import landmarks, monuments, structures
 from bake.osm_buildings import colour_of
 from bake.osm_buildings import material_of as osm_material
 from bake.skyview import Field
@@ -755,3 +756,29 @@ def test_an_inner_hall_drawn_too_high_is_no_hole():
     # its scan a lower roof 8 m up: no hole; down to the floor: a glass roof
     assert not structures.roof_holes(void, roofed, 1.0, np.where(void, 8.0, depth)).any()
     assert structures.roof_holes(void, roofed, 1.0, np.where(void, 0.5, depth))[void].all()
+
+
+def test_a_box_is_asked_whole_and_its_ties_in_order(monkeypatch):
+    """Equal sitelinks must not leave the pick to the endpoint: the query
+    orders ties by the item and asks for more rows than a tile holds."""
+    asked = []
+
+    class Answer:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def read(self, *_):
+            return json.dumps({"results": {"bindings": []}}).encode()
+
+    def urlopen(req, timeout):
+        asked.append(urllib.parse.unquote_plus(req.full_url))
+        return Answer()
+
+    monkeypatch.setattr(landmarks.urllib.request, "urlopen", urlopen)
+    landmarks.query_box((13.0, 13.1), (51.0, 51.1))
+    landmarks.query_box((13.0, 13.1), (51.0, 51.1), template=monuments.WIKIDATA_QUERY)
+    assert f"ORDER BY DESC(?links) ?i LIMIT {landmarks.ROW_LIMIT}" in asked[0]
+    assert f"ORDER BY ?i LIMIT {landmarks.ROW_LIMIT}" in asked[1]
