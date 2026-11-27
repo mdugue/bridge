@@ -49,6 +49,7 @@ import {
   FLAG_CLOTH_L,
 } from "@/lib/city/furniture";
 import { Instances, instanceMatrix, instancePosition } from "./instancing";
+import { RING, SOFT_GREEN } from "./furniture-palette";
 import { hash21 } from "./shader-chunks";
 import { markThinCaster, sceneMaterial } from "./three-utils";
 import { swayNear } from "./vegetation-layer";
@@ -56,10 +57,6 @@ import { swayNear } from "./vegetation-layer";
 /** How far under the mast's top the cloth's top hangs (m); its size is
  *  lib/city/furniture.ts's FLAG_CLOTH_H × FLAG_CLOTH_L. */
 const CLOTH_TOP = -0.12;
-/** The ball on the mast's top (lib/city/furniture.ts). */
-const BALL_R = FLAG_BALL_R;
-const BALL_Y = FLAG_BALL_Y;
-const BALL = 0xb3_b3_bf; // furniture-layer.ts's RING
 /** Off the mast's axis (m): the hoist clears the mast's radius. */
 const HOIST = 0.06;
 /** Quads along the cloth and down it: six rows hold two or three bands. */
@@ -78,13 +75,12 @@ const WAVE_SPEED = 4.2;
 const FOLD_SHADE = float(0.22);
 const TURN = Math.PI * 2;
 
-/* The cloths, in the scene's pastels (furniture-layer.ts's palette). */
+/* The cloths, in the scene's pastels (furniture-palette.ts's too). */
 const CLOTH = 0xf1_ec_e2;
 const BLACK = 0x76_74_7e; // charcoal, not black
 const RED = 0xd4_91_89;
 const GOLD = 0xe9_d3_9b;
 const BLUE_EU = 0x9f_b3_d6;
-const GREEN = 0xb9_c9_a8;
 const BLUE_BY = 0xb7_cd_e6;
 
 /** Each design's bands, top to bottom (each an equal share of the rows). */
@@ -92,7 +88,7 @@ const CLOTH_BANDS: Record<FlagDesign | "plain", readonly number[]> = {
   plain: [CLOTH],
   de: [BLACK, RED, GOLD],
   eu: [BLUE_EU],
-  sn: [CLOTH, GREEN],
+  sn: [CLOTH, SOFT_GREEN],
   by: [CLOTH, BLUE_BY],
   hh: [RED],
 };
@@ -126,12 +122,12 @@ function clothGeometry(design: FlagDesign | "plain"): BufferGeometry {
     }
   }
   // the ball (above the cloth's top: the wave leaves it still)
-  const ball = new SphereGeometry(BALL_R, 10, 6);
-  ball.translate(0, BALL_Y, 0);
+  const ball = new SphereGeometry(FLAG_BALL_R, 10, 6);
+  ball.translate(0, FLAG_BALL_Y, 0);
   const bp = ball.getAttribute("position");
   const bn = ball.getAttribute("normal");
   const first = pos.length / 3;
-  c.setHex(BALL);
+  c.setHex(RING); // the mast's fittings
   for (let i = 0; i < bp.count; i += 1) {
     pos.push(bp.getX(i), bp.getY(i), bp.getZ(i));
     nrm.push(bn.getX(i), bn.getY(i), bn.getZ(i));
