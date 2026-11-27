@@ -149,11 +149,13 @@ export function createLensBlur(
   const tiles = rtt(
     Fn(() => {
       const at = uv();
-      let near: F = float(0);
+      // a variable, not one nested max(): unrolled, a nesting past about
+      // 128 is more than Chrome's WGSL parser takes (CITY-WALK-Y)
+      const near = float(0).toVar();
       for (let y = 0; y < TILE / 2; y += 1) {
         for (let x = 0; x < TILE / 2; x += 1) {
           const step2 = vec2((x - 1.5) * 2, (y - 1.5) * 2).mul(pixel);
-          near = max(near, prefilter.sample(at.add(step2)).a.negate());
+          near.assign(max(near, prefilter.sample(at.add(step2)).a.negate()));
         }
       }
       return vec4(near.mul(0.5), 0, 0, 1);

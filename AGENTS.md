@@ -121,6 +121,8 @@ itself). See ADR 0005.
 - A TSL `select` and a `Loop` body are scopes: in per-pixel graphs use
   `mix`/`step`, and take what a loop reads into a `toVar()` before it.
   A packed word or a hash seed reaches the fragment as a FLAT varying.
+  A reduction unrolled in JS accumulates into a `toVar()`: as one nested
+  expression, past ~128 steps Chrome's WGSL parser fails (WebGL2 not).
 - Every `compileAsync` runs in its turn (`compileInTurn`), and a frame
   names the targets it draws into — workarounds for three r187 bugs
   (`docs/rendering.md`, "Workarounds for upstream bugs"). Builds are per
