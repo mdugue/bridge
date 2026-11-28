@@ -1,6 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 import { error, warn } from "three/webgpu";
-import { routeThreeErrors, threeErrorText } from "./three-console";
+import {
+  pipelineFailureContext,
+  routeThreeErrors,
+  threeErrorText,
+} from "./three-console";
 
 let undo: (() => void) | null = null;
 afterEach(() => {
@@ -105,4 +109,21 @@ test("a second app's route replaces the first's: an error is noted once", () => 
     console.error = original;
   }
   expect(noted).toEqual(["second THREE.once", "second THREE.again"]);
+});
+
+test("a failed pipeline says which compile was in flight and on which target, other errors nothing", () => {
+  const at = { compiling: "nameplate", queued: 2, target: "" };
+  expect(
+    pipelineFailureContext(
+      "THREE.WebGPURenderer: Async render pipeline creation failed (renderPipeline_plate_1): a reason",
+      at
+    )
+  ).toBe("nameplate, 2 queued, target canvas");
+  expect(
+    pipelineFailureContext(
+      "THREE.WebGPURenderer: Render pipeline creation failed (plate_1): a reason",
+      { compiling: null, queued: 0, target: "Outline.mask" }
+    )
+  ).toBe("none, 0 queued, target Outline.mask");
+  expect(pipelineFailureContext("THREE.TSL: a build error", at)).toBeNull();
 });

@@ -31,6 +31,35 @@ export function threeErrorText(message: string, params: unknown[]): string {
   return parts.join(" ");
 }
 
+/** Where the renderer stood as three reported an error. */
+export interface CompileContext {
+  /** the compile in flight (compile-lanes.ts `compileInFlight`) */
+  compiling: string | null;
+  /** compiles queued or in flight */
+  queued: number;
+  /** the current render target's name, "" for the canvas */
+  target: string;
+}
+
+/**
+ * What the trail notes before a pipeline that failed to build: which
+ * compile was in flight and which target was current. three names the
+ * material only, and a build takes its output's type from the target
+ * current as it runs — a plate built for the canvas with a two-channel
+ * target current fails this way (Sentry CITY-WALK-13), and the trail
+ * could not say which compile it was. Null for any other error: those
+ * may repeat every frame.
+ */
+export function pipelineFailureContext(
+  text: string,
+  at: CompileContext
+): string | null {
+  if (!text.includes("pipeline creation failed")) {
+    return null;
+  }
+  return `${at.compiling ?? "none"}, ${at.queued} queued, target ${at.target || "canvas"}`;
+}
+
 /** What three itself prints without a console function (utils.js). */
 function print(
   type: "log" | "warn" | "error",

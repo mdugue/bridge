@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { compileInLanes, compileInTurn } from "./compile-lanes";
+import {
+  compileInFlight,
+  compileInLanes,
+  compileInTurn,
+} from "./compile-lanes";
 import type { Compiling } from "./compile-lanes";
 
 interface Item {
@@ -148,4 +152,26 @@ test("the compiles on one renderer run in turn, each once the one before has set
   await settle();
   expect(third).toEqual({ settled: true, error: undefined });
   expect(other.settled).toBe(true);
+});
+
+test("a renderer's compile in flight is named while its turn runs, a failed one too", async () => {
+  const renderer = {};
+  const { step, end, fail } = heldSteps();
+  expect(compileInFlight(renderer)).toBeNull();
+  const first = watch(
+    compileInTurn(renderer, async () => await step(item("a")), "outline")
+  );
+  const second = watch(
+    compileInTurn(renderer, async () => await step(item("b")), "nameplate")
+  );
+  await settle();
+  expect(compileInFlight(renderer)).toBe("outline");
+  fail("a", new Error("lost"));
+  await settle();
+  expect(first.settled).toBe(true);
+  expect(compileInFlight(renderer)).toBe("nameplate");
+  end("b");
+  await settle();
+  expect(second.settled).toBe(true);
+  expect(compileInFlight(renderer)).toBeNull();
 });

@@ -2003,6 +2003,18 @@ motion blur came in (2026-10-30), never in the runs before. Not reported
 yet: find the context first (a hook on `createRenderPipelineAsync` shows
 the descriptor).
 
+**Open: the nameplate's shadow built for the wrong target.** Now and
+then three logs `Async render pipeline creation failed
+(renderPipeline_nameplate-shadow_…)`: the fragment stage writes two
+components into the canvas's four (Sentry CITY-WALK-13, earlier
+CITY-WALK-S). A build takes its output's type from the target current
+as it runs, so a two-channel target (the outline's, SMAA's edges) was
+current while the plate built for the canvas; which compile or frame
+left it there is not known (plan 094's findings). Nothing works around
+it. The crash trail notes `compiling` before a failed pipeline — the
+compile in flight (`compile-lanes.ts` `compileInFlight`), how many are
+queued, the current target — so the next event places it.
+
 **three r187: an attribute whose GPU buffer failed to allocate stays
 half made** — its entry without a buffer — and the dispose of its
 geometry throws on it midway (`destroyAttribute`). *Worked around* in

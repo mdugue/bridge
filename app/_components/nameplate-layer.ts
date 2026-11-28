@@ -1260,30 +1260,34 @@ export function createNameplate(deps: NameplateDeps): Nameplate {
     // docs/rendering.md, "Workarounds for
     // upstream bugs").
     compile: async (renderer, camera) =>
-      await compileInTurn(renderer, async () => {
-        if (disposed) {
-          return;
-        }
-        const shown = [letters.visible, shadow.visible] as const;
-        const previous = renderer.getRenderTarget();
-        const { toneMapping } = renderer;
-        const colorSpace = renderer.outputColorSpace;
-        letters.visible = true;
-        shadow.visible = true;
-        renderer.setRenderTarget(null);
-        renderer.toneMapping = NoToneMapping;
-        renderer.outputColorSpace = LinearSRGBColorSpace;
-        let compiling: Promise<void>;
-        try {
-          compiling = renderer.compileAsync(scene, camera);
-        } finally {
-          [letters.visible, shadow.visible] = shown;
-          renderer.outputColorSpace = colorSpace;
-          renderer.toneMapping = toneMapping;
-          renderer.setRenderTarget(previous);
-        }
-        await compiling;
-      }),
+      await compileInTurn(
+        renderer,
+        async () => {
+          if (disposed) {
+            return;
+          }
+          const shown = [letters.visible, shadow.visible] as const;
+          const previous = renderer.getRenderTarget();
+          const { toneMapping } = renderer;
+          const colorSpace = renderer.outputColorSpace;
+          letters.visible = true;
+          shadow.visible = true;
+          renderer.setRenderTarget(null);
+          renderer.toneMapping = NoToneMapping;
+          renderer.outputColorSpace = LinearSRGBColorSpace;
+          let compiling: Promise<void>;
+          try {
+            compiling = renderer.compileAsync(scene, camera);
+          } finally {
+            [letters.visible, shadow.visible] = shown;
+            renderer.outputColorSpace = colorSpace;
+            renderer.toneMapping = toneMapping;
+            renderer.setRenderTarget(previous);
+          }
+          await compiling;
+        },
+        "nameplate"
+      ),
     shown: () =>
       letters.visible && subject && layout
         ? { title: subject.text.title, mode: layout.mode, spot: layout.spot }

@@ -130,14 +130,14 @@ import {
 import type { OutlineSelection } from "./selection-outline";
 import { trafficMesh } from "./traffic-flow";
 import { createCityCollider } from "./collision";
-import { compilesQueued } from "./compile-lanes";
+import { compileInFlight, compilesQueued } from "./compile-lanes";
 import { createDemolitions } from "./demolitions";
 import { createDesignLayer } from "./design-layer";
 import type { DesignLayer, DesignStatus } from "./design-layer";
 import { cutsGround, foldedThing, groundKeptUnderDesign } from "./design-site";
 import { graphOf, setGraph } from "./material-slots";
 import type { CrashTrail } from "./crash-trail";
-import { routeThreeErrors } from "./three-console";
+import { pipelineFailureContext, routeThreeErrors } from "./three-console";
 import type { NameplateDeps } from "./nameplate-layer";
 import { leafLitterAt, seasonAt, seasonShiftFor } from "@/lib/city/tree-season";
 import { crownLeaf, footLitter } from "./tree-foot";
@@ -1269,8 +1269,20 @@ export async function createCityWalkApp(
   });
   // three's own errors (a pipeline that failed to build, and why): into
   // the trail, which saw only what came after them (three-console.ts)
-  const trailThree = opts.trail
-    ? routeThreeErrors(opts.trail.error)
+  // (a failed pipeline with the compile in flight and the target beside it)
+  const { trail } = opts;
+  const trailThree = trail
+    ? routeThreeErrors((text) => {
+        const context = pipelineFailureContext(text, {
+          compiling: compileInFlight(renderer),
+          queued: compilesQueued(renderer),
+          target: renderer.getRenderTarget()?.texture.name ?? "",
+        });
+        if (context !== null) {
+          trail.note("compiling", context);
+        }
+        trail.error(text);
+      })
     : () => {
         // no trail: three prints as it does
       };
