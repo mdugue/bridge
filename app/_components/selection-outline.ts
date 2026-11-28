@@ -508,28 +508,32 @@ export function createSelectionOutline(deps: {
     // once the outline is disposed.
     compile: async (renderer, camera) => {
       const inTurn = async (into: RenderTarget, root: Object3D, view: Camera) =>
-        await compileInTurn(renderer, async () => {
-          if (outlineDisposed) {
-            return;
-          }
-          held = true;
-          lastUsed = performance.now();
-          const previous = renderer.getRenderTarget();
-          const shown = [shape.visible, flow.visible] as const;
-          shape.visible = true;
-          flow.visible = true;
-          renderer.setRenderTarget(into);
-          // not awaited in the try: the state is restored as soon as the
-          // compile is started, as before
-          let compiling: Promise<void> | undefined;
-          try {
-            compiling = renderer.compileAsync(root, view);
-          } finally {
-            [shape.visible, flow.visible] = shown;
-            renderer.setRenderTarget(previous);
-          }
-          await compiling;
-        });
+        await compileInTurn(
+          renderer,
+          async () => {
+            if (outlineDisposed) {
+              return;
+            }
+            held = true;
+            lastUsed = performance.now();
+            const previous = renderer.getRenderTarget();
+            const shown = [shape.visible, flow.visible] as const;
+            shape.visible = true;
+            flow.visible = true;
+            renderer.setRenderTarget(into);
+            // not awaited in the try: the state is restored as soon as the
+            // compile is started, as before
+            let compiling: Promise<void> | undefined;
+            try {
+              compiling = renderer.compileAsync(root, view);
+            } finally {
+              [shape.visible, flow.visible] = shown;
+              renderer.setRenderTarget(previous);
+            }
+            await compiling;
+          },
+          `outline ${into.texture.name}`
+        );
       await Promise.all([
         inTurn(mask, scene, camera),
         inTurn(across, blurAcross.quad, blurAcross.quad.camera),

@@ -395,8 +395,8 @@
   },
   "code": {
     "product": {
-      "total": 154161,
-      "app": 60866,
+      "total": 154211,
+      "app": 60916,
       "lib": 41359,
       "components": 3007,
       "scripts": 13464,
@@ -407,7 +407,7 @@
     "readWith": "chromium 159.0.8154.6, google / swiftshader",
     "firstLoad": {
       "files": 42,
-      "gzip": 1098934,
+      "gzip": 1099142,
       "workerOnly": {
         "files": 8,
         "gzip": 34659

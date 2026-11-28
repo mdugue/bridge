@@ -999,13 +999,17 @@ export function createPostStack(
       // compiles in flight, and its own call — `?trace=1` tells whether a
       // slow tile waits for the line or for its own builds)
       const queued = streamTimings.now();
-      await compileInTurn(renderer, async () => {
-        streamTimings.since("compile:turn-wait", queued);
-        await streamTimings.timed(
-          "compile:call",
-          async () => await now(object)
-        );
-      });
+      await compileInTurn(
+        renderer,
+        async () => {
+          streamTimings.since("compile:turn-wait", queued);
+          await streamTimings.timed(
+            "compile:call",
+            async () => await now(object)
+          );
+        },
+        "scene"
+      );
     };
   const compileOne = inTurn(async (object) => await compileNow(object));
   /**

@@ -480,7 +480,19 @@ Dresden and Meißen) logged nothing, and the spec was green. The cause
 is not known. A pointer: Sentry issue CITY-WALK-S (production, two
 events on 2 and 3 November, in flight, not Modell) shows an invalid
 `nameplate-shadow` pipeline reaching a frame; whether it is the same
-fault is open.
+fault is open. CITY-WALK-13 (production, 2026-11-27,
+Chrome 158 on a Mac, in flight, 85 s into the page, no boot stage in
+the trail before it) carries three's reason: the plate's fragment stage
+writes two components into the canvas's four. A build takes its
+output's type from the target current as it runs
+(`NodeBuilder.getOutputType`), so the plate's shadow was built for the
+canvas while a two-channel target was current — the selection outline's
+mask and blurs and SMAA's edges are the scene's only ones. Read against
+three r187, a compile alone in its turn sets the canvas before each of
+its builds, so which compile or frame left the other target there is
+still open. The trail now notes, before a failed pipeline, the compile
+in flight, how many are queued and the current target (`compiling`,
+three-console.ts `pipelineFailureContext`): the next event names them.
 
 ### Phase 2 — the census (2026-11-16, three r187, headless Chromium 153 on SwiftShader, four cores)
 

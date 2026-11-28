@@ -31,9 +31,23 @@ export function compilesQueued(renderer: object): number {
   return queued.get(renderer) ?? 0;
 }
 
+/** The compile in flight on each renderer, by the name its caller gave. */
+const inFlight = new WeakMap<object, string>();
+
+/**
+ * The compile in flight on `renderer`, or null between turns: what the
+ * crash trail names beside an error of three's own (create-app.ts), since
+ * a pipeline that fails to build says its material, never which compile
+ * built it (Sentry CITY-WALK-13).
+ */
+export function compileInFlight(renderer: object): string | null {
+  return inFlight.get(renderer) ?? null;
+}
+
 /**
  * Runs `start` once every compile queued before it on `renderer` has
- * settled, and resolves as the compile it starts does. `start` makes the
+ * settled, and resolves as the compile it starts does. `label` names the
+ * turn while it runs (`compileInFlight`). `start` makes the
  * `compileAsync` call itself, with whatever it sets up for the call's
  * synchronous half (the target, a swap, a clipping group) and puts back
  * right after.
@@ -52,10 +66,20 @@ export function compilesQueued(renderer: object): number {
  */
 export async function compileInTurn(
   renderer: object,
-  start: () => Promise<void>
+  start: () => Promise<void>,
+  label = "compile"
 ): Promise<void> {
   const before = turns.get(renderer) ?? Promise.resolve();
-  const compiling = before.then(start);
+  const turn = async () => {
+    inFlight.set(renderer, label);
+    try {
+      await start();
+    } finally {
+      inFlight.delete(renderer);
+    }
+  };
+  const compiling = before.then(turn);
+
   turns.set(
     renderer,
     compiling.catch(() => {
